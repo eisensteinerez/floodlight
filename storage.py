@@ -6,12 +6,15 @@ or restarts. On start the database copy wins.
 """
 import json
 import os
+import re
 import ssl
 import threading
 import urllib.parse
 from pathlib import Path
 
-URL = (os.environ.get("DATABASE_URL") or "").strip()
+# Accept the connection string even if it was pasted with "psql" or quotes around it.
+_m = re.search(r"postgres(?:ql)?://[^\s'\"]+", os.environ.get("DATABASE_URL") or "")
+URL = _m.group(0) if _m else ""
 _lock = threading.Lock()
 _conn = None
 
