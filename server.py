@@ -1400,11 +1400,46 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
 
+# ---------- memory guard ----------
+# Free hosts give the server 512 MB. The page caches below can grow past that on a busy day, and the host then
+# restarts the server (visitors see "502 Bad Gateway"). This empties the caches before that happens.
+MEM_LIMIT_MB = int(os.environ.get("FLOODLIGHT_MEM_MB") or (330 if HOSTED else 0))
+
+
+def _rss_mb():
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024
+    except Exception:
+        pass
+    return 0
+
+
+def _memory_guard():
+    import gc
+    while True:
+        time.sleep(10)
+        used = _rss_mb()
+        if used < MEM_LIMIT_MB:
+            continue
+        for mod in (sys.modules[__name__], baseball, basketball, dfs, sys.modules.get("baseball_asia"), sys.modules.get("baseball_banana")):
+            c = getattr(mod, "_cache", None)
+            if isinstance(c, dict):
+                c.clear()
+        tennis._rank_cache.clear()
+        gc.collect()
+        print(f"memory guard: {used:.0f} MB in use, cleared caches, now {_rss_mb():.0f} MB")
+
+
 if __name__ == "__main__":
     import atexit
     atexit.register(save_photos)
     odds.setup(fetch=fetch, similar=similar)
     ensure_admin()
+    if MEM_LIMIT_MB:
+        threading.Thread(target=_memory_guard, daemon=True, name="memory-guard").start()
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
                      users=lambda: _users, cache_dir=CACHE_DIR)
     print(f"Floodlight running at http://localhost:{PORT}")
