@@ -19,6 +19,7 @@ function fcTrack(evs){
   return api('/api/forecast/track', { matches: items }).catch(() => items.forEach(i => fcSent.delete(`${i.sport}:${i.id}`)));
 }
 async function fcFetch(keys){
+  if (document.documentElement.classList.contains('fl-noresearch')) return [];
   if (!keys.length || S.serverOK === false) return [];
   const d = await api(`/api/forecast/get?keys=${keys.map(encodeURIComponent).join(',')}`);
   S.fcSettings = d.settings;
@@ -84,6 +85,7 @@ const fcTag = P => P.fromServer ? ` <small class="fc-tag">${esc(FC_LABEL[P.fromS
 /* ---------- the timeline ---------- */
 const fcPending = new Set();
 function fcBlock(e){
+  if (document.documentElement.classList.contains('fl-noresearch')) return '';
   if (S.serverOK === false || e.src === 'tsdb') return '';
   const key = fcKeyOf(e), f = S.fc.get(key);
   if (!f) {

@@ -810,6 +810,7 @@ function rsEl(){
   return el;
 }
 function openResearch(o = {}){
+  if (document.documentElement.classList.contains('fl-noresearch')) return;
   const r = S.rs; r.open = true; if (o.sport) { r.sport = o.sport; store.set('fl.rsSport', r.sport) }
   if (o.tab) r.tab = o.tab;
   const el = rsEl(); el.hidden = false; document.documentElement.classList.add('rs-lock');

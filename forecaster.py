@@ -26,6 +26,8 @@ import time
 import urllib.parse
 from pathlib import Path
 
+import storage
+
 ESPN = "https://site.api.espn.com/apis/site/v2/sports"
 ESPN2 = "https://site.api.espn.com/apis/v2/sports"
 FM = "https://www.fotmob.com"
@@ -60,22 +62,11 @@ def _path(name):
 
 
 def _load(name, default):
-    try:
-        return json.loads(_path(name).read_text())
-    except Exception:
-        return default
+    return storage.load(_path(name), default)
 
 
 def _save(name, data):
-    p = _path(name)
-    p.parent.mkdir(exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data))
-    tmp.replace(p)
-    try:
-        p.chmod(0o600)
-    except Exception:
-        pass
+    storage.save(_path(name), data)
 
 
 TRACKED, FORECASTS, CONFIG = {}, {}, {}

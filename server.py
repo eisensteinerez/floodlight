@@ -37,6 +37,7 @@ import tennis
 import forecaster
 import dfs
 import odds
+import storage
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -45,10 +46,14 @@ PORT = int(ARGS[0]) if ARGS else int(os.environ.get("PORT", 8642))
 # Hosted mode (e.g. Render): listen on all interfaces, mark cookies Secure, lock down admin settings.
 HOSTED = bool(os.environ.get("PORT") or os.environ.get("RENDER"))
 ADMIN = (os.environ.get("FLOODLIGHT_ADMIN") or "").strip().lower()
+ADMIN_PASSWORD = os.environ.get("FLOODLIGHT_ADMIN_PASSWORD") or ""
+# Members only: when hosted, people need an account the admin has approved before they see any data.
+GATED = HOSTED and os.environ.get("FLOODLIGHT_OPEN", "") != "1"
+ROLES = ("pending", "viewer", "research")
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
-                "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js"}
+                "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -947,28 +952,92 @@ SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str}
 
 
-def _load(path):
-    try:
-        return json.loads(path.read_text())
-    except Exception:
-        return {}
-
-
-_users = _load(USERS_FILE)
-_sessions = _load(SESSIONS_FILE)
+_users = storage.load(USERS_FILE, {})
+_sessions = storage.load(SESSIONS_FILE, {})
 _failures = {}
 
 
 def _save_accounts():
-    CACHE_DIR.mkdir(exist_ok=True)
-    for path, data in ((USERS_FILE, _users), (SESSIONS_FILE, _sessions)):
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data))
-        tmp.replace(path)
-        try:
-            path.chmod(0o600)
-        except Exception:
-            pass
+    storage.save(USERS_FILE, _users)
+    storage.save(SESSIONS_FILE, _sessions)
+
+
+def role_of(u):
+    """admin, research (everything), viewer (games only) or pending (waiting for the admin)."""
+    if not u:
+        return None
+    if ADMIN and u["username"].lower() == ADMIN:
+        return "admin"
+    if not GATED:
+        return "research"   # running on your own computer: every account can use everything
+    return u.get("role") if u.get("role") in ROLES else "pending"
+
+
+def can_view(u):
+    return not GATED or role_of(u) in ("viewer", "research", "admin")
+
+
+def can_research(u):
+    return not GATED or role_of(u) in ("research", "admin")
+
+
+def _new_user(username, password, role, display=None, prefs=None):
+    salt = secrets.token_hex(16)
+    return {"username": username, "salt": salt, "hash": _hash(password, salt), "created": int(time.time()), "role": role,
+            "prefs": clean_prefs(prefs or {}, {"display": (display or username).strip()[:40]})}
+
+
+def ensure_admin():
+    """Recreate the admin account from FLOODLIGHT_ADMIN_PASSWORD if it's missing, so you can always log in."""
+    if not (ADMIN and ADMIN_PASSWORD) or ADMIN in _users or not re.fullmatch(r"[a-z0-9_.]{3,20}", ADMIN):
+        return
+    with _acct_lock:
+        _users[ADMIN] = _new_user(ADMIN, ADMIN_PASSWORD, "admin")
+        _save_accounts()
+    print(f"Created the admin account '{ADMIN}'")
+
+
+def admin_list():
+    rows = [{"username": u["username"], "display": u.get("prefs", {}).get("display") or u["username"],
+             "role": role_of(u), "created": u.get("created", 0)} for u in _users.values()]
+    order = {"pending": 0, "admin": 1, "research": 2, "viewer": 3}
+    return sorted(rows, key=lambda r: (order.get(r["role"], 9), -r["created"]))
+
+
+def admin_action(path, body):
+    key = str(body.get("username") or "").strip().lower()
+    if path == "/api/admin/add":
+        username = str(body.get("username") or "").strip()
+        password = str(body.get("password") or "")
+        role = body.get("role") if body.get("role") in ("viewer", "research") else "viewer"
+        if not re.fullmatch(r"[A-Za-z0-9_.]{3,20}", username):
+            return 400, {"error": "Usernames are 3–20 letters, numbers, dots or underscores."}
+        if len(password) < 8:
+            return 400, {"error": "Use a password of at least 8 characters."}
+        with _acct_lock:
+            if key in _users:
+                return 409, {"error": "That username is taken."}
+            _users[key] = _new_user(username, password, role)
+            _save_accounts()
+        return 200, {"users": admin_list()}
+    u = _users.get(key)
+    if not u:
+        return 404, {"error": "No member with that username."}
+    if role_of(u) == "admin":
+        return 400, {"error": "You can't change the admin account here."}
+    with _acct_lock:
+        if path == "/api/admin/set":
+            if body.get("role") not in ROLES:
+                return 400, {"error": "Pick viewer, research or pending."}
+            u["role"] = body["role"]
+        elif path == "/api/admin/remove":
+            _users.pop(key, None)
+            for t in [t for t, v in _sessions.items() if v["user"] == key]:
+                _sessions.pop(t, None)
+        else:
+            return 404, {"error": "unknown endpoint"}
+        _save_accounts()
+    return 200, {"users": admin_list()}
 
 
 def _hash(password, salt):
@@ -977,7 +1046,7 @@ def _hash(password, salt):
 
 def public_user(u):
     return {"username": u["username"], "display": u.get("prefs", {}).get("display") or u["username"],
-            "created": u["created"], "prefs": u.get("prefs", {})}
+            "created": u["created"], "prefs": u.get("prefs", {}), "role": role_of(u)}
 
 
 def clean_prefs(raw, old):
@@ -1004,9 +1073,8 @@ def signup(body):
     with _acct_lock:
         if key in _users:
             return 409, {"error": "That username is taken. Try another."}
-        salt = secrets.token_hex(16)
-        _users[key] = {"username": username, "salt": salt, "hash": _hash(password, salt), "created": int(time.time()),
-                       "prefs": clean_prefs(body.get("prefs") or {}, {"display": (body.get("display") or username).strip()[:40]})}
+        _users[key] = _new_user(username, password, "admin" if key == ADMIN else "pending",
+                                body.get("display"), body.get("prefs"))
         token = new_session(key)
         _save_accounts()
     return 200, {"user": public_user(_users[key]), "_token": token}
@@ -1130,7 +1198,13 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path == "/api/auth/login":
             return self.send_auth(*login(body))
         token, user = session_user(self.headers.get("Cookie"))
+        if u.path.startswith("/api/admin/"):
+            if role_of(user) != "admin":
+                return self.send_auth(403, {"error": "Only the admin can manage members."})
+            return self.send_auth(*admin_action(u.path, body))
         if u.path == "/api/forecast/track":
+            if not can_research(user):
+                return self.send_auth(200, {"ok": True, "added": 0})
             items = body.get("matches") if isinstance(body.get("matches"), list) else []
             n = forecaster.track(items, research=bool(user), source="account" if user else "app")
             return self.send_auth(200, {"ok": True, "added": n})
@@ -1151,6 +1225,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(403, {"error": "Only the site owner can change these settings."})
             return self.send_auth(*forecaster.update_settings(body))
         if u.path == "/api/forecast/run":
+            if not can_research(user):
+                return self.send_auth(403, {"error": "Your account doesn't include research."})
             key = str(body.get("key") or "")
             if not forecaster.request_now(key):
                 return self.send_auth(404, {"error": "That match isn't tracked yet."})
@@ -1169,6 +1245,14 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+        if GATED and u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users"):
+            _, user = session_user(self.headers.get("Cookie"))
+            if not user:
+                return self.send_json({"error": "Log in to use Floodlight."}, 401)
+            if not can_view(user):
+                return self.send_json({"error": "Your account is waiting for the admin to approve it."}, 403)
+            if u.path.startswith(("/api/dfs/", "/api/forecast/")) and not can_research(user):
+                return self.send_json({"error": "Your account doesn't include research."}, 403)
         try:
             if u.path.startswith("/api/kalshi/"):
                 path = u.path[len("/api/kalshi/"):]
@@ -1209,7 +1293,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"v": int((ROOT / "index.html").stat().st_mtime)})
             if u.path == "/api/me":
                 _, user = session_user(self.headers.get("Cookie"))
-                return self.send_auth(200, {"user": public_user(user) if user else None})
+                return self.send_auth(200, {"user": public_user(user) if user else None, "gated": GATED})
+            if u.path == "/api/admin/users":
+                _, user = session_user(self.headers.get("Cookie"))
+                if role_of(user) != "admin":
+                    return self.send_json({"error": "Only the admin can manage members."}, 403)
+                return self.send_auth(200, {"users": admin_list()})
             if u.path == "/api/forecast/get":
                 keys = [k for k in q.get("keys", "").split(",") if re.fullmatch(r"(soccer|football):[A-Za-z0-9_-]{1,24}", k)][:40]
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
@@ -1315,6 +1404,7 @@ if __name__ == "__main__":
     import atexit
     atexit.register(save_photos)
     odds.setup(fetch=fetch, similar=similar)
+    ensure_admin()
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
                      users=lambda: _users, cache_dir=CACHE_DIR)
     print(f"Floodlight running at http://localhost:{PORT}")

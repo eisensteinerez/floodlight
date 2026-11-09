@@ -1084,6 +1084,7 @@ img.lg-dark{background:#fff;border-radius:7px;padding:2px;box-sizing:border-box;
 :root[data-theme="dark"] .lg > img,:root[data-theme="dark"] .group-h img,:root[data-theme="dark"] .chip img,:root[data-theme="dark"] .hero-top .lgname img,:root[data-theme="dark"] .cal-lg,:root[data-theme="dark"] .ag-lg,:root[data-theme="dark"] .conf-logo{background:rgba(255,255,255,.92);border-radius:5px;padding:1px;box-sizing:border-box}
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .lg > img,:root:not([data-theme="light"]) .group-h img,:root:not([data-theme="light"]) .chip img,:root:not([data-theme="light"]) .hero-top .lgname img,:root:not([data-theme="light"]) .cal-lg,:root:not([data-theme="light"]) .ag-lg,:root:not([data-theme="light"]) .conf-logo{background:rgba(255,255,255,.92);border-radius:5px;padding:1px;box-sizing:border-box} }
 </style>
+<script src="access.js"></script>
 </head>
 <body>
 <a class="skip" href="#groups">Skip to matches</a>
@@ -3695,7 +3696,7 @@ function profileAct(a, el){
   if (a === 'lgUp' || a === 'lgDown') return moveLeague(el.dataset.to, a === 'lgUp' ? -1 : 1);
   if (a === 'addT') { const t = P.resT.find(x => String(x.id) === el.dataset.to); if (t && !isFav(t.id)) { S.fav = [...S.fav, { id: t.id, name: t.name, logo: t.logo, lg: t.lg }]; savePrefs(); render() } return renderProfile() }
   if (a === 'addP') { const p = P.resP.find(x => String(x.id) === el.dataset.to); if (p && !isFavPlayer(p.id)) { S.favPlayers = [...S.favPlayers, p]; savePrefs(); render() } return renderProfile() }
-  if (a === 'logout') return api('/api/auth/logout', {}).finally(() => { S.me = null; P.edit = P.del = false; renderProfileBtn(); render(); renderProfile(); toast('Logged out. Your favourites stay on this device as a guest.') });
+  if (a === 'logout') return api('/api/auth/logout', {}).finally(() => { S.me = null; P.edit = P.del = false; renderProfileBtn(); render(); renderProfile(); toast('Logged out. Your favourites stay on this device as a guest.'); if (window.FL_GATED) location.reload() });
 }
 async function profileSubmit(form){
   const P = S.prof; P.err = '';

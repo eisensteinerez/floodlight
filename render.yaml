@@ -11,5 +11,9 @@ services:
         value: 3.12.7
       - key: FLOODLIGHT_ADMIN
         sync: false
+      - key: FLOODLIGHT_ADMIN_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
