@@ -14,6 +14,14 @@ Serves the app and fetches the two sources a browser can't reach directly:
 Responses are cached in memory so each page is fetched at most once per cache window.
 Run:  python3 server.py   then open http://localhost:8642
 """
+import os
+import sys
+
+if (os.environ.get("PORT") or os.environ.get("RENDER")) and not os.environ.get("MALLOC_ARENA_MAX"):
+    # Each thread would otherwise get its own memory pool, which on a 512 MB host adds up fast.
+    os.environ["MALLOC_ARENA_MAX"] = "2"
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
 import gzip
 import hashlib
 import hmac
@@ -1243,6 +1251,12 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_auth(404, {"error": "unknown endpoint"})
 
     def do_GET(self):
+        if self.path.startswith("/api/") and not self.path.startswith(("/api/me", "/api/version")):
+            with _api_gate:
+                return self._do_GET()
+        return self._do_GET()
+
+    def _do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
         if GATED and u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users"):
@@ -1403,7 +1417,9 @@ class Handler(SimpleHTTPRequestHandler):
 # ---------- memory guard ----------
 # Free hosts give the server 512 MB. The page caches below can grow past that on a busy day, and the host then
 # restarts the server (visitors see "502 Bad Gateway"). This empties the caches before that happens.
-MEM_LIMIT_MB = int(os.environ.get("FLOODLIGHT_MEM_MB") or (330 if HOSTED else 0))
+MEM_LIMIT_MB = int(os.environ.get("FLOODLIGHT_MEM_MB") or (280 if HOSTED else 0))
+# At most this many data requests are worked on at once; the rest wait their turn, which keeps memory steady.
+_api_gate = threading.BoundedSemaphore(int(os.environ.get("FLOODLIGHT_API_THREADS") or (6 if HOSTED else 64)))
 
 
 def _rss_mb():
@@ -1420,7 +1436,7 @@ def _rss_mb():
 def _memory_guard():
     import gc
     while True:
-        time.sleep(10)
+        time.sleep(3)
         used = _rss_mb()
         if used < MEM_LIMIT_MB:
             continue
