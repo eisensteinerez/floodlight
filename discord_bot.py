@@ -28,6 +28,7 @@ Environment:
 """
 import concurrent.futures as cf
 import datetime as dt
+import html
 import json
 import os
 import re
@@ -138,7 +139,7 @@ def pct(x):
 def fmt(v):
     if v is None:
         return "–"
-    return str(int(v)) if float(v).is_integer() else f"{v:.1f}".rstrip("0").rstrip(".") if abs(v) >= 1 else f"{v:.2f}"
+    return str(int(v)) if float(v).is_integer() else f"{v:.1f}".rstrip("0").rstrip(".") if abs(v) >= 1 else f"{v:.2f}".rstrip("0").rstrip(".")
 
 
 # ---------- sports ----------
@@ -404,7 +405,7 @@ def soccer_player(name):
             continue
         hs, as_ = (m.get("score") or [None, None])[:2] if isinstance(m.get("score"), list) else (None, None)
         us, them = (hs, as_) if m.get("home") else (as_, hs)
-        games.append({"id": str(m.get("id")), "date": parse_date(m.get("utc")), "opp": m.get("opponent") or "", "oppAbbr": "", "home": bool(m.get("home")),
+        games.append({"id": str(m.get("id")), "date": parse_date(m.get("utc")), "opp": html.unescape(m.get("opponent") or ""), "oppAbbr": "", "home": bool(m.get("home")),
                       "comp": m.get("league") or "", "res": "" if us is None else "W" if us > them else "L" if us < them else "D",
                       "score": "" if us is None else f"{us}-{them}", "min": m.get("minutes"),
                       "raw": {"goals": m.get("goals") or 0, "assists": m.get("assists") or 0, "yellow": m.get("yellow") or 0, "red": m.get("red") or 0, "rating": num(m.get("rating"))}})
@@ -588,7 +589,8 @@ def props_board(sport, stat=None, count=10):
     rows = {}
     for x in d.get("lines") or []:
         k = stat_key(sport, x.get("stat"))
-        if not k or (key and k != key) or STAT[stat_sport(sport)][k]["deep"]:
+        # yes/no stats like a double-double crowd the top with 100% unders; leave them out unless asked for
+        if not k or (key and k != key) or STAT[stat_sport(sport)][k]["deep"] or (not key and k in ("dd", "g1")):
             continue
         r = rows.setdefault((norm(x["player"]), k), {"player": x["player"], "team": x.get("team"), "opp": x.get("opp"), "k": k, "offers": []})
         r["offers"].append(x)
@@ -626,7 +628,7 @@ def props_board(sport, stat=None, count=10):
     with cf.ThreadPoolExecutor(4) as ex:
         list(ex.map(analyse, order))
     done = [r for n in order for r in players[n] if r.get("l10") and r["l10"]["pct"] is not None]
-    done.sort(key=lambda r: (-(r["l10"]["pct"]), -(r["l5"]["pct"] or 0), -(r["l20"]["pct"] or 0)))
+    done.sort(key=lambda r: (-(r["l10"]["pct"]), -(r["l20"]["pct"] or 0), -(r["l5"]["pct"] or 0)))
     return {"rows": done[:count], "errors": d.get("errors") or {}, "lines": len(rows)}
 
 
@@ -792,7 +794,7 @@ def cmd_predict(o):
             fair = (b.get("ml") or {}).get("fair") or {}
             if fair:
                 fields.append({"name": "Consensus (all books)", "value": " · ".join(f"{(hm['short'] if k == 'home' else aw['short'] if k == 'away' else 'Draw')} {pct(v)}" for k, v in fair.items() if v is not None) or "–", "inline": False})
-            best = (b.get("ml") or {}).get("best") or {}
+            best = {k: v for k, v in ((b.get("ml") or {}).get("best") or {}).items() if v}
             if best:
                 fields.append({"name": "Best moneyline", "value": "\n".join(f"{(hm['short'] if k == 'home' else aw['short'] if k == 'away' else 'Draw')}: {am_txt(v['price'])} at {v['book']}" for k, v in best.items() if v) or "–", "inline": True})
             tots = b.get("totals") or []
@@ -875,7 +877,10 @@ def soccer_lineup(team):
                     continue
                 for side in ("home", "away"):
                     t = m.get(side) or {}
-                    if nt and (nt in norm(t.get("longName")) or nt in norm(t.get("name"))):
+                    names = norm(t.get("longName")) + " " + norm(t.get("name"))
+                    # "Arsenal" means the men's team; women's and youth sides only when asked for by name
+                    other = re.search(r"\b(w|women|u\d\d|ii|b)\b", names) and not re.search(r"\b(w|women|u\d\d|ii|b)\b", nt)
+                    if nt and nt in names and not other:
                         best = (day, m, lg.get("name"))
                         break
                 if best:
