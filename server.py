@@ -46,6 +46,7 @@ import forecaster
 import dfs
 import odds
 import storage
+import discord_bot
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -1191,6 +1192,12 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
+        if u.path == "/api/discord/interactions":   # Discord slash commands (discord_bot.py); signed by Discord, not a member login
+            length = int(self.headers.get("Content-Length") or 0)
+            if not discord_bot.enabled() or length > 64_000:
+                return self.send_json({"error": "the Discord bot isn't set up"}, 404)
+            status, obj = discord_bot.handle(self.rfile.read(length), self.headers)
+            return self.send_json(obj, status)
         # JSON only: a plain form on another site can't send this content type, which blocks cross-site posts
         if "application/json" not in (self.headers.get("Content-Type") or ""):
             return self.send_auth(415, {"error": "Send JSON."})
@@ -1440,7 +1447,7 @@ def _memory_guard():
         used = _rss_mb()
         if used < MEM_LIMIT_MB:
             continue
-        for mod in (sys.modules[__name__], baseball, basketball, dfs, sys.modules.get("baseball_asia"), sys.modules.get("baseball_banana")):
+        for mod in (sys.modules[__name__], baseball, basketball, dfs, discord_bot, sys.modules.get("baseball_asia"), sys.modules.get("baseball_banana")):
             c = getattr(mod, "_cache", None)
             if isinstance(c, dict):
                 c.clear()
@@ -1458,6 +1465,10 @@ if __name__ == "__main__":
         threading.Thread(target=_memory_guard, daemon=True, name="memory-guard").start()
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
                      users=lambda: _users, cache_dir=CACHE_DIR)
+    if discord_bot.enabled():
+        discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
+                          odds=odds, dfs=dfs, cache_dir=CACHE_DIR)
+        print("Discord bot: listening at /api/discord/interactions")
     print(f"Floodlight running at http://localhost:{PORT}")
     if LAN:
         import socket
