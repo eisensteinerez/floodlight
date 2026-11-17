@@ -17,3 +17,15 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: DISCORD_PUBLIC_KEY
+        sync: false
+      - key: DISCORD_APP_ID
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: DISCORD_DIGEST_HOURS
+        value: "14"
+      - key: DISCORD_GUILD_ID
+        sync: false

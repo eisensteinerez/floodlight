@@ -19,7 +19,8 @@ doesn't multiply requests: player game logs for an hour, prop lines and predicti
 Environment:
   DISCORD_PUBLIC_KEY      the application's public key (Developer Portal > General Information); turns the bot on
   DISCORD_APP_ID          the application id; needed to register the commands
-  DISCORD_BOT_TOKEN       the bot token; only needed to register the commands (python3 discord_bot.py register)
+  DISCORD_BOT_TOKEN       the bot token; with it the server registers the commands itself when they change
+                          (or run python3 discord_bot.py register)
   DISCORD_GUILD_ID        optional: register the commands to one server, where they show up instantly
   DISCORD_WEBHOOK_URL     optional: channel webhook for scheduled posts
   DISCORD_DIGEST_HOURS    optional: UTC hours for scheduled posts, default "14"
@@ -53,6 +54,8 @@ _work = threading.BoundedSemaphore(2)   # commands worked on at once; the rest q
 
 def setup(**deps):
     D.update(deps)
+    if os.environ.get("DISCORD_APP_ID") and os.environ.get("DISCORD_BOT_TOKEN"):
+        threading.Thread(target=_register_on_start, daemon=True, name="discord-register").start()
     if os.environ.get("DISCORD_WEBHOOK_URL"):
         threading.Thread(target=_digest_loop, daemon=True, name="discord-digest").start()
 
@@ -1107,13 +1110,28 @@ def command_defs():
     ]
 
 
-def register():
+def register(only_if_changed=False):
     app, token, guild = os.environ.get("DISCORD_APP_ID"), os.environ.get("DISCORD_BOT_TOKEN"), os.environ.get("DISCORD_GUILD_ID")
     if not app or not token:
         sys.exit("Set DISCORD_APP_ID and DISCORD_BOT_TOKEN first (Discord Developer Portal > your app).")
     path = f"/applications/{app}/guilds/{guild}/commands" if guild else f"/applications/{app}/commands"
-    got = discord("PUT", path, command_defs(), token=token)
-    print(f"Registered {len(got)} commands {'in server ' + guild if guild else 'globally (can take up to an hour to appear)'}: " + ", ".join("/" + c["name"] for c in got))
+    want = command_defs()
+    if only_if_changed:
+        shape = lambda cs: sorted(json.dumps({"n": c["name"], "d": c["description"], "o": [(o["name"], o.get("type")) for o in c.get("options") or []]}) for c in cs)
+        try:
+            if shape(discord("GET", path, token=token) or []) == shape(want):
+                return
+        except Exception:
+            pass
+    got = discord("PUT", path, want, token=token)
+    print(f"Discord bot: registered {len(got)} commands {'in server ' + guild if guild else 'globally (can take up to an hour to appear)'}: " + ", ".join("/" + c["name"] for c in got))
+
+
+def _register_on_start():
+    try:
+        register(only_if_changed=True)
+    except Exception as e:
+        print(f"Discord bot: couldn't register the commands: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
