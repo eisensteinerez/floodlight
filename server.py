@@ -63,7 +63,7 @@ ROLES = ("pending", "viewer", "research")
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
-                "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js"}
+                "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -1149,11 +1149,18 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-cache")  # always pick up a new version of the app
         super().end_headers()
 
+    def wants_gzip(self):
+        return "gzip" in (self.headers.get("Accept-Encoding") or "")
+
     def send_json(self, obj, status=200, max_age=0):
-        body = json.dumps(obj).encode()
+        body = json.dumps(obj, separators=(",", ":")).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Cache-Control", f"max-age={max_age}")
+        if len(body) > 1024 and self.wants_gzip():   # data travels four to eight times smaller
+            body = gzip.compress(body, 4)
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1429,7 +1436,43 @@ class Handler(SimpleHTTPRequestHandler):
         if rel not in PUBLIC_FILES and not re.fullmatch(r"icons/[A-Za-z0-9_-]+\.png", rel):
             self.send_error(404)
             return
+        if rel.endswith((".html", ".js", ".css", ".webmanifest")):
+            return self.send_static(rel)
         return super().do_GET()
+
+    def send_static(self, rel):
+        """The app's own files, compressed once and kept in memory. A browser that already has the current
+        version gets a short "not modified" answer instead of the file."""
+        path = ROOT / rel
+        try:
+            st = path.stat()
+        except OSError:
+            return self.send_error(404)
+        tag = f'"{int(st.st_mtime)}-{st.st_size}"'
+        if self.headers.get("If-None-Match") == tag:
+            self.send_response(304)
+            self.send_header("ETag", tag)
+            return self.end_headers()
+        with _static_lock:
+            hit = _static.get(rel)
+            if not hit or hit[0] != tag:
+                raw = path.read_bytes()
+                hit = _static[rel] = (tag, raw, gzip.compress(raw, 9))
+        zipped = self.wants_gzip()
+        body = hit[2] if zipped else hit[1]
+        self.send_response(200)
+        self.send_header("Content-Type", self.guess_type(str(path)) + ("; charset=utf-8" if not rel.endswith(".webmanifest") else ""))
+        self.send_header("ETag", tag)
+        self.send_header("Vary", "Accept-Encoding")
+        if zipped:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+_static = {}
+_static_lock = threading.Lock()
 
 
 # ---------- memory guard ----------
