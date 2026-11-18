@@ -243,3 +243,17 @@ if __name__ == "__main__":
                 fails += 1
                 print("FAIL", n, type(e).__name__, e)
     sys.exit(1 if fails else 0)
+
+
+def test_record_round_trip_on_github(tmp_path, monkeypatch):
+    import pick_tracker as T
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "t0ken")
+    monkeypatch.setitem(T.D, "data_dir", str(tmp_path))
+    T.STATE["posted"]["2026-11-18 00:30"] = 1
+    T.save()
+    blob = (tmp_path / T.DATA_FILE).read_bytes()
+    assert b"posted" not in blob                      # encrypted: the public branch doesn't show the record
+    T.STATE["posted"].clear()
+    T.reload()
+    assert "2026-11-18 00:30" in T.STATE["posted"]
+    monkeypatch.delitem(T.D, "data_dir")

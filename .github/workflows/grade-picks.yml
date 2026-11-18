@@ -1,9 +1,9 @@
 # Grades the pick channels and posts the results in #verified-records at 12:30 AM and 8:00 AM Eastern.
-# It runs here as well as on the server because Discord often blocks requests from Render's shared address
+# It runs here, not on the server, because Discord often blocks requests from Render's shared address
 # (Cloudflare "error 1015"). Every run checks what is due and exits in seconds when nothing is; a run that failed is
-# tried again on the next one. The record is shared with the server through the database.
-# Needs two repository secrets (Settings > Secrets and variables > Actions): DISCORD_BOT_TOKEN and DATABASE_URL,
-# the same values as on Render.
+# tried again on the next one. The record lives on the pick-data branch, encrypted with a key made from the bot token,
+# and the server reads it from there for /leaderboard.
+# Needs one repository secret (Settings > Secrets and variables > Actions): DISCORD_BOT_TOKEN, the same value as on Render.
 name: Grade pick channels
 on:
   schedule:
@@ -15,6 +15,8 @@ on:
         description: "Grade and post right away"
         type: boolean
         default: false
+permissions:
+  contents: write
 concurrency:
   group: grade-picks
   cancel-in-progress: false
@@ -24,11 +26,26 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Load the record
+        run: |
+          mkdir -p data
+          if git fetch --depth=1 origin pick-data 2>/dev/null; then git show FETCH_HEAD:pick-tracker.enc > data/pick-tracker.enc 2>/dev/null || rm -f data/pick-tracker.enc; fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "pg8000>=1.31,<2"
+      - run: pip install "cryptography>=42"
       - run: python3 pick_tracker.py ${{ inputs.now && 'now' || 'scheduled' }}
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PICKS_DATA_DIR: data
+      - name: Save the record
+        if: always()
+        run: |
+          [ -f data/pick-tracker.enc ] || exit 0
+          cd data
+          git init -q -b pick-data
+          git config user.name "floodlight-bot"
+          git config user.email "floodlight-bot@users.noreply.github.com"
+          git add pick-tracker.enc
+          git commit -qm "Pick record $(date -u +%FT%TZ)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" pick-data
