@@ -120,7 +120,7 @@
   sheet.addEventListener('click', ev => { if (ev.target === sheet || ev.target.closest('.flsheet-i')) setTimeout(closeSheetUI, 0) });
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeSheetUI() });
   function syncBar(k, n) {
-    const pf = el('profile'), which = !sheet.hidden ? 'sports' : pf && !pf.hidden ? 'profile' : k === 'research' ? 'research' : k === 'live' ? 'live' : 'home';
+    const pf = el('profile'), which = !sheet.hidden ? 'sports' : pf && !pf.hidden ? 'profile' : k === 'research' ? 'research' : k === 'live' ? 'live' : k === 'home' ? 'home' : 'sports';
     const on = bar.querySelector(`.flb[data-k="${which}"]`), ind = el('flBarInd');
     bar.querySelectorAll('.flb').forEach(b => { b.classList.toggle('on', b === on); if (b === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current') });
     if (on && on.offsetWidth) { ind.style.width = (on.offsetWidth - 10) + 'px'; ind.style.transform = `translateX(${on.offsetLeft + 5}px)` }
@@ -130,12 +130,15 @@
 
   /* ---------- keep the highlight on what is showing ---------- */
   function current() {
+    if (root.classList.contains('hub-on')) return 'home';
     const rs = el('rs'); if (rs && !rs.hidden) return 'research';
     if (railBtn(/^Predictions/)?.classList.contains('on') || S.page === 'picks') return 'pred';
     if (S.sport === 'soccer' && !S.scope && S.page !== 'transfers') { if (S.filter === 'live') return 'live'; if (S.filter === 'fav') return 'fav' }
     return S.sport || 'soccer';
   }
+  let hubLive = 0; document.addEventListener('fl:hub', e => { hubLive = e.detail.live; sync() });
   function liveCount() {
+    if (root.classList.contains('hub-on') || hubLive) return hubLive || 0;
     if (S.sport === 'soccer') return [...S.events.values()].filter(e => e.state === 'in').length;
     return [...(rail?.querySelectorAll('.lg:not(.dup) b.live') || [])].reduce((n, b) => n + (+b.textContent || 0), 0);
   }
