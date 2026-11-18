@@ -827,11 +827,29 @@ function rsEl(){
   if (!el) { el = document.createElement('section'); el.id = 'rs'; el.className = 'rs'; el.hidden = true; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Prop research'); document.body.appendChild(el) }
   return el;
 }
+// Research opens the Floodlight Lab (lab.html, the same page the Discord /lab command opens) inside this overlay.
+// The classic screen below stays one tap away, and is what tennis uses, since the Lab has no tennis.
+const RS_LAB = new Set(['nba', 'wnba', 'nfl', 'nhl', 'mlb', 'soccer']);
+function rsLab(o = {}){
+  const r = S.rs, el = rsEl(), th = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const q = new URLSearchParams({ embed: '1', sport: r.sport, theme: th });
+  if (o.name) q.set(o.team ? 'team' : 'player', o.name);
+  if (o.stat) q.set('stat', o.stat);
+  if (o.line != null && !isNaN(o.line)) q.set('line', o.line);
+  if (!o.name && (r.tab === 'board' || r.tab === 'team')) q.set('tab', r.tab);
+  r.lab = true;
+  el.innerHTML = `<div style="display:flex;flex-direction:column;height:100%"><div class="rs-top" style="flex:none;margin:0;padding:10px 16px"><button class="rs-x" data-rs="close" aria-label="Close research">‹ Back</button><h2>Research</h2>
+    <button class="linkbtn" data-rs="classic" style="margin-left:auto">Classic view</button></div>
+    <iframe src="/lab?${q}" title="Floodlight Lab" style="flex:1;width:100%;min-height:0;border:0;background:var(--bg)"></iframe></div>`;
+  el.style.overflow = 'hidden';
+}
 function openResearch(o = {}){
   if (document.documentElement.classList.contains('fl-noresearch')) return;
   const r = S.rs; r.open = true; if (o.sport) { r.sport = o.sport; store.set('fl.rsSport', r.sport) }
   if (o.tab) r.tab = o.tab;
   const el = rsEl(); el.hidden = false; document.documentElement.classList.add('rs-lock');
+  r.lab = false; el.style.overflow = '';
+  if (!o.classic && !store.get('fl.rsClassic', false) && RS_LAB.has(r.sport) && (o.name || !(o.id || o.fmId))) { hideResults?.(); return rsLab(o) }
   hideResults?.(); rsDfsLoad(r.sport);
   if (o.id || o.fmId || o.name) rsPick(o); else rsRender();
   el.scrollTop = 0; setTimeout(() => (el.querySelector('#rsQ') || el.querySelector('.rs-x'))?.focus(), 30);
@@ -957,10 +975,11 @@ const rsLineTxt = l => (Math.round(l * 10) / 10).toString();
 const rsSportName = s => RS_SPORTS.find(x => x[0] === s)[1];
 const rsScreen = s => ({ nba: 'Basketball', nfl: 'Football', mlb: 'Baseball', soccer: 'Soccer', nhl: 'Hockey', tennis: 'Tennis' })[s];
 function rsRender(){
-  const el = rsEl(); if (!S.rs.open) return;
+  const el = rsEl(); if (!S.rs.open || S.rs.lab) return;
   const r = S.rs, keepY = el.scrollTop, act = document.activeElement?.id;
   el.innerHTML = `<div class="rs-in">
     <div class="rs-top"><button class="rs-x" data-rs="close" aria-label="Close research">‹ Back</button><h2>Research</h2>
+      ${RS_LAB.has(r.sport) ? '<button class="linkbtn" data-rs="lab">Open the Lab</button>' : ''}
       <div class="seg rs-sp" role="tablist" aria-label="Sport">${RS_SPORTS.map(([k, l]) => `<button role="tab" data-rs="sport" data-to="${k}" aria-selected="${r.sport === k}" class="${r.sport === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="rs-tabs" role="tablist">${[['player', 'Player research'], ['board', "Today's player props"], ['team', 'Team props']].map(([k, l]) => `<button role="tab" data-rs="tab" data-to="${k}" aria-selected="${r.tab === k}">${l}</button>`).join('')}</div>
     ${r.tab === 'board' ? rsBoardHTML() : r.tab === 'team' ? rsTeamHTML() : rsPlayerHTML()}
@@ -1375,6 +1394,8 @@ document.addEventListener('click', ev => {
   if (a === 'open') return openResearch();
   if (a === 'pp') return openResearch({ sport: t.dataset.sport, name: t.dataset.name, stat: t.dataset.stat, line: t.dataset.line != null ? +t.dataset.line : undefined });
   if (a === 'close') return closeResearch();
+  if (a === 'classic') { store.set('fl.rsClassic', true); return openResearch({ classic: true }) }
+  if (a === 'lab') { store.set('fl.rsClassic', false); return openResearch(r.p && r.p.sport === r.sport && r.p.name ? { name: r.p.name } : {}) }
   if (a === 'sport') { r.sport = to; store.set('fl.rsSport', to); r.hits = []; r.q = ''; r.bmk = 'all'; rsDfsLoad(to); return rsRender() }
   if (a === 'tab') { r.tab = to; return rsRender() }
   if (a === 'pick') { const x = r.hits[+t.dataset.i]; r.hits = []; return x && rsPick({ ...x, sport: r.sport }) }

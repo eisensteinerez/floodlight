@@ -31,7 +31,7 @@ import discord_bot as bot
 
 PASS_HOURS = 12
 TICKET_MIN = 15
-IMG_HOSTS = ("a.espncdn.com", "img.mlbstatic.com", "www.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com")
+IMG_HOSTS = ("fonts.gstatic.com", "a.espncdn.com", "img.mlbstatic.com", "www.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com")
 
 _tickets, _instances, _imgs = {}, {}, {}
 _lock = threading.Lock()
@@ -127,7 +127,7 @@ def img(u):
             ct, data = r.headers.get("Content-Type") or "image/png", r.read(2_000_000)
     except Exception:
         return 404, "text/plain", b""
-    if not ct.startswith("image/"):
+    if not (ct.startswith("image/") or (p.hostname == "fonts.gstatic.com" and "font" in ct)):
         return 404, "text/plain", b""
     with _lock:
         _imgs[u] = (ct, data)
@@ -137,12 +137,59 @@ def img(u):
     return 200, ct, data
 
 
+FONTS = "https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..900&family=Geist:wght@400..800&family=Geist+Mono:wght@400..700&display=swap"
+_fonts = {}
+
+
+def fonts_css():
+    """Google's font sheet with the font files pointed at this server, so the Lab's type also loads inside Discord."""
+    if not _fonts.get("css"):
+        try:
+            req = urllib.request.Request(FONTS, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"})
+            css = urllib.request.urlopen(req, timeout=10).read().decode()
+            # the Latin files are enough; the other scripts would only add requests
+            blocks = re.findall(r"/\* ([a-z-]+) \*/\s*(@font-face\s*{[^}]*})", css)
+            keep = [b for name, b in blocks if name == "latin"] or [b for _, b in blocks]
+            css = "\n".join(keep) if keep else css
+            _fonts["css"] = re.sub(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", lambda m: f"url({img_url(m.group(1))})", css)
+        except Exception:
+            return ""
+    return _fonts["css"]
+
+
+def _extras(sport, p, name):
+    """The team crest (it lights the player card) and position, best effort."""
+    out = {"crest": "", "pos": ""}
+    try:
+        if sport == "soccer":
+            d = bot.D["fm_player"](None, name, "") or {}
+            tid = (d.get("team") or {}).get("id")
+            out["crest"] = f"https://images.fotmob.com/image_resources/logo/teamlogo/{tid}.png" if tid else ""
+            out["pos"] = d.get("position") or ""
+        elif sport == "mlb":
+            d = (bot.get_json(f"{bot.SAPI}/people/{p['id']}?hydrate=currentTeam", 86400).get("people") or [{}])[0]
+            tid = (d.get("currentTeam") or {}).get("id")
+            out["crest"] = f"https://www.mlbstatic.com/team-logos/{tid}.svg" if tid else ""
+            out["pos"] = (d.get("primaryPosition") or {}).get("abbreviation") or ""
+        else:
+            o = bot.find_player(sport, name) or {}
+            path = f"{bot.ESPN_PATH[sport].split('/')[0]}/{o.get('lg') or sport}"
+            a = bot.get_json(f"{bot.ESPN_WEB}/sports/{path}/athletes/{p['id']}", 86400).get("athlete") or {}
+            t = a.get("team") or {}
+            out["crest"] = ((t.get("logos") or [{}])[0]).get("href") or ""
+            out["pos"] = (a.get("position") or {}).get("abbreviation") or ""
+            out["num"] = a.get("displayJersey") or ""
+    except Exception:
+        pass
+    return out
+
+
 # ---------- the data ----------
 def _r(v, d=2):
     return None if v is None else round(v, d) if isinstance(v, float) else v
 
 
-def player(sport, name):
+def player(sport, name, stat=""):
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
     if not (name or "").strip():
@@ -178,7 +225,11 @@ def player(sport, name):
                                   "opp": x.get("opp") or "", "start": x.get("start") or ""})
     except Exception:
         pass
+    ex = _extras(sport, p, name.strip())
+    nxt = next(({"opp": x["opp"], "date": x["start"], "home": None} for x in lines if x.get("opp")), None)
     return {"sport": sport, "sportLabel": bot.SPORTS[sport], "name": p["name"], "team": p.get("team") or "", "photo": img_url(p.get("photo")),
+            "crest": img_url(ex.get("crest")), "pos": " · ".join(x for x in (ex.get("num") and "#" + ex["num"], ex.get("pos")) if x), "next": nxt,
+            "want": bot.stat_key(sport, stat) if stat else None,
             "seasonStart": bot.season_start(sport).isoformat(), "stats": stats, "games": games, "lines": lines, "at": int(time.time())}
 
 
@@ -439,13 +490,15 @@ def handle(path, q, signed_in=False):
     if path == "img":
         st, ct, data = img(q.get("u"))
         return st, (ct, data)
+    if path == "fonts.css":
+        return 200, ("text/css; charset=utf-8", fonts_css().encode())
     if path == "session":
         return session(q, signed_in)
     if not signed_in and not check_pass(q.get("_pass")):
         return 401, {"error": "Your Lab pass expired. Type /lab in Discord again.", "need": "lab"}
     try:
         if path == "player":
-            return 200, player(q.get("sport") or "nba", q.get("name") or "")
+            return 200, player(q.get("sport") or "nba", q.get("name") or "", q.get("stat") or "")
         if path == "team":
             return 200, team(q.get("sport") or "nba", q.get("name") or "")
         if path == "board":
