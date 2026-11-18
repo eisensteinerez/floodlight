@@ -115,7 +115,7 @@ body.embed .brand{display:none}
 @media (max-width:640px){.hero{padding:18px 16px;border-radius:22px}.ph{gap:14px}.face{width:84px;height:84px}.ph h1{font-size:44px}.ghost{font-size:120px}.meter{width:120px;margin:0 auto}}
 
 /* controls */
-.stats{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:thin}
+.stats{position:relative;display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:thin}
 .linebar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;margin:8px 0 12px}
 .lc{display:flex;align-items:center;gap:6px}
 .lc button{width:38px;height:40px;border:1px solid var(--line);background:var(--surface);border-radius:var(--rc);font-size:18px;color:var(--muted);transition:border-color .2s,color .2s,transform .2s var(--spring)}
@@ -517,7 +517,7 @@ function render() {
     <div class="card" style="margin-top:12px">${propTable()}</div>
     ${p.kind === 'team' ? teamExtras() : ''}
     <div class="card" style="margin-top:12px">${gameLog(shown)}</div>`;
-  const on = document.querySelector('.qf.on'); if (on && !S.drag) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const on = document.querySelector('.stats .qf.on'); if (on) { const box = on.parentElement; if (on.offsetLeft + on.offsetWidth > box.scrollLeft + box.clientWidth || on.offsetLeft < box.scrollLeft) box.scrollLeft = Math.max(0, on.offsetLeft - 40) }
 }
 function hero(gs, meter) {
   const p = S.p, k = S.k, team = p.kind === 'team', glow = p.crest || (team ? p.photo : ''), last = team ? p.name : p.name.trim().split(/\s+/).slice(-1)[0];
