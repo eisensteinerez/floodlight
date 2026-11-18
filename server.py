@@ -85,7 +85,7 @@ def signup_allowed(addr):
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
-                "arena.css", "shell.js", "dates.js", "cards.js"}
+                "arena.css", "shell.js", "dates.js", "cards.js", "predict.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -994,6 +994,41 @@ def _save_accounts():
     storage.save(SESSIONS_FILE, _sessions)
 
 
+# ---------- what members picked (the community split on a prediction) ----------
+
+VOTES_FILE = CACHE_DIR / "votes.json"
+_votes = storage.load(VOTES_FILE, {})   # game key ("soccer:12345") -> {username: "home" | "draw" | "away"}
+VOTE_KEY = re.compile(r"[a-z]{2,12}:[A-Za-z0-9._-]{1,40}")
+VOTE_MAX_GAMES = 4000
+
+
+def vote_split(key):
+    out = {"home": 0, "draw": 0, "away": 0}
+    for pick in (_votes.get(key) or {}).values():
+        if pick in out:
+            out[pick] += 1
+    out["n"] = sum(out.values())
+    return out
+
+
+def cast_vote(user, body):
+    key, pick = str(body.get("key") or ""), str(body.get("pick") or "")
+    if not VOTE_KEY.fullmatch(key) or pick not in ("", "home", "draw", "away"):
+        return 400, {"error": "Bad pick."}
+    with _acct_lock:
+        game = _votes.setdefault(key, {})
+        if pick:
+            game[user["username"].lower()] = pick
+        else:
+            game.pop(user["username"].lower(), None)
+        if not game:
+            _votes.pop(key, None)
+        while len(_votes) > VOTE_MAX_GAMES:   # oldest games first; a dict keeps the order they were added
+            _votes.pop(next(iter(_votes)))
+        storage.save(VOTES_FILE, _votes)
+        return 200, {"ok": True, "split": vote_split(key)}
+
+
 def role_of(u):
     """admin, research (everything), viewer (games only) or pending (waiting for the admin)."""
     if not u:
@@ -1299,6 +1334,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
         if not user:
             return self.send_auth(401, {"error": "Log in first."})
+        if u.path == "/api/picks/vote":
+            if not can_view(user):
+                return self.send_auth(403, {"error": "Your account is waiting for the admin to approve it."})
+            return self.send_auth(*cast_vote(user, body))
         if u.path == "/api/me/prefs":
             with _acct_lock:
                 user["prefs"] = clean_prefs(body, user.get("prefs", {}))
@@ -1354,6 +1393,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": "Your account is waiting for the admin to approve it."}, 403)
             if u.path.startswith(("/api/dfs/", "/api/forecast/")) and not can_research(user):
                 return self.send_json({"error": "Your account doesn't include research."}, 403)
+        if u.path == "/api/picks/split":
+            keys = [k for k in (q.get("keys") or "").split(",") if VOTE_KEY.fullmatch(k)][:60]
+            with _acct_lock:
+                return self.send_json({"splits": {k: vote_split(k) for k in keys}})
         try:
             if u.path.startswith("/api/kalshi/"):
                 path = u.path[len("/api/kalshi/"):]

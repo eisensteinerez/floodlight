@@ -1163,6 +1163,7 @@ document.addEventListener('error', ev => {
 
 <script src="dates.js"></script>
 <script src="cards.js"></script>
+<script src="predict.js"></script>
 <script>
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const BASE2 = 'https://site.api.espn.com/apis/v2/sports/soccer';
@@ -4444,6 +4445,24 @@ function predict(e){
   const score = scores.find(([i, j]) => pick === 'home' ? i > j : pick === 'away' ? j > i : i === j) || scores[0];
   return { ready: !!tbl, H, A, lh, la, model, market, final, pick, top, conf, score: [score[0], score[1]], o25, btts, likely: scores.slice(0, 3), fh, fa, outH, outA, mu, lineup };
 }
+/* the same reasoning as reasons(), cut into short cards for the prediction panel */
+function keyFactors(e, P){
+  const out = [], hn = e.home.name, an = e.away.name, ppg = r => r?.gp ? r.pts / r.gp : null;
+  if (P.H?.gp && P.A?.gp) {
+    const a = ppg(P.H), b = ppg(P.A);
+    if (Math.abs(a - b) >= .05) out.push({ ico: 'table', side: a > b ? 'home' : 'away', title: 'League standing', text: `${a > b ? hn : an} take ${Math.max(a, b).toFixed(2)} points a game against ${Math.min(a, b).toFixed(2)}${P.H.rank && P.A.rank ? `, ${ord(a > b ? P.H.rank : P.A.rank)} against ${ord(a > b ? P.A.rank : P.H.rank)} in the table` : ''}.` });
+    const gH = P.H.gf / P.H.gp, gA = P.A.gf / P.A.gp, cH = P.H.ga / P.H.gp, cA = P.A.ga / P.A.gp;
+    out.push({ ico: 'goals', side: gH - cH > gA - cA + .1 ? 'home' : gA - cA > gH - cH + .1 ? 'away' : '', title: 'Attack and defence', text: `${hn} score ${gH.toFixed(1)} and concede ${cH.toFixed(1)} a game. ${an} score ${gA.toFixed(1)} and concede ${cA.toFixed(1)}.` });
+  } else out.push({ ico: 'info', title: 'No league table', text: `There is no table for this competition, so both sides start as average and form and the market carry more weight.` });
+  if (P.fh != null && P.fa != null) out.push({ ico: 'form', side: Math.abs(P.fh - P.fa) > .15 ? (P.fh > P.fa ? 'home' : 'away') : '', title: 'Recent form', text: `${hn} ${(e.home.form || '').slice(-5)}, ${an} ${(e.away.form || '').slice(-5)} over the last five.` });
+  out.push({ ico: 'home', side: 'home', title: 'Home advantage', text: `${hn} are at home, worth roughly a 10% lift to the goals they are expected to score.` });
+  if (P.lineup?.rH != null) { const conf = P.lineup.type === 'standard' || P.lineup.type === 'confirmed', miss = l => l.length ? ` without ${l.slice(0, 2).map(x => x.name).join(' and ')}` : '';
+    out.push({ ico: 'squad', side: Math.abs(P.lineup.rH - P.lineup.rA) > .08 ? (P.lineup.rH > P.lineup.rA ? 'home' : 'away') : '', title: conf ? 'Confirmed lineups' : 'Predicted lineups', text: `${hn} field ${Math.round(P.lineup.rH * 100)}% of their strongest eleven${miss(P.lineup.missH)}. ${an} field ${Math.round(P.lineup.rA * 100)}%${miss(P.lineup.missA)}.` }) }
+  else if (P.outH || P.outA) out.push({ ico: 'squad', side: P.outH === P.outA ? '' : P.outH < P.outA ? 'home' : 'away', title: 'Missing players', text: `${hn} have ${P.outH} out, ${an} have ${P.outA}.` });
+  if (P.market) { const fav = ['home', 'draw', 'away'].reduce((a, b) => P.market[b] > P.market[a] ? b : a);
+    out.push({ ico: 'market', side: fav === 'draw' ? '' : fav, title: 'The market', text: `Kalshi traders ${fav === 'draw' ? 'see a draw as the likeliest result' : `make ${e[fav].name} the favourite`} at ${pct(P.market[fav])}%. The model alone says ${pct(P.model[fav])}%.` }) }
+  return out;
+}
 const pickLabel = (e, k) => k === 'draw' ? 'Draw' : `${e[k].name} win`;
 const ord = n => n + (['th','st','nd','rd'][(n % 100 > 10 && n % 100 < 14) || n % 10 > 3 ? 0 : n % 10]);
 function reasons(e, P){
@@ -4591,22 +4610,11 @@ function insightPane(e, lite){
     : P.top >= .62 ? `${fav} are clear favourites. An upset would be a surprise.` : P.top >= .48 ? `${fav} are favourites, but ${other} have a real chance.` : `Close to a coin flip. ${fav} have a slight edge.`;
   let body = '';
   if (pv === 'sum' || lite) {
-    const card = k => { const p = P.final[k], isPick = P.pick === k, mine = myPick?.pick === k, nm = k === 'draw' ? 'Draw' : e[k].name, col = k === 'home' ? e.hc : k === 'away' ? e.ac : 'var(--draw)';
-      const inner = `${isPick ? `<i class="vc-tag">Our pick</i>` : ''}${actual === k ? `<i class="vc-tag res">Result</i>` : ''}
-        <span class="vc-crest">${k === 'draw' ? '<u>=</u>' : e[k].logo ? `<img src="${esc(e[k].logo)}" alt="">` : ''}</span><span class="vc-n">${esc(nm)}</span>
-        <b class="num">${pct(p)}<i>%</i></b><span class="vc-o num">fair ${fairUS(p)}</span><span class="vc-fill" style="height:${Math.max(6, p * 100).toFixed(1)}%"></span>${mine ? `<span class="vc-mine">✓ Your pick</span>` : ''}`;
-      return post ? `<div class="vc${isPick ? ' pick' : ''}${actual === k ? ' hit' : ''}" style="--c:${col}">${inner}</div>`
-        : `<button class="vc${isPick ? ' pick' : ''}${mine ? ' mine' : ''}" style="--c:${col}" data-act="mypick" data-to="${k}" aria-pressed="${mine}" aria-label="${esc(`${nm}, ${pct(p)} percent. Save as your pick`)}">${inner}</button>` };
-    const ring = (p, label, tip) => { const C = 2 * Math.PI * 26; return `<div class="pg" data-tip="${esc(tip)}" tabindex="0"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle class="pg-a" cx="32" cy="32" r="26" stroke-dasharray="${(p * C).toFixed(1)} ${C.toFixed(1)}" style="--len:${(p * C).toFixed(1)}" transform="rotate(-90 32 32)"/></svg><b class="num">${pct(p)}<i>%</i></b><span>${label}</span></div>` };
-    const vdHTML = `<div class="vd"><div class="vd-h"><small>${post ? 'Pre-match prediction' : 'Floodlight prediction'}${fcTag(P)}</small>
-        <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}" data-tip="How sure the model is. Strong means one result stands well clear, Lean means a modest edge, Toss-up means it could go any way.">${P.conf === 'Toss-up' ? 'Toss-up' : P.conf + ' confidence'}</span></div>
-      <h4 class="vd-pick">${esc(pickLabel(e, P.pick))}</h4><p class="vd-line">${esc(line)}</p>
-      ${post ? `<p class="pred-out ${actual === P.pick ? 'ok' : 'miss'}">${actual === P.pick ? 'Called it' : 'Missed'}: finished ${esc(e.home.score)}–${esc(e.away.score)}</p>` : ''}
-      <div class="vcs" role="group" aria-label="${post ? 'Chances before kick-off' : 'Chances. Tap one to save your own pick'}">${card('home')}${card('draw')}${card('away')}</div>
-      ${post ? '' : `<p class="vd-hint">Tap a card to save your own pick and track it in your profile.</p>`}</div>`;
-    const pgHTML = `<div class="pgs"><div class="pg sc" data-tip="The single most likely final score" tabindex="0"><b class="num">${P.score[0]}–${P.score[1]}</b><span>Likeliest score</span></div>
-        ${ring(P.o25, 'Over 2.5 goals', 'Chance of three or more goals in the match')}${ring(P.btts, 'Both score', 'Chance that both teams score at least once')}
-        <div class="pg sc" data-tip="Goals each side is expected to score on average" tabindex="0"><b class="num">${P.lh.toFixed(1)}–${P.la.toFixed(1)}</b><span>Expected goals</span></div></div>`;
+    const vdHTML = flPred({ key: 'soccer:' + e.id, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac },
+      probs: P.final, pick: P.pick, pickLabel: pickLabel(e, P.pick), line, conf: P.conf, tag: fcTag(P), score: P.score, scoreNote: 'The single likeliest final score.',
+      extra: [{ v: `${P.lh.toFixed(1)}–${P.la.toFixed(1)}`, l: 'Expected goals' }, { v: pct(P.o25) + '%', l: 'Over 2.5 goals' }, { v: pct(P.btts) + '%', l: 'Both score' }],
+      factors: lite ? null : keyFactors(e, P), my: myPick?.pick, final: post ? { actual, text: `finished ${e.home.score}–${e.away.score}` } : null, pickAttr: k => `data-act="mypick" data-to="${k}"` });
+    const pgHTML = '';
     if (lite) return vdHTML + pgHTML;
     body = vdHTML + pgHTML + `${P.market ? `<div class="sub-h"><h5>Model vs market</h5><small>Kalshi</small></div>
       <div class="vs-table">${['home','draw','away'].map(k => { const g = P.model[k] - P.market[k];
