@@ -4852,7 +4852,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 (function init(){
   checkVersion();
   applyPrefs(); renderProfileBtn(); loadMe();
-  const th = store.get('fl.theme', null); if (th) document.documentElement.dataset.theme = th;
+  document.documentElement.dataset.theme = store.get('fl.theme', null) || 'dark';   // dark is the house look; the switch in the top bar still flips it
   S.filter = store.get('fl.filter', 'all'); S.scope = store.get('fl.scope', null);
   if (!QUICK.includes(S.filter)) { if (LG[S.filter] && S.filter !== 'all') S.scope = S.filter; S.filter = 'all' }   // older saved state kept the league in the filter
   if (S.scope && !LG[S.scope]) S.scope = null;
