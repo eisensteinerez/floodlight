@@ -1127,7 +1127,15 @@ button.bx-hero:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fl-toast{display:flex;align-items:center;gap:10px;text-align:left;transition:opacity .4s,transform .4s var(--ease)}
 .fl-toast.hot i{width:8px;height:8px;border-radius:50%;background:var(--live);animation:hubPulse 1.4s infinite}
 .fl-toast.out{opacity:0;transform:translateY(8px)}
-.fl-rv:not(.fl-seen){opacity:0;transform:translateY(14px)}
-.fl-rv{transition:opacity .5s var(--ease),transform .5s var(--ease)}
-@media (prefers-reduced-motion:reduce){.fl-rv:not(.fl-seen){opacity:1;transform:none}.cmdk,.cmdk-bg{animation:none}}
+@media (prefers-reduced-motion:reduce){.cmdk,.cmdk-bg{animation:none}}
 .cmdk-in input:focus-visible{outline:none;box-shadow:none}
+
+/* ---------- smooth scrolling (ported from the scroll-ghosting fix) ----------
+   Live backdrop blurs over scrolling content, and a viewport-sized light that follows the pointer, made the
+   graphics card repaint huge layers every frame; with oversized photos it ran out of memory and painted ghost
+   copies. Glass stays only on the fixed chrome (sidebar, bottom bar); everything that scrolls uses a solid tint. */
+#flLight{display:none!important}
+.tabs,.shell.stage .tabs,.sheet,.drawer-scrim,.bx-card-img .mx-badge,.tn-h-r,.card,.mc-c,.pane.pgrid > .pcard,.hero.mh .score,.rs-strip,.rs-meterbox,.slip{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.tabs,.shell.stage .tabs{background:color-mix(in oklab,var(--surface) 97%,transparent)!important}
+.top{backdrop-filter:blur(8px)!important;-webkit-backdrop-filter:blur(8px)!important;background:color-mix(in oklab,var(--bg) 92%,transparent)!important}
+.cmdk-bg{backdrop-filter:none;background:rgba(5,5,8,.78)}

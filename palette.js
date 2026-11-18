@@ -1,7 +1,7 @@
 /* Floodlight · the command palette (Cmd/Ctrl + K) and a few site-wide touches.
    The palette jumps anywhere: any page or sport, any game on today's Live Hub, any team playing today, UFC events and
    fighters, and "research <name>" in the Lab. Arrow keys move, Enter opens, Esc closes.
-   Also here: live toasts when a followed team scores or a game ends, and sections that reveal as they scroll in. */
+   Also here: live toasts when a followed team scores or a game ends. */
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ic = (k, s = 18) => window.flShell?.ic ? window.flShell.ic(k, s) : '';
@@ -123,11 +123,4 @@
     host.appendChild(t); setTimeout(() => t.classList.add('out'), 6500); setTimeout(() => t.remove(), 7000);
   }
 
-  /* ---------- sections reveal as they scroll into view ---------- */
-  if (!still() && 'IntersectionObserver' in window) {
-    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fl-seen'); io.unobserve(e.target) } }), { rootMargin: '0px 0px -8% 0px' });
-    const watch = () => document.querySelectorAll('.group:not(.fl-rv), .hb:not(.fl-rv), .sfx:not(.fl-rv)').forEach(el => { el.classList.add('fl-rv'); const r = el.getBoundingClientRect(); if (r.top < innerHeight) el.classList.add('fl-seen'); else io.observe(el) });
-    let q = 0; new MutationObserver(() => { if (q) return; q = requestAnimationFrame(() => { q = 0; watch() }) }).observe(document.querySelector('.shell') || document.body, { childList: true, subtree: true });
-    watch();
-  }
 })();
