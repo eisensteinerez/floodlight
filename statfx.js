@@ -53,7 +53,7 @@
     const big = Math.max(.02, ...mom.map(Math.abs));
     const last = ok[ok.length - 1], hp = Math.round(last.p * 100), swing = ok.reduce((m, q, i) => i && Math.abs(q.p - ok[i - 1].p) > Math.abs(m.d) ? { d: q.p - ok[i - 1].p, q } : m, { d: 0, q: null });
     const hit = ok.filter((_, i) => i % Math.ceil(ok.length / 60) === 0).map(q => `<rect x="${(x(q.t) - 5).toFixed(1)}" y="0" width="10" height="${H}" data-tip="${esc(`${q.tip ? q.tip + ' · ' : ''}${o.home} ${Math.round(q.p * 100)}% · ${o.away} ${100 - Math.round(q.p * 100)}%`)}"/>`).join('');
-    return `<div class="sfx vz-wp" style="--hc:${o.hc};--ac:${o.ac}">${head('Win probability', `${o.home} ${hp}% · ${o.away} ${100 - hp}%${o.live ? ' · live' : ''}`, true)}
+    return `<div class="sfx vz-wp" style="--hc:${o.hc};--ac:${o.ac}">${head(o.title || 'Win probability', o.title ? `${hp >= 50 ? o.home : o.away} on top${o.live ? ' · live' : ''}` : `${o.home} ${hp}% · ${o.away} ${100 - hp}%${o.live ? ' · live' : ''}`, true)}
       <div class="vz-wp-box"><span class="vz-wp-lab top">${esc(o.home)}</span><span class="vz-wp-lab bot">${esc(o.away)}</span>
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(`Win probability through the game. ${o.home} now ${hp}%.${swing.q ? ` Biggest swing: ${swing.q.tip || ''}` : ''}`)}">
         <defs><clipPath id="vzTop${o.id}"><rect x="0" y="0" width="${W}" height="${y(.5)}"/></clipPath><clipPath id="vzBot${o.id}"><rect x="0" y="${y(.5)}" width="${W}" height="${H}"/></clipPath></defs>
