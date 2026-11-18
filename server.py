@@ -61,6 +61,26 @@ ADMIN_PASSWORD = os.environ.get("FLOODLIGHT_ADMIN_PASSWORD") or ""
 # Members only: when hosted, people need an account the admin has approved before they see any data.
 GATED = HOSTED and os.environ.get("FLOODLIGHT_OPEN", "") != "1"
 ROLES = ("pending", "viewer", "research")
+# What a brand-new account can do on the hosted site. "viewer" lets people create an account and get straight in to the
+# games; research stays something the admin grants. Set FLOODLIGHT_SIGNUP_ROLE=pending to approve every member by hand.
+SIGNUP_ROLE = os.environ.get("FLOODLIGHT_SIGNUP_ROLE", "viewer")
+if SIGNUP_ROLE not in ROLES:
+    SIGNUP_ROLE = "viewer"
+_signups = {}   # address -> times of recent sign-ups, so one visitor can't create accounts in bulk
+
+
+def signup_allowed(addr):
+    now = time.time()
+    recent = [t for t in _signups.get(addr, []) if now - t < 3600]
+    if len(recent) >= 5:
+        _signups[addr] = recent
+        return False
+    recent.append(now)
+    _signups[addr] = recent
+    if len(_signups) > 5000:
+        for k in [k for k, v in _signups.items() if not v or now - v[-1] > 3600]:
+            _signups.pop(k, None)
+    return True
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
@@ -1092,7 +1112,7 @@ def signup(body):
     with _acct_lock:
         if key in _users:
             return 409, {"error": "That username is taken. Try another."}
-        _users[key] = _new_user(username, password, "admin" if key == ADMIN else "pending",
+        _users[key] = _new_user(username, password, "admin" if key == ADMIN else SIGNUP_ROLE,
                                 body.get("display"), body.get("prefs"))
         token = new_session(key)
         _save_accounts()
@@ -1247,6 +1267,9 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             return self.send_auth(400, {"error": "Bad JSON."})
         if u.path == "/api/auth/signup":
+            addr = (self.headers.get("X-Forwarded-For") or self.client_address[0] or "").split(",")[0].strip()
+            if GATED and not signup_allowed(addr):
+                return self.send_auth(429, {"error": "Too many new accounts from here. Try again in an hour."})
             return self.send_auth(*signup(body))
         if u.path == "/api/auth/login":
             return self.send_auth(*login(body))

@@ -1615,7 +1615,7 @@ function teamSide(t){
 
 const TABS = [['pitch','Pitch'],['stats','Stats'],['odds','Odds'],['insight','Prediction'],['flow','Momentum'],['lineups','Lineups'],['table','Table'],['feed','Commentary']];
 function renderSheet(){
-  const v = S.stack[S.stack.length-1];
+  const v = S.stack[S.stack.length-1]; syncStage();
   if (v?.type?.startsWith('fb')) return v.type === 'fbgame-stand' ? fbStandingsSheet(v.id) : fbRenderSheet(v);
   if (v?.type?.startsWith('bb')) return bbRenderSheet(v);
   if (v && v.type !== 'match') return renderInfo(v);
@@ -2104,29 +2104,42 @@ function oddsPane(e){
   if (!o || !o.at) { loadMatchOdds(e).then(() => { if (S.tab === 'odds' && S.sel === e.id) renderSheet() }); return `<div class="skel" style="height:240px"></div>` }
   if (o.offline) return serverNote('odds');
   if (!o.found) return `<div class="note">${e.state === 'post' ? 'Markets for this match have closed.' : 'No Kalshi market found for this match yet.'}</div>`;
+  // every price is a button: tap to drop it on the slip, which works out the chance, the fair price and what a stake returns
+  const slip = S.slip?.id === e.id ? S.slip : (S.slip = { id: e.id, legs: [], stake: S.slip?.stake || 10 });
+  const on = k => slip.legs.some(l => l.k === k), pick = (k, label, p) => `data-act="slip" data-k="${esc(k)}" data-label="${esc(label)}" data-p="${p}" aria-pressed="${on(k)}"`;
   let html = '';
   if (o.ml) {
+    const C = 2 * Math.PI * 34;
     const cell = (k, label, col) => { const x = o.ml[k]; if (!x) return '';
-      return `<div class="ml${flashKey(e.id+k, x.p)}" style="--c:${col}"><span class="lbl">${esc(label)}</span><b class="num">${pct(x.p)}%</b>
-        <span class="am num">${american(x.p)} ${moveTag(x.p, x.prev)}</span><i style="width:${pct(x.p)}%"></i></div>` };
-    html += `<div class="sub-h" style="margin-top:0"><h5>Moneyline · chance to win</h5><small>Kalshi price = implied probability</small></div>
-      <div class="mls">${cell('home', e.home.name, e.hc)}${cell('draw', 'Draw', 'var(--draw)')}${cell('away', e.away.name, e.ac)}</div>`;
+      return `<button class="ob${on('ml' + k) ? ' on' : ''}${flashKey(e.id+k, x.p)}" style="--c:${col}" ${pick('ml' + k, k === 'draw' ? 'Draw' : label + ' win', x.p)}>
+        <svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34"/><circle class="v" cx="40" cy="40" r="34" stroke-dasharray="${(x.p * C).toFixed(1)} ${C.toFixed(1)}"/></svg>
+        <b class="num">${pct(x.p)}<small>%</small></b><span class="lbl">${esc(label)}</span><span class="am num">${american(x.p)} ${moveTag(x.p, x.prev)}</span></button>` };
+    html += `<div class="sub-h" style="margin-top:0"><h5>Match result</h5><small>Price = chance to win · tap to add to your slip</small></div>
+      <div class="obs">${cell('home', e.home.name, e.hc)}${cell('draw', 'Draw', 'var(--draw)')}${cell('away', e.away.name, e.ac)}</div>`;
   }
+  const chip = (k, label, top, p, prev, col, main) => `<button class="oc${on(k) ? ' on' : ''}${main ? ' main' : ''}${flashKey(e.id + k, p)}" style="--c:${col};--p:${pct(p)}%" ${pick(k, label, p)}><span>${esc(top)}</span><b class="num">${pct(p)}%</b><small class="num">${american(p)} ${moveTag(p, prev)}</small></button>`;
   if (o.spread?.length) {
-    html += `<div class="sub-h"><h5>Spread · win by more than</h5></div><div class="lines">` + ['home','away'].map(side => {
-      const rows = o.spread.filter(x => x.side === side); if (!rows.length) return '';
-      const t = e[side];
-      return rows.map(x => `<div class="ln${flashKey(e.id+'s'+side+x.line, x.p)}"><span><b>${esc(t.abbr || t.name)} −${x.line}</b> <small>${esc(t.name)} by ${Math.ceil(x.line)}+</small></span>
-        <span class="bar"><i style="width:${pct(x.p)}%;background:${side==='home'?e.hc:e.ac}"></i></span><span class="num pv">${pct(x.p)}% <small>${american(x.p)}</small> ${moveTag(x.p, x.prev)}</span></div>`).join('') }).join('') + `</div>`;
+    html += `<div class="sub-h"><h5>Spread</h5><small>Win by more than</small></div>` + ['home','away'].map(side => {
+      const rows = o.spread.filter(x => x.side === side); if (!rows.length) return ''; const t = e[side];
+      return `<div class="ocs-r"><span class="ocs-t"><img src="${esc(t.logo)}" alt="">${esc(t.abbr || t.name)}</span><div class="ocs">${rows.map(x => chip('s' + side + x.line, `${t.abbr || t.name} −${x.line}`, `−${x.line}`, x.p, x.prev, side === 'home' ? e.hc : e.ac)).join('')}</div></div>` }).join('');
   }
   if (o.total?.length) {
     const main = o.total.reduce((a, b) => Math.abs(b.p - .5) < Math.abs(a.p - .5) ? b : a);
-    html += `<div class="sub-h"><h5>Total goals · over</h5><small>Main line: ${main.line} (${pct(main.p)}% over)</small></div><div class="lines">` +
-      o.total.map(x => `<div class="ln${x === main ? ' main' : ''}${flashKey(e.id+'t'+x.line, x.p)}"><span><b>Over ${x.line}</b> <small>Under ${pct(1 - x.p)}%</small></span>
-        <span class="bar"><i style="width:${pct(x.p)}%;background:var(--accent)"></i></span><span class="num pv">${pct(x.p)}% <small>${american(x.p)}</small> ${moveTag(x.p, x.prev)}</span></div>`).join('') + `</div>`;
+    html += `<div class="sub-h"><h5>Total goals</h5><small>Main line ${main.line}</small></div>
+      <div class="ocs-r"><span class="ocs-t">Over</span><div class="ocs">${o.total.map(x => chip('to' + x.line, `Over ${x.line} goals`, `O ${x.line}`, x.p, x.prev, 'var(--accent)', x === main)).join('')}</div></div>
+      <div class="ocs-r"><span class="ocs-t">Under</span><div class="ocs">${o.total.map(x => chip('tu' + x.line, `Under ${x.line} goals`, `U ${x.line}`, 1 - x.p, x.prev != null ? 1 - x.prev : null, 'var(--draw)', x === main)).join('')}</div></div>`;
   }
+  html += slipHTML(slip);
   html += `<p class="srcnote">Prices from <a href="https://kalshi.com/sports/soccer" target="_blank" rel="noopener">Kalshi</a>, updated ${new Date(o.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} and every 20 seconds while this tab is open. ▲▼ show the change over 24 hours. American odds are converted from the price and ignore fees.</p>`;
   return html;
+}
+function slipHTML(slip){
+  const n = slip.legs.length, p = slip.legs.reduce((a, l) => a * l.p, 1), ret = n && p > 0 ? slip.stake / p : 0;
+  return `<div class="slip${n ? ' has' : ''}" aria-live="polite"><div class="slip-h"><b>Your slip</b><small>${n ? `${n} pick${n === 1 ? '' : 's'}` : 'Tap any price above'}</small>${n ? `<button class="linkbtn" data-act="slipclear">Clear</button>` : ''}</div>
+    ${n ? `<div class="slip-legs">${slip.legs.map(l => `<button data-act="slip" data-k="${esc(l.k)}" data-label="${esc(l.label)}" data-p="${l.p}" title="Remove">${esc(l.label)} <b class="num">${pct(l.p)}%</b><i aria-hidden="true">×</i></button>`).join('')}</div>
+    <div class="slip-st" role="group" aria-label="Stake"><span>Stake</span>${[5, 10, 25, 50, 100].map(v => `<button class="${slip.stake === v ? 'on' : ''}" data-act="slipstake" data-to="${v}">$${v}</button>`).join('')}</div>
+    <div class="slip-out"><div><b class="num">${p < .01 ? '<1' : pct(p)}%</b><span>Chance</span></div><div><b class="num">${american(p)}</b><span>Fair price</span></div><div><b class="num">$${ret.toFixed(2)}</b><span>Returns</span></div><div class="win"><b class="num">+$${(ret - slip.stake).toFixed(2)}</b><span>Profit</span></div></div>
+    ${n > 1 ? `<p class="slip-n">Picks are multiplied together as if they were unrelated. Picks from the same match are linked, so treat a combined number as a rough guide.</p>` : ''}` : ''}</div>`;
 }
 function serverNote(what){
   return `<div class="note">${what === 'odds' ? 'Odds' : 'Market values, photos and injuries'} need the Floodlight server. Start the app with <code>python3 server.py</code> instead of a plain file server, then reload.</div>`;
@@ -2302,7 +2315,7 @@ function openTeam(id, lg){
 function openPlayer(id, o = {}){ if (!id) return; pushView({type:'player', id, tab:'overview', fmId: o.fmId || null}); const v = S.stack[S.stack.length-1]; if (!v.data) loadPlayer(v) }
 function goBack(){
   S.stack.pop();
-  if (!S.stack.length) { $('sheet').classList.remove('open'); $('sheet').innerHTML = S.page === 'transfers' ? marketSummary(marketFiltered()) : emptySheet(); return }
+  if (!S.stack.length) { syncStage(); $('sheet').classList.remove('open'); $('sheet').innerHTML = S.page === 'transfers' ? marketSummary(marketFiltered()) : emptySheet(); return }
   renderSheet();
 }
 
@@ -2323,11 +2336,27 @@ function renderInfo(v){
     : v.type === 'team' ? teamPane(v) : playerPane(v);
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${heroHTML}${tabs.length ? tabsHTML(tabs, v.tab) : ''}<div class="pane" id="pane" ${tabs.length ? 'role="tabpanel"' : ''} style="--tc:${esc(v.color || 'var(--accent)')}">${body}</div></div>`;
+  stageDress(sheet, v);
   sheet.querySelector('.sheet-body').scrollTop = scroll;
   if (S.focusTab) { sheet.querySelector('.tab.on')?.focus(); S.focusTab = false }
   if (v.type === 'team' && v.tab === 'table' && v.data && !v.data.error) loadTeamTable(v);
   if (v.type === 'team' && v.tab === 'xi' && v.data && !v.data.error && !v.lastXI) loadLastXI(v);
   if (v.type === 'player' && v.tab === 'career' && v.data?.a && !v.career && v.fm && !v.fm.loading && !fmOK(v)?.career?.senior) loadCareer(v);
+}
+// Dress a profile page: a ghost title behind the header, and the tab's sections gathered into cards that flow in columns.
+const PCARDS = { team: ['overview', 'transfers', 'news'], fmteam: ['transfers'], player: ['overview', 'stats', 'value', 'transfers', 'news'] };
+function stageDress(sheet, v){
+  const hero = sheet.querySelector('.hero.solo'), h3 = hero?.querySelector('h3');
+  if (hero && h3) { const t = h3.textContent.trim(); hero.dataset.ghost = v.type === 'player' ? t.split(' ').slice(-1)[0] : t; hero.classList.add('h-' + v.type) }
+  const pane = sheet.querySelector('#pane'); if (!pane || !PCARDS[v.type]?.includes(v.tab)) return;
+  const kids = [...pane.children]; if (kids.length < 3) return;
+  const out = []; let cur = null;
+  for (const k of kids) {
+    if (k.matches('.srcnote, p.note, .rg')) { out.push(k); cur = null; continue }
+    if (!cur || k.matches('h5, .sub-h, .bench')) { cur = document.createElement('section'); cur.className = 'pcard'; out.push(cur) }
+    cur.appendChild(k);
+  }
+  pane.classList.add('pgrid'); pane.replaceChildren(...out);
 }
 function tcHero(back){
   return `<div class="hero solo" style="--tc:var(--accent)">${topBar(back)}<div class="thead"><div><h3>Transfer centre</h3>
@@ -2412,7 +2441,13 @@ function teamPane(v){
     }
     const top = (n, l) => { const arr = sq.map(a=>({a, n:astat(a,n)})).filter(x=>x.n>0).sort((x,y)=>y.n-x.n).slice(0,5);
       return arr.length ? `<div><h5>${l}</h5>${arr.map(x=>`<button class="prow" data-player="${esc(x.a.id)}" style="grid-template-columns:22px minmax(0,1fr) auto"><img src="${esc(x.a.flag?.href||'')}" alt="" onerror="this.style.visibility='hidden'"><span class="nm"><span>${esc(x.a.displayName)}</span></span><span class="st2" style="font-size:15px;color:var(--fg)">${x.n}</span></button>`).join('')}</div>` : '' };
-    return `${next ? `<h5>Next match</h5>${fixtureRow(next, id, false)}${kickoffIn(new Date(next.date)) ? `<div class="callout">${kickoffIn(new Date(next.date))}. Open <button class="linkbtn" data-act="tab" data-to="xi">Predicted XI</button> for the likely lineup.</div>` : ''}` : ''}
+    const run = d.results.slice(0, 20).map(e => ({ e, x: resultFor(e, id) })).filter(o => o.x?.r).reverse();
+    const pts = run.reduce((a, o) => a + (o.x.r === 'W' ? 3 : o.x.r === 'D' ? 1 : 0), 0), gfs = run.map(o => o.x.score.split('–').map(Number)), mx = Math.max(1, ...gfs.map(([a, b]) => Math.abs(a - b)));
+    const runHTML = run.length >= 3 ? `<div class="sub-h" style="margin-top:0"><h5>Season run</h5><small>${run.length} games, oldest to newest</small></div>
+      <div class="run" role="img" aria-label="Results of the last ${run.length} games">${run.map((o, i) => { const [a, b] = gfs[i], m = a - b;
+        return `<i class="${o.x.r}" style="--h:${(Math.abs(m) / mx * 100).toFixed(0)}%" tabindex="0" data-tip="${esc(`${fmtDate(new Date(o.e.date))} · ${o.x.home ? 'vs' : 'at'} ${o.x.op.team.displayName} · ${o.x.score} ${o.x.r === 'W' ? 'won' : o.x.r === 'L' ? 'lost' : 'drew'}`)}"><s></s></i>` }).join('')}</div>
+      <div class="run-k"><span><b class="num">${run.filter(o => o.x.r === 'W').length}</b>won</span><span><b class="num">${run.filter(o => o.x.r === 'D').length}</b>drawn</span><span><b class="num">${run.filter(o => o.x.r === 'L').length}</b>lost</span><span><b class="num">${gfs.reduce((t, g) => t + g[0], 0)}–${gfs.reduce((t, g) => t + g[1], 0)}</b>goals</span><span><b class="num">${(pts / run.length).toFixed(2)}</b>points a game</span></div>` : '';
+    return `${runHTML}${next ? `<div class="sub-h"><h5>Next match</h5></div>${fixtureRow(next, id, false)}${kickoffIn(new Date(next.date)) ? `<div class="callout">${kickoffIn(new Date(next.date))}. Open <button class="linkbtn" data-act="tab" data-to="xi">Predicted XI</button> for the likely lineup.</div>` : ''}` : ''}
       <div class="sub-h"><h5>Recent results</h5><small>All competitions</small></div>${d.results.slice(0,6).map(e=>fixtureRow(e,id,true)).join('') || '<div class="note">No results yet this season.</div>'}
       ${typeof fmTops !== 'undefined' && fmTops ? fmTops : `<div class="bench" style="margin-top:22px">${top('totalGoals','Top scorers')}${top('goalAssists','Most assists')}</div>`}${teamTM(v)}`;
   }
@@ -2617,6 +2652,12 @@ function act(a, el, ev){
   if (a === 'caltoday') { const d = new Date(); v.calMonth = new Date(d.getFullYear(), d.getMonth(), 1, 12); return renderSheet() }
   if (a === 'fmfav') { const t = v.fmTeam; return toggleFav({ id: 'fm' + t.id, name: t.name, logo: t.crest, lg: 'isr.1' }) }
   if (a === 'lginfo') return openLeague(scopeLeague(), true);
+  if (a === 'slip') { const sl = S.slip || (S.slip = { id: S.sel, legs: [], stake: 10 }), k = el.dataset.k, i = sl.legs.findIndex(l => l.k === k);
+    if (i >= 0) sl.legs.splice(i, 1); else { const fam = k.startsWith('ml') ? 'ml' : k.startsWith('t') ? 't' : k.slice(0, 2); sl.legs = sl.legs.filter(l => !(fam === 'ml' ? l.k.startsWith('ml') : fam === 't' ? l.k.startsWith('t') : l.k.startsWith(fam))); sl.legs.push({ k, label: el.dataset.label, p: +el.dataset.p }) }
+    return renderSheet() }
+  if (a === 'slipclear') { if (S.slip) S.slip.legs = []; return renderSheet() }
+  if (a === 'slipstake') { if (S.slip) S.slip.stake = +el.dataset.to; return renderSheet() }
+  if (a === 'lgsort') { v.sort = el.dataset.to; return renderSheet() }
   if (a === 'futall') { v.showAll[el.dataset.to] = !v.showAll[el.dataset.to]; return renderSheet() }
   if (a === 'mkmode') { if (S.mk.mode === el.dataset.to) return; S.mk.mode = el.dataset.to; S.mk.sort = el.dataset.to === 'records' ? 'fee' : 'date'; return loadMarket() }
   if (a === 'mkday') { const d = day(S.mk.day); d.setDate(d.getDate() + +el.dataset.to); if (d > new Date()) return; S.mk.day = isoDay(d); return loadMarket() }
@@ -3431,12 +3472,22 @@ function clubCell(c){
 }
 function marketRow(t){
   const k = kindOf(t);
-  return `<button class="mk-row${S.mk.newIds.has(t.id) ? ' new' : ''}" data-pname="${esc(t.name)}" role="listitem"
+  return `<button class="mk-row${S.mk.newIds.has(t.id) ? ' new' : ''}" data-pname="${esc(t.name)}" role="listitem" style="--fv:${t.feeValue || 0}"
     aria-label="${esc(`${t.name}, ${t.age ? t.age + ', ' : ''}${t.position}. From ${t.from?.name || 'unknown'} to ${t.to?.name || 'unknown'}. ${t.fee || 'Fee unknown'}${t.date ? ', ' + t.date : ''}`)}">
     ${face(t.name, t.to?.name, t.photo)}
     <span class="nm"><span>${esc(t.name)}${S.mk.newIds.has(t.id) ? ' <em class="newtag">New</em>' : ''}</span><small>${esc([t.position, t.age ? t.age + ' yrs' : '', t.nationality.join(' / ')].filter(Boolean).join(' · '))}</small></span>
     <span class="mk-move">${t.from?.name ? clubCell(t.from) + '<span class="arrow" aria-hidden="true">→</span>' : ''}${clubCell(t.to)}</span>
     <span class="mk-fee"><span class="fee ${k === 'paid' ? 'paid' : k}">${esc(t.fee && t.fee !== '-' ? t.fee : '–')}</span><small>${t.marketValue && t.marketValue !== '-' ? 'MV ' + esc(t.marketValue) : ''}${t.date ? `${t.marketValue && t.marketValue !== '-' ? ' · ' : ''}${day(t.date) > new Date() ? 'Agreed for ' : ''}${esc(day(t.date).toLocaleDateString([], {day:'numeric', month:'short', year: day(t.date).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined}))}` : ''}</small></span></button>`;
+}
+// the three biggest deals on show, as headline cards above the list
+function marketHeadlines(list){
+  const top = list.filter(t => t.feeValue > 0).sort((a, b) => b.feeValue - a.feeValue).slice(0, 3); if (top.length < 3) return '';
+  const crest = c => c?.id ? `<img src="https://img.a.transfermarkt.technology/wappen/head/${esc(c.id)}.png" alt="" loading="lazy">` : '<i class="nocrest"></i>';
+  return `<div class="mk-heads" aria-label="Biggest deals shown">${top.map((t, i) => `<button class="mk-head h${i + 1}" data-pname="${esc(t.name)}" aria-label="${esc(`${t.name}, ${t.from?.name || 'unknown'} to ${t.to?.name || 'unknown'}, ${t.fee}`)}">
+      <span class="mk-hn num">${i + 1}</span><span class="mk-hf">${face(t.name, t.to?.name, t.photo)}</span>
+      <strong>${esc(t.name)}</strong><small>${esc([t.position, t.age ? t.age + ' yrs' : ''].filter(Boolean).join(' · '))}</small>
+      <span class="mk-hm">${crest(t.from)}<i aria-hidden="true"><s></s></i>${crest(t.to)}</span><small class="mk-hc">${esc(t.from?.name || '–')} to ${esc(t.to?.name || '–')}</small>
+      <b class="num">${esc(eur(t.feeValue))}</b></button>`).join('')}</div>`;
 }
 function renderMarket(){
   const el = $('market'); if (!el || S.page !== 'transfers') return;
@@ -3465,7 +3516,8 @@ function renderMarket(){
     <div class="tiles mk-tiles"><div class="tile"><b class="num">${list.length}</b><span>Moves</span></div><div class="tile"><b class="num">${eur(sum)}</b><span>Total fees</span></div>
       <div class="tile"><b class="num">${biggest ? eur(biggest.feeValue) : '–'}</b><span>${biggest ? 'Biggest · ' + esc(biggest.name) : 'Biggest fee'}</span></div><div class="tile"><b class="num">${ages.length ? (ages.reduce((a,b)=>a+b,0)/ages.length).toFixed(1) : '–'}</b><span>Average age</span></div></div>
     ${m.err && !m.items.length ? (S.serverOK === false || /offline|Failed/.test(m.err) ? serverNote('values') : `<div class="note">Couldn't load transfers: ${esc(m.err)}</div>`) : ''}
-    <div class="mk-list" role="list" aria-label="Transfers">${list.slice(0, m.show).map(marketRow).join('') || (m.loading ? '<div class="skel" style="height:64px"></div><div class="skel" style="height:64px;margin-top:6px"></div>' : '<div class="empty-state"><strong>No transfers</strong>Nothing matches these filters. Try widening them.</div>')}</div>
+    ${marketHeadlines(list)}
+    <div class="mk-list" role="list" aria-label="Transfers" style="--top:${Math.max(1, ...list.map(t => t.feeValue || 0))}">${list.slice(0, m.show).map(marketRow).join('') || (m.loading ? '<div class="skel" style="height:64px"></div><div class="skel" style="height:64px;margin-top:6px"></div>' : '<div class="empty-state"><strong>No transfers</strong>Nothing matches these filters. Try widening them.</div>')}</div>
     <div class="pager">${list.length > m.show ? `<button class="btn ghost" data-act="mkshow">Show ${Math.min(150, list.length - m.show)} more</button>` : ''}
       ${m.mode === 'day' && m.loaded < m.pages ? `<button class="btn" data-act="mkall" ${m.loading ? 'disabled' : ''}>${m.loading ? `Loading page ${m.loaded} of ${m.pages}…` : `Load every transfer that day (${m.pages - m.loaded} more pages)`}</button>` : ''}</div>
     <p class="srcnote">Transfers from Transfermarkt. ${m.mode === 'latest' ? 'The latest list holds the most recent 100 moves and refreshes itself; new ones are marked.' : m.mode === 'day' ? 'Shows every registered move on the chosen day, including loans, free transfers and returning loanees.' : 'The 100 biggest fees of the window.'} Tap a player for their profile, value and full transfer history.</p>`;
@@ -3511,8 +3563,14 @@ function openLeague(slug, show){
   if (show) $('sheet').classList.add('open');
   $('sheet').querySelector('.sheet-body')?.scrollTo(0, 0);
 }
+const STAGE = new Set(['team', 'fmteam', 'player', 'tc']);
+// Team, player and transfer-centre pages take the whole stage; matches and a league beside its fixtures stay as a side panel.
+function syncStage(){
+  const v = S.stack[S.stack.length - 1], sh = document.querySelector('.shell'), auto = !!v && STAGE.has(v.type) && matchMedia('(min-width:821px)').matches;
+  sh.classList.toggle('sheet-wide', !!S.big || auto); sh.classList.toggle('stage', (!!S.big || auto) && !!v && v.type !== 'match'); sh.classList.toggle('stage-auto', auto);
+}
 function setBig(on){
-  S.big = on; document.querySelector('.shell').classList.toggle('sheet-wide', on);
+  S.big = on; syncStage();
   if (S.stack.length || S.sel) renderSheet();
   if (on) window.scrollTo({ top: 0 });
 }
@@ -3522,10 +3580,10 @@ function closeSheet(){
   S.sel = null; S.summary = null;
   document.querySelectorAll('.m.sel,.tk.sel').forEach(x => x.classList.remove('sel'));
   $('sheet').classList.remove('open');
-  if (S.page === 'transfers') { S.stack = []; $('sheet').innerHTML = marketSummary(marketFiltered()); return }
+  if (S.page === 'transfers') { S.stack = []; syncStage(); $('sheet').innerHTML = marketSummary(marketFiltered()); return }
   // closing a match inside a league goes back to that league; closing the league page itself empties the panel
   if (!leagueRoot && S.sport === 'soccer' && scopeLeague() && matchMedia('(min-width:821px)').matches) return openLeague(scopeLeague());
-  S.stack = []; $('sheet').innerHTML = emptySheet();
+  S.stack = []; syncStage(); $('sheet').innerHTML = emptySheet();
   $('announce').textContent = 'Match closed';
 }
 function leagueData(v){
@@ -3562,10 +3620,52 @@ function fmLeadersPane(v){
   const f = v.fmLeaders; if (f.loading) return `<div class="skel" style="height:320px"></div>`;
   const rows = f[v.tab === 'scorers' ? 'goals' : 'assists'] || [];
   if (f.error || !rows.length) return `<div class="note">No player stats are published for this competition yet.</div>`;
-  return `<ol class="leaders">${rows.map((r, i) => `<li><button class="ldr" data-pname="${esc(r.name)}" aria-label="${esc(`${i + 1}. ${r.name}, ${r.team}, ${r.value} ${v.tab === 'scorers' ? 'goals' : 'assists'}`)}">
-      <b class="rk num">${i + 1}</b>${face(r.name, r.team, r.photo)}<span class="nm"><span>${esc(r.name)}</span><small>${r.teamId ? `<img src="https://images.fotmob.com/image_resources/logo/teamlogo/${esc(r.teamId)}.png" alt="">` : ''}${esc(r.team || '')}${r.matches ? ` · ${r.matches} matches` : ''}</small></span>
-      <span class="side-n"></span><span class="big num">${esc(Math.round(r.value))}</span></button></li>`).join('')}</ol>
+  return leadersHTML(rows.map(r => ({ attr: `data-pname="${esc(r.name)}"`, name: r.name, team: r.team || '', logo: r.teamId ? `https://images.fotmob.com/image_resources/logo/teamlogo/${r.teamId}.png` : '', face: face(r.name, r.team, r.photo), matches: r.matches, value: Math.round(r.value) })), v.tab === 'scorers' ? 'goals' : 'assists') + `
     <p class="srcnote">From <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a>; ESPN doesn't publish player stats for ${esc(LG[v.id].name)}.</p>`;
+}
+// The league table as a board: sortable columns, a won-drawn-lost strip and a points bar for every side, with the
+// headline numbers of the season pulled out above it.
+function leagueRows(g){
+  const val = (x, n) => { const s = (x.stats || []).find(s => s.name === n || s.type === n); return s ? +s.value || 0 : 0 };
+  return g.standings.entries.map((x, i) => { const r = { x, t: x.team || {}, rank: val(x, 'rank') || i + 1, gp: val(x, 'gamesPlayed'), w: val(x, 'wins'), d: val(x, 'ties'), l: val(x, 'losses'), gf: val(x, 'pointsFor'), ga: val(x, 'pointsAgainst'), pts: val(x, 'points') };
+    r.gd = r.gf - r.ga; r.ppg = r.gp ? r.pts / r.gp : 0; return r });
+}
+function leagueDash(rows){
+  const by = rows.slice().sort((a, b) => a.rank - b.rank), played = rows.filter(r => r.gp); if (by.length < 3 || !played.length) return '';
+  const games = rows.reduce((a, r) => a + r.gp, 0) / 2, goals = rows.reduce((a, r) => a + r.gf, 0);
+  const att = played.slice().sort((a, b) => b.gf / b.gp - a.gf / a.gp)[0], def = played.slice().sort((a, b) => a.ga / a.gp - b.ga / b.gp)[0], gap = by[0].pts - by[1].pts;
+  const crest = r => r.t.logos?.[0]?.href ? `<img src="${esc(r.t.logos[0].href)}" alt="">` : '';
+  const nm = r => esc(r.t.shortDisplayName || r.t.displayName || '');
+  return `<div class="lg-dash"><div class="lgd lead">${crest(by[0])}<span>Leaders</span><b>${nm(by[0])}</b><small>${gap > 0 ? `${gap} point${gap === 1 ? '' : 's'} clear of ${nm(by[1])}` : `level on points with ${nm(by[1])}`}</small></div>
+    <div class="lgd"><span>Goals a game</span><b class="num">${games ? (goals / games).toFixed(2) : '–'}</b><small>${goals} in ${Math.round(games)} matches</small></div>
+    <div class="lgd">${crest(att)}<span>Best attack</span><b>${nm(att)}</b><small>${(att.gf / att.gp).toFixed(2)} scored a game</small></div>
+    <div class="lgd">${crest(def)}<span>Best defence</span><b>${nm(def)}</b><small>${(def.ga / def.gp).toFixed(2)} conceded a game</small></div></div>`;
+}
+const LT_COLS = [['gp', 'P', 'Played'], ['w', 'W', 'Won'], ['d', 'D', 'Drawn'], ['l', 'L', 'Lost'], ['gf', 'GF', 'Goals for'], ['ga', 'GA', 'Goals against'], ['gd', 'GD', 'Goal difference'], ['ppg', 'PPG', 'Points per game'], ['pts', 'Pts', 'Points']];
+function leagueTableRich(v, groups){
+  const sort = v.sort || 'rank', notes = new Map();
+  return groups.map((g, gi) => { const rows = leagueRows(g), max = Math.max(1, ...rows.map(r => r.pts));
+    rows.sort((a, b) => sort === 'rank' ? a.rank - b.rank : sort === 'ga' || sort === 'l' ? a[sort] - b[sort] || a.rank - b.rank : b[sort] - a[sort] || a.rank - b.rank);
+    return `${groups.length > 1 ? `<div class="grp-name">${esc(g.name || '')}</div>` : leagueDash(rows)}
+      <div class="lt" role="table" aria-label="League table"><div class="lt-h" role="row"><button data-act="lgsort" data-to="rank" class="${sort === 'rank' ? 'on' : ''}" title="League order">#</button><span>Team</span><span class="lt-wdl-h">Record</span>
+        ${LT_COLS.map(([k, l, t]) => `<button data-act="lgsort" data-to="${k}" class="c-${k}${sort === k ? ' on' : ''}" title="Sort by ${t.toLowerCase()}">${l}</button>`).join('')}</div>
+      ${rows.map((r, i) => { const t = r.t, id = t.id, n = r.x.note; if (n) notes.set(n.description, n.color);
+        return `<button class="lt-r${isFav(id) ? ' fav' : ''}" role="row" data-team="${esc(id || '')}" data-lg="${esc(v.id)}" style="--zc:${esc(n?.color || 'transparent')};--i:${i}" aria-label="${esc(`${r.rank}. ${t.displayName}, ${r.pts} points from ${r.gp} games`)}">
+          <b class="num lt-rk">${r.rank}</b><span class="lt-t">${t.logos?.[0]?.href ? `<img src="${esc(t.logos[0].href)}" alt="" loading="lazy">` : ''}<span>${esc(t.shortDisplayName || t.displayName || '')}</span></span>
+          <span class="lt-wdl" data-tip="${r.w} won · ${r.d} drawn · ${r.l} lost">${r.gp ? `<i class="w" style="flex-grow:${r.w}"></i><i class="d" style="flex-grow:${r.d}"></i><i class="l" style="flex-grow:${r.l}"></i>` : ''}</span>
+          ${LT_COLS.slice(0, -1).map(([k]) => `<span class="num c-${k}${sort === k ? ' on' : ''}">${k === 'gd' && r.gd > 0 ? '+' : ''}${k === 'ppg' ? r.ppg.toFixed(2) : r[k]}</span>`).join('')}
+          <span class="lt-pts"><i style="width:${(r.pts / max * 100).toFixed(1)}%"></i><b class="num">${r.pts}</b></span></button>` }).join('')}</div>` }).join('')
+    + (notes.size ? `<div class="notes">${[...notes].map(([d, c]) => `<span><i style="background:${esc(c)}"></i>${esc(d)}</span>`).join('')}</div>` : '');
+}
+// Scorers and assists: a podium for the top three, then the chasing pack with a bar against the leader.
+function leadersHTML(items, unit){
+  const top = Math.max(1, +items[0]?.value || 1), pod = items.slice(0, 3), rest = items.slice(3);
+  return `<div class="pod">${pod.map((r, i) => `<button class="pod-c p${i + 1}" ${r.attr} aria-label="${esc(`${i + 1}. ${r.name}, ${r.team}, ${r.value} ${unit}`)}">
+      <i class="pod-n num">${i + 1}</i>${r.face}<strong>${esc(r.name)}</strong><small>${r.logo ? `<img src="${esc(r.logo)}" alt="">` : ''}${esc(r.team || '')}</small>
+      <b class="num">${esc(r.value)}</b><span>${esc(unit)}${r.side ? ` · ${esc(r.side)}` : ''}</span></button>`).join('')}</div>
+    ${rest.length ? `<ol class="leaders ld2" start="4">${rest.map((r, i) => `<li><button class="ldr" ${r.attr} aria-label="${esc(`${i + 4}. ${r.name}, ${r.team}, ${r.value} ${unit}`)}">
+      <b class="rk num">${i + 4}</b>${r.face}<span class="nm"><span>${esc(r.name)}</span><small>${r.logo ? `<img src="${esc(r.logo)}" alt="">` : ''}${esc(r.team || '')}${r.matches ? ` · ${esc(r.matches)} matches` : ''}</small></span>
+      <span class="ld-bar"><i style="width:${(r.value / top * 100).toFixed(1)}%"></i></span><span class="side-n">${esc(r.side || '')}</span><span class="big num">${esc(r.value)}</span></button></li>`).join('')}</ol>` : ''}`;
 }
 function leagueHero(v, back){
   const lg = LG[v.id];
@@ -3595,22 +3695,17 @@ function leaguePane(v){
     const groups = (d.children?.length ? d.children : d.standings ? [d] : []).filter(g => g.standings?.entries?.length);
     if (d.error || !groups.length) return `<div class="note">No table for ${esc(seasonName(v.season, v.id))}. Cup competitions don't have one.</div>`;
     const fav = { home: { id: S.fav[0]?.id }, away: { id: S.fav[1]?.id } };
-    return groups.map(g => tableHTML(fav, groups.length > 1 ? (g.name || '') : '', g.standings.entries)).join('')
-      + `<p class="srcnote">Tap a team for its page. Your followed teams are highlighted.</p>`;
+    return leagueTableRich(v, groups) + `<p class="srcnote">Tap a team for its page, or a column heading to re-order the table. Your followed teams are highlighted.</p>`;
   }
   if (v.tab === 'scorers' || v.tab === 'assists') {
     const d = v.leaders; if (!d) return `<div class="skel" style="height:320px"></div>`;
     const cat = (d.stats || []).find(c => c.name === (v.tab === 'scorers' ? 'goalsLeaders' : 'assistsLeaders'));
     if (d.error || !cat?.leaders?.length) return fmLeadersPane(v);
-    return `<ol class="leaders">${cat.leaders.slice(0, 30).map((l, i) => {
-      const a = l.athlete || {}, t = a.team || {};
+    return leadersHTML(cat.leaders.slice(0, 30).map(l => { const a = l.athlete || {}, t = a.team || {};
       const m = (l.shortDisplayValue || '').match(/M:\s*(\d+).*?G:\s*(\d+).*?A:\s*(\d+)/) || [];
       athleteNames.set(String(a.id), [a.displayName, t.displayName]);
-      return `<li><button class="ldr" data-player="${esc(a.id)}" aria-label="${esc(`${i + 1}. ${a.displayName}, ${t.displayName || ''}, ${l.value} ${v.tab === 'scorers' ? 'goals' : 'assists'}`)}">
-        <b class="rk num">${i + 1}</b>${face(a.displayName, t.displayName, '')}
-        <span class="nm"><span>${esc(a.displayName)}</span><small>${t.logos?.[0]?.href ? `<img src="${esc(t.logos[0].href)}" alt="">` : ''}${esc(t.displayName || '')}${m[1] ? ` · ${m[1]} matches` : ''}</small></span>
-        <span class="side-n">${v.tab === 'scorers' ? (m[3] != null ? `${m[3]} A` : '') : (m[2] != null ? `${m[2]} G` : '')}</span>
-        <span class="big num">${esc(Math.round(l.value))}</span></button></li>` }).join('')}</ol>
+      return { attr: `data-player="${esc(a.id)}"`, name: a.displayName, team: t.displayName || '', logo: t.logos?.[0]?.href, face: face(a.displayName, t.displayName, ''), matches: m[1],
+        side: v.tab === 'scorers' ? (m[3] != null ? `${m[3]} assists` : '') : (m[2] != null ? `${m[2]} goals` : ''), value: Math.round(l.value) } }), v.tab === 'scorers' ? 'goals' : 'assists') + `
       <p class="srcnote">${v.tab === 'scorers' ? 'Goals' : 'Assists'} in ${esc(LG[v.id].name)} ${esc(seasonName(v.season, v.id))}, from ESPN.</p>`;
   }
   if (v.tab === 'odds') {
