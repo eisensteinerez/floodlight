@@ -1586,7 +1586,8 @@ function hero(e){
 }
 function kickoffIn(d){
   const ms = d - Date.now(); if (ms <= 0) return ''; const h = Math.floor(ms/36e5), m = Math.floor(ms%36e5/6e4);
-  return h > 48 ? '' : `Kick-off in ${h ? h+'h ' : ''}${m}m`;
+  const word = { basketball: 'Tip-off', hockey: 'Puck drop', baseball: 'First pitch', tennis: 'Starts', boxing: 'First bell', ufc: 'First bell' }[S.sport] || 'Kick-off';   // each sport's own word
+  return h > 48 ? '' : `${word} in ${h ? h+'h ' : ''}${m}m`;
 }
 function teamSide(t){
   const e = S.events.get(S.sel); if (!t || !e) return null;
