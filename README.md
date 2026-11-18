@@ -37,6 +37,8 @@ and its disk is wiped whenever it sleeps or redeploys. Without `DATABASE_URL`, m
 - `/lineup team [sport]` – FotMob predicted or confirmed soccer lineups, MLB batting orders and probable pitchers,
   and injury reports for the NBA, WNBA, NFL and NHL.
 - `/record [sport] [days]` – Floodlight's own prediction record (see below).
+- `/leaderboard [days]` – each pick channel's graded record (see "Pick channel grading").
+- `/checkpicks` – admins only: run the pick grading now.
 - `/help`
 
 It runs inside `server.py` on the same free Render service, so there's nothing extra to host. Discord sends each
@@ -83,3 +85,17 @@ FotMob for FotMob-only leagues). Predictions › Track record shows the W-L, hit
 results by confidence, sport and league, the full history with filters, your own picks next to Floodlight's, and a
 shareable record card image. It's saved in `record.json` (and in the database when `DATABASE_URL` is set). Link
 straight to it with `/#record`.
+
+## Pick channel grading
+
+`pick_tracker.py` grades the picks posted in the server's pick channels (codex-props, claude-props, instinct-props,
+codex-soccer, claude-soccer, instinct-soccer, cafe-picks, parlay-predictor, ez-picks). At 12:30 AM Eastern it reads the
+last day and a half of posts, pulls each card's picks (TRACK lines, player props, soccer and NBA/NFL moneylines,
+spreads, totals, team totals, draws, correct scores, and parlays), grades them from ESPN box scores and results, and
+posts the finished ones with each channel's record and an all-time leaderboard in #verified-records. At 8:00 AM it
+checks again and posts only what finished since. A pick repeated in a later card counts once; picks posted only as
+images can't be read for free and are listed as skipped. No AI, no paid APIs.
+
+It needs **Message Content Intent** turned on (Discord Developer Portal › your app › Bot › Privileged Gateway Intents)
+so the bot can read the posts. Optional settings: `DISCORD_TRACK_CHANNELS`, `DISCORD_RECORDS_CHANNEL`,
+`DISCORD_TRACK_TIMES` (default `00:30,08:00`). Try it locally with the bot token set: `python3 pick_tracker.py try`.

@@ -324,6 +324,11 @@ def espn_season(path, pid, y):
         g = get_json(f"{ESPN_WEB}/sports/{path}/athletes/{pid}/gamelog?season={y}", 3600)
     except Exception:
         return []
+    return espn_season_from(g)
+
+
+def espn_season_from(g):
+    """An ESPN gamelog response as a list of games."""
     if not g or not g.get("seasonTypes"):
         return []
     labels, cats, out = g.get("labels") or [], g.get("categories") or [], []
@@ -941,6 +946,7 @@ def cmd_help(o):
         "`/predict` win chances from the betting market. Add a team for every book's price and the value bets.",
         "`/lineup` predicted or confirmed soccer lineups, MLB batting orders and probable pitchers, injury reports.",
         "`/record` Floodlight's own prediction record: W-L, hit rate, streak and the latest results.",
+        "`/leaderboard` each pick channel's graded record. Results post in #verified-records at 12:30 AM ET, re-checked at 8 AM.",
         "", "Hit rates are past results, not guarantees. Bet responsibly."])}]}
 
 
@@ -972,7 +978,18 @@ def cmd_record(o):
                         "footer": {"text": f"Logged at kick-off, graded at full time · {s['pending']} pending · Past results, not guarantees"}}]}
 
 
-COMMANDS = {"research": cmd_research, "props": cmd_props, "scores": cmd_scores, "predict": cmd_predict, "lineup": cmd_lineup, "record": cmd_record, "help": cmd_help}
+def cmd_leaderboard(o):
+    import pick_tracker
+    return pick_tracker.cmd_leaderboard(o)
+
+
+def cmd_checkpicks(o):
+    import pick_tracker
+    return pick_tracker.cmd_check(o)
+
+
+COMMANDS = {"research": cmd_research, "props": cmd_props, "scores": cmd_scores, "predict": cmd_predict, "lineup": cmd_lineup, "record": cmd_record,
+            "leaderboard": cmd_leaderboard, "checkpicks": cmd_checkpicks, "help": cmd_help}
 
 
 def err(msg):
@@ -1062,6 +1079,13 @@ def handle(body, headers):
         return 200, {"type": 4, "data": {"flags": 64, "content": "Floodlight's commands are for members. Ask a server admin for the member role."}}
     if name == "help":
         return 200, {"type": 4, "data": clean(cmd_help(opts))}
+    if name == "checkpicks":
+        try:
+            admin = int((it.get("member") or {}).get("permissions") or 0) & 0x8
+        except ValueError:
+            admin = 0
+        if not admin:
+            return 200, {"type": 4, "data": {"flags": 64, "content": "Only server admins can run the pick check."}}
 
     def work():
         msg = run(name, opts)
@@ -1161,6 +1185,9 @@ def command_defs():
         {"name": "record", "description": "Floodlight's prediction record: W-L, hit rate, streak and latest results", "options": [
             {"type": 3, "name": "sport", "description": "Only this sport", "choices": [{"name": "Soccer", "value": "soccer"}, {"name": "American football", "value": "football"}]},
             {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
+        {"name": "leaderboard", "description": "Each pick channel's graded W-L record", "options": [
+            {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
+        {"name": "checkpicks", "description": "Admins: grade the pick channels now and post finished results", "default_member_permissions": "8"},
         {"name": "help", "description": "What the Floodlight bot can do"},
     ]
 
