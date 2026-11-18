@@ -48,6 +48,4 @@ document.addEventListener('pointerdown', ev => {
   document.body.appendChild(r); r.addEventListener('animationend', () => r.remove());
 }, { passive: true });
 
-/* the sport switcher lives in a floating dock at the foot of the screen */
-{ const sw = document.querySelector('.top .sport-sw'); if (sw) { sw.classList.add('dock'); document.body.appendChild(sw) } }
 
