@@ -711,6 +711,16 @@ if __name__ == "__main__":
             scheduled(runner="github", window=SERVER_DELAY - 5)   # after that the server takes the set time
         STATE["ranBy"] = {"who": "github", "at": int(time.time())}
         save()
+    elif cmd == "delete":   # take down the bot's own posts in the results channel: delete <message id> ...
+        D["data_dir"] = os.environ.get("PICKS_DATA_DIR") or "data"
+        reload()
+        dest = STATE.get("dest")
+        for mid in re.findall(r"\d{15,22}", " ".join(sys.argv[2:])):
+            try:
+                api("DELETE", f"/channels/{dest}/messages/{mid}")
+                print(f"deleted {mid}")
+            except Exception as e:
+                print(f"couldn't delete {mid}: {e}")
     elif cmd == "try":   # read, grade and print; posts nothing, saves nothing
         h = int(sys.argv[2]) if len(sys.argv) > 2 else LOOK_BACK_H
         run(dry=True, hours=h)
