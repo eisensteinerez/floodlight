@@ -72,8 +72,31 @@
   // run one of the page's own filter clicks without drawing a second button for it
   function clickAttr(attr, v) { const b = document.createElement('button'); b.setAttribute(attr, v); b.setAttribute('data-global', ''); b.hidden = true; document.body.appendChild(b); b.click(); b.remove() }
   function firstRail() { rail?.querySelector('.lg')?.click() }
-  function closeSheetUI() {}
-  function openSheetUI() {}
+
+  /* ---------- bottom bar and sports sheet (phones) ---------- */
+  const bar = document.createElement('nav'); bar.id = 'flBar'; bar.className = 'flbar'; bar.setAttribute('aria-label', 'Sections');
+  const tab = (k, icon, label, attrs, extra = '') => `<button class="flb" data-k="${k}" ${attrs}>${ic(icon, 22)}<span>${label}</span>${extra}</button>`;
+  bar.innerHTML = `<div class="flbar-ind" id="flBarInd"></div>${tab('home', 'home', 'Home', 'data-shell="home"')}${tab('sports', 'grid', 'Sports', 'data-shell="sports" aria-haspopup="dialog"')}
+    ${tab('live', 'live', 'Live', 'data-shell="live"', '<b id="flBarLive" hidden></b>')}${tab('research', 'research', 'Research', 'data-rs="open"')}${tab('profile', 'profile', 'Profile', 'data-shell="profile"')}`;
+  document.body.appendChild(bar);
+  const sheet = document.createElement('div'); sheet.id = 'flSheet'; sheet.className = 'flsheet-bg'; sheet.hidden = true;
+  sheet.innerHTML = `<div class="flsheet" role="dialog" aria-modal="true" aria-label="Sports"><h4>Sports</h4>
+    <div class="flsheet-grid">${SPORTS.map(([k, l]) => `<button class="flsheet-i" data-sport="${k}">${ic(k)}<span>${l}</span></button>`).join('')}</div>
+    <h4>More</h4><div class="flsheet-grid"><button class="flsheet-i" data-shell="pred">${ic('pred')}<span>Predictions</span></button><button class="flsheet-i" data-shell="fav">${ic('fav')}<span>Favorites</span></button>
+      <button class="flsheet-i fl-soccer-only" data-act="tc">${ic('swap')}<span>Transfer market</span></button></div></div>`;
+  document.body.appendChild(sheet);
+  function openSheetUI() { sheet.hidden = false; sheet.querySelector('.flsheet-i')?.focus({ preventScroll: true }); sync() }
+  function closeSheetUI() { if (!sheet.hidden) { sheet.hidden = true; sync() } }
+  sheet.addEventListener('click', ev => { if (ev.target === sheet || ev.target.closest('.flsheet-i')) setTimeout(closeSheetUI, 0) });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeSheetUI() });
+  function syncBar(k, n) {
+    const pf = el('profile'), which = !sheet.hidden ? 'sports' : pf && !pf.hidden ? 'profile' : k === 'research' ? 'research' : k === 'live' ? 'live' : 'home';
+    const on = bar.querySelector(`.flb[data-k="${which}"]`), ind = el('flBarInd');
+    bar.querySelectorAll('.flb').forEach(b => { b.classList.toggle('on', b === on); if (b === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current') });
+    if (on && on.offsetWidth) { ind.style.width = (on.offsetWidth - 10) + 'px'; ind.style.transform = `translateX(${on.offsetLeft + 5}px)` }
+    const lv = el('flBarLive'); lv.hidden = !n; lv.textContent = n;
+    sheet.querySelectorAll('[data-sport]').forEach(b => b.classList.toggle('on', b.dataset.sport === S.sport));
+  }
 
   /* ---------- keep the highlight on what is showing ---------- */
   function current() {
@@ -93,6 +116,7 @@
     nav.querySelectorAll('.fsn').forEach(b => { b.classList.toggle('on', b === on); b.classList.toggle('cur', b.dataset.k === S.sport && b !== on); if (b === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current') });
     if (on) { if (ind.hidden || still()) { ind.style.transition = 'none'; requestAnimationFrame(() => ind.style.transition = '') } ind.hidden = false; ind.style.transform = `translateY(${on.offsetTop}px)` }
     const n = liveCount(), lv = el('sideLive'); lv.hidden = !n; lv.querySelector('b').textContent = n;
+    syncBar(k, n);
     document.dispatchEvent(new CustomEvent('fl:shell', { detail: { view: k, live: n } }));
   }
   // the page redraws through render(); follow it, and anything else that changes what is showing
