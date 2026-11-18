@@ -137,7 +137,11 @@ def img(u):
     return 200, ct, data
 
 
-FONTS = "https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..900&family=Geist:wght@400..800&family=Geist+Mono:wght@400..700&display=swap"
+FONTS = "https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400..700&display=swap"
+# the display and reading faces, declared the same way theme.css declares them
+FONT_FACES = """@font-face{font-family:"FL Slant";font-style:normal;font-weight:100 900;font-stretch:62% 70%;font-display:swap;src:url(https://fonts.gstatic.com/s/archivo/v25/k3kSo8UDI-1M0wlSfdzYLGHE.woff2) format("woff2")}
+@font-face{font-family:"Manrope";font-style:normal;font-weight:400 800;font-display:swap;src:url(https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2) format("woff2")}
+"""
 _fonts = {}
 
 
@@ -151,9 +155,10 @@ def fonts_css():
             blocks = re.findall(r"/\* ([a-z-]+) \*/\s*(@font-face\s*{[^}]*})", css)
             keep = [b for name, b in blocks if name == "latin"] or [b for _, b in blocks]
             css = "\n".join(keep) if keep else css
+            css = FONT_FACES + css
             _fonts["css"] = re.sub(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", lambda m: f"url({img_url(m.group(1))})", css)
         except Exception:
-            return ""
+            return re.sub(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", lambda m: f"url({img_url(m.group(1))})", FONT_FACES)
     return _fonts["css"]
 
 
