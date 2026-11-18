@@ -47,6 +47,7 @@ import dfs
 import odds
 import storage
 import discord_bot
+import record
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -62,7 +63,7 @@ ROLES = ("pending", "viewer", "research")
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
-                "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js"}
+                "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -1328,6 +1329,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if role_of(user) != "admin":
                     return self.send_json({"error": "Only the admin can manage members."}, 403)
                 return self.send_auth(200, {"users": admin_list()})
+            if u.path == "/api/record":   # Floodlight's own graded predictions (record.py)
+                return self.send_json({"entries": record.entries(), "summary": record.summary(), "now": int(time.time())}, max_age=60)
             if u.path == "/api/forecast/get":
                 keys = [k for k in q.get("keys", "").split(",") if re.fullmatch(r"(soccer|football):[A-Za-z0-9_-]{1,24}", k)][:40]
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
@@ -1473,9 +1476,10 @@ if __name__ == "__main__":
         threading.Thread(target=_memory_guard, daemon=True, name="memory-guard").start()
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
                      users=lambda: _users, cache_dir=CACHE_DIR)
+    record.setup(fetch=fetch, fm_matchstats=fm_matchstats, forecaster=forecaster, cache_dir=CACHE_DIR)
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
-                          odds=odds, dfs=dfs, cache_dir=CACHE_DIR)
+                          odds=odds, dfs=dfs, record=record, cache_dir=CACHE_DIR)
         print("Discord bot: listening at /api/discord/interactions")
     print(f"Floodlight running at http://localhost:{PORT}")
     if LAN:

@@ -4328,6 +4328,7 @@ function settlePicks(){
 function openPicks(){ S.page = 'picks'; hideResults(); closeDatePanel(); render(); window.scrollTo({ top: 0 }) }
 function renderPicks(){
   const el = $('picks'); if (!el || S.page !== 'picks') return;
+  if (S.picksTab === 'record' && typeof renderRecord === 'function') return renderRecord(el);
   settlePicks();
   const evs = [...S.events.values()].filter(e => (!S.scope || !LG[S.scope] || e.slug === LG[S.scope].slug) && e.state !== 'post');
   const preds = evs.map(e => ({ e, P: predict(e) })).filter(x => x.P.ready).sort((a, b) => b.P.top - a.P.top);
@@ -4341,7 +4342,8 @@ function renderPicks(){
     cat: LG[e.slug] && e.slug !== 'all' ? LG[e.slug].region : 'More', order: LEAGUES.findIndex(l => l.slug === e.slug) + 1 || 99, date: e.date, live: e.state === 'in', conf: P.conf, top: P.top,
     edge: P.market ? P.model[P.pick] - P.market[P.pick] : null, fav: isFav(e.home.id) || isFav(e.away.id) }));
   const shown = typeof PFX === 'undefined' ? items : PFX.apply('soccer', items);
-  el.innerHTML = `<div class="livebar"><h2>Predictions</h2><span class="count">${preds.length} match${preds.length === 1 ? '' : 'es'} ${esc(dayLabel)}${S.scope && LG[S.scope] ? ' · ' + esc(LG[S.scope].name) : ''}</span></div>
+  const countTxt = `${preds.length} match${preds.length === 1 ? '' : 'es'} ${esc(dayLabel)}${S.scope && LG[S.scope] ? ' · ' + esc(LG[S.scope].name) : ''}`;
+  el.innerHTML = `${typeof recTabs === 'function' ? recTabs(countTxt) : `<div class="livebar"><h2>Predictions</h2><span class="count">${countTxt}</span></div>`}
     <div class="tiles"><div class="tile"><b class="num">${S.picks.length}</b><span>Your picks</span></div><div class="tile"><b class="num">${settled.length ? `${won}/${settled.length}` : '–'}</b><span>Correct so far</span></div>
       <div class="tile"><b class="num">${settled.length ? Math.round(won / settled.length * 100) + '%' : '–'}</b><span>Hit rate</span></div><div class="tile"><b class="num">${open.length}</b><span>Waiting on result</span></div></div>
     ${S.picks.length ? `<div class="sub-h"><h5>Your picks</h5><small>Saved ${S.me ? 'to your profile' : 'in this browser'}</small></div>
@@ -4513,6 +4515,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="forecast.js"></script>
 <script src="books.js"></script>
 <script src="research.js"></script>
+<script src="record.js"></script>
 <script type="module">
 // Predicted lineups: Claude researches recent team news with web search, using the viewer's own API key.
 import Anthropic from 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.131.0/+esm';
