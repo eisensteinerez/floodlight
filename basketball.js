@@ -115,9 +115,6 @@ function bbRail(){
 }
 function bbCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail.replace(/ - /, ' '))}</span>LIVE</div>`
-    : e.state === 'pre' ? (/postpon|cancel|delay/i.test(e.detail) ? `<div class="st">${esc(e.detail)}</div>` : `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div>`) : `<div class="st">${esc(e.detail.replace('Final', 'FT'))}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>${t.rank ? `<em class="rk">${t.rank}</em>` : ''}${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const P = S.bb.pred?.get(e.id);
   const O = e.state !== 'post' ? bbCardOdds(e) : null, ab = t => esc(t.abbr || t.name);
   const spTxt = O?.sp ? `${ab(O.sp.line < 0 ? e.home : e.away)} ${O.sp.line < 0 ? O.sp.line : -O.sp.line}` : e.line?.details ? esc(e.line.details) : '';
@@ -125,10 +122,10 @@ function bbCard(e){
   const odds = e.state !== 'post' && (O || e.line?.details || P) ? `<div class="oddrow" aria-hidden="true">${P && e.state === 'pre' ? `<span class="${P.pH >= .5 ? 'fav' : ''}">${ab(e.home)} ${pct(P.pH)}%</span><span class="${P.pH < .5 ? 'fav' : ''}">${ab(e.away)} ${pct(1 - P.pH)}%</span>` : ''}${O?.h && O?.a ? `<span class="bb-ml" title="Best moneyline">${ab(e.home)} ${decAm(O.h)} · ${ab(e.away)} ${decAm(O.a)}</span>` : ''}${spTxt ? `<span>${spTxt}</span>` : ''}${ouTxt ? `<span>O/U ${esc(ouTxt)}</span>` : ''}</div>` : '';
   // US leagues list the away team first; everywhere else the home team comes first
   const us = e.src === 'espn' && e.lg !== 'nbl', [A, B, la, lb] = us ? [e.away, e.home, al, hl] : [e.home, e.away, hl, al];
-  return `<button class="m fb bb" data-bbgame="${esc(e.id)}" style="--hc:${us ? e.ac : e.hc};--ac:${us ? e.hc : e.ac}"
-    aria-label="${esc(`${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Tip-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}`)}">
-    ${st}<div class="tms">${team(A, la)}${team(B, lb)}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${la ? 'lose' : ''}">${esc(A.score)}</span><span class="${lb ? 'lose' : ''}">${esc(B.score)}</span>` : `<span class="tv">${esc((e.tv || '').split(',')[0])}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: `onerror="this.style.visibility='hidden'"` });
+  return flCard({ id: e.id, attrs: `data-bbgame="${esc(e.id)}"`, hc: us ? e.ac : e.hc, ac: us ? e.hc : e.ac, state: e.state, a: T(A, la, lb), b: T(B, lb, la), clock: e.detail.replace(/ - /, ' '), final: e.detail,
+    note: e.state === 'pre' && /postpon|cancel|delay/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: odds,
+    label: `${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Tip-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}` });
 }
 async function renderBasketball(){
   const el = $('bb'); if (!el) return;
@@ -145,9 +142,7 @@ async function renderBasketball(){
     const day = new Date(); day.setDate(day.getDate() + off);
     const groups = new Map(); for (const e of list) { if (!groups.has(e.lg)) groups.set(e.lg, []); groups.get(e.lg).push(e) }
     const order = BB_LEAGUES.map(l => l.key);
-    const navs = `<div class="datebar"><button class="dnav" data-bbact="day" data-to="-1" aria-label="Previous day">‹</button>
-      <button class="dtoggle" data-bbact="day" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${off === 0 ? 'Today' : off === -1 ? 'Yesterday' : off === 1 ? 'Tomorrow' : esc(day.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</span></button>
-      <button class="dnav" data-bbact="day" data-to="1" aria-label="Next day">›</button></div>`;
+    const navs = `<div class="datebar">${flDates({ sport: S.sport, sel: day, days: flDates.range(new Date()), attr: (d, o) => `data-bbact="day" data-set="${o}"`, prev: 'data-bbact="day" data-to="-1"', next: 'data-bbact="day" data-to="1"' })}</div>`;
     const ranked = d.events.some(e => BBL[e.lg].college && (e.home.rank || e.away.rank) && (key === 'all' || e.lg === key));
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ...(ranked || S.bb.filter === 'top25' ? [['top25', 'Top 25']] : []), ['fav', '★ My teams']].map(([k, l]) => `<button class="qf" data-bbfilter="${k}" aria-pressed="${S.bb.filter === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}</div>`;
     const lgBtn = key !== 'all' ? `<button class="btn ghost lginfo" data-bbact="league">Standings, results & fixtures</button>` : '';
@@ -383,8 +378,9 @@ function bbPane(v){
   if (v.tab === 'odds') return bbOddsPane(v);
   if (v.tab === 'stand') { if (!S.bb.stand[e.lg]) bbStandings(e.lg).then(() => S.stack.includes(v) && renderSheet()); return bbStandingsHTML(e.lg, [e.home.id, e.away.id]) }
   if (v.tab === 'h2h') return bbH2HPane(v);
-  if (v.tab === 'box') return e.src === 'espn' ? bbEspnBox(v) : bbFsBox(v);
+  if (v.tab === 'box') return e.src === 'espn' ? (e.state !== 'pre' && v.sum && window.flViz ? flViz.gameStory(e, v.sum, { periodName: (i, n) => i < (e.lg === 'cbb' || e.lg === 'wcbb' ? 2 : 4) ? (e.lg === 'cbb' ? 'H' : 'Q') + (i + 1) : 'OT' }) : '') + bbEspnBox(v) : bbFsBox(v);
   if (v.tab === 'team') return bbTeamStatsPane(v);
+  if (v.tab === 'shots') { if (!v.sum) return bbLoading(); return flFx.court(flFx.court.fromEspn(v.sum, e.home.id), { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac }) || `<div class="note">Shot locations are not available for this game yet.</div>` }
   return '';
 }
 function bbStatBars(e, rows){
@@ -510,22 +506,22 @@ function bbPredPane(v){
   const post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null, pickTeam = e[P.pick];
   const us = e.src === 'espn' && e.lg !== 'nbl', [L, R, lc, rc, pL] = us ? [e.away, e.home, e.ac, e.hc, 1 - P.pH] : [e.home, e.away, e.hc, e.ac, P.pH];
   const [sL, sR] = us ? [P.score[1], P.score[0]] : P.score;
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(pickTeam.name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(L.score)}–${esc(R.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${sL}–${sR}</b><small>${esc(L.abbr || L.name)} – ${esc(R.abbr || R.name)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${L.name} ${pct(pL)} percent, ${R.name} ${pct(1 - pL)} percent`)}"><i style="flex-grow:${pL};background:${lc}"><span>${pct(pL)}%</span></i><i style="flex-grow:${1 - pL};background:${rc}"><span>${pct(1 - pL)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${lc}"></i>${esc(L.name)}</span><span><i style="background:${rc}"></i>${esc(R.name)}</span></div>
+  return flPredDeep({ key: 'bb:' + e.id, flip: us, model: { kind: 'normal', mean: [+P.score[0], +P.score[1]], sd: BBL[e.lg].sd || 12, unit: 'points', step: 5, replace: .72 },
+      roster: e.src === 'espn' ? () => flRoster.basketball(`basketball/${BBL[e.lg].path}`, { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.M.pH ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }, { label: `Spread (${e.home.abbr || e.home.name})`, model: -P.margin, market: P.M.spread ?? null, edge: 2 }, { label: 'Total points', model: P.total, market: P.M.total ?? null, edge: 3 }],
+      methodWhy: 'The model blends each team\'s points scored and allowed with home court, then leans on the bookmakers where they post prices.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf,
+      line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(bbReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${L.score}–${R.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${esc((P.margin >= 0 ? e.home : e.away).abbr || (P.margin >= 0 ? e.home : e.away).name)} −${Math.abs(P.margin).toFixed(1)}</b><span>Projected spread</span></div>
       <div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total${P.M.total != null ? ` · books ${bbFix(P.M.total)}` : ''}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.abbr || e.home.name)} in the market</span></div>
       <div class="tile"><b class="num">${pct(P.pModel)}%</b><span>${esc(e.home.abbr || e.home.name)} on form alone</span></div></div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${bbReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     ${bbSeasonCompare(v)}
     <p class="srcnote">Model: each team's average winning margin this season (shrunk toward zero early on) plus home court, turned into a win chance. When sportsbooks list the game, their no-vig consensus carries 70% of the chance, spread and total${BBL[e.lg].kx ? ' (Kalshi included)' : ''}; ESPN's matchup predictor adds 20% where it exists.</p>${RG}`;
 }
 function bbGameTabs(v){
   const e = v.e;
-  return [['box', 'Box score'], ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', e.src === 'espn' ? 'Series & H2H' : 'Head to head'], ['stand', 'Standings']];
+  return [['box', 'Box score'], ...(e.src === 'espn' && e.state !== 'pre' ? [['shots', 'Shot chart']] : []), ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', e.src === 'espn' ? 'Series & H2H' : 'Head to head'], ['stand', 'Standings']];
 }
 
 /* ---------- team pages ---------- */
@@ -685,12 +681,13 @@ function bbPlayerPane(v){
         const rad = items.length >= 3 ? radarSVG({ items }, v.color || '#3D6FD9') : '';
         const strong = rows.filter(x => x.r.pc >= 80 && x.r.qualified).sort((a, b) => b.r.pc - a.r.pc).slice(0, 5), weak = rows.filter(x => x.r.pc <= 25 && x.r.qualified).sort((a, b) => a.r.pc - b.r.pc).slice(0, 4);
         const chip = x => `<li><span>${esc(x.label)}</span><b class="num">${bbFix(x.r.val, /%/.test(x.ab) ? 1 : x.ab === 'DD2' ? 0 : 1)}</b><small>${bbOrd(x.r.rank)} of ${x.r.n}</small></li>`;
-        h += `<div class="bb-viz">${rad ? `<div class="radar"><h5>Compared with the league</h5>${rad}<small>Percentile among ${esc(l.name)} players with enough games (100 = best).</small></div>` : ''}
-          <div class="bb-sw">${strong.length ? `<h5>Best at</h5><ul class="bb-chips hi">${strong.map(chip).join('')}</ul>` : ''}${weak.length ? `<h5>Below average</h5><ul class="bb-chips lo">${weak.map(chip).join('')}</ul>` : ''}
-          ${rows[0] && !rows[0].r.qualified ? `<p class="bb-q">Not enough games yet to be ranked with the regulars, so these are rough.</p>` : ''}</div></div>
-          <div class="sub-h"><h5>Per game and league rank</h5><small>${esc(last.season?.displayName || '')}${me ? ` · ${me.gp} games` : ''}</small></div>
-          <div class="bb-rh"><span>Stat</span><span>Value</span><span>Rank</span><span>Percentile</span></div>${rows.map(x => { const pc = x.r.pc, cls = pc >= 70 ? 'hi' : pc < 30 ? 'lo' : '';
-            return `<div class="bb-rr"><span>${esc(x.label)}</span><b class="num">${bbFix(x.r.val, x.ab === 'DD2' ? 0 : 1)}</b><span class="num">${bbOrd(x.r.rank)}<small>/${x.r.n}</small></span><span class="bb-pc"><span class="ps-bar"><i class="${cls}" style="width:${Math.max(2, pc)}%"></i></span><span class="num ${cls}">${pc}</span></span></div>` }).join('')}`;
+        // last 10 games per stat, from the game log, for the sparklines
+        const gl = v.log, lab = gl?.labels || [], evs = (gl?.seasonTypes || []).flatMap(st => st.categories.filter(c => c.type === 'event').flatMap(c => c.events || [])).slice(0, 10).reverse();
+        const col = { PTS: 'PTS', REB: 'REB', AST: 'AST', STL: 'STL', BLK: 'BLK', TO: 'TO', '3PM': '3PT', 'FG%': 'FG%', 'FT%': 'FT%', MIN: 'MIN', PF: 'PF' };
+        const sparkOf = ab => { const k = lab.indexOf(col[ab]); if (k < 0) return null; return evs.map(e => parseFloat(String(e.stats?.[k] ?? '').split('-')[0])).filter(x => isFinite(x)) };
+        h += flViz.playerBoard(rows.map(x => ({ label: x.label, short: x.ab, val: bbFix(x.r.val, /%/.test(x.ab) ? 1 : x.ab === 'DD2' ? 0 : 1), rank: x.r.rank, n: x.r.n, pc: x.r.pc, spark: sparkOf(x.ab) })), {
+          color: v.color || '#3D6FD9', peers: `${l.name} players`, season: last.season?.displayName || '', name: (v.bio?.displayName || '').split(' ').slice(-1)[0],
+          radar: ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%'], note: rows[0] && !rows[0].r.qualified ? 'Not enough games yet to rank with the regulars, so treat these as rough.' : '' });
       }
     }
     // full season table: every row ESPN returns (regular season by year)
@@ -924,7 +921,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.bbplayer) return openBbPlayer(t.dataset.bbplayer, t.dataset.bbl);
   if (t.dataset.bbfsplayer) return openBbFsPlayer(t.dataset.bbfsplayer, t.dataset.bbslug, t.dataset.bbl === 'fsany' ? 'euroleague' : t.dataset.bbl);
   const a = t.dataset.bbact, v = S.stack[S.stack.length - 1];
-  if (a === 'day') { const n = +t.dataset.to; S.bb.off = n ? Math.max(-7, Math.min(7, S.bb.off + n)) : 0; return render() }
+  if (a === 'day') { const n = +t.dataset.to; S.bb.off = t.dataset.set != null ? Math.max(-7, Math.min(7, +t.dataset.set)) : n ? Math.max(-7, Math.min(7, S.bb.off + n)) : 0; return render() }
   if (a === 'league') return openBbLeague(S.bb.lg);
   if (a === 'period' && v) { v.period = +t.dataset.to; return renderSheet() }
   if (a === 'rk' && v) { v.rk = t.dataset.to; return renderSheet() }

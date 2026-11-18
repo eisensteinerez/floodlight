@@ -48,11 +48,11 @@ async function tnLoadDay(off){
     if (old) { Object.assign(old, e); list.push(old) } else { S.tn.matches.set(x.id, e); list.push(e) } }
   return S.tn.days[off] = { events: list.sort((a, b) => a.date - b.date), at: Date.now(), down: false };
 }
-async function tnListOdds(evs){
+async function tnListOdds(evs, onBatch){
   const need = evs.filter(e => e.state !== 'post' && e.home.pid && e.away.pid && !(Date.now() - (S.tn.odds.get(e.id)?.at || 0) < 180000)).slice(0, 240);
   const jobs = [];
   for (let i = 0; i < need.length; i += 30) { const part = need.slice(i, i + 30);
-    jobs.push(getJSON(`/api/tn/odds?ids=${part.map(e => `${e.id}:${e.home.pid}:${e.away.pid}`).join(',')}`).then(r => { for (const e of part) S.tn.odds.set(e.id, { ...(r[e.id] || { books: [] }), at: Date.now() }) }).catch(() => {})) }
+    jobs.push(getJSON(`/api/tn/odds?ids=${part.map(e => `${e.id}:${e.home.pid}:${e.away.pid}`).join(',')}`).then(r => { for (const e of part) S.tn.odds.set(e.id, { ...(r[e.id] || { books: [] }), at: Date.now() }); onBatch?.() }).catch(() => {})) }
   await Promise.allSettled(jobs); return jobs.length > 0;
 }
 // ESPN rankings: top 150 or so of each tour, with points, movement and headshots
@@ -184,20 +184,20 @@ function tnCard(e){
 }
 function tnDateBar(off){
   const day = new Date(); day.setDate(day.getDate() + off);
-  return `<div class="datebar"><button class="dnav" data-tnact="day" data-to="-1" aria-label="Previous day">‹</button>
-    <button class="dtoggle" data-tnact="day" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${off === 0 ? 'Today' : off === -1 ? 'Yesterday' : off === 1 ? 'Tomorrow' : esc(day.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</span></button>
-    <button class="dnav" data-tnact="day" data-to="1" aria-label="Next day">›</button></div>`;
+  return `<div class="datebar">${flDates({ sport: S.sport, sel: day, days: flDates.range(new Date()), attr: (d, o) => `data-tnact="day" data-set="${o}"`, prev: 'data-tnact="day" data-to="-1"', next: 'data-tnact="day" data-to="1"' })}</div>`;
 }
 function tnTourHead(t, n){
   return `<div class="group-h tn-gh"><span class="tn-lvl tn-l-${esc(t.level)}">${esc(TNL[t.level]?.short || '')}</span><button class="linkbtn tn-tname" data-tntour="${esc(t.id)}"><strong>${esc(t.name)}</strong></button><span>${t.country ? '· ' + esc(t.country) : ''}${t.disc === 'D' ? ' · Doubles' : t.disc === 'X' ? ' · Mixed' : ''}${t.stage ? ' · ' + esc(t.stage) : ''}</span>${tnSurf(t.surface)}${t.indoor ? '<span class="tn-surf">Indoor</span>' : ''}<small class="tn-gn">${n}</small></div>`;
 }
-const TN_SHOW = 40;   // matches per tournament before "show all"
+const TN_SHOW = 12;   // matches per tournament before "show all" (a busy day has 400+ matches; drawing them all made tennis slow)
 async function renderTennis(){
   const el = $('tn'); if (!el) return;
   tnRail();
   if (S.tn.view === 'picks') return renderTnPicks();
   if (S.tn.view === 'rank') return renderTnRank();
   const off = S.tn.off;
+  // ranks and odds arrive in several pieces: draw at most once a frame, and only when the markup actually changed
+  let queued = 0; const later = () => { if (!queued) queued = requestAnimationFrame(() => { queued = 0; paint() }) };
   const paint = () => {
     const d = S.tn.days[off]; if (!d || S.sport !== 'tennis' || S.tn.view !== 'matches' || S.tn.off !== off) return;
     tnRail();
@@ -207,18 +207,21 @@ async function renderTennis(){
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ['fav', '★ My players']].map(([k, l]) => `<button class="qf" data-tnfilter="${k}" aria-pressed="${S.tn.filter === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}
       <span class="tn-sep"></span>${[['S', 'Singles'], ['D', 'Doubles'], ['all', 'Both']].map(([k, l]) => `<button class="qf" data-tndisc="${k}" aria-pressed="${S.tn.disc === k}">${l}</button>`).join('')}</div>`;
     const title = S.tn.lg === 'all' ? (off === 0 ? 'Today' : day.toLocaleDateString([], { weekday: 'long' })) : TNL[S.tn.lg].name;
-    el.innerHTML = tnDateBar(off) + chips + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} match${list.length === 1 ? '' : 'es'} · ${groups.size} tournament${groups.size === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span></div>`
+    const html = tnDateBar(off) + chips + (S.tn.lg === 'all' && S.tn.filter === 'all' && list.length ? tnTourBanner(list) : '') + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} match${list.length === 1 ? '' : 'es'} · ${groups.size} tournament${groups.size === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span></div>`
       + (list.length ? [...groups].sort((a, b) => { const ta = S.tn.tours[a[0]] || {}, tb = S.tn.tours[b[0]] || {}; return order.indexOf(ta.level) - order.indexOf(tb.level) || (ta.disc > tb.disc ? 1 : ta.disc < tb.disc ? -1 : 0) || (b[1].some(e => e.state === 'in') - a[1].some(e => e.state === 'in')) || String(ta.name).localeCompare(tb.name) })
           .map(([k, l]) => { const t = S.tn.tours[k] || {}, open = S.tn.open?.[k] || l.length <= TN_SHOW, sorted = [...l].sort((a, b) => (b.state === 'in') - (a.state === 'in') || (a.state === 'post') - (b.state === 'post') || a.date - b.date);
             return `<div class="group">${tnTourHead(t, l.length)}<div class="cards">${(open ? sorted : sorted.slice(0, TN_SHOW)).map(tnCard).join('')}</div>${open ? '' : `<button class="linkbtn bb-more" data-tnact="more" data-to="${esc(k)}">Show all ${l.length} matches ›</button>`}</div>` }).join('')
         : `<div class="empty-state"><strong>${d.down ? "Couldn't load matches" : 'No matches'}</strong>${d.down ? 'The local server isn\'t answering. Start it with <code>python3 server.py --lan</code>.' : S.tn.filter === 'live' ? 'Nothing live right now.' : 'Try another day, tour or singles/doubles.'}</div>`)
       + `<p class="srcnote">Scores, stats and odds from Flashscore; rankings from ESPN. Times are local.</p>`;
+    if (html !== el._tnHtml) { el._tnHtml = html; el.innerHTML = html }
   };
-  if (S.tn.days[off]) paint(); else el.innerHTML = tnDateBar(off) + '<div class="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+  if (S.tn.days[off]) paint(); else el.innerHTML = el._tnHtml = tnDateBar(off) + '<div class="cards">' + '<div class="skel"></div>'.repeat(6) + '</div>';
   await tnLoadDay(off); paint();
+  // ranks for what is on screen first; odds for the main tours first, the rest after, each batch drawn as it lands
   const vis = tnFiltered(S.tn.days[off]).filter(e => e.state !== 'post');
-  tnLoadRanks(vis.slice(0, 200)).then(paint).catch(() => {});
-  tnListOdds(vis.slice(0, 120)).then(ch => ch && paint()).catch(() => {});
+  const top = e => ['slam', 'atp', 'wta', 'chm', 'chw'].includes(tnTour(e).level);
+  tnLoadRanks(vis.slice(0, 200)).then(later).catch(() => {});
+  tnListOdds(vis.filter(top).slice(0, 90), later).then(() => tnListOdds(vis.filter(e => !top(e)).slice(0, 60), later)).catch(() => {});
 }
 function tnTicker(){
   const all = Object.values(S.tn.days).flatMap(d => d.events || []), seen = new Set(), rankOf = e => Math.min(TN_LEVELS.findIndex(l => l.key === tnTour(e).level) + 1 || 99);
@@ -334,6 +337,14 @@ function tnStatRows(per){ const out = {}; for (const gr of per?.groups || []) fo
 function tnSummaryPane(v){
   const e = v.e, g = v.g; let h = '';
   if (g.sets?.length) h += `<div class="sub-h" style="margin-top:0"><h5>Set by set</h5>${g.info?.time ? `<small>${esc(g.info.time)} in all</small>` : ''}</div><div class="tn-setlist">${g.sets.map(s => `<div><span>${esc(s.set)}</span><b class="num">${esc(s.home)}${s.tbHome ? `<sup>${esc(s.tbHome)}</sup>` : ''}–${esc(s.away)}${s.tbAway ? `<sup>${esc(s.tbAway)}</sup>` : ''}</b><small>${esc(s.time || '')}</small></div>`).join('')}</div>`;
+  if (window.flViz && g.sets?.length) {
+    // momentum: every game in order, the line leaning toward whoever has been winning games lately
+    const games = (g.pbp || []).flatMap((st, si) => (st.games || []).map((gm, gi, arr) => { const prev = arr[gi - 1]; const hw = prev ? (+gm.h || 0) > (+prev.h || 0) : (+gm.h || 0) > 0; return { si, set: st.name, hw, score: `${gm.h}–${gm.a}`, brk: !!gm.lost } }));
+    if (games.length >= 6) { let m = 0; const pts = games.map((x, i) => { m = m * .72 + (x.hw ? 1 : -1) * (x.brk ? 1.8 : 1); return { t: (i + 1) / games.length, p: .5 + .5 * Math.tanh(m / 2.4), tip: `${x.set} · ${x.score}${x.brk ? ' · break' : ''}` } });
+      const marks = []; games.forEach((x, i) => { if (i && x.si !== games[i - 1].si) marks.push(i / games.length) });
+      h = flViz.wp(pts, { title: 'Momentum', home: e.home.name, away: e.away.name, hc: 'var(--accent)', ac: '#7CC8FF', id: 'tn' + String(e.id).replace(/\W/g, ''), marks, live: e.state === 'in' }) + h }
+    h += flViz.periods([{ name: e.home.name, c: 'var(--accent)', lines: g.sets.map(x => x.home) }, { name: e.away.name, c: '#7CC8FF', lines: g.sets.map(x => x.away) }], g.sets.map(x => String(x.set).replace(/^(\d).*/, 'Set $1')), { title: 'Games by set' });
+  }
   const R = tnStatRows(g.stats?.find(p => p.period === 'Match'));
   const key = ['Aces', 'Double Faults', '1st serve percentage', '1st serve points won', '2nd serve points won', 'Break Points Converted', 'Service games won', 'Total Points Won'].filter(k => R[k]);
   if (key.length) h += `<div class="sub-h"><h5>Key numbers</h5><small>${esc(e.home.name)} · ${esc(e.away.name)}</small></div>` + bbStatBars(e, key.map(k => ({ label: k, l: R[k].home, r: R[k].away, lc: 'var(--accent)', rc: 'color-mix(in oklab,var(--muted) 60%,var(--surface-2))' })));
@@ -399,19 +410,20 @@ function tnPredPane(v){
   if (!P) return `<div class="note">Not enough information to predict this match: neither player has a known ranking and no bookmaker prices it.</div>`;
   const post = e.state === 'post', pH = post ? P.pPre : P.pH, fav = pH >= .5 ? 'home' : 'away';
   const top = P.scores.slice(0, 6).map(x => `<div class="tile"><b class="num">${x.a}–${x.b}</b><span>${esc(e[x.w].name)} · ${pct(x.p)}%</span></div>`).join('');
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-match prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[fav].name)} to win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${PFX.confOf(Math.max(pH, 1 - pH))} · ${pct(Math.max(pH, 1 - pH))}%</span>${post && e.winner ? `<span class="pred-out ${e.winner === fav ? 'ok' : 'miss'}">${e.winner === fav ? 'Called it' : 'Missed'} — ${e.home.sets}–${e.away.sets} in sets</span>` : ''}</div>
-      <div class="pred-score"><small>Most likely result</small><b class="num">${P.scores[0].a}–${P.scores[0].b}</b><small>sets, ${esc(e.home.name.split(' ')[0])} – ${esc(e.away.name.split(' ')[0])}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.home.name} ${pct(pH)} percent, ${e.away.name} ${pct(1 - pH)} percent`)}"><i style="flex-grow:${pH};background:var(--accent)"><span>${pct(pH)}%</span></i><i style="flex-grow:${1 - pH};background:color-mix(in oklab,var(--muted) 55%,var(--surface-2))"><span>${pct(1 - pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:var(--accent)"></i>${esc(e.home.name)}</span><span><i style="background:color-mix(in oklab,var(--muted) 55%,var(--surface-2))"></i>${esc(e.away.name)}</span></div>
+  const tp = t => ({ name: e[t].name, short: e[t].name.split(' ').pop(), logo: e[t].flag || e[t].logo || '', col: t === 'home' ? 'var(--tint)' : 'var(--muted)' }), tc = Math.max(pH, 1 - pH);
+  return flPredDeep({ key: 'tn:' + e.id, model: { kind: 'fit' }, scorelines: P.scores.slice(0, 6).map(x => ({ label: `${e[x.w].name} ${x.w === 'home' ? x.a + '–' + x.b : x.b + '–' + x.a}`, p: x.p })),
+      markets: [{ label: `${e.home.name} win chance`, model: P.pModel ?? null, market: P.market ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%', note: 'Model from world rankings' }],
+      methodWhy: 'A rating from the world ranking, stretched for best of five where it applies, blended with the bookmakers (65%) where they price the match.',
+      home: tp('home'), away: tp('away'), probs: { home: pH, away: 1 - pH }, pick: fav, pickLabel: e[fav].name + ' to win', conf: tc >= .72 ? 'Strong' : tc >= .6 ? 'Lean' : 'Toss-up',
+      line: bbLine(e, { pick: fav, top: tc }, true), score: [P.scores[0].a, P.scores[0].b], scoreNote: 'The likeliest result in sets.', factors: flPred.fromReasons(tnReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post && e.winner ? { actual: e.winner, text: `${e.home.sets}–${e.away.sets} in sets` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${pct(P.s)}%</b><span>${esc(e.home.name)} wins a set</span></div>
       <div class="tile"><b class="num">${pct(P.pDecider)}%</b><span>Goes to a deciding set</span></div>
       <div class="tile"><b class="num">${pct(P.straight[fav])}%</b><span>${esc(e[fav].name)} in straight sets</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.name)} in the market</span></div>
       <div class="tile"><b class="num">${P.pModel != null ? pct(P.pModel) + '%' : '–'}</b><span>${esc(e.home.name)} on ranking alone</span></div>
       <div class="tile"><b class="num">${P.rH || '–'} · ${P.rA || '–'}</b><span>World rankings</span></div></div>
-    <div class="sub-h"><h5>Set scores</h5><small>Best of ${P.bo}</small></div><div class="tiles">${top}</div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${tnReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>${RG}`;
+    <div class="sub-h"><h5>Set scores</h5><small>Best of ${P.bo}</small></div><div class="tiles">${top}</div>${RG}`;
 }
 
 /* ---------- player page ---------- */
@@ -543,14 +555,16 @@ function openTnTour(id){
 }
 function tnTourSheet(v){
   const t = v.t, sheet = $('sheet'), back = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
-  const tabs = [['today', 'Today'], ['res', 'Results'], ['fix', 'Upcoming']];
+  const knock = !/group|round robin/i.test(t.stage || '');
+  const tabs = [['today', 'Today'], ...(knock ? [['draw', 'Draw']] : []), ['res', 'Results'], ['fix', 'Upcoming']];
   let body;
-  if (v.tab === 'today') { const evs = Object.values(S.tn.days).flatMap(d => d.events || []).filter(e => e.tn === v.id); const seen = new Set(); body = `<div class="cards">${evs.filter(e => !seen.has(e.id) && seen.add(e.id)).sort((a, b) => a.date - b.date).map(tnCard).join('') || '<div class="note">No matches in the days loaded.</div>'}</div>` }
+  if (v.tab === 'draw') body = v.err ? `<div class="note">Couldn't load this tournament.</div>` : !v.d ? tnLoading(320) : tnDraw(v);
+  else if (v.tab === 'today') { const evs = Object.values(S.tn.days).flatMap(d => d.events || []).filter(e => e.tn === v.id); const seen = new Set(); body = `<div class="cards">${evs.filter(e => !seen.has(e.id) && seen.add(e.id)).sort((a, b) => a.date - b.date).map(tnCard).join('') || '<div class="note">No matches in the days loaded.</div>'}</div>` }
   else { const list = v.d?.[v.tab === 'res' ? 'results' : 'fixtures'];
     body = v.err ? `<div class="note">Couldn't load this tournament.</div>` : !list ? tnLoading() : !list.length ? `<div class="note">${v.tab === 'res' ? 'No results yet.' : 'No matches scheduled yet.'}</div>`
       : `<div class="cards">${list.slice(0, 150).map(m => tnCard(S.tn.matches.get(m.id) || { ...m, date: new Date(m.ts * 1000) })).join('')}</div>` }
   S.curTabs = tabs;
-  sheet.innerHTML = `<div class="sheet-body"><div class="hero solo" style="--tc:var(--accent)">${topBar(back)}<div class="thead"><div><h3>${esc(t.name)}</h3><p><span class="tn-lvl tn-l-${esc(t.level)}">${esc(TNL[t.level]?.name || '')}</span>${t.country ? `<span>${esc(t.country)}</span>` : ''}${t.surface ? `<span>${esc(t.surface)}${t.indoor ? ' · indoor' : ''}</span>` : ''}<span>${t.disc === 'D' ? 'Doubles' : t.disc === 'X' ? 'Mixed doubles' : 'Singles'}</span>${t.stage ? `<span>${esc(t.stage)}</span>` : ''}</p></div></div></div>${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel">${body}</div></div>`;
+  sheet.innerHTML = `<div class="sheet-body"><div class="hero solo tn-tour-hero tn-sf-${esc(t.surface || 'hard')}" style="--tc:var(--accent)">${topBar(back)}<div class="thead">${t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" onerror="this.remove()">` : ''}<div><h3>${esc(t.name)}</h3><p><span class="tn-lvl tn-l-${esc(t.level)}">${esc(TNL[t.level]?.name || '')}</span>${t.country ? `<span>${esc(t.country)}</span>` : ''}${t.surface ? `<span>${esc(t.surface)}${t.indoor ? ' · indoor' : ''}</span>` : ''}<span>${t.disc === 'D' ? 'Doubles' : t.disc === 'X' ? 'Mixed doubles' : 'Singles'}</span>${t.stage ? `<span>${esc(t.stage)}</span>` : ''}</p></div></div></div>${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel">${body}</div></div>`;
 }
 
 /* ---------- sheet routing ---------- */
@@ -617,7 +631,7 @@ document.addEventListener('click', ev => {
   const v = S.stack[S.stack.length - 1];
   if (t.dataset.tnlog && v?.type === 'tnplayer') return tnOpenLogMatch(v, t.dataset.tnlog);
   const a = t.dataset.tnact;
-  if (a === 'day') { const n = +t.dataset.to; S.tn.off = n ? Math.max(-7, Math.min(7, S.tn.off + n)) : 0; return render() }
+  if (a === 'day') { const n = +t.dataset.to; S.tn.off = t.dataset.set != null ? Math.max(-7, Math.min(7, +t.dataset.set)) : n ? Math.max(-7, Math.min(7, S.tn.off + n)) : 0; return render() }
   if (a === 'more') { (S.tn.open ||= {})[t.dataset.to] = true; return renderTennis() }
   if (a === 'ranktour') { S.tn.rankTour = t.dataset.to; store.set('fl.tnRankTour', S.tn.rankTour); return renderTnRank() }
   if (!v) return;
@@ -705,3 +719,48 @@ td.tn-l{text-align:left!important;white-space:nowrap}td.tn-tn{white-space:normal
 @media (max-width:520px){ .tn-sets{font-size:13px} .tn-g{min-width:12px} .tn-rq{width:100%;margin-left:0} .tn-split div{grid-template-columns:minmax(0,1fr) 70px auto 34px;gap:6px} }
 </style>`);
 if (S.sport === 'tennis') { S.stack = []; const sh = $('sheet'); if (sh && !sh.querySelector('.sheet-empty')) { sh.innerHTML = emptySheet(); sh.classList.remove('open') } setTimeout(render, 0) }
+
+/* Tennis opens instantly: once the page is idle, fetch today's matches and the ATP/WTA rankings in the background
+   (data only, nothing is drawn), so the first visit to tennis paints from memory. */
+(window.requestIdleCallback || (f => setTimeout(f, 2500)))(() => setTimeout(() => {
+  if (S.sport === 'tennis' || document.hidden) return;
+  tnLoadDay(0).then(d => tnLoadRanks((d?.events || []).filter(e => e.state !== 'post').slice(0, 200))).catch(() => {});
+}, 3000), { timeout: 6000 });
+
+/* ---------- the draw: rounds worked out from each player's path ----------
+   Flashscore's lists carry no round names, so a match's round is one more than the number of matches either player had
+   already won here; the last round is the final and the names count back from it (SF, QF, R16…). */
+function tnDraw(v){
+  const all = [...(v.d.results || []), ...(v.d.fixtures || [])].map(m => S.tn.matches.get(m.id) || { ...m, date: new Date(m.ts * 1000) })
+    .filter(m => m.tn === v.id || !m.tn).sort((a, b) => a.date - b.date);
+  if (all.length < 3) return `<div class="note">The draw appears once a few matches are on the schedule.</div>`;
+  const wins = new Map(), rd = new Map();
+  for (const m of all) { const a = m.home.id, b = m.away.id, r = Math.max(wins.get(a) || 0, wins.get(b) || 0) + 1; rd.set(m.id, r);
+    if (m.state === 'post' && m.winner) { const w = m[m.winner].id; wins.set(w, Math.max(wins.get(w) || 0, r)) } }
+  const R = Math.max(...rd.values()), names = ['Final', 'Semi-finals', 'Quarter-finals', 'Round of 16', 'Round of 32', 'Round of 64', 'Round of 128'];
+  const cols = Array.from({ length: R }, (_, i) => all.filter(m => rd.get(m.id) === i + 1));
+  // a draw that is still early: name rounds from the field size of round one
+  const size = 2 ** Math.ceil(Math.log2(Math.max(2, cols[0].length * 2))), total = Math.round(Math.log2(size));
+  const label = i => names[total - 1 - i] || `Round ${i + 1}`;
+  const side = (m, k) => { const p = m[k], won = m.state === 'post' && m.winner === k, lost = m.state === 'post' && m.winner && m.winner !== k;
+    return `<div class="tn-dr-p${won ? ' w' : ''}${lost ? ' l' : ''}">${tnFace(m, k, 'tn-dr-face')}<span>${esc(p.name)}</span><b class="num">${(p.games || []).map((g, i) => `<i>${g ?? ''}${p.tb?.[i] != null ? `<sup>${p.tb[i]}</sup>` : ''}</i>`).join('')}</b></div>` };
+  return `<div class="tn-draw" style="--cols:${R}">${cols.map((c, i) => `<section class="tn-dr-col"><h6>${esc(label(i))}<small>${c.length}</small></h6>
+    ${c.map((m, j) => `<button class="tn-dr-m${m.state === 'in' ? ' live' : ''}" data-tngame="${esc(m.id)}" style="--j:${j}">${m.state === 'in' ? '<span class="tn-dr-live">Live</span>' : m.state === 'pre' ? `<span class="tn-dr-t">${m.date.toLocaleDateString([], { weekday: 'short' })} ${m.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>` : ''}${side(m, 'home')}${side(m, 'away')}</button>`).join('')}</section>`).join('')}</div>
+    <p class="srcnote">Rounds are worked out from each player's path through the event, so a walkover or a late withdrawal can shift a match by a column.</p>`;
+}
+
+/* ---------- the tournament hero at the top of the tennis page ---------- */
+function tnTourBanner(list){
+  const by = new Map(); for (const e of list) { if (!by.has(e.tn)) by.set(e.tn, []); by.get(e.tn).push(e) }
+  const rank = k => { const t = S.tn.tours[k] || {}, i = TN_LEVELS.findIndex(l => l.key === t.level); return (i < 0 ? 9 : i) * 10 - (by.get(k).some(e => e.state === 'in') ? 5 : 0) - (t.disc === 'S' ? 1 : 0) };
+  const k = [...by.keys()].sort((a, b) => rank(a) - rank(b))[0]; if (!k) return '';
+  const t = S.tn.tours[k] || {}, ms = by.get(k), live = ms.filter(e => e.state === 'in'), feat = live[0] || ms.filter(e => e.state === 'pre').sort((a, b) => a.date - b.date)[0] || ms[ms.length - 1];
+  const P = feat ? (s => `<span class="tn-h-p">${tnFace(feat, s, 'tn-h-face', false)}<b>${esc(feat[s].name)}</b><small>${tnRankOf(feat, s) ? 'No. ' + tnRankOf(feat, s) : esc(feat[s].country || '')}</small></span>`) : null;
+  return `<section class="tn-hero tn-sf-${esc(t.surface || 'hard')}" aria-label="${esc(t.name)}">
+    <div class="tn-h-l">${t.logo ? `<img class="tn-h-logo" src="${esc(t.logo)}" alt="" onerror="this.remove()">` : ''}<span class="tn-h-k">${esc(TNL[t.level]?.name || '')} · ${esc(t.surface || '')}${t.indoor ? ' · indoor' : ''}</span>
+      <h2>${esc(t.name)}</h2><p>${esc([t.country, t.stage].filter(Boolean).join(' · '))}</p>
+      <div class="tn-h-s"><span><b class="num">${ms.length}</b>matches today</span>${live.length ? `<span class="live"><b class="num">${live.length}</b>live now</span>` : ''}</div>
+      <button class="btn tn-h-btn" data-tntour="${esc(k)}">Open tournament${/group|round robin/i.test(t.stage || '') ? '' : ' & draw'}</button></div>
+    ${feat ? `<button class="tn-h-r" data-tngame="${esc(feat.id)}"><span class="tn-h-tag">${feat.state === 'in' ? '<i></i>Live' : feat.state === 'pre' ? 'Next up · ' + feat.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Final'}</span>
+      <span class="tn-h-vs">${P('home')}<span class="tn-h-sc num">${feat.state === 'pre' ? 'VS' : `${feat.home.sets ?? 0}<i>–</i>${feat.away.sets ?? 0}`}</span>${P('away')}</span></button>` : ''}</section>`;
+}

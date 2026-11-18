@@ -114,18 +114,15 @@ function fbRail(){
 }
 function fbCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail.replace(/ - /, ' '))}</span>LIVE</div>`
-    : e.state === 'pre' ? `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>${esc(e.date.toLocaleDateString([], { weekday: 'short' }))}</div>` : `<div class="st">${esc(e.detail)}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy"><span>${t.rank ? `<em class="rk">${t.rank}</em>` : ''}${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const ml = S.odds.get(e.id)?.ml;
   const odds = e.state !== 'post' && ml?.home && ml?.away ? `<div class="oddrow" aria-hidden="true"><span class="${ml.home.p >= ml.away.p ? 'fav' : ''}">${esc(e.home.abbr)} ${pct(ml.home.p)}%</span><span class="${ml.away.p > ml.home.p ? 'fav' : ''}">${esc(e.away.abbr)} ${pct(ml.away.p)}%</span>${e.espnOdds?.details ? `<span>${esc(e.espnOdds.details)}</span>` : ''}</div>`
     : e.espnOdds?.details && e.state === 'pre' ? `<div class="oddrow" aria-hidden="true"><span>${esc(e.espnOdds.details)}</span>${e.espnOdds.ou ? `<span>O/U ${esc(e.espnOdds.ou)}</span>` : ''}</div>` : '';
   const sit = e.state === 'in' && e.situation?.text ? `<div class="fb-sit">${e.situation.red ? '<b>RED ZONE</b> ' : ''}${esc(e.situation.text)}</div>` : '';
   // ESPN lists the away team first in American football; keep that convention
-  return `<button class="m fb" data-fbgame="${esc(e.id)}" data-fbl="${esc(e.lg)}" style="--hc:${e.ac};--ac:${e.hc}"
-    aria-label="${esc(`${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'Kick-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}`)}">
-    ${st}<div class="tms">${team(e.away, al)}${team(e.home, hl)}${sit}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${al ? 'lose' : ''}">${esc(e.away.score)}</span><span class="${hl ? 'lose' : ''}">${esc(e.home.score)}</span>` : `<span class="tv">${esc(e.tv.split(',')[0] || '')}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win });
+  return flCard({ id: e.id, attrs: `data-fbgame="${esc(e.id)}" data-fbl="${esc(e.lg)}"`, hc: e.ac, ac: e.hc, state: e.state, a: T(e.away, al, hl), b: T(e.home, hl, al), clock: e.detail.replace(/ - /, ' '), final: e.detail,
+    date: e.date, tv: (e.tv || '').split(',')[0], extra: sit + odds,
+    label: `${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'Kick-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}` });
 }
 async function renderFootball(){
   const el = $('fb'); if (!el) return;
@@ -304,8 +301,13 @@ function fbHero(e, back){
       ${[e.away, e.home].map(t => `<tr><td class="t">${esc(t.abbr)}</td>${t.lines.map(x => `<td>${esc(x)}</td>`).join('')}<td class="pts">${esc(t.score)}</td></tr>`).join('')}</tbody></table></div>` : ''}
     <div class="meta-row">${e.venue ? `<span>${esc(e.venue)}${e.city ? ', ' + esc(e.city) : ''}</span>` : ''}${e.tv ? `<span>TV: ${esc(e.tv)}</span>` : ''}${e.espnOdds?.details ? `<span>Line: ${esc(e.espnOdds.details)}${e.espnOdds.ou ? ` · O/U ${esc(e.espnOdds.ou)}` : ''}</span>` : ''}</div></div>`;
 }
-function wpChart(e, wp){
+function wpChart(e, wp, sum){
   if (!wp?.length) return '';
+  // the creative timeline (statfx.js): momentum strip, hover for every play; falls back to the plain line below
+  if (window.flViz) { const W = sum ? flViz.wp.fromEspn(sum) : null;
+    const pts = W ? W.pts : wp.map((p, i) => ({ t: i / (wp.length - 1), p: +p.homeWinPercentage }));
+    const out = flViz.wp(pts, { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac, id: String(e.id).replace(/\W/g, ''), marks: W?.marks || [.25, .5, .75], live: e.state === 'in' });
+    if (out) return out }
   const W = 600, H = 150, xs = i => i / (wp.length - 1) * W, ys = p => H - p * H;
   const path = wp.map((p, i) => `${i ? 'L' : 'M'}${xs(i).toFixed(1)} ${ys(p.homeWinPercentage).toFixed(1)}`).join(' ');
   const last = wp[wp.length - 1].homeWinPercentage;
@@ -324,12 +326,13 @@ function fbPane(v){
   if (!d) return `<div class="skel" style="height:260px"></div>`;
   if (d.none) return `<div class="note">Only scores and odds are available for this league.</div>`;
   if (d.error) return `<div class="note">Couldn't load this game. It retries when you reopen it.</div>`;
+  if (v.tab === 'drives') return flFx.drives(flFx.drives.fromEspn(d, e.home.id), { hc: e.hc, ac: e.ac }) || `<div class="note">Drive details are not available for this game yet.</div>`;
   if (v.tab === 'summary') {
     const sp = d.scoringPlays || [];
     const leaders = (d.leaders || []).map(t => { const side = t.team?.id === e.home.id ? e.home : e.away;
       return `<div><div class="head"><img src="${esc(side.logo)}" alt="" style="width:18px;height:18px">${esc(side.name)}</div>${(t.leaders || []).map(c => { const a = c.leaders?.[0]; if (!a) return '';
         return `<button class="ldr fbl" data-fbplayer="${esc(a.athlete?.id)}" data-fbl="${esc(e.lg)}"><span class="cat">${esc(c.displayName || c.name)}</span><img class="face-s espn-shot" src="${esc(fbShot(a.athlete, e.lg))}" alt="" onerror="this.onerror=null;this.src=SIL"><span class="nm"><span>${esc(a.athlete?.displayName || '')}</span><small>${esc(a.displayValue || '')}</small></span></button>` }).join('')}</div>` }).join('');
-    return wpChart(e, d.winprobability) + (leaders ? `<div class="sub-h"><h5>Game leaders</h5></div><div class="bench fb-leaders">${leaders}</div>` : '')
+    return wpChart(e, d.winprobability, d) + (window.flViz ? flViz.gameStory(e, { ...d, winprobability: null }, { periodName: i => i < 4 ? 'Q' + (i + 1) : 'OT' }) : '') + (leaders ? `<div class="sub-h"><h5>Game leaders</h5></div><div class="bench fb-leaders">${leaders}</div>` : '')
       + `<div class="sub-h"><h5>Scoring plays</h5><small>${sp.length}</small></div>${sp.length ? `<ol class="plays">${sp.map(p => { const t = p.team?.id === e.home.id ? e.home : e.away;
         return `<li><img src="${esc(t.logo)}" alt=""><span class="pq">Q${p.period?.number}<br>${esc(p.clock?.displayValue || '')}</span><span class="ptx"><strong>${esc(p.type?.abbreviation || p.type?.text || '')}</strong> ${esc(p.text)}</span><b class="num">${esc(p.awayScore)}–${esc(p.homeScore)}</b></li>` }).join('')}</ol>` : `<div class="note">${e.state === 'pre' ? 'Scoring plays appear here once the game starts.' : 'No scoring plays yet.'}</div>`}`;
   }
@@ -373,16 +376,16 @@ function fbPredPane(e){
   const P = fcApplyFootball(e, fbPredict(e)), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
   const o = S.odds.get(e.id), mainTotal = o?.total?.length ? o.total.reduce((a, b) => Math.abs(b.p - .5) < Math.abs(a.p - .5) ? b : a) : null;
   const pickTeam = e[P.pick];
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}${fcTag(P)}</h5><strong class="pred-pick">${esc(pickTeam.name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(e.away.score)}–${esc(e.home.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${P.score[1]}–${P.score[0]}</b><small>${esc(e.away.abbr)} – ${esc(e.home.abbr)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.away.name} ${pct(1 - P.pH)} percent, ${e.home.name} ${pct(P.pH)} percent`)}"><i style="flex-grow:${1 - P.pH};background:${e.ac}"><span>${pct(1 - P.pH)}%</span></i><i style="flex-grow:${P.pH};background:${e.hc}"><span>${pct(P.pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${e.ac}"></i>${esc(e.away.name)}</span><span><i style="background:${e.hc}"></i>${esc(e.home.name)}</span></div>
+  return flPredDeep({ key: 'fb:' + e.id, flip: true, model: { kind: 'normal', mean: [+P.score[0], +P.score[1]], sd: FBL[e.lg].sd || 13.5, unit: 'points', step: 7, replace: .62 },
+      roster: !FBL[e.lg].tsdb ? () => flRoster.football(`football/${FBL[e.lg].path}`, { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.market ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }, { label: 'Total points', model: P.total, market: mainTotal?.line ?? null, edge: 3 }],
+      methodWhy: 'Team strength from points scored and allowed, adjusted for home field, blended with the market and ESPN\'s forecast where available.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf, tag: fcTag(P),
+      line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(fbReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${e.away.score}–${e.home.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.effMargin >= 0 ? esc(e.home.abbr) : esc(e.away.abbr)} −${Math.abs(P.effMargin).toFixed(1)}</b><span>Projected spread</span></div>
       <div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total${mainTotal ? ` · Kalshi ${mainTotal.line}` : ''}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.abbr)} on Kalshi</span></div></div>
     ${propsBlock(e)}${fcBlock(e)}
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${fbReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     <p class="srcnote">Model: each team's points scored and allowed per game (shrunk toward average early in the season), home field, AP rank for college games and the injury report. The shown chance weighs the betting market (Kalshi, or the sportsbook line) at 55%, ESPN's matchup predictor at 25% and the model at 20%, using whichever are available. Once the scheduled forecasts start, the latest one replaces these numbers.</p>${RG}`;
 }
 
@@ -628,9 +631,10 @@ function fbStatsBody(v){
     const items = K.radar.map(([k, title]) => { const x = ss.raw[k]; const n = fbStatVal(x); const r = x && (n || FBP_LOW.has(k)) ? fbRankIn(v, k, n) : null;
       return x ? { title, value: (r?.pc ?? 0) / 100 } : null }).filter(Boolean);
     const rad = items.length >= 3 ? radarSVG({ title: 'vs ' + fbPeerLabel(v), items }, v.color || '#3D6FD9') : '';
-    if (rad || strong.length || weak.length) h += `<div class="fbp-viz">${rad ? `<div class="radar"><h5>Compared with ${esc(fbPeerLabel(v))}</h5>${rad}<small>Percentile, 0–100 (100 = best). Totals are compared per game.</small></div>` : ''}
-      <div class="fbp-sw">${strong.length ? `<h5>Best at</h5><ul class="fbp-chips hi">${strong.map(chip).join('')}</ul>` : ''}${weak.length ? `<h5>Below average</h5><ul class="fbp-chips lo">${weak.map(chip).join('')}</ul>` : ''}
-        ${!ss.qualified && v.gk !== 'DL' && v.gk !== 'LB' && v.gk !== 'DB' ? `<p class="fbp-q">Not enough plays yet to make ESPN's qualified list, so these comparisons are rough.</p>` : ''}</div></div>`;
+    const radarKeys = new Set(K.radar.map(r => r[0])), title = Object.fromEntries(K.radar);
+    h += flViz.playerBoard(cand.map(c => ({ label: fbLbl(c.k, c.x), short: title[c.k] || fbLbl(c.k, c.x), val: c.x.displayValue, rank: c.r.rank, n: c.r.n, pc: c.r.pc, onRadar: radarKeys.has(c.k) })), {
+      color: v.color || '#3D6FD9', peers: fbPeerLabel(v), name: (v.bio?.displayName || v.name || '').split(' ').slice(-1)[0], radar: K.radar.map(r => r[1]),
+      note: !ss.qualified && !['DL', 'LB', 'DB'].includes(v.gk) ? "Not enough plays yet to make ESPN's qualified list, so treat these as rough." : '' });
   }
   for (const c of shown) {
     const skipIn = FBP_SKIP_IN[c.name] || [], first = FBP_FIRST[c.name] || [];
@@ -806,7 +810,7 @@ function fbRenderSheet(v){
   const back = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
   let hero, tabs, body;
   if (v.type === 'fbgame') { const e = v.e; hero = fbHero(e, back);
-    tabs = [['summary', 'Summary'], ['box', 'Box score'], ['odds', 'Odds'], ['pred', 'Prediction'], ...(e.lg === 'nfl' ? [['inj', 'Injuries']] : []), ['stand', 'Standings']];
+    tabs = [['summary', 'Summary'], ...(e.state !== 'pre' ? [['drives', 'Drives']] : []), ['box', 'Box score'], ['odds', 'Odds'], ['pred', 'Prediction'], ...(e.lg === 'nfl' ? [['inj', 'Injuries']] : []), ['stand', 'Standings']];
     if (e.src === 'tsdb') tabs = [['odds', 'Odds'], ['pred', 'Prediction']];
     if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = fbPane(v) }
   else if (v.type === 'fbteam') { hero = fbTeamHero(v, back); tabs = [['sched', 'Schedule'], ['roster', 'Roster'], ['stand', 'Standings'], ...(v.lg === 'nfl' || FBL[v.lg].college ? [['fut', 'Title odds']] : [])]; body = fbTeamPane(v) }

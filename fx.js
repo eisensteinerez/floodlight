@@ -1,5 +1,6 @@
 /* Floodlight · the finishing layer: the design sheet gets the last word, and cards light up under the pointer. */
 document.head.appendChild(document.getElementById('flTheme'));
+{ const ar = document.getElementById('flArena'); if (ar) document.head.appendChild(ar) }   // arena.css is the current look and goes last
 { // at most once a frame, and only on devices with a mouse
   let pend = null, raf = 0;
   if (matchMedia('(hover:hover) and (pointer:fine)').matches) document.addEventListener('pointermove', ev => {
@@ -7,14 +8,6 @@ document.head.appendChild(document.getElementById('flTheme'));
     raf = requestAnimationFrame(() => { raf = 0; const e = pend, c = e.target.closest?.('.m,.spot,.rs-tile,.tile,.ml,.rs-game,.fx-card,.flg-grid article'); if (!c) return;
       const b = c.getBoundingClientRect(); c.style.setProperty('--mx', e.clientX - b.left + 'px'); c.style.setProperty('--my', e.clientY - b.top + 'px') });
   }, { passive: true });
-}
-/* a soft pool of light follows the mouse across the page (desktop only) */
-if (matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches) {
-  const light = document.createElement('div'); light.id = 'flLight'; light.setAttribute('aria-hidden', 'true'); document.body.prepend(light);
-  let lx = 0, ly = 0, raf = 0;
-  document.addEventListener('pointermove', ev => { lx = ev.clientX; ly = ev.clientY; document.body.classList.add('fl-pointer');
-    if (!raf) raf = requestAnimationFrame(() => { raf = 0; light.style.transform = `translate3d(${lx}px,${ly}px,0)` }) }, { passive: true });
-  document.addEventListener('pointerleave', () => document.body.classList.remove('fl-pointer'));
 }
 /* a small drawing for each sport in the switcher */
 (() => {
@@ -55,8 +48,39 @@ document.addEventListener('pointerdown', ev => {
   document.body.appendChild(r); r.addEventListener('animationend', () => r.remove());
 }, { passive: true });
 
-/* the sport switcher lives in a floating dock at the foot of the screen */
-{ const sw = document.querySelector('.top .sport-sw'); if (sw) { sw.classList.add('dock'); document.body.appendChild(sw) } }
-
-/* three slow lights behind the page */
-{ const a = document.createElement('div'); a.id = 'flAurora'; a.setAttribute('aria-hidden', 'true'); a.innerHTML = '<i></i><i></i><i></i>'; document.body.prepend(a) }
+/* Photos at the size they are shown (ported from the scroll-ghosting fix on claude/project-thread-uf118b).
+   Photos at the size they are shown. ESPN logos and headshots arrive at 500px or more and were shown at
+   18-90px: a match page decoded ~110 MB of pictures, the browser ran out of graphics memory and the page
+   smeared into ghost copies while scrolling. ESPN's own resizer serves them small; every picture also
+   decodes off the main thread, and pictures below the fold wait until they are needed. */
+(() => {
+  const ESPN = /^https?:\/\/a\.espncdn\.com(\/i\/[^?#]+\.(?:png|jpe?g))(?:[?#].*)?$/i;
+  const widthFor = p => /\/headshots\//.test(p) ? 260 : 160;
+  const fix = img => {
+    if (img.decoding !== 'async') img.decoding = 'async';
+    if (!img.hasAttribute('loading') && !img.closest('.hero,.top')) img.loading = 'lazy';
+    const src = img.getAttribute('src') || '', m = ESPN.exec(src);
+    if (!m) return;
+    img.dataset.full = src;
+    const big = img.closest('.ufc-hero,.ufc-eh,.ufc-fp,.ufc-fh,.tcard,.vz-story,.tn-hero');   // poster-size photos stay sharp
+    img.setAttribute('src', `https://a.espncdn.com/combiner/i?img=${m[1]}&w=${big ? 600 : widthFor(m[1])}`);
+  };
+  // if the resizer ever fails, fall back to the original picture before the page's own error handler runs
+  document.addEventListener('error', e => {
+    const img = e.target;
+    if (img?.tagName !== 'IMG' || !img.dataset.full || !/\/combiner\/i\?/.test(img.src)) return;
+    e.stopImmediatePropagation();
+    const full = img.dataset.full; delete img.dataset.full; img.dataset.noshrink = '1'; img.setAttribute('src', full);
+  }, true);
+  const scan = root => {
+    if (root.tagName === 'IMG') { if (!root.dataset.noshrink) fix(root); return }
+    root.querySelectorAll?.('img:not([data-noshrink])').forEach(fix);
+  };
+  scan(document.body);
+  new MutationObserver(list => {
+    for (const r of list) {
+      if (r.type === 'attributes') { if (!r.target.dataset.noshrink) fix(r.target) }
+      else r.addedNodes.forEach(n => n.nodeType === 1 && scan(n));
+    }
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+})();

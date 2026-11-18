@@ -250,23 +250,18 @@ function hkRail(){
 }
 function hkCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail.replace(/ - /, ' '))}</span>LIVE</div>`
-    : e.state === 'pre' ? (/postpon|cancel|delay/i.test(e.detail) ? `<div class="st">${esc(e.detail)}</div>` : `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div>`) : `<div class="st">${esc(e.detail.replace('Final', 'FT'))}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy" ${hkErr}><span>${t.rank ? `<em class="rk">${t.rank}</em>` : ''}${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const P = S.hk.pred.get(e.id), ab = t => esc(t.abbr || t.name);
   const books = e.state !== 'post' ? S.hk.odds.get(e.id)?.books || [] : [], best = k => Math.max(0, ...books.map(b => b.ml?.[k] || 0)), to = books.map(bbMainTotal).find(Boolean);
   const odds = e.state !== 'post' && (P || books.length || e.line?.details) ? `<div class="oddrow" aria-hidden="true">${P && e.state === 'pre' ? `<span class="${P.pH >= .5 ? 'fav' : ''}">${ab(e.home)} ${pct(P.pH)}%</span><span class="${P.pH < .5 ? 'fav' : ''}">${ab(e.away)} ${pct(1 - P.pH)}%</span>` : ''}${best('home') && best('away') ? `<span class="bb-ml" title="Best moneyline">${ab(e.home)} ${decAm(best('home'))} · ${ab(e.away)} ${decAm(best('away'))}</span>` : e.line?.details ? `<span>${esc(e.line.details)}</span>` : ''}${to ? `<span>O/U ${esc(to.line)}</span>` : e.line?.ou ? `<span>O/U ${esc(e.line.ou)}</span>` : ''}</div>` : '';
   const us = hkUS(e), [A, B, la, lb] = us ? [e.away, e.home, al, hl] : [e.home, e.away, hl, al];
-  return `<button class="m fb bb" data-hkgame="${esc(e.id)}" style="--hc:${us ? e.ac : e.hc};--ac:${us ? e.hc : e.ac}"
-    aria-label="${esc(`${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Puck drop ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}`)}">
-    ${st}<div class="tms">${team(A, la)}${team(B, lb)}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${la ? 'lose' : ''}">${esc(A.score)}</span><span class="${lb ? 'lose' : ''}">${esc(B.score)}</span>` : `<span class="tv">${esc((e.tv || '').split(',')[0])}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: hkErr });
+  return flCard({ id: e.id, attrs: `data-hkgame="${esc(e.id)}"`, hc: us ? e.ac : e.hc, ac: us ? e.hc : e.ac, state: e.state, a: T(A, la, lb), b: T(B, lb, la), clock: e.detail.replace(/ - /, ' '), final: e.detail,
+    note: e.state === 'pre' && /postpon|cancel|delay/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: odds,
+    label: `${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Puck drop ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}` });
 }
 function hkDateBar(off){
   const day = new Date(); day.setDate(day.getDate() + off);
-  return `<div class="datebar"><button class="dnav" data-hkact="day" data-to="-1" aria-label="Previous day">‹</button>
-    <button class="dtoggle" data-hkact="day" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${off === 0 ? 'Today' : off === -1 ? 'Yesterday' : off === 1 ? 'Tomorrow' : esc(day.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</span></button>
-    <button class="dnav" data-hkact="day" data-to="1" aria-label="Next day">›</button></div>`;
+  return `<div class="datebar">${flDates({ sport: S.sport, sel: day, days: flDates.range(new Date()), attr: (d, o) => `data-hkact="day" data-set="${o}"`, prev: 'data-hkact="day" data-to="-1"', next: 'data-hkact="day" data-to="1"' })}</div>`;
 }
 async function renderHockey(){
   const el = $('hk'); if (!el) return;
@@ -437,7 +432,7 @@ function hkHero(e, back){
 function hkGameTabs(v){
   const e = v.e;
   if (e.src === 'espn') return e.state === 'pre' ? [['pred', 'Prediction'], ['odds', 'Odds'], ['team', 'Matchup'], ['h2h', 'Season series'], ['stand', 'Standings']]
-    : [['summary', 'Summary'], ['box', 'Box score'], ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', 'Season series'], ['stand', 'Standings']];
+    : [['summary', 'Summary'], ['rink', 'Shot map'], ['box', 'Box score'], ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', 'Season series'], ['stand', 'Standings']];
   return [['summary', 'Summary'], ...(v.fs?.box?.length ? [['box', 'Box score']] : []), ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', 'Head to head'], ['stand', 'Standings']];
 }
 function hkPane(v){
@@ -448,7 +443,8 @@ function hkPane(v){
   if (v.tab === 'h2h') return hkH2HPane(v);
   if (v.tab === 'box') return e.src === 'espn' ? hkEspnBox(v) : hkFsBox(v);
   if (v.tab === 'team') return hkTeamStatsPane(v);
-  if (v.tab === 'summary') return e.src === 'espn' ? hkEspnSummary(v) : hkFsSummary(v);
+  if (v.tab === 'rink') { if (!v.sum) return hkLoading(); return flFx.rink(flFx.rink.fromEspn(v.sum, e.home.id), { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac }) || `<div class="note">Shot locations are not available for this game yet.</div>` }
+  if (v.tab === 'summary') return e.src === 'espn' ? (v.sum && window.flViz ? flViz.gameStory(e, v.sum, { periodName: i => i < 3 ? 'P' + (i + 1) : i === 3 ? 'OT' : 'SO' }) : '') + hkEspnSummary(v) : hkFsSummary(v);
   return '';
 }
 // goals and penalties, period by period
@@ -570,11 +566,12 @@ function hkPredPane(v){
   const us = hkUS(e), [L, R, lc, rc, pL] = us ? [e.away, e.home, e.ac, e.hc, 1 - P.pH] : [e.home, e.away, e.hc, e.ac, P.pH];
   const [sL, sR] = us ? [P.score[1], P.score[0]] : P.score, fav = P.pick, dog = fav === 'home' ? 'away' : 'home';
   const likely = P.likely.map(([i, j, p]) => { const [a, b] = us ? [j, i] : [i, j]; return `<div class="tile"><b class="num">${a}–${b}</b><span>${pct(p)}%${i === j ? ' · then OT' : ''}</span></div>` }).join('');
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[fav].name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(L.score)}–${esc(R.score)}${e.ot ? ' (OT)' : ''}</span>` : ''}</div>
-      <div class="pred-score"><small>Most likely winning score</small><b class="num">${sL}–${sR}</b><small>${esc(L.abbr || L.name)} – ${esc(R.abbr || R.name)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${L.name} ${pct(pL)} percent, ${R.name} ${pct(1 - pL)} percent`)}"><i style="flex-grow:${pL};background:${lc}"><span>${pct(pL)}%</span></i><i style="flex-grow:${1 - pL};background:${rc}"><span>${pct(1 - pL)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${lc}"></i>${esc(L.name)}</span><span><i style="background:${rc}"></i>${esc(R.name)}</span></div>
+  return flPredDeep({ key: 'hk:' + e.id, flip: us, model: { kind: 'poisson', mean: [P.lh, P.la], unit: 'goals', draw: false, replace: .7 },
+      roster: HKL[e.lg].src === 'espn' ? () => flRoster.hockey(`hockey/${HKL[e.lg].path}`, { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.M.pH ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }, { label: 'Total goals', model: P.total, market: P.M.total ?? null, edge: .5 }],
+      methodWhy: 'Expected goals for each side from scoring and conceding rates and home ice; ties in regulation are split into overtime by strength.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[fav].name + ' win', conf: P.conf,
+      line: bbLine(e, P), score: P.score, scoreNote: 'The likeliest winning score.', factors: flPred.fromReasons(hkReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${L.score}–${R.score}${e.ot ? ' (OT)' : ''}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected goals${P.M.total != null ? ` · line ${bbFix(P.M.total)}` : ''}</span></div>
       <div class="tile"><b class="num">${pct(P.ou.over)}%</b><span>Over ${P.ou.line}</span></div>
       <div class="tile"><b class="num">${pct(P.ot)}%</b><span>Goes to overtime</span></div>
@@ -584,7 +581,6 @@ function hkPredPane(v){
       <div class="tile"><b class="num">${pct(P.pModel)}%</b><span>${esc(e.home.abbr || e.home.name)} on goals alone</span></div>
       <div class="tile"><b class="num">${pct(P.reg.home)}–${pct(P.reg.draw)}–${pct(P.reg.away)}</b><span>Regulation: home, tie, away</span></div></div>
     <div class="sub-h"><h5>Most likely scores after 60 minutes</h5></div><div class="tiles">${likely}</div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${hkReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     ${hkSeasonCompare(v)}
     <p class="srcnote">Starting goalies are usually confirmed at the morning skate; a backup in net can swing an NHL game by several points. The model doesn't know the starter yet, but the market adjusts quickly once it's announced.</p>${RG}`;
 }
@@ -691,7 +687,16 @@ function hkPlayerPane(v){
   if (v.tab === 'stats') {
     const cats = (v.stats?.categories || []).filter(c => c.statistics?.length);
     if (!cats.length) return `<div class="note">No stats for this player yet.</div>`;
-    return cats.map(c => `<div class="sub-h"><h5>${esc(c.displayName || c.name)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${(c.labels || []).map((x, i) => `<th title="${esc(c.displayNames?.[i] || c.descriptions?.[i] || '')}">${esc(x)}</th>`).join('')}</tr></thead><tbody>
+    // this season at a glance: the main numbers, each with its last 10 games and how that compares with the season
+    const c0 = cats[0], cur = c0.statistics[c0.statistics.length - 1], L = c0.labels || [];
+    const gl = v.log, gL = gl?.labels || [], evs = (gl?.seasonTypes || []).flatMap(st => (st.categories || []).flatMap(c => c.events || [])).slice(0, 10).reverse();
+    const glance = ['G', 'A', 'PTS', '+/-', 'SOG', 'SV%', 'GAA', 'W'].filter(k => L.includes(k)).slice(0, 4).map(k => {
+      const val = cur.stats[L.indexOf(k)], gi = gL.indexOf(k), sp = gi < 0 ? [] : evs.map(e => parseFloat(e.stats?.[gi])).filter(x => isFinite(x));
+      const gp = parseFloat(cur.stats[L.indexOf('GP')]) || 0, per = gp && !/%|GAA/.test(k) ? parseFloat(val) / gp : null, l10 = sp.length ? sp.reduce((x, y) => x + y, 0) / sp.length : null;
+      const trend = per != null && l10 != null ? (l10 > per * 1.1 ? `Up lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)} for the season` : l10 < per * .9 ? `Quieter lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)}` : `Steady: ${l10.toFixed(2)} a game over the last ${sp.length}`) : (cur.season?.displayName || '');
+      return `<article class="pb-story"><b class="num">${esc(val)}</b><span>${esc(k === 'G' ? 'Goals' : k === 'A' ? 'Assists' : k === 'PTS' ? 'Points' : k === 'SOG' ? 'Shots on goal' : k === 'W' ? 'Wins' : k)}</span>${sp.length > 1 ? flViz.spark(sp, { label: k + ', last ' + sp.length + ' games', w: 120, h: 26 }) : ''}<p>${esc(trend)}</p></article>` }).join('');
+    const top = glance ? `<div class="pb"><div class="pb-stories">${glance}</div></div>` : '';
+    return top + cats.map(c => `<div class="sub-h"><h5>${esc(c.displayName || c.name)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${(c.labels || []).map((x, i) => `<th title="${esc(c.displayNames?.[i] || c.descriptions?.[i] || '')}">${esc(x)}</th>`).join('')}</tr></thead><tbody>
       ${c.statistics.slice().reverse().map(s => `<tr><td class="t">${esc(s.season?.displayName || '')} <small>${esc((s.teamSlug || '').split('-').pop())}</small></td>${(s.stats || []).map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}
       ${c.totals?.length ? `<tr class="tot"><td class="t">Career</td>${c.totals.map(x => `<td>${esc(x)}</td>`).join('')}</tr>` : ''}</tbody></table></div>`).join('')
       + `<p class="srcnote">Every season ESPN keeps for this player. Hover a column for its meaning.</p>`;
@@ -901,7 +906,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.hkfsplayer) return openHkFsPlayer(t.dataset.hkfsplayer, t.dataset.hkslug, t.dataset.hkl);
   if (t.dataset.hknhlp) return openHkNhlPlayer(t.dataset.hknhlp);
   const a = t.dataset.hkact, v = S.stack[S.stack.length - 1];
-  if (a === 'day') { const n = +t.dataset.to; S.hk.off = n ? Math.max(-7, Math.min(7, S.hk.off + n)) : 0; return render() }
+  if (a === 'day') { const n = +t.dataset.to; S.hk.off = t.dataset.set != null ? Math.max(-7, Math.min(7, +t.dataset.set)) : n ? Math.max(-7, Math.min(7, S.hk.off + n)) : 0; return render() }
   if (a === 'league') return openHkLeague(S.hk.lg);
   if (a === 'nhlleague') return openHkLeague('nhl');
   if (a === 'pos') { S.hk.statPos = t.dataset.to; return renderHkStats() }

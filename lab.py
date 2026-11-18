@@ -28,10 +28,11 @@ import urllib.parse
 import urllib.request
 
 import discord_bot as bot
+import labfight   # UFC and boxing fighters in the same shape as a player
 
 PASS_HOURS = 12
 TICKET_MIN = 15
-IMG_HOSTS = ("fonts.gstatic.com", "a.espncdn.com", "img.mlbstatic.com", "www.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com")
+IMG_HOSTS = ("fonts.gstatic.com", "a.espncdn.com", "img.mlbstatic.com", "www.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com", "upload.wikimedia.org")
 
 _tickets, _instances, _imgs = {}, {}, {}
 _lock = threading.Lock()
@@ -137,7 +138,7 @@ def img(u):
     return 200, ct, data
 
 
-FONTS = "https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400..700&display=swap"
+FONTS = "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400..700&family=Geist+Mono:wght@400..700&display=swap"
 # the display and reading faces, declared the same way theme.css declares them
 FONT_FACES = """@font-face{font-family:"FL Slant";font-style:normal;font-weight:100 900;font-stretch:62% 70%;font-display:swap;src:url(https://fonts.gstatic.com/s/archivo/v25/k3kSo8UDI-1M0wlSfdzYLGHE.woff2) format("woff2")}
 @font-face{font-family:"Manrope";font-style:normal;font-weight:400 800;font-display:swap;src:url(https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2) format("woff2")}
@@ -194,6 +195,24 @@ def _r(v, d=2):
     return None if v is None else round(v, d) if isinstance(v, float) else v
 
 
+def _deeper(sport, p):
+    """Two more seasons behind the two the bot loads, so the Lab can go back 100+ games. Cached by the bot's fetcher."""
+    try:
+        if sport == "mlb":
+            y = time.gmtime().tm_year
+            more = bot.mlb_season(p["id"], y - 2) + bot.mlb_season(p["id"], y - 3)
+        else:
+            o = bot.find_player(sport, p["name"]) or {}
+            path = f"{bot.ESPN_PATH[sport].split('/')[0]}/{o.get('lg') or sport}"
+            y = bot.cur_season(sport)
+            more = bot.espn_season(path, p["id"], y - 2) + bot.espn_season(path, p["id"], y - 3)
+    except Exception:
+        return p
+    seen = {g["id"] for g in p["games"]}
+    games = p["games"] + [g for g in more if g["id"] not in seen]
+    return {**p, "games": sorted(games, key=lambda g: g["date"], reverse=True)}
+
+
 def player(sport, name, stat=""):
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
@@ -202,10 +221,12 @@ def player(sport, name, stat=""):
     p = bot.load_player(sport, name.strip())
     if sport == "soccer":
         bot.soccer_deep(p, 20)
+    else:
+        p = _deeper(sport, p)
     sp = bot.stat_sport(sport)
     defs = bot.STAT[sp]
     games = []
-    for g in p["games"][:82]:
+    for g in p["games"][:400]:
         v = {}
         for k, sd in defs.items():
             try:
@@ -502,12 +523,22 @@ def handle(path, q, signed_in=False):
     if not signed_in and not check_pass(q.get("_pass")):
         return 401, {"error": "Your Lab pass expired. Type /lab in Discord again.", "need": "lab"}
     try:
+        sp = q.get("sport") or "nba"
+        if sp in ("ufc", "boxing"):   # fighters: one fight is one game
+            if path == "player":
+                d = labfight.ufc(q.get("name") or "") if sp == "ufc" else labfight.box(q.get("name") or "")
+                d["photo"] = img_url(d.get("photo"))
+                return 200, d
+            if path == "team":
+                raise LookupError("Fight sports have fighters, not teams. Search a fighter on the Player tab.")
+            if path == "board":
+                return 200, {"sport": sp, "rows": [], "checked": 0, "errors": [], "note": "Sportsbooks don't post player props for fights. Search a fighter to see every fight, stat by stat."}
         if path == "player":
-            return 200, player(q.get("sport") or "nba", q.get("name") or "", q.get("stat") or "")
+            return 200, player(sp, q.get("name") or "", q.get("stat") or "")
         if path == "team":
-            return 200, team(q.get("sport") or "nba", q.get("name") or "")
+            return 200, team(sp, q.get("name") or "")
         if path == "board":
-            return 200, board(q.get("sport") or "nba")
+            return 200, board(sp)
     except LookupError as e:
         return 404, {"error": str(e)}
     except Exception as e:

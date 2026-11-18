@@ -149,9 +149,6 @@ function bsBases(s, size = 30){
 const bsOuts = n => `<span class="bs-outs" aria-label="${n} out${n === 1 ? '' : 's'}">${[0, 1, 2].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
 function bsCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail)}</span>LIVE</div>`
-    : e.state === 'pre' ? `<div class="st"><span class="ko">${e.detail ? esc(e.detail) : e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>${esc(e.date.toLocaleDateString([], { weekday: 'short' }))}</div>` : `<div class="st">${esc(e.detail)}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy" ${bsLogoErr}><span>${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const ml = S.odds.get(e.id)?.ml;
   const odds = e.state !== 'post' && ml?.home && ml?.away ? `<div class="oddrow" aria-hidden="true"><span class="${ml.home.p >= ml.away.p ? 'fav' : ''}">${esc(e.home.abbr)} ${pct(ml.home.p)}%</span><span class="${ml.away.p > ml.home.p ? 'fav' : ''}">${esc(e.away.abbr)} ${pct(ml.away.p)}%</span></div>` : '';
   let extra = '';
@@ -159,10 +156,10 @@ function bsCard(e){
   else if (e.state === 'pre' && (e.away.sp || e.home.sp)) extra = `<div class="bs-sp">${esc(e.away.sp?.name || 'TBD')} <span>vs</span> ${esc(e.home.sp?.name || 'TBD')}</div>`;
   else if (post && e.dec?.w) extra = `<div class="bs-sp">W ${esc(e.dec.w.fullName)}${e.dec.l ? ` · L ${esc(e.dec.l.fullName)}` : ''}${e.dec.s ? ` · SV ${esc(e.dec.s.fullName)}` : ''}</div>`;
   const ser = e.series || e.seriesStatus ? `<div class="bs-ser">${esc([e.series, e.seriesStatus].filter(Boolean).join(' · '))}</div>` : '';
-  return `<button class="m fb bs" data-bsgame="${esc(e.id)}" style="--hc:${e.ac};--ac:${e.hc}"
-    aria-label="${esc(`${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'First pitch ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}`)}">
-    ${st}<div class="tms">${team(e.away, al)}${team(e.home, hl)}${ser}${extra}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${al ? 'lose' : ''}">${esc(e.away.score)}</span><span class="${hl ? 'lose' : ''}">${esc(e.home.score)}</span>` : `<span class="tv">${esc(e.tv.split(',')[0] || '')}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: bsLogoErr });
+  return flCard({ id: e.id, cls: 'bs', attrs: `data-bsgame="${esc(e.id)}"`, hc: e.ac, ac: e.hc, state: e.state, a: T(e.away, al, hl), b: T(e.home, hl, al), clock: e.detail, final: e.detail,
+    note: e.state === 'pre' && /postpon|cancel|delay|suspend/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: ser + extra + odds,
+    label: `${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'First pitch ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}` });
 }
 function bsLgSelect(){ const key = S.bsb.view === 'games' ? S.bsb.lg : '_' + S.bsb.view, l = S.bsb.lg;
   return `<select class="bs-lgsel" id="bsLgSel" aria-label="League"><option value="all" ${key === 'all' ? 'selected' : ''}>All leagues</option><option value="_futures" ${key === '_futures' ? 'selected' : ''}>Futures & title odds</option><option value="_picks" ${key === '_picks' ? 'selected' : ''}>Predictions</option>${BS_GROUPS.map(([g, lab]) => `<optgroup label="${lab}">${BS_LEAGUES.filter(l => l.grp === g).map(l => `<option value="${l.key}" ${key === l.key ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</optgroup>`).join('')}</select>` }
@@ -188,9 +185,7 @@ async function renderBaseball(){
     const live = list.filter(e => e.state === 'in').length;
     const groups = new Map(); const order = BS_LEAGUES.map(l => l.key);
     for (const e of [...list].sort((a, b) => order.indexOf(a.lg) - order.indexOf(b.lg) || a.date - b.date)) { if (!groups.has(e.lg)) groups.set(e.lg, []); groups.get(e.lg).push(e) }
-    const navs = `<div class="datebar"><button class="dnav" data-bsact="day" data-to="-1" aria-label="Previous day">‹</button>
-        <label class="dtoggle bs-dpick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(bsDateLabel(ymd))}</span><input type="date" id="bsDate" value="${ymd}" aria-label="Pick a date"></label>
-        <button class="dnav" data-bsact="day" data-to="1" aria-label="Next day">›</button></div>`;
+    const navs = `<div class="datebar">${flDates({ sport: 'baseball', sel: new Date(ymd + 'T12:00:00'), days: flDates.range(Math.abs(new Date(ymd + 'T12:00:00') - new Date(bsToday() + 'T12:00:00')) > 7 * 864e5 ? new Date(ymd + 'T12:00:00') : new Date()), attr: d => `data-bsact="setday" data-to="${isoDay(d)}"`, prev: 'data-bsact="day" data-to="-1"', next: 'data-bsact="day" data-to="1"', cal: flDates.cal(`id="bsDate" value="${ymd}"`, 'Pick a date') })}</div>`;
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ['fav', '★ My teams']].map(([k, l]) => `<button class="qf" data-bsfilter="${k}" aria-pressed="${(S.bsb.filter || 'all') === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}
       ${ymd !== bsToday() ? `<button class="qf" data-bsact="today">Back to today</button>` : ''}
       ${bsLgSelect()}</div>`;
@@ -428,6 +423,9 @@ function bsSummary(v){
   const dec = f.liveData?.decisions;
   if (dec?.winner) h += `<div class="tiles bs-dec">${[['Win', dec.winner], ['Loss', dec.loser], ['Save', dec.save]].filter(x => x[1]).map(([k, p]) => `<div class="tile"><img class="face-s" src="${esc(bsShot(p.id, BSL[e.lg].sport === 1))}" alt="" ${bsImgErr}><b>${bsPlayerLink(p, e)}</b><span>${k}</span></div>`).join('')}</div>`;
   if (v.wp?.length > 2) h += wpChart(e, v.wp.map(p => ({ homeWinPercentage: (p.homeTeamWinProbability ?? 50) / 100 })));
+  // runs inning by inning, as paired columns
+  const inn = f.liveData?.linescore?.innings || [];
+  if (inn.length && window.flViz) h += flViz.periods([{ name: e.away.abbr || e.away.name, c: e.ac, lines: inn.map(i => i.away?.runs ?? '') }, { name: e.home.abbr || e.home.name, c: e.hc, lines: inn.map(i => i.home?.runs ?? '') }], inn.map(i => i.ordinalNum || i.num), { title: 'Runs by inning' });
   const top = f.liveData?.boxscore?.topPerformers || [];
   if (top.length) h += `<div class="sub-h"><h5>Top performers</h5></div><div class="bench fb-leaders"><div>${top.map(t => { const p = t.player?.person, s = t.player?.stats;
     const line = t.type === 'pitcher' ? s?.pitching?.summary : s?.batting?.summary;
@@ -561,15 +559,16 @@ function bsPredPane(v){
   const e = v.e;
   if (!S.bsb.stand[e.lg]) { bsStandings(e.lg).then(() => renderSheet()); return `<div class="skel" style="height:260px"></div>` }
   const P = bsPredict(e, v), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[P.pick].name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(e.away.score)}–${esc(e.home.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${P.score[1]}–${P.score[0]}</b><small>${esc(e.away.abbr)} – ${esc(e.home.abbr)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.away.name} ${pct(1 - P.pH)} percent, ${e.home.name} ${pct(P.pH)} percent`)}"><i style="flex-grow:${1 - P.pH};background:${e.ac}"><span>${pct(1 - P.pH)}%</span></i><i style="flex-grow:${P.pH};background:${e.hc}"><span>${pct(P.pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${e.ac}"></i>${esc(e.away.name)}</span><span><i style="background:${e.hc}"></i>${esc(e.home.name)}</span></div>
+  return flPredDeep({ key: 'bsb:' + e.id, flip: true, model: { kind: 'normal', mean: [+P.score[0], +P.score[1]], sd: 4.4, totSd: 4.5, unit: e.src === 'bb' ? 'points' : 'runs', step: 1, replace: .75 },
+      roster: e.lg === 'mlb' ? () => flRoster.baseball('baseball/mlb', { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.market ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }],
+      method: 'How it\'s estimated: each hitter\'s share of the team\'s runs and RBIs this season; the team keeps 75% of that when he sits. Pitchers are not counted here: the starting pitcher is already in the main prediction.',
+      methodWhy: 'Run scoring and prevention from the table, the starting pitchers and home field, blended with the market where it prices the game.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[P.pick].name + ' win', conf: P.conf,
+      line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(bsReasons(e, P, v), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${e.away.score}–${e.home.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total ${e.src === 'bb' ? 'points' : 'runs'}</span></div>
       <div class="tile"><b class="num">${P.rA.toFixed(1)}–${P.rH.toFixed(1)}</b><span>Model ${e.src === 'bb' ? 'points' : 'runs'} ${esc(e.away.abbr)}–${esc(e.home.abbr)}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : P.books != null ? pct(P.books) + '%' : '–'}</b><span>${esc(e.home.abbr)} ${P.market != null ? 'on Kalshi' : 'at the books'}</span></div></div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${bsReasons(e, P, v).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     <p class="srcnote">Model: each team's runs scored and allowed per game (shrunk toward the league average early in the season), the probable starters' ERA and FIP, and home field. The shown chance weighs the betting market (Kalshi, or the sportsbooks' consensus) at 60% and the model at 40% when a market exists.</p>${RG}`;
 }
 function bsGamePane(v){
@@ -582,7 +581,7 @@ function bsGamePane(v){
   if (v.tab === 'box') return bsBox(v);
   if (v.tab === 'plays') return bsPlays(v);
   if (v.tab === 'matchup') return bsMatchup(v);
-  return bsSummary(v);
+  return (e.state === 'in' && e.sit ? flFx.diamond(e.sit) : '') + bsSummary(v);
 }
 
 /* ---------- team pages ---------- */
@@ -850,9 +849,10 @@ function bsStatsBody(v){
     const strong = cand.filter(c => c.r.pc >= 80).sort((a, b) => b.r.pc - a.r.pc).slice(0, 5), weak = cand.filter(c => c.r.pc <= 20).sort((a, b) => a.r.pc - b.r.pc).slice(0, 4);
     const chip = c => `<li><span>${esc(bsLabel(g, c.k))}</span><b class="num">${esc(st[c.k])}</b><small>${fbOrd(c.r.rank)} of ${c.r.n}</small></li>`;
     const rad = items.length >= 3 ? radarSVG({ title: 'vs league', items }, v.color || '#3D6FD9') : '';
-    if (rad || strong.length || weak.length) h += `<div class="fbp-viz">${rad ? `<div class="radar"><h5>Compared with the league</h5>${rad}<small>Percentile, 0–100 (100 = best). Totals are compared per game.</small></div>` : ''}
-      <div class="fbp-sw">${strong.length ? `<h5>Best at</h5><ul class="fbp-chips hi">${strong.map(chip).join('')}</ul>` : ''}${weak.length ? `<h5>Below average</h5><ul class="fbp-chips lo">${weak.map(chip).join('')}</ul>` : ''}
-        ${!peers.some(p => p.id === String(v.id)) ? `<p class="fbp-q">Not enough ${g === 'pitching' ? 'innings' : 'plate appearances'} yet to count as a regular, so these comparisons are rough.</p>` : ''}</div></div>`;
+    const title = Object.fromEntries(BS_KEY[g].radar);
+    h += flViz.playerBoard(cand.map(c => ({ label: bsLabel(g, c.k), short: title[c.k] || bsLabel(g, c.k), val: String(st[c.k]), rank: c.r.rank, n: c.r.n, pc: c.r.pc })), {
+      color: v.color || '#3D6FD9', peers: `${BSL[v.lg].name} ${g === 'pitching' ? 'pitchers' : 'hitters'}`, season: String(v.season || ''), radar: BS_KEY[g].radar.map(r => r[1]),
+      note: !peers.some(p => p.id === String(v.id)) ? `Not enough ${g === 'pitching' ? 'innings' : 'plate appearances'} yet to count as a regular, so treat these as rough.` : '' });
   }
   const first = BS_FIRST[g], keys = Object.keys(st).filter(k => !BS_SKIP.has(k) && (typeof st[k] === 'number' || /^[-.\d]/.test(String(st[k]))) && !/^[.-]+-*$/.test(String(st[k])))
     .sort((a, b) => { const i = x => { const j = first.indexOf(x); return j < 0 ? 99 : j }; return i(a) - i(b) });
@@ -1246,6 +1246,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.bsteam) return openBsTeam(t.dataset.bsteam, t.dataset.bsl, t.dataset.bsslug);
   if (t.dataset.bsplayer) { openBsPlayer(t.dataset.bsplayer, t.dataset.bsl, t.dataset.bsgroup); if (t.dataset.bsfrom) S.stack[S.stack.length - 1].fromSearch = true; return }
   const a = t.dataset.bsact, v = S.stack[S.stack.length - 1];
+  if (a === 'setday') { S.bsb.date = t.dataset.to === bsToday() ? null : t.dataset.to; return render() }
   if (a === 'day') { const d = new Date(bsDate() + 'T12:00:00'); d.setDate(d.getDate() + +t.dataset.to); S.bsb.date = bsYmd(d) === bsToday() ? null : bsYmd(d); return render() }
   if (a === 'today') { S.bsb.date = null; return render() }
   if (a === 'lginfo') return bsLeagueSheet(S.bsb.lg);
