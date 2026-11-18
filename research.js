@@ -830,6 +830,14 @@ function rsEl(){
 // Research opens the Floodlight Lab (lab.html, the same page the Discord /lab command opens) inside this overlay.
 // The classic screen below stays one tap away, and is what tennis uses, since the Lab has no tennis.
 const RS_LAB = new Set(['nba', 'wnba', 'nfl', 'nhl', 'mlb', 'soccer']);
+// The light switch between the classic Research screen and the Lab.
+function rsSwitch(lab){
+  return `<button data-rs="${lab ? 'classic' : 'lab'}" role="switch" aria-checked="${lab}" aria-label="Switch between Research and the Lab" title="${lab ? 'Switch to classic Research' : 'Switch to the Lab'}" style="margin-left:auto;display:inline-flex;align-items:center;gap:9px;border:0;background:none;padding:4px;cursor:pointer;color:inherit;font:600 12.5px/1 var(--f-body,inherit)">
+    <span style="opacity:${lab ? .5 : 1};transition:opacity .2s">Research</span>
+    <span style="position:relative;width:54px;height:30px;border-radius:99px;border:1px solid ${lab ? 'var(--accent)' : 'var(--line)'};background:${lab ? 'color-mix(in oklab,var(--accent) 28%,var(--surface))' : 'var(--surface-2,var(--surface))'};box-shadow:${lab ? '0 0 18px -2px color-mix(in oklab,var(--accent) 70%,transparent),' : ''}inset 0 1px 3px rgba(0,0,0,.35);transition:all .25s">
+      <span style="position:absolute;top:2px;left:${lab ? 26 : 2}px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:${lab ? 'var(--accent)' : 'var(--muted)'};box-shadow:0 2px 6px rgba(0,0,0,.4);transition:left .25s cubic-bezier(.3,1.5,.5,1)">${lab ? '🧪' : ''}</span></span>
+    <span style="opacity:${lab ? 1 : .5};transition:opacity .2s">🧪 Lab</span></button>`;
+}
 function rsLab(o = {}){
   const r = S.rs, el = rsEl(), th = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const q = new URLSearchParams({ embed: '1', sport: r.sport, theme: th });
@@ -839,7 +847,7 @@ function rsLab(o = {}){
   if (!o.name && (r.tab === 'board' || r.tab === 'team')) q.set('tab', r.tab);
   r.lab = true;
   el.innerHTML = `<div style="display:flex;flex-direction:column;height:100%"><div class="rs-top" style="flex:none;margin:0;padding:10px 16px"><button class="rs-x" data-rs="close" aria-label="Close research">‹ Back</button><h2>Research</h2>
-    <button class="linkbtn" data-rs="classic" style="margin-left:auto">Classic view</button></div>
+    ${rsSwitch(true)}</div>
     <iframe src="/lab?${q}" title="Floodlight Lab" style="flex:1;width:100%;min-height:0;border:0;background:var(--bg)"></iframe></div>`;
   el.style.overflow = 'hidden';
 }
@@ -979,7 +987,7 @@ function rsRender(){
   const r = S.rs, keepY = el.scrollTop, act = document.activeElement?.id;
   el.innerHTML = `<div class="rs-in">
     <div class="rs-top"><button class="rs-x" data-rs="close" aria-label="Close research">‹ Back</button><h2>Research</h2>
-      ${RS_LAB.has(r.sport) ? '<button class="linkbtn" data-rs="lab">Open the Lab</button>' : ''}
+      ${RS_LAB.has(r.sport) ? rsSwitch(false) : ''}
       <div class="seg rs-sp" role="tablist" aria-label="Sport">${RS_SPORTS.map(([k, l]) => `<button role="tab" data-rs="sport" data-to="${k}" aria-selected="${r.sport === k}" class="${r.sport === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="rs-tabs" role="tablist">${[['player', 'Player research'], ['board', "Today's player props"], ['team', 'Team props']].map(([k, l]) => `<button role="tab" data-rs="tab" data-to="${k}" aria-selected="${r.tab === k}">${l}</button>`).join('')}</div>
     ${r.tab === 'board' ? rsBoardHTML() : r.tab === 'team' ? rsTeamHTML() : rsPlayerHTML()}
