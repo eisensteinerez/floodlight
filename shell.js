@@ -34,13 +34,14 @@
   const side = document.createElement('aside'); side.id = 'flSide'; side.className = 'flside'; side.setAttribute('aria-label', 'Main menu');
   const item = (k, label, attrs, extra = '') => `<button class="fsn" data-k="${k}" ${attrs} title="${label}">${ic(k)}<span class="fsn-l">${label}</span>${extra}</button>`;
   side.innerHTML = `<div class="fls-brand"><span class="fls-mark">${ic('bolt', 18)}</span><b>Floodlight</b></div>
+    <button class="fls-jump" type="button" onclick="window.flPalette && flPalette.open()" title="Jump anywhere">${ic('research', 16)}<span class="fsn-l">Jump to…</span><kbd>${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl '}K</kbd></button>
     <nav class="fls-nav" id="sideNav" aria-label="Sections"><div class="fls-ind" id="sideInd" hidden></div>
       ${item('home', 'Home', 'data-shell="home"')}
       ${item('live', 'Live', 'data-shell="live"', '<span class="fsn-live" id="sideLive" hidden><i></i><b></b></span>')}
       <h4>Sports</h4>
       ${SPORTS.map(([k, l]) => item(k, l, `data-sport="${k}"`)).join('')}
       <h4>You</h4>
-      ${item('research', 'Research', 'data-rs="open"', `<kbd>${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl '}K</kbd>`)}
+      ${item('research', 'Research', 'data-rs="open"')}
       ${item('pred', 'Predictions', 'data-shell="pred"')}
       ${item('fav', 'Favorites', 'data-shell="fav"')}
       ${item('profile', 'Profile', 'data-shell="profile"')}

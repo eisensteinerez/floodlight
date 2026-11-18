@@ -183,7 +183,7 @@
     window.flShell?.sync?.();
   }
   function hide() { if (!root.classList.contains('hub-on')) return; root.classList.remove('hub-on'); sec.hidden = true; clearInterval(poll) }
-  window.flHub = { show, hide, load, on: () => root.classList.contains('hub-on') };
+  window.flHub = { show, hide, load, on: () => root.classList.contains('hub-on'), games: () => H.games, open: g => openGame(g.sport, g.lg, g.id) };
 
   // Home opens the hub (capture phase, ahead of the older Home behaviour in shell.js)
   document.addEventListener('click', ev => {
