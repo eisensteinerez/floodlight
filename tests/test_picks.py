@@ -249,6 +249,9 @@ def test_record_round_trip_on_github(tmp_path, monkeypatch):
     import pick_tracker as T
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "t0ken")
     monkeypatch.setitem(T.D, "data_dir", str(tmp_path))
+    sent = []
+    monkeypatch.setattr(T, "push", sent.append)
+    monkeypatch.setattr(T, "from_server", lambda: None)
     T.STATE["posted"]["2026-11-18 00:30"] = 1
     T.save()
     blob = (tmp_path / T.DATA_FILE).read_bytes()
@@ -256,4 +259,23 @@ def test_record_round_trip_on_github(tmp_path, monkeypatch):
     T.STATE["posted"].clear()
     T.reload()
     assert "2026-11-18 00:30" in T.STATE["posted"]
+    assert sent and T.unseal(sent[0])["posted"]                 # the server got the same record
+
+    # the server's copy wins when it is newer (the server posted a set time GitHub's timer missed)
+    newer = dict(T.STATE, posted={"2026-11-18 08:00": 2}, savedAt=T.STATE["savedAt"] + 60)
+    monkeypatch.setattr(T, "from_server", lambda: newer)
+    T.reload()
+    assert "2026-11-18 08:00" in T.STATE["posted"]
     monkeypatch.delitem(T.D, "data_dir")
+
+
+def test_server_accepts_only_newer_sealed_records(monkeypatch):
+    import pick_tracker as T
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "t0ken")
+    T.STATE["savedAt"] = 100
+    assert not T.accept_blob(b"not a record")
+    assert not T.accept_blob(T.seal({"savedAt": 50, "posted": {}}))
+    assert T.accept_blob(T.seal({"savedAt": 150, "posted": {"x": 1}})) and T.STATE["posted"] == {"x": 1}
+    forged = T.seal({"savedAt": 999})
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "other")               # made without the bot token: refused
+    assert not T.accept_blob(forged)
