@@ -918,7 +918,7 @@ button.bx-hero:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:520px){.vz-cols{gap:4px}.vz-bars i{width:44%}.vz-story-n{font-size:44px}.stat.vz-m .v{font-size:17px}}
 
 /* ---------- tennis: tournament hero, surface tints, draw ---------- */
-.tn-sf-hard{--sf:#3E7BFA;--sf2:#1B3E8F}.tn-sf-clay{--sf:#E2733A;--sf2:#8E3A16}.tn-sf-grass{--sf:#3DBA6A;--sf2:#16592F}.tn-sf-carpet{--sf:#9B6BFF;--sf2:#4A2C93}
+.tn-sf-hard{--sf:#3E7BFA;--sf2:#1B3E8F}.tn-sf-clay{--sf:#E2733A;--sf2:#8E3A16}.tn-sf-grass{--sf:#3DBA6A;--sf2:#16592F}.tn-sf-carpet{--sf:#2BB3A3;--sf2:#11564F}
 .tn-hero{position:relative;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:stretch;margin:4px 0 20px;padding:24px;border-radius:20px;overflow:hidden;border:1px solid color-mix(in oklab,var(--sf) 35%,var(--line));
   background:radial-gradient(90% 120% at 100% 0%,color-mix(in oklab,var(--sf) 40%,transparent),transparent 60%),linear-gradient(135deg,color-mix(in oklab,var(--sf2) 55%,var(--surface)),var(--surface) 70%)}
 .tn-hero::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.045;background:
@@ -1222,3 +1222,34 @@ button.bx-hero:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .wx-why{display:grid;gap:8px}
 .wx-soccer{margin-top:22px}
 @media (max-width:700px){.wx-teams{grid-template-columns:1fr}}
+
+/* ==========================================================================
+   Design guidelines pass (web-interface-guidelines, accessibility-review, unslop, frontend-design)
+   ========================================================================== */
+/* visible keyboard focus on everything you can operate, never on mouse clicks */
+:where(button,a,input,select,textarea,summary,[tabindex]):focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:inherit}
+/* taps: no double-tap zoom delay, no grey flash */
+button,a,[role="tab"],label,select,summary{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+/* scrolling panels don't drag the page behind them */
+.sheet,.sheet-body,.drawer,.flsheet,.cmdk-list,.pb-tbl,.hub-strip{overscroll-behavior:contain}
+/* headings wrap evenly; long names never push the layout */
+h1,h2,h3,.hub-head h1,.ufc-hero h2,.tn-hero h2,.lh-hero h1{text-wrap:balance}
+p{text-wrap:pretty}
+.num,td,.vz-story-n,.pb-story > b,.hb-cd b{font-variant-numeric:tabular-nums}
+/* touch screens: every control at least 44px tall */
+@media (pointer:coarse){
+  .chip,.qf,.tab,.hub-chip,.dt,.seg button,.ex,.vz-share,.wx-chip,.linkbtn,.btn,.fsn,.flb,.cmdk-i,.ufc-ev,.tn-dr-m,[data-ufcyear],[data-bxyear]{min-height:44px}
+}
+/* quiet chrome (unslop): small labels in sentence case, not tracked-out capitals; the big condensed capitals stay
+   for page titles, scoreboards and countdowns, and the LIVE badge keeps its pulse */
+.hb-k,.hub-kick,.ufc-k,.tn-h-k,.ufc-cls,.ufc-wc,.hb-cd small,.ufc-tr small,.ufc-fh-tags,.cmdk-g,.sfx-h small,.vz-wp-lab,.ufc-ev-b small,.ufc-ev-n small,.ufc-fp-rec small{text-transform:none;letter-spacing:0}
+.hb-k{font:600 14px/1.2 var(--f-body)}.hub-kick{font:600 13px/1 var(--f-body)}.ufc-k{font:600 13px/1 var(--f-body)}.cmdk-g{font:600 12px/1 var(--f-body)}
+.hb-cd small{font:500 11px/1 var(--f-body)}.ufc-tr small{font:600 12px/1 var(--f-body)}
+/* depth from surface steps and hairlines on the dark theme, not coloured glows */
+.hub-chip.on{box-shadow:none}
+.ufc-cta{box-shadow:none}
+.vz-bars i.win{box-shadow:none}
+.stat.vz-ll .bars span:first-child,.stat.vz-lr .bars span:last-child{box-shadow:none}
+.ufc-meth em,.bx-tbar em.up,.vz-pct-t i{box-shadow:none}
+/* the accent carries text only where it reaches 4.5:1 */
+:root[data-theme="light"] .hub-kick,:root[data-theme="light"] .lh-steps li::before{color:color-mix(in oklab,var(--accent) 70%,#000)}

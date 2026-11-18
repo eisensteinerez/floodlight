@@ -836,7 +836,7 @@ function rsSwitch(lab){
     <span style="opacity:${lab ? .5 : 1};transition:opacity .2s">Research</span>
     <span style="position:relative;width:54px;height:30px;border-radius:99px;border:1px solid ${lab ? 'var(--accent)' : 'var(--line)'};background:${lab ? 'color-mix(in oklab,var(--accent) 28%,var(--surface))' : 'var(--surface-2,var(--surface))'};box-shadow:${lab ? '0 0 18px -2px color-mix(in oklab,var(--accent) 70%,transparent),' : ''}inset 0 1px 3px rgba(0,0,0,.35);transition:all .25s">
       <span style="position:absolute;top:2px;left:${lab ? 26 : 2}px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:${lab ? 'var(--accent)' : 'var(--muted)'};box-shadow:0 2px 6px rgba(0,0,0,.4);transition:left .25s cubic-bezier(.3,1.5,.5,1)">${lab ? '🧪' : ''}</span></span>
-    <span style="opacity:${lab ? 1 : .5};transition:opacity .2s">🧪 Lab</span></button>`;
+    <span style="opacity:${lab ? 1 : .5};transition:opacity .2s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-2px"><path d="M9 3h6M10 3v6L5 18a2 2 0 0 0 1.700 3h10.600a2 2 0 0 0 1.700-3L14 9V3"/></svg> Lab</span></button>`;
 }
 function rsLab(o = {}){
   const r = S.rs, el = rsEl(), th = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');

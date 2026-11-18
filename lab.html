@@ -644,7 +644,7 @@ async function load(name, kind, o = {}) {
   } catch (e) { if (seq !== loadSeq) return; S.p = null; $('#msg').innerHTML = ''; notFound(name, kind, e.message) }
 }
 function drawRecent() {
-  $('#recent').innerHTML = store.get('lab.recent', []).map(r => `<button data-n="${esc(r.n)}" data-s="${r.s}" data-t="${r.t || 'player'}">${r.t === 'team' ? '🛡 ' : ''}${esc(r.n)}</button>`).join('');
+  $('#recent').innerHTML = store.get('lab.recent', []).map(r => `<button data-n="${esc(r.n)}" data-s="${r.s}" data-t="${r.t || 'player'}">${esc(r.n)}</button>`).join('');
 }
 
 /* ---------- the maths ---------- */

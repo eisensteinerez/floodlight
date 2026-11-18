@@ -1156,7 +1156,7 @@ document.addEventListener('error', ev => {
   </aside>
 </main>
 <footer class="fl-foot" aria-hidden="true"><span class="fl-foot-mark">Floodlight</span><span class="fl-foot-line">Every match, every line, under the lights.</span></footer>
-<div class="toasts" id="toasts"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <div class="drawer-scrim" id="profileScrim" hidden></div>
 <aside class="drawer" id="profile" role="dialog" aria-modal="true" aria-labelledby="profileTitle" tabindex="-1" hidden></aside>
 <nav class="bottomnav" id="bottomnav" aria-label="Sections"></nav>
@@ -4070,7 +4070,7 @@ const FM_SOURCE = { 'isr.1': 127 };
 const FM_IMGS = 'https://images.fotmob.com/image_resources';
 if (LG['isr.1']) LG['isr.1'].logo = `${FM_IMGS}/logo/leaguelogo/127.png`;
 const FM_TABS = [['lineups','Lineups'],['stats','Stats'],['events','Timeline'],['odds','Odds'],['insight','Prediction'],['table','Table']];
-const FM_PALETTE = ['#C8102E','#1D4ED8','#15803D','#D97706','#7C3AED','#0E7490','#BE185D','#4D7C0F','#B45309','#1E3A8A','#9F1239','#047857'];
+const FM_PALETTE = ['#C8102E','#1D4ED8','#15803D','#D97706','#0EA5E9','#0E7490','#BE185D','#4D7C0F','#B45309','#1E3A8A','#9F1239','#047857'];
 const fmColor = name => { let h = 0; for (const c of name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0; return FM_PALETTE[h % FM_PALETTE.length].slice(1) };
 const abbrOf = n => { const w = (n || '').replace(/\b(FC|SC|F\.C\.)\b/g, '').split(/[\s-]+/).filter(Boolean); const a = w.map(x => x[0]).join('').toUpperCase(); return (a.length >= 3 ? a : (a + (w[w.length - 1] || '').slice(1).toUpperCase())).slice(0, 3) };
 function normFM(f, slug){
