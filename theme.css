@@ -1730,3 +1730,172 @@ body::after{background:
 body::after,.rs::before{-webkit-mask-image:linear-gradient(#000 20%,transparent 70%);mask-image:linear-gradient(#000 20%,transparent 70%)}
 .dt.today::after{box-shadow:none}
 @media (max-width:640px){.dt.today::after{top:4px;right:5px;width:4px;height:4px}}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   NEAT · the whole site set straight: upright type in sentence case, a 4px grid, square-cornered nothing, no slants,
+   no cut corners. Neutral cards with a team-colour edge; colour lives in the featured match and in live numbers.
+   ═══════════════════════════════════════════════════════════════════ */
+@font-face{font-family:"FL Neat";font-style:normal;font-weight:600;font-display:swap;
+  src:url(https://fonts.gstatic.com/s/geist/v5/gyByhwUxId8gMEwcGFWNOITd.woff2) format("woff2")}
+:root{--f-display:"FL Neat","Geist","Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;--f-body:"Geist","Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-variation-settings:normal;font-synthesis:none;--card-r:14px;--r-card:14px;--r-ctl:10px;--slant:none;--cut:none;
+  --hairline:color-mix(in oklab,var(--fg) 9%,transparent);
+  --f-num:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;--f-mono:var(--f-body)}
+*,*::before,*::after{text-transform:none!important;clip-path:none!important;font-style:normal!important}
+body{font:14px/1.5 var(--f-body);letter-spacing:0}
+h1,h2,h3,h4,h5{letter-spacing:-.01em}
+
+/* ---- top bar ---- */
+.brand{font:600 19px/1 var(--f-display);letter-spacing:-.01em}
+.brand small{font:500 12px/1 var(--f-body);letter-spacing:0;color:var(--muted)}
+.tk,.tk > *,.dt > *{transform:none}
+.tk{border-radius:8px}
+.ticker *{letter-spacing:0!important}
+
+/* ---- page title row ---- */
+#list > .livebar{margin:8px 0 16px;gap:12px;align-items:baseline}
+.livebar h2{font:600 32px/1.1 var(--f-display);letter-spacing:-.02em;text-shadow:none;padding:0}
+.livebar .count{font:500 13px/1 var(--f-body);letter-spacing:0;padding:0;color:var(--muted)}
+.livebar .count::before{display:none}
+
+/* ---- day picker: seven equal tiles ---- */
+.dt,.dt:hover,.dt.on{transform:none;border-radius:10px!important}
+.dt{border:1px solid var(--hairline);background:var(--surface)}
+.dt:hover{background:var(--surface-2)}
+.dt *{letter-spacing:0!important}
+
+/* ---- chosen controls: an off-white step, amber is kept for today and for live numbers ---- */
+.tab.on,.sport-sw.dock button.on,.rail .lg.on,.qf.on,.qf[aria-pressed="true"],.chip.on,.pv-nav button.on,.seg button.on,.vc-tag,.mc-go:hover,.nx-go:hover{
+  background:var(--fg)!important;color:var(--bg)!important;border-radius:8px!important;font-weight:500;padding-inline:14px}
+.dt.on,.pf-form .btn:not(.ghost){background:var(--accent)!important;color:var(--accent-ink)!important;border-radius:10px!important}
+.tab,.qf,.chip,.sport-sw.dock button,.seg button,.pv-nav button{border-radius:8px;font-weight:500;letter-spacing:0}
+.pill.live,.hero.mh .pill.live,.conf,.vd .conf{border-radius:6px;padding-inline:8px;font-weight:600;letter-spacing:0}
+
+/* ---- league headers ---- */
+.group{margin-bottom:32px}
+.group-h{gap:10px;padding:0 0 12px}
+.group-h img{width:24px;height:24px;padding:3px;border-radius:6px}
+.group-h strong{font:600 18px/1.2 var(--f-display);letter-spacing:-.01em}
+.group-h > span:not(.pill){font:400 13px/1 var(--f-body);letter-spacing:0;color:var(--muted)}
+.group-h::after{height:1px;background:var(--hairline);opacity:1}
+
+/* ---- match cards: neutral, two rows, a team-colour edge ---- */
+.cards,.shell.no-sheet .cards{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.m{min-height:0;border:1px solid var(--hairline);border-radius:12px;overflow:hidden;
+  background:linear-gradient(180deg,var(--hc) 0 50%,var(--ac) 50% 100%) 0 0/3px 100% no-repeat,var(--surface);transition:background-color .15s,border-color .15s}
+.m:hover{transform:none;filter:none;border-color:color-mix(in oklab,var(--fg) 22%,transparent);background-color:var(--surface-2)}
+.m.sel{box-shadow:inset 0 0 0 1px var(--fg)!important}
+.m .st,.m .st.live{height:32px;padding:0 14px 0 16px;background:none;font:500 12px/1 var(--f-body);letter-spacing:0;color:var(--muted);border-bottom:1px solid var(--hairline)}
+.m .st .ko{font:600 13px/1 var(--f-num);letter-spacing:0;color:var(--fg)}
+.m .st .cd{font:500 12px/1 var(--f-num);color:var(--muted)}
+.m .st.live,.m .st.live .lv{color:var(--live);font:600 12px/1 var(--f-body);letter-spacing:0}
+.m .st.live .min{font:600 13px/1 var(--f-num);color:var(--fg)}
+.m .st.live::before{width:6px;height:6px;animation:none;box-shadow:none}
+.m .tms{padding:6px 0 8px 16px}
+.m .tm,.m.fb .tm{gap:10px;height:36px}
+.m .tm img{width:22px;height:22px;filter:none}
+.m .tm > span{font:500 15px/1.2 var(--f-body);letter-spacing:0;color:var(--fg);text-shadow:none}
+.m .tm.lose > span{opacity:1;color:var(--muted)}
+.m .tm .rec{font:400 11px/1 var(--f-num);color:var(--muted)}
+.m .sc{grid-template-rows:36px 36px;padding:6px 16px 8px 8px}
+.m .sc span,.m:has(.st.live) .sc span{font:600 18px/1 var(--f-num);color:var(--fg);text-shadow:none}
+.m .sc span.lose{opacity:1;color:var(--muted)}
+.m:has(.st.live) .sc span{color:var(--accent)}
+.m .sc .tv{color:var(--muted)!important;font:400 11px/1.2 var(--f-body)!important}
+.m .oddrow span{background:var(--surface-2);color:var(--muted);border-radius:4px}
+.m .oddrow span.fav{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--fg)}
+:root:not([data-theme="dark"]) .m:has(.st.live) .sc span,:root:not([data-theme="dark"]) .m.tn-m .tn-sets .tn-s,:root:not([data-theme="dark"]) .m .st .cd{color:var(--accent)}
+:root:not([data-theme="dark"]) .m .st .cd{color:var(--muted)}
+:root:not([data-theme="dark"]) .m .oddrow span.fav{background:color-mix(in oklab,var(--accent) 14%,transparent);color:var(--fg)}
+.m.tn-m,.m.tn-m:has(.st.live){background:var(--surface)}
+.m.tn-m .tm > span,.m .tn-sets .tn-g.w{color:var(--fg)}.m .tn-sets .tn-g{color:var(--muted)}
+.m.tn-m .tm > span.tn-nm{font-size:15px}.m.tn-m .tn-sets .tn-s{font:600 18px/1 var(--f-num)}
+.m.tn-m .tn-row{height:40px}.m.tn-m .tn-round{color:var(--muted)}
+/* prediction cards */
+.m.pred-card .st .min{font:600 13px/1 var(--f-num)}
+.m.pred-card .pc-chips span{background:var(--surface-2);color:var(--muted)}.m.pred-card .pc-chips b{color:var(--fg)}
+.m.pred-card .pc-chips .edge-c{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--fg)}.m.pred-card .pc-chips .edge-c b{color:var(--fg)}
+.m.pred-card .pc-side{background:none;border-top:1px solid var(--hairline);padding:12px 16px}
+.m.pred-card .pc-side b{font:600 16px/1.2 var(--f-display);color:var(--fg)}
+.m.pred-card .pc-side small{color:var(--muted)}
+
+/* ---- featured match: the one place team colour fills the frame ---- */
+.spot,.spot.mini,.spots > .spot{border-radius:16px}
+.spots > .spot{min-height:340px;padding:20px 32px 24px}
+.spots > .spot .spot-bg{background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 70%,#07090C) 0%,color-mix(in oklab,var(--hc) 22%,#0B0D11) 40%,color-mix(in oklab,var(--ac) 22%,#0B0D11) 60%,color-mix(in oklab,var(--ac) 70%,#07090C) 100%)}
+.spots > .spot .spot-bg::after,.spot-ghost{display:none}
+.spots > .spot .spot-bg img{opacity:.1;transform:none}
+.spots > .spot .spot-sc b{font:600 clamp(64px,8vw,112px)/1 var(--f-num);letter-spacing:-.04em;text-shadow:none}
+.spots > .spot .spot-sc.pre b{font-size:clamp(40px,5vw,64px)}
+.spots > .spot .spot-t strong{font:600 clamp(20px,2.2vw,30px)/1.15 var(--f-display);letter-spacing:-.01em}
+.spots > .spot .spot-t img{width:clamp(64px,6vw,88px);height:clamp(64px,6vw,88px)}
+.spot *{letter-spacing:0}
+.spot.mini .spot-sc b{font:600 32px/1 var(--f-num)}
+
+/* ---- panels ---- */
+.sheet{border-radius:16px}
+.pulse,.empty-state,.tile,.ml,.rs-tile,.fx-card,.rail{border-radius:14px!important}
+.mc-c::after,.pane.pgrid > .pcard::after{display:none}
+.mc-c,.pane.pgrid > .pcard{background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none;border:1px solid var(--hairline)}
+.mc-c > header h5{font:600 16px/1.2 var(--f-display)}
+.mc-c > header h5::before,.sub-h h5::before{display:none}
+.vd-pick{font:600 28px/1.1 var(--f-display)}
+.empty-state strong,.rs-empty strong{font:600 18px/1.2 var(--f-display)}
+
+/* ---- match header ---- */
+.hero.mh{background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 70%,#07090C) 0%,color-mix(in oklab,var(--hc) 22%,#0B0D11) 40%,color-mix(in oklab,var(--ac) 22%,#0B0D11) 60%,color-mix(in oklab,var(--ac) 70%,#07090C) 100%)}
+.hero.mh::before{background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.45))}
+.hero.mh::after{display:none}
+.hero.mh .score,.hero.mh .score > *{transform:none}
+.hero.mh .score{background:rgba(0,0,0,.35);border-radius:12px;backdrop-filter:none;padding:12px 24px}
+.hero.mh .score .big{font:600 64px/1 var(--f-num);letter-spacing:-.04em}
+.hero.mh .score .big em{color:rgba(255,255,255,.5)}
+.hero.mh *{letter-spacing:0}
+
+/* ---- footer: one quiet line ---- */
+.fl-foot{flex-direction:row;justify-content:center;gap:12px;padding:24px 16px calc(96px + env(safe-area-inset-bottom,0px));margin-top:48px}
+.fl-foot::before,.fl-foot::after{display:none}
+.fl-foot-mark{font:600 14px/1 var(--f-display);letter-spacing:0;color:var(--fg);-webkit-text-stroke:0;background:none;-webkit-background-clip:border-box;background-clip:border-box;-webkit-mask:none;mask:none}
+.fl-foot-line{font:400 13px/1 var(--f-body);letter-spacing:0;margin:0}
+
+/* small labels read as text, numbers stay in the mono face */
+body{font-variant-numeric:tabular-nums}
+.num,.sc,.tk .s,.dt strong,.date strong{font-family:var(--f-num)}
+.spot-ghost,.spot > svg{display:none}
+.spot.mini .spot-bg{background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 60%,#07090C) 0%,color-mix(in oklab,var(--hc) 20%,#0B0D11) 42%,color-mix(in oklab,var(--ac) 20%,#0B0D11) 58%,color-mix(in oklab,var(--ac) 60%,#07090C) 100%)}
+.spot.mini .spot-bg img{opacity:.08}
+.spots > .spot .spot-clock{margin-top:32px}
+.pulse-s b{font:600 28px/1 var(--f-num);letter-spacing:-.02em}
+.pulse-s span{font:400 13px/1.2 var(--f-body);letter-spacing:0;color:var(--muted)}
+.pulse-m,.pulse-m.live{box-shadow:none!important;border-radius:6px}
+.pulse-now em{border-radius:4px}
+/* no tracked-out labels anywhere */
+*,*::before,*::after{letter-spacing:0!important}
+/* match header, sized for reading */
+.mh-fx,.hero.solo[data-ghost]::after,.rs-hero-ghost{display:none!important}
+.hero.mh .side strong,.shell.stage-match .hero.mh .side strong{font:600 clamp(20px,2vw,28px)/1.15 var(--f-display)!important;text-shadow:none}
+.hero.mh .side img,.shell.stage-match .hero.mh .side img{width:88px!important;height:88px!important;filter:none!important}
+.hero.mh .score .big,.shell.stage-match .hero.mh .score .big{font:600 clamp(56px,6vw,80px)/1 var(--f-num)!important;text-shadow:none}
+.hero.mh .score .big em{background:none;color:rgba(255,255,255,.45)!important;margin:0 4px}
+.hero.mh .score{border:0}
+/* tabs: an underline, not a block */
+.tab.on{background:none!important;color:var(--fg)!important;border-radius:0!important;box-shadow:inset 0 -2px 0 var(--fg)!important;padding-inline:12px}
+/* team and league headers */
+.thead h3,.shell.stage .hero.solo .thead h3{font:600 clamp(28px,3.2vw,40px)/1.1 var(--f-display)!important;text-shadow:none!important}
+.tile b,.hero.solo .tiles .tile b,.shell.stage .hero.solo .tile b{font:600 28px/1 var(--f-num)!important}
+.tile span,.bio span,.shell.stage .hero.solo .tile span{font:400 13px/1.2 var(--f-body)!important;color:var(--muted)}
+.pf-head h2,.sub-h h5,h5{font-family:var(--f-display)}
+@media (max-width:700px){
+  .livebar h2{font-size:26px}
+  .spots > .spot{min-height:0;padding:16px}
+  .spots > .spot .spot-sc b{font-size:44px}.spots > .spot .spot-sc.pre b{font-size:30px}
+  .spots > .spot .spot-t strong{font-size:15px}.spots > .spot .spot-t img{width:48px;height:48px}
+  .spot-g{font-size:11px}.spot-g span{white-space:nowrap}
+  .spots > .spot .spot-clock{margin-top:20px}
+  .hero.mh .side img{width:56px!important;height:56px!important}
+  .hero.mh .score .big{font-size:44px!important}.hero.mh .side strong{font-size:16px!important}
+  .group-h strong{font-size:16px}.group-h img{width:22px;height:22px}
+  .m{min-height:0}.m .tm,.m.fb .tm{height:36px}.m .sc{grid-template-rows:36px 36px}
+}
+@container groups (max-width:700px){.spots > .spot{padding:16px}.spots > .spot .spot-sc b{font-size:44px}.spots > .spot .spot-sc.pre b{font-size:30px}.spots > .spot .spot-t strong{font-size:15px}.spots > .spot .spot-t img{width:48px;height:48px}.spots > .spot .spot-main{margin:16px 0 12px}}

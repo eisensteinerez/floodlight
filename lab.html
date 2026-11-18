@@ -407,6 +407,22 @@ body,input,select,button{font-variation-settings:normal}
 .tip .hit{color:var(--win);font-weight:600}.tip .miss{color:var(--loss);font-weight:600}.tip .push{color:var(--muted)}
 html.dragging .tip{display:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* NEAT: the same straightened look as the main site. Upright type in sentence case, no slants, no tracked labels. */
+:root{--f-display:"FL Neat","Geist","Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;--f-body:"Geist","Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;--f-mono:var(--f-body);--slant:none;font-synthesis:none;--r:14px;--rc:10px}
+*,*::before,*::after{text-transform:none!important;clip-path:none!important;font-style:normal!important;letter-spacing:0!important;font-stretch:100%!important;font-variation-settings:normal!important}
+body{font-variant-numeric:tabular-nums}
+.num{font-family:var(--f-num)}
+.ghost{display:none!important}
+.brand{font:600 17px/1 var(--f-display)}
+.brand i{border-radius:6px;background:var(--accent)}
+.seg button.on,.qf.on{background:var(--fg);color:var(--bg);border-radius:8px;font-weight:500}
+.go{background:var(--accent);color:var(--accent-ink);border-radius:10px;font:600 14px/1 var(--f-display)}
+.sec>i{border-radius:6px;background:var(--surface-2);color:var(--fg);font-weight:600}
+.empty h2{font:600 28px/1.15 var(--f-display)}
+.ph h1{font:600 clamp(28px,3.4vw,40px)/1.1 var(--f-display);text-shadow:none}
+.hero-bg img{display:none}
 </style>
 </head>
 <body>
