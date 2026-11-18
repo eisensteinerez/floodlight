@@ -78,6 +78,15 @@
   new MutationObserver(() => document.querySelectorAll('#rs .rs-search .search:not([data-kbd])').forEach(l => l.setAttribute('data-kbd', KBD)))
     .observe(document.documentElement, { childList: true, subtree: true });
 
+  /* ---------- page transitions: changing sport, day or filter brings the new list in softly, cards one after another ---------- */
+  let navT = 0;
+  document.addEventListener('click', ev => {
+    if (!ev.target.closest?.('[data-sport],[data-iso],[data-days],[data-f],[data-shell="home"],[data-shell="live"],.rail button')) return;
+    const main = document.querySelector('.shell'); if (!main) return;
+    main.classList.remove('fl-enter'); clearTimeout(navT);
+    requestAnimationFrame(() => { main.classList.add('fl-enter'); navT = setTimeout(() => main.classList.remove('fl-enter'), 1100) });
+  }, true);
+
   /* ---------- actions the page has no single attribute for ---------- */
   document.addEventListener('click', ev => {
     const t = ev.target.closest('[data-shell]'); if (!t) return;
