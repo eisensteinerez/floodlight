@@ -2143,3 +2143,94 @@ body:has(.sheet.open) .sport-sw.dock,body.drawer-open .sport-sw.dock{display:fle
   .hero.mh .score{padding:10px 12px 8px}
   .hero.mh .side{min-width:0}
 }
+
+/* ==========================================================================
+   MATCHDAY · every sport gets the floodlit match header.
+   Same light cones, lamp banks and scoreboard score as soccer, with that
+   sport's own playing surface under the lights.
+   ========================================================================== */
+.hero.mh{--lamps:
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 18px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 27px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 36px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 45px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 18px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 27px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 36px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 45px) 16px/9px 9px no-repeat;
+  --cones:
+  conic-gradient(from 132deg at 6% -14%,transparent 0deg,color-mix(in oklab,var(--hc) 62%,transparent) 12deg,color-mix(in oklab,var(--hc) 30%,transparent) 22deg,transparent 34deg),
+  conic-gradient(from 194deg at 94% -14%,transparent 0deg,color-mix(in oklab,var(--ac) 30%,transparent) 12deg,color-mix(in oklab,var(--ac) 62%,transparent) 22deg,transparent 34deg)}
+
+/* basketball: hardwood with the centre circle and the lane lines */
+.hero.mh.sp-bb{background:var(--cones),
+  radial-gradient(120% 70% at 50% 120%,rgba(196,120,52,.55) 0%,rgba(110,62,26,.4) 45%,transparent 75%),
+  repeating-linear-gradient(90deg,rgba(255,214,160,.05) 0 1px,transparent 1px 34px),
+  linear-gradient(180deg,#05070A,#0A0907 60%,#1A1009)!important}
+.hero.mh.sp-bb::before{background:var(--lamps),
+  radial-gradient(circle at 50% 118%,transparent 0 92px,rgba(255,230,190,.16) 93px 95px,transparent 96px),
+  linear-gradient(90deg,transparent calc(50% - 1px),rgba(255,230,190,.12) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) 0 100%/100% 40% no-repeat!important}
+
+/* American football: turf with yard lines */
+.hero.mh.sp-fb{background:var(--cones),
+  radial-gradient(120% 70% at 50% 120%,#13502C 0%,#0B2A18 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,#0A1810)!important}
+.hero.mh.sp-fb::before{background:var(--lamps),
+  repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),rgba(255,255,255,.09) calc(10% - 1px) 10%) 0 100%/100% 42% no-repeat,
+  linear-gradient(90deg,transparent calc(50% - 2px),rgba(255,231,168,.18) calc(50% - 2px) calc(50% + 2px),transparent calc(50% + 2px)) 0 100%/100% 42% no-repeat!important}
+
+/* hockey: white ice with the red centre line and the blue lines */
+.hero.mh.sp-hk{background:var(--cones),
+  radial-gradient(120% 70% at 50% 125%,rgba(200,226,255,.30) 0%,rgba(120,160,210,.14) 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B10 60%,#0D1520)!important}
+.hero.mh.sp-hk::before{background:var(--lamps),
+  linear-gradient(90deg,transparent calc(50% - 2px),rgba(230,57,70,.5) calc(50% - 2px) calc(50% + 2px),transparent calc(50% + 2px)) 0 100%/100% 40% no-repeat,
+  linear-gradient(90deg,transparent calc(30% - 3px),rgba(80,140,255,.45) calc(30% - 3px) calc(30% + 3px),transparent calc(30% + 3px) calc(70% - 3px),rgba(80,140,255,.45) calc(70% - 3px) calc(70% + 3px),transparent calc(70% + 3px)) 0 100%/100% 40% no-repeat,
+  radial-gradient(circle at 50% 118%,transparent 0 70px,rgba(80,140,255,.3) 71px 73px,transparent 74px)!important}
+
+/* baseball: grass, an infield of dirt and the diamond */
+.hero.mh.sp-bs{background:var(--cones),
+  radial-gradient(46% 38% at 50% 112%,rgba(150,92,52,.55) 0 60%,transparent 62%),
+  radial-gradient(120% 70% at 50% 120%,#145230 0%,#0B2A18 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,#0A1810)!important}
+.hero.mh.sp-bs::before{background:var(--lamps),
+  linear-gradient(45deg,transparent calc(50% - 1px),rgba(255,255,255,.16) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) calc(50% - 70px) 100%/140px 140px no-repeat,
+  linear-gradient(-45deg,transparent calc(50% - 1px),rgba(255,255,255,.16) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) calc(50% + 70px) 100%/140px 140px no-repeat!important}
+
+/* tennis: the court colour follows the surface */
+.hero.mh.sp-tn{--court:#1C3F73;background:var(--cones),
+  radial-gradient(120% 70% at 50% 120%,color-mix(in oklab,var(--court) 85%,transparent) 0%,color-mix(in oklab,var(--court) 40%,transparent) 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,color-mix(in oklab,var(--court) 30%,#05070A))!important}
+.hero.mh.sp-tn.tn-s-clay{--court:#A2461F}
+.hero.mh.sp-tn.tn-s-grass{--court:#2D6B32}
+.hero.mh.sp-tn::before{background:var(--lamps),
+  linear-gradient(90deg,transparent calc(50% - 1px),rgba(255,255,255,.22) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) 0 100%/100% 34% no-repeat,
+  linear-gradient(90deg,transparent 20%,rgba(255,255,255,.14) 20% calc(20% + 2px),transparent calc(20% + 2px) calc(80% - 2px),rgba(255,255,255,.14) calc(80% - 2px) 80%,transparent 80%) 0 100%/100% 34% no-repeat!important}
+
+/* the scoreboard score works for any sport; long scores (basketball, football) get a narrower dot size */
+.hero.mh:is(.sp-bb,.sp-fb) .score .big,.shell.stage-match .hero.mh:is(.sp-bb,.sp-fb) .score .big{font-size:clamp(56px,6vw,96px)!important}
+.hero.mh .board .side img{filter:drop-shadow(0 10px 24px rgba(0,0,0,.55))}
+.hero.mh .side .rec{color:rgba(255,246,220,.6)}
+.hero.mh .qtr{background:rgba(0,0,0,.42);border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.hero.mh .qtr td.pts,.hero.mh .qtr th:last-child{font-family:var(--f-board);color:#FFF6DC}
+.hero.mh .kick{font:900 clamp(40px,4.4vw,64px)/1 var(--f-board)!important;color:#FFF6DC}
+@media (max-width:640px){
+  .hero.mh:is(.sp-bb,.sp-fb) .score .big,.shell.stage-match .hero.mh:is(.sp-bb,.sp-fb) .score .big{font-size:36px!important}
+  .hero.mh .kick{font-size:30px!important}
+}
+.vcs.two{grid-template-columns:1fr 1fr}
+.vcs.two .vc-crest u{font:800 22px/1 var(--f-wide);text-decoration:none}
+
+/* game centre (every sport): prediction beside the main live panel */
+@media (min-width:1101px){
+  .shell.stage .mc.gc{grid-template-columns:repeat(12,minmax(0,1fr));align-items:start}
+  .shell.stage .mc.gc > .mc-pred,.shell.stage .mc.gc > .mc-main{grid-column:1/-1}
+  .shell.stage .mc.gc > .mc-pred .mc-b:has(> .vd){display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;align-items:center}
+  .shell.stage .mc.gc > .mc-pred .pgs{grid-template-columns:repeat(2,minmax(0,1fr));margin:0}
+  .shell.stage .mc.gc > .mc-pred .edge{grid-column:1/-1;margin:0}
+  .shell.stage .mc.gc > .mc-wide{grid-column:1/-1}
+  .shell.stage .mc.gc > .mc-main:only-of-type,.shell.stage .mc.gc:not(:has(> .mc-pred)) > .mc-main{grid-column:1/-1}
+}
+.mc.gc .mc-main .tbl-wrap,.mc.gc .mc-wide .tbl-wrap{overflow-x:auto}
+.hero.mh .tbl-wrap{background:none!important;border:0!important;box-shadow:none!important;display:flex;justify-content:center}
+.hero.mh .tbl-wrap .qtr{width:auto;min-width:min(420px,100%)}

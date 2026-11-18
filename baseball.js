@@ -338,7 +338,7 @@ function bsReasons(e, P, v){
 function bsFindEvent(id){ return bsAllEvents().find(x => x.id === String(id)) || S.bsb.extra?.get(String(id)) || null }
 function openBsGame(id, tab){
   const e = bsFindEvent(id); if (!e) return bsOpenGameById(id);
-  S.sel = null; S.stack = [{ type: 'bsbgame', id: e.id, e, tab: tab || (e.state === 'pre' ? 'pred' : 'summary') }];
+  S.sel = null; S.stack = [{ type: 'bsbgame', id: e.id, e, tab: tab || 'centre' }];
   renderSheet(); $('sheet').classList.add('open'); $('sheet').querySelector('.sheet-body')?.scrollTo(0, 0);
   bsLoadGame(S.stack[0]);
 }
@@ -408,7 +408,7 @@ function bsHero(e, back){
   const n = Math.max(e.sched || 9, e.home.lines?.length || 0, e.away.lines?.length || 0);
   const lineRow = t => `<tr><td class="t">${esc(t.abbr)}</td>${[...Array(n)].map((_, i) => `<td>${esc(t.lines?.[i] ?? '')}</td>`).join('')}<td class="pts">${esc(t.score)}</td><td>${esc(t.hits)}</td><td>${esc(t.errors)}</td></tr>`;
   const L = BSL[e.lg];
-  return `<div class="hero" style="--hc:${e.ac};--ac:${e.hc}">
+  return `<div class="hero mh sp-bs${e.state === 'in' ? ' is-live' : ''}" style="--hc:${e.ac};--ac:${e.hc}">
     ${topBar(back).replace('<div class="hero-top">', `<div class="hero-top"><div class="lgname">${L.logo ? `<img src="${esc(L.logo)}" width="16" height="16" alt="" ${bsLogoErr}>` : ''}<span>${esc(L.name)}${e.series ? ' · ' + esc(e.series) : ''}</span></div>`)}
     <div class="board">${side(e.away, 'Away')}
       <div class="score">${s ? `<div class="big num">${esc(e.away.score)}<em>–</em>${esc(e.home.score)}</div><div class="status">${e.state === 'in' ? `<span class="pill live">${esc(e.detail)}</span>` : `<span class="pill" style="background:var(--surface-2);color:var(--muted)">${esc(e.detail)}</span>`}</div>`
@@ -561,15 +561,14 @@ function bsPredPane(v){
   const e = v.e;
   if (!S.bsb.stand[e.lg]) { bsStandings(e.lg).then(() => renderSheet()); return `<div class="skel" style="height:260px"></div>` }
   const P = bsPredict(e, v), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[P.pick].name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(e.away.score)}–${esc(e.home.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${P.score[1]}–${P.score[0]}</b><small>${esc(e.away.abbr)} – ${esc(e.home.abbr)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.away.name} ${pct(1 - P.pH)} percent, ${e.home.name} ${pct(P.pH)} percent`)}"><i style="flex-grow:${1 - P.pH};background:${e.ac}"><span>${pct(1 - P.pH)}%</span></i><i style="flex-grow:${P.pH};background:${e.hc}"><span>${pct(P.pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${e.ac}"></i>${esc(e.away.name)}</span><span><i style="background:${e.hc}"></i>${esc(e.home.name)}</span></div>
+  return `${sportVerdict({ post, conf: P.conf, L: { name: e.away.name, logo: e.away.logo, p: 1 - P.pH, col: e.ac }, R: { name: e.home.name, logo: e.home.logo, p: P.pH, col: e.hc },
+      winner: post ? (win === 'away' ? 'L' : 'R') : null, final: `final ${e.away.score}–${e.home.score}`,
+      model: P.model == null ? null : 1 - P.model, market: (P.market ?? P.books) == null ? null : 1 - (P.market ?? P.books),
+      tiles: [[`${P.score[1]}–${P.score[0]}`, 'Projected score', `${e.away.abbr} – ${e.home.abbr}`], [P.total.toFixed(1), `Projected ${e.src === 'bb' ? 'points' : 'runs'}`]] })}
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total ${e.src === 'bb' ? 'points' : 'runs'}</span></div>
       <div class="tile"><b class="num">${P.rA.toFixed(1)}–${P.rH.toFixed(1)}</b><span>Model ${e.src === 'bb' ? 'points' : 'runs'} ${esc(e.away.abbr)}–${esc(e.home.abbr)}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : P.books != null ? pct(P.books) + '%' : '–'}</b><span>${esc(e.home.abbr)} ${P.market != null ? 'on Kalshi' : 'at the books'}</span></div></div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${bsReasons(e, P, v).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+    <div class="sub-h"><h5>Why</h5></div>${whyList(bsReasons(e, P, v))}
     <p class="srcnote">Model: each team's runs scored and allowed per game (shrunk toward the league average early in the season), the probable starters' ERA and FIP, and home field. The shown chance weighs the betting market (Kalshi, or the sportsbooks' consensus) at 60% and the model at 40% when a market exists.</p>${RG}`;
 }
 function bsGamePane(v){
@@ -1178,7 +1177,7 @@ function bsRenderSheet(v){
     tabs = e.src === 'bb' ? [['summary', 'Summary'], ['pred', 'Prediction'], ['stand', 'Standings']] : e.src === 'fs' ? [['summary', 'Summary'], ['lineups', 'Lineups'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', 'Head to head'], ['stand', 'Standings']]
       : e.state === 'pre' ? [['pred', 'Prediction'], ['matchup', 'Matchup'], ['odds', 'Odds'], ['stand', 'Standings']]
       : [['summary', 'Summary'], ['box', 'Box score'], ['plays', 'Plays'], ['matchup', 'Matchup'], ['odds', 'Odds'], ['pred', 'Prediction'], ['stand', 'Standings']];
-    if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = bsGamePane(v) }
+    tabs = withCentre(tabs); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = v.tab === 'centre' ? gameCentre(v, tabs, bsGamePane, bsPredPane(v)) : bsGamePane(v) }
   else if (v.type === 'bsbteam') { hero = bsTeamHero(v, back); tabs = [['sched', 'Schedule'], ['roster', 'Roster'], ...(BSL[v.lg].src === 'sa' ? [['stats', 'Team stats']] : []), ['stand', 'Standings'], ...(BSL[v.lg].kx ? [['fut', 'Title odds']] : [])]; body = bsTeamPane(v) }
   else if (v.type === 'bsbleague') { const l = BSL[v.id];
     hero = `<div class="hero solo" style="--tc:var(--accent)">${topBar(back)}<div class="thead">${l.logo ? `<img class="crest" src="${esc(l.logo)}" alt="" ${bsLogoErr}>` : ''}<div><h3>${esc(l.name)}</h3><p><span>${esc(l.area)}</span><span>${bsSeason(v.id)} season</span></p></div></div></div>`;
@@ -1223,7 +1222,7 @@ async function bsSearch(q){
     renderBaseball(); bsTicker();
   };
   const _sheet = renderSheet;
-  renderSheet = function(){ const v = S.stack[S.stack.length - 1]; if (v?.type?.startsWith('bsb')) return bsRenderSheet(v); return _sheet.apply(this, arguments) };
+  renderSheet = function(){ const v = S.stack[S.stack.length - 1]; if (v?.type?.startsWith('bsb')) { syncStage(); return bsRenderSheet(v) } return _sheet.apply(this, arguments) };
   const _search = searchAll;
   searchAll = function(q){ if (S.sport === 'baseball') return bsSearch(q); return _search.apply(this, arguments) };
   const _openLeague = openLeague;
