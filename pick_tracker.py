@@ -65,8 +65,17 @@ def snowflake(t):
     return str((int(t.timestamp() * 1000) - EPOCH_MS) << 22)
 
 
+def guild_id():
+    """DISCORD_GUILD_ID, or the server the bot is in."""
+    gid = os.environ.get("DISCORD_GUILD_ID") or STATE.get("guild")
+    if not gid:
+        gs = api("GET", "/users/@me/guilds") or []
+        gid = STATE["guild"] = gs[0]["id"] if gs else None
+    return gid
+
+
 def guild_channels():
-    gid = os.environ.get("DISCORD_GUILD_ID")
+    gid = guild_id()
     return [c for c in api("GET", f"/guilds/{gid}/channels") or [] if c.get("type") in (0, 5)] if gid else []
 
 
@@ -669,7 +678,7 @@ def setup(**deps):
         got = storage.load(_path(), {})
         if isinstance(got, dict):
             STATE.update(got)
-    if os.environ.get("DISCORD_BOT_TOKEN") and os.environ.get("DISCORD_GUILD_ID"):
+    if os.environ.get("DISCORD_BOT_TOKEN"):
         threading.Thread(target=_loop, daemon=True, name="pick-tracker").start()
 
 
