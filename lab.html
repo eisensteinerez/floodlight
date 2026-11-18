@@ -200,6 +200,17 @@ html.dragging,html.dragging *{cursor:ns-resize!important;user-select:none;-webki
 .chart.dense .b em,.chart.dense .bl small{display:none}
 @media (max-width:640px){.bars{height:190px;padding:0 44px 0 22px}.roll{left:22px;width:calc(100% - 66px)}.key{margin-left:0;flex-basis:100%}.key i:first-child{margin-left:0}.chart.mid .b em{display:none}}
 
+.back{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:12px}
+.back input[type=range]{flex:1 1 140px;max-width:260px;accent-color:var(--accent);height:26px}
+.back b{font:800 20px/1 var(--f-display);min-width:28px}
+.avgl{position:absolute;left:0;right:0;border-top:1px dotted color-mix(in oklab,var(--accent) 70%,transparent);pointer-events:none;z-index:2}
+.avgl span{position:absolute;left:0;top:3px;font:600 9.5px/1 var(--f-mono);color:var(--accent);background:var(--surface);padding:1px 3px;border-radius:4px}
+.b u{display:none;position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:var(--loss);box-shadow:0 0 0 2px var(--surface),0 0 12px var(--loss);z-index:3;transition:transform .15s var(--spring)}
+.b.hit u{background:var(--win);box-shadow:0 0 0 2px var(--surface),0 0 12px var(--win)}.b.push u{background:var(--draw);box-shadow:0 0 0 2px var(--surface)}
+.chart.trend .b i{display:none}.chart.trend .b u{display:block}.chart.trend .b:hover u{transform:scale(1.5)}
+.chart.trend.dense .b u{width:7px;height:7px;margin:0 0 -3.5px -3.5px}
+.roll.tl polyline.raw{stroke:color-mix(in oklab,var(--fg) 75%,transparent);stroke-width:1.5}
+.chart.trend .roll:not(.tl) polyline{stroke-dasharray:4 4;opacity:.8}
 /* the read */
 .read{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px 26px;margin-top:12px;overflow:hidden}
 .read::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:radial-gradient(70% 120% at 0% 0%,color-mix(in oklab,var(--muted) 12%,transparent),transparent 70%)}
@@ -209,7 +220,7 @@ html.dragging,html.dragging *{cursor:ns-resize!important;user-select:none;-webki
 .read-v>span{font:500 9.5px/1 var(--f-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
 .read-v strong{display:block;font:900 44px/.9 var(--f-display);text-transform:uppercase;letter-spacing:.015em;margin:8px 0 14px}
 .read.pos strong{color:var(--win)}.read.neg strong{color:var(--loss)}
-.read-n{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.read-n{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.read-v>span em{font-style:normal;color:var(--fg)}.read-v>span em.up{color:var(--win)}.read-v>span em.down{color:var(--loss)}
 .read-n div{border:1px solid var(--line);border-radius:12px;padding:9px 10px;background:color-mix(in oklab,var(--bg) 50%,transparent)}
 .read-n b{display:block;font:900 26px/1 var(--f-display)}.read-n small{font-size:10.5px;color:var(--muted)}
 .read-v p{margin:12px 0 0;color:var(--muted);font-size:12px}
@@ -363,7 +374,7 @@ const HERO = { nba:['pts','reb','ast','3pm','pra'], wnba:['pts','reb','ast','3pm
 const HERO_T = ['pf','pa','tot','mar','win'];
 const YES = new Set(['win','btts','cs','dd','g1']);
 const BK = { prizepicks:'PP', sleeper:'SL', DraftKings:'DK' }, BOOK = { prizepicks:'PrizePicks', sleeper:'Sleeper' };
-const S = { tab:'player', sport:'nba', pass:'', p:null, k:null, line:null, side:'over', range:'l10', opp:'', venue:'all', comp:'all', res:'all', minMin:0,
+const S = { tab:'player', sport:'nba', pass:'', p:null, k:null, line:null, side:'over', range:'l10', back:10, mode:'bars', opp:'', venue:'all', comp:'all', res:'all', minMin:0,
   sort:{ col:'l10', dir:-1 }, board:{}, drag:null, chartKey:'' };
 const store = { get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
 const $ = s => document.querySelector(s);
@@ -458,6 +469,7 @@ function pool(k) {
 }
 function inRange(gs, r) {
   if (r === 'l5') return gs.slice(0, 5); if (r === 'l10') return gs.slice(0, 10); if (r === 'l20') return gs.slice(0, 20);
+  if (r === 'n') return gs.slice(0, S.back);
   if (r === 'szn') return gs.filter(g => g.date >= S.p.seasonStart); if (r === 'h2h') return S.opp ? gs.filter(g => sameOpp(g, S.opp)) : [];
   return gs;
 }
@@ -487,11 +499,35 @@ const short = g => (g.oppAbbr || g.opp.replace(/^(FC|AC|AS|SC|CF|RC|SS|1\. ?)\s+
 const lineTxt = v => fmt(v);
 function pickStat(k, line) { S.k = k; const m = mainLine(k); S.line = line != null && !isYes(k) ? line : m.line; S.lineFrom = line != null ? 'custom' : m.from; S.side = 'over'; render() }
 const bookPct = () => { const o = postedFor(S.k).find(x => x.pOver != null && (isYes(S.k) || x.line === S.line)); return o ? o.pOver : null };
-// the form meter blends four spans into one reading: recent games count most
-function meterOf(gs) {
-  const parts = [['l5', .35], ['l10', .3], ['l20', .2], ['szn', .15]].map(([r, w]) => [rate(inRange(gs, r), S.k, S.line, S.side).pct, w]).filter(x => x[0] != null);
-  return parts.length ? parts.reduce((a, [v, w]) => a + v * w, 0) / parts.reduce((a, x) => a + x[1], 0) : null;
+// The meter: an estimate of how often this side of the line comes in, from the games already played.
+// It blends two readings. (1) What happened: the hit rate with newer games counting more (a game 10 back counts half),
+// pulled toward 50% when there are few games. (2) Where the numbers sit: the recency-weighted average and spread,
+// nudged for home/away and the next opponent, turned into a chance of clearing the line. A line far below the average
+// on a steady stat reads high even after a couple of misses; a line right on the average reads near 50 either way.
+const erf = x => { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + .3275911 * x); return s * (1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x)) };
+const Phi = z => .5 * (1 + erf(z / Math.SQRT2));
+const poisCdf = (k, lam) => { if (k < 0) return 0; let s = 0, t = Math.exp(-lam); for (let i = 0; i <= k; i++) { s += t; t *= lam / (i + 1) } return Math.min(1, s) };
+function judge(gs) {
+  const k = S.k, line = S.line, over = S.side === 'over', use = gs.slice(0, 60), vs = use.map(g => g.v[k]), n = vs.length; if (n < 3) return null;
+  const w = vs.map((_, i) => Math.pow(.5, i / 10)), W = w.reduce((a, b) => a + b, 0), neff = W * W / w.reduce((a, b) => a + b * b, 0);
+  const wm = (xs, ws) => { const t = ws.reduce((a, b) => a + b, 0); return t ? xs.reduce((a, v, i) => a + v * ws[i], 0) / t : null };
+  let ho = 0, hd = 0; vs.forEach((v, i) => { if (v === line) return; hd += w[i]; if (v > line) ho += w[i] });
+  const emp = (ho + 1.5) / (hd + 3);
+  if (isYes(k)) { const p = over ? emp : 1 - emp; return { p, emp: p, model: p, mu: wm(vs, w), sd: 0, n, neff, conf: n >= 15 ? 'High' : n >= 8 ? 'Medium' : 'Low', notes: [] } }
+  const base = wm(vs, w), notes = []; let mu = base;
+  const nh = S.p.next ? S.p.next.home : null;
+  if (nh != null && S.venue === 'all') { const ix = use.map((g, i) => g.home === nh ? i : -1).filter(i => i >= 0); if (ix.length >= 5) { const m = wm(ix.map(i => vs[i]), ix.map(i => w[i])), d = .35 * (m - base); mu += d; if (Math.abs(d) > .02 * Math.max(1, Math.abs(base))) notes.push(['venue', d]) } }
+  if (S.opp) { const ix = use.map((g, i) => sameOpp(g, S.opp) ? i : -1).filter(i => i >= 0); if (ix.length >= 2) { const m = avg(ix.map(i => vs[i])), d = Math.min(.3, ix.length * .08) * (m - base); mu += d; if (Math.abs(d) > .02 * Math.max(1, Math.abs(base))) notes.push(['opp', d]) } }
+  const mins = use.map(g => g.min), haveMin = k !== 'min' && S.p.kind !== 'team' && mins.filter(m => m != null).length >= 10;
+  if (haveMin) { const m5 = avg(mins.slice(0, 5).filter(m => m != null)), mAll = wm(mins.map(m => m ?? 0), w.map((x, i) => mins[i] == null ? 0 : x)); if (m5 && mAll) { const d = .5 * (m5 / mAll - 1) * base; if (Math.abs(m5 / mAll - 1) >= .06) { mu += d; notes.push(['min', d]) } } }
+  const varr = wm(vs.map(v => (v - base) ** 2), w) * (neff > 1.5 ? neff / (neff - 1) : 1), sd = Math.sqrt(varr * (1 + 1 / neff)) || .5;
+  const ints = vs.every(Number.isInteger), lowCount = ints && Math.min(...vs) >= 0 && base < 6 && varr <= Math.max(base, .2) * 1.6;
+  const model = lowCount ? 1 - poisCdf(Math.floor(line), Math.max(.05, mu)) : 1 - Phi((line - mu) / sd);
+  const wE = n >= 20 ? .5 : n >= 10 ? .42 : .3, pOver = Math.max(.02, Math.min(.98, wE * emp + (1 - wE) * model));
+  let fair = Math.floor(mu) + .5; if (lowCount) { fair = .5; while (fair < 60 && 1 - poisCdf(Math.floor(fair), Math.max(.05, mu)) > .5) fair += 1 }
+  return { p: over ? pOver : 1 - pOver, emp: over ? emp : 1 - emp, model: over ? model : 1 - model, mu, base, sd, n, neff, fair, notes, conf: n >= 20 && neff >= 10 ? 'High' : n >= 10 ? 'Medium' : 'Low' };
 }
+function meterOf(gs) { S.J = judge(gs); return S.J ? S.J.p : null }
 
 /* ---------- drawing ---------- */
 function render() {
@@ -528,12 +564,12 @@ function hero(gs, meter) {
   const trend = l5a != null && base ? (l5a - base) / Math.abs(base) : 0, show = v => v == null ? '–' : isYes(k) ? pc(v) : f1(v);
   const word = meter == null ? '' : meter >= .7 ? 'Running hot' : meter >= .57 ? 'Warm' : meter > .43 ? 'Coin flip' : meter > .3 ? 'Cool' : 'Ice cold';
   const arc = Math.PI * 52, spark = sv.slice(0, 12).reverse(), sMin = Math.min(0, ...spark), sMax = Math.max(...spark, S.line * 1.1, 1), sh = v => (v - sMin) / (sMax - sMin) * 100;
-  const gauge = meter == null ? '' : `<div class="meter" title="A blend of the last 5 (35%), last 10 (30%), last 20 (20%) and season (15%) hit rates">
+  const gauge = meter == null ? '' : `<div class="meter" title="The estimated chance this side comes in: recent hit rate (newer games count more) blended with where the average and spread sit against the line, adjusted for venue, opponent and minutes">
     <svg viewBox="0 0 128 76" aria-hidden="true"><defs><linearGradient id="mg" x1="0" x2="1"><stop offset="0" stop-color="#FF6272"/><stop offset=".5" stop-color="#FFC233"/><stop offset="1" stop-color="#2BDB8C"/></linearGradient></defs>
       <path class="t" d="M12 68a52 52 0 0 1 104 0"/><path class="v" d="M12 68a52 52 0 0 1 104 0" stroke="url(#mg)" stroke-dasharray="${(meter * arc).toFixed(1)} ${arc.toFixed(1)}"/>
       ${[0, .25, .5, .75, 1].map(t => { const a = Math.PI * (1 - t), c = Math.cos(a), s = Math.sin(a); return `<path class="k" d="M${(64 + c * 62).toFixed(1)} ${(68 - s * 62).toFixed(1)}L${(64 + c * 58).toFixed(1)} ${(68 - s * 58).toFixed(1)}"/>` }).join('')}
       <g transform="rotate(${(meter * 180 - 90).toFixed(1)} 64 68)"><path class="n" d="M64 68V26"/><circle class="h" cx="64" cy="68" r="5"/></g></svg>
-    <b class="num">${Math.round(meter * 100)}</b><span>Form meter</span><small class="${meter >= .57 ? 'up' : meter <= .43 ? 'down' : ''}">${word}</small></div>`;
+    <b class="num">${Math.round(meter * 100)}</b><span>Lab meter${S.J ? " · " + S.J.conf.toLowerCase() + " confidence" : ""}</span><small class="${meter >= .57 ? 'up' : meter <= .43 ? 'down' : ''}">${word}</small></div>`;
   const strip = !sv.length ? '' : `<div class="side">${gauge}<div class="strip">
     <div><span>${szn.length >= 3 ? 'Season' : 'Recent'} ${isYes(k) ? 'rate' : 'avg'}</span><b class="num">${show(base)}</b><small>${esc(label(k).toLowerCase())}</small></div>
     <div><span>Last 5 ${isYes(k) ? 'rate' : 'avg'}</span><b class="num">${show(l5a)}</b><small class="${trend > .03 ? 'up' : trend < -.03 ? 'down' : ''}">${trend > .03 ? '▲' : trend < -.03 ? '▼' : '●'} ${Math.abs(Math.round(trend * 100))}% vs season</small></div>
@@ -562,9 +598,15 @@ function tiles(gs) {
       <small class="num">${R.n ? `${R.hit}/${R.n - R.push}${R.push ? ` · ${R.push} push` : ''}` : r === 'h2h' && !S.opp ? 'pick an opponent' : 'no games'}</small></button>` }).join('');
 }
 // The main chart: one bar per game against the line. Drag the line to move it; the thin curve is the 5-game running average.
+function backBar(n) {
+  const tot = pool(S.k).length, cur = Math.min(n, tot), opts = [5, 10, 15, 20, 30, 50].filter(x => x < tot);
+  return `<div class="back"><span class="lbl">Games back</span><div class="seg sm">${opts.map(x => `<button data-back="${x}" class="${cur === x && /^(l\d+|n)$/.test(S.range) ? 'on' : ''}">${x}</button>`).join('')}<button data-back="${tot}" class="${S.range === 'all' ? 'on' : ''}">All ${tot}</button></div>
+    <input type="range" id="backR" min="${Math.min(3, tot)}" max="${tot}" value="${cur}" aria-label="Games back"><b class="num" id="backN">${cur}</b>
+    ${isYes(S.k) ? '' : `<div class="seg sm" style="margin-left:auto"><button data-mode="bars" class="${S.mode === 'bars' ? 'on' : ''}">Bars</button><button data-mode="trend" class="${S.mode === 'trend' ? 'on' : ''}">Trend</button></div>`}</div>`;
+}
 function chart(games) {
   if (!games.length) return `<div class="card chart"><p class="sub" style="margin:0">No games match these filters.</p></div>`;
-  const k = S.k, yes = isYes(k), gs = games.slice(0, 40).reverse(), n = gs.length, vals = gs.map(g => g.v[k]);
+  const k = S.k, yes = isYes(k), gs = games.slice(0, 82).reverse(), n = gs.length, vals = gs.map(g => g.v[k]);
   const hi = Math.max(...vals, 1), lo = Math.min(0, ...vals);
   const max = S.drag?.max ?? Math.max(S.line * 1.25, hi * 1.04, 1), min = S.drag?.min ?? Math.min(lo * 1.1, S.line < 0 ? S.line * 1.25 : 0);
   const y = v => Math.max(0, Math.min(100, (v - min) / (max - min) * 100)), y0 = y(0);
@@ -572,10 +614,10 @@ function chart(games) {
   const key = [S.p.name, k, S.range, S.venue, S.comp, S.res, S.opp, S.minMin, n].join('|'), fresh = key !== S.chartKey && !S.drag; S.chartKey = key;
   const roll = vals.map((_, i) => avg(vals.slice(Math.max(0, i - 4), i + 1)));
   const over = yes ? 'Yes' : 'Over', under = yes ? 'No' : 'Under', lab = label(k);
-  return `<div class="card chart${fresh ? ' fresh' : ''}${n > 22 ? ' dense' : n > 12 ? ' mid' : ''}">
+  return `<div class="card chart${fresh ? ' fresh' : ''}${n > 22 ? ' dense' : n > 12 ? ' mid' : ''}${S.mode === 'trend' && !yes ? ' trend' : ''}">
     <div class="chh"><b>${esc(lab)}</b><span>last ${n} game${n === 1 ? '' : 's'}, oldest to newest</span>
       <span class="key"><i class="hit"></i>${S.side === 'over' ? over : under}<i class="miss"></i>${S.side === 'over' ? under : over}${n > 2 && !yes ? '<i class="avg"></i>5-game average' : ''}</span></div>
-    ${games.length > 40 ? '<p class="sub" style="margin:6px 0 0">The chart shows the newest 40; the game log has them all.</p>' : ''}
+    ${backBar(n)}
     <div class="bars" data-max="${max}" data-min="${min}">
       <div class="zn ${S.side === 'over' ? 'hit' : 'miss'}" style="bottom:${y(S.line)}%;top:0"></div><div class="zn ${S.side === 'over' ? 'miss' : 'hit'}" style="bottom:0;height:${y(S.line)}%;transform:scaleY(-1)"></div>
       ${ticks.map(t => `<div class="gl" style="bottom:${y(t)}%"><span class="num">${fmt(t)}</span></div>`).join('')}${min < 0 ? `<div class="gl zero" style="bottom:${y0}%"><span class="num">0</span></div>` : ''}
@@ -583,8 +625,10 @@ function chart(games) {
         const tip = `<small>${esc(dayLong(g.date))}</small><strong>${g.home === false ? '@ ' : g.home ? 'vs ' : ''}${esc(g.opp)}</strong><span class="tv"><b class="num">${yes ? (v ? 'Yes' : 'No') : fmt(v)}</b> ${esc(lab.toLowerCase())}</span>
           <span class="${cls}">${yes ? '' : cls === 'push' ? 'Push, right on the line' : `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))} ${d > 0 ? 'over' : 'under'} the line`}</span>
           <small>${esc([g.res === 'W' ? 'Won' : g.res === 'L' ? 'Lost' : g.res === 'D' ? 'Drew' : '', g.score, g.min != null && k !== 'min' ? Math.round(g.min) + ' min' : '', g.comp].filter(Boolean).join(' · '))}</small>`;
-        return `<div class="b ${cls}${neg ? ' neg' : ''}" style="--i:${i}"${tipAttr(tip)}><i style="bottom:${b}%;height:${h}%"></i><em class="num" style="${neg ? `top:${100 - b + 1.5}%` : `bottom:${b + h + 1.5}%`}">${yes ? (v ? '✓' : '✕') : fmt(v)}</em>
+        return `<div class="b ${cls}${neg ? ' neg' : ''}" style="--i:${i}"${tipAttr(tip)}><i style="bottom:${b}%;height:${h}%"></i><u style="bottom:${y(v)}%"></u><em class="num" style="${neg ? `top:${100 - b + 1.5}%` : `bottom:${b + h + 1.5}%`}">${yes ? (v ? '✓' : '✕') : fmt(v)}</em>
           <span class="bl">${g.home === false ? '@' : ''}${esc(short(g))}<small>${esc(new Date(g.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }))}</small>${g.res ? `<b class="${esc(g.res)}">${esc(g.res)}</b>` : ''}</span></div>` }).join('')}
+      ${!yes && n > 2 ? `<div class="avgl" style="bottom:${y(avg(vals))}%"><span class="num">avg ${f1(avg(vals))}</span></div>` : ''}
+      ${S.mode === 'trend' && !yes ? `<svg class="roll tl" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".3"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs><path d="M.5,${100 - y0} ${vals.map((v, i) => `L${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')} L${n - .5},${100 - y0}Z" fill="url(#tg)"/><polyline class="raw" points="${vals.map((v, i) => `${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')}"/></svg>` : ''}
       ${n > 2 && !yes ? `<svg class="roll" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${roll.map((v, i) => `${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')}"/></svg>` : ''}
       <div class="ln${yes ? ' fixed' : ''}" style="bottom:${y(S.line)}%"${yes ? '' : ' data-drag title="Drag to move the line"'}><span class="num">${yes ? 'Yes' : lineTxt(S.line)}${yes ? '' : '<svg viewBox="0 0 10 14" aria-hidden="true"><path d="M5 1 1.5 5h7zM5 13 1.5 9h7z" fill="currentColor"/></svg>'}</span></div></div></div>`;
 }
@@ -594,14 +638,18 @@ function read(gs, meter, bp) {
   const p = S.p, k = S.k, line = S.line, side = S.side, vals = gs.map(g => g.v[k]); if (isYes(k) || vals.length < 5 || meter == null) return '';
   const over = side === 'over', sideTxt = over ? 'over' : 'under', lab = esc(label(k).toLowerCase()), who = p.kind === 'team' ? p.name : p.name.split(' ').slice(-1)[0];
   const aN = n => avg(vals.slice(0, n)), sz = inRange(gs, 'szn').map(g => g.v[k]), szA = sz.length ? avg(sz) : null;
-  const ws = [[aN(5), .35], [aN(10), .3], [aN(20), .2], [szA, .15]].filter(x => x[0] != null), proj = ws.reduce((a, [v, w]) => a + v * w, 0) / ws.reduce((a, x) => a + x[1], 0);
+  const J = S.J || {}, proj = J.mu ?? aN(10);
   const l20 = vals.slice(0, 20), mean = avg(l20), sd = Math.sqrt(avg(l20.map(v => (v - mean) ** 2))), cv = mean ? sd / Math.abs(mean) : 0;
-  const cushion = (proj - line) * (over ? 1 : -1), agree = cushion > 0 === meter > .5;
-  const strength = !agree || Math.abs(meter - .5) < .07 ? 0 : Math.abs(meter - .5) >= .18 && Math.abs(cushion) >= sd * .25 ? 2 : 1;
+  const cushion = (proj - line) * (over ? 1 : -1), gap = Math.abs(meter - .5), agree = (J.emp > .5) === (J.model > .5);
+  let strength = gap < .06 ? 0 : gap >= .16 && agree ? 2 : 1; if (J.conf === 'Low' && strength === 2) strength = 1;
+  const imp = bp == null ? null : over ? bp : 1 - bp, edge = imp == null ? null : meter - imp;
+  const like = edge == null ? null : edge >= .08 ? 'Loves this line' : edge >= .035 ? 'Likes this line' : edge > -.035 ? 'Fairly priced' : edge > -.08 ? 'Dislikes this line' : 'Hates this line';
   const lean = strength === 0 ? 'No clear lean' : `${strength === 2 ? 'Strong' : 'Slight'} lean ${meter > .5 ? sideTxt : over ? 'under' : 'over'}`;
   const notes = [], add = (c, t) => notes.push(`<li class="${c}"><i></i><span>${t}</span></li>`), R = n => rate(gs.slice(0, n), k, line, side), r10 = R(10), r5 = R(5);
   add(r10.pct >= .6 ? 'up' : r10.pct <= .4 ? 'down' : 'flat', `Went ${sideTxt} ${lineTxt(line)} in <b>${r10.hit} of the last ${r10.n - r10.push}</b>${r5.n >= 5 ? ` and ${r5.hit} of the last ${r5.n - r5.push}` : ''}.`);
-  add(cushion > 0 ? 'up' : 'down', `Recent form points to about <b>${f1(proj)}</b> ${lab}, ${f1(Math.abs(proj - line))} ${proj > line ? 'above' : 'below'} the line.`);
+  add(cushion > 0 ? 'up' : 'down', `The Lab projects about <b>${f1(proj)}</b> ${lab}, ${f1(Math.abs(proj - line))} ${proj > line ? 'above' : 'below'} the line${J.fair != null ? `. Its fair line is <b>${lineTxt(J.fair)}</b>` : ''}.`);
+  for (const [t, d] of J.notes || []) add(d > 0 === over ? 'up' : 'down', `${t === 'venue' ? `Playing ${p.next.home ? 'at home' : 'away'} next` : t === 'opp' ? 'History against this opponent' : 'The recent change in minutes'} moves the projection ${d > 0 ? 'up' : 'down'} by <b>${f1(Math.abs(d))}</b>.`);
+  if (J.emp != null && !agree) add('flat', `Mixed signals: the recent hit rate says ${pc(J.emp)}, the average and spread say ${pc(J.model)}.`);
   if (szA != null && aN(5) != null && Math.abs(aN(5) - szA) > Math.max(sd * .3, .01)) { const up = aN(5) > szA; add(up === over ? 'up' : 'down', `Trending ${up ? 'up' : 'down'}: <b>${f1(aN(5))}</b> over the last five against ${f1(szA)} on the season.`) }
   add(cv < .22 ? 'up' : cv > .4 ? 'down' : 'flat', `${cv < .22 ? 'Steady' : cv > .4 ? 'Swingy' : 'Fairly even'} output: most games land between <b>${f1(quant(l20, .1))} and ${f1(quant(l20, .9))}</b>${cv > .4 ? ', so one game can land far from the average' : ''}.`);
   const H = rate(gs.filter(g => g.home === true), k, line, side), A = rate(gs.filter(g => g.home === false), k, line, side);
@@ -611,11 +659,11 @@ function read(gs, meter, bp) {
   if (h2h && h2h.n - h2h.push >= 2) add(h2h.pct >= .6 ? 'up' : h2h.pct <= .4 ? 'down' : 'flat', `Against ${esc(gs.find(g => sameOpp(g, S.opp))?.opp || S.opp)}: <b>${h2h.hit} of ${h2h.n - h2h.push}</b>, averaging ${f1(h2h.avg)}.`);
   const mins = gs.filter(g => g.min != null).map(g => g.min);
   if (k !== 'min' && mins.length >= 10) { const m5 = avg(mins.slice(0, 5)), mAll = avg(mins.slice(0, 30)); if (mAll && Math.abs(m5 - mAll) / mAll >= .1) add(m5 > mAll === over ? 'up' : 'down', `Playing ${m5 > mAll ? 'more' : 'less'} lately: <b>${Math.round(m5)} minutes</b> a game over the last five, ${Math.round(mAll)} before that.`) }
-  if (bp != null) { const imp = over ? bp : 1 - bp, edge = meter - imp; add(edge > .04 ? 'up' : edge < -.04 ? 'down' : 'flat', `The books price the ${sideTxt} at <b>${pc(imp)}</b>; the games played say ${pc(meter)}, a gap of ${edge >= 0 ? '+' : '−'}${Math.abs(Math.round(edge * 100))} points.`) }
+  if (bp != null) { add(edge > .04 ? 'up' : edge < -.04 ? 'down' : 'flat', `The books price the ${sideTxt} at <b>${pc(imp)}</b>; the Lab makes it ${pc(meter)}, a gap of ${edge >= 0 ? '+' : '−'}${Math.abs(Math.round(edge * 100))} points.`) }
   if (vals.length < 12) add('flat', `Only ${vals.length} games to go on, so treat every number here as rough.`);
   return `<div class="card read ${strength ? (meter > .5 ? 'pos' : 'neg') : ''}">
-    <div class="read-v"><span>The read</span><strong>${lean}</strong>
-      <div class="read-n"><div><b class="num">${pc(meter)}</b><small>blended hit rate</small></div><div><b class="num">${american(meter)}</b><small>fair price at that rate</small></div><div><b class="num">${f1(proj)}</b><small>form projection</small></div></div>
+    <div class="read-v"><span>The read${like ? ` · <em class="${edge >= .035 ? 'up' : edge <= -.035 ? 'down' : ''}">${like}</em>` : ''}</span><strong>${lean}</strong>
+      <div class="read-n"><div><b class="num">${pc(meter)}</b><small>estimated chance</small></div><div><b class="num">${american(meter)}</b><small>fair price</small></div><div><b class="num">${f1(proj)}</b><small>projection</small></div><div><b class="num">${J.fair != null ? lineTxt(J.fair) : '–'}</b><small>fair line</small></div>${edge != null ? `<div><b class="num ${edge >= .035 ? 'up' : edge <= -.035 ? 'down' : ''}">${edge >= 0 ? '+' : '−'}${Math.abs(Math.round(edge * 100))}</b><small>edge vs books, pts</small></div>` : ''}<div><b>${esc(J.conf || '–')}</b><small>confidence · ${J.n || 0} games</small></div></div>
       <p>${esc(who)} ${sideTxt} ${lineTxt(line)} ${lab}. A price better than the fair price is where the value would be; this is history, not a forecast.</p></div>
     <ul class="read-l">${notes.join('')}</ul></div>`;
 }
@@ -768,6 +816,8 @@ $('#sf').addEventListener('submit', e => { e.preventDefault(); const n = $('#q')
 $('#sports').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.sport = b.dataset.sp; store.set('lab.sport', S.sport); drawSports(); if (S.tab !== 'board') { S.p = null } render() });
 $('#tabs').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; S.tab = t.dataset.t; tabs(); $('#msg').innerHTML = ''; render() });
 $('#recent').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.sport = b.dataset.s; load(b.dataset.n, b.dataset.t) });
+function setBack(nn) { const tot = pool(S.k).length; S.back = Math.max(1, Math.min(tot, nn)); S.range = S.back >= tot ? 'all' : S.back === 5 ? 'l5' : S.back === 10 ? 'l10' : S.back === 20 ? 'l20' : 'n'; const y = scrollY; render(); scrollTo(0, y) }
+document.addEventListener('input', e => { if (e.target.id === 'backR') { const o = $('#backN'); if (o) o.textContent = e.target.value } });
 const setLine = v => { S.line = Math.round(v * 100) / 100; S.lineFrom = 'custom'; render() };
 document.addEventListener('click', e => {
   const t = e.target;
@@ -776,6 +826,8 @@ document.addEventListener('click', e => {
   const kk = t.closest('[data-k]'); if (kk) return pickStat(kk.dataset.k);
   const st = t.closest('[data-step]'); if (st) return setLine(S.line + .5 * +st.dataset.step);
   const sd = t.closest('[data-side]'); if (sd) { S.side = sd.dataset.side; return render() }
+  const bb = t.closest('[data-back]'); if (bb) return setBack(+bb.dataset.back);
+  const md = t.closest('[data-mode]'); if (md) { S.mode = md.dataset.mode; store.set('lab.mode', S.mode); return render() }
   const rg = t.closest('[data-r]'); if (rg) { S.range = rg.dataset.r; render(); if (S.range === 'h2h' && !S.opp) document.querySelector('[data-f="opp"]')?.focus(); return }
   const bk = t.closest('[data-line]'); if (bk) return setLine(+bk.dataset.line);
   const so = t.closest('[data-sort]'); if (so) { const c = so.dataset.sort; S.sort = { col: c, dir: S.sort.col === c ? -S.sort.dir : (c === 'l' ? 1 : -1) }; return render() }
@@ -783,6 +835,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.id === 'backR') return setBack(+t.value);
   if (t.id === 'line') { const v = parseFloat(t.value); if (!isNaN(v)) setLine(v); return }
   if (t.dataset.f) { const f = t.dataset.f; S[f] = f === 'minMin' ? +t.value : t.value; if (f === 'opp') S.range = t.value ? 'h2h' : (S.range === 'h2h' ? 'l10' : S.range); render() }
 });
@@ -816,6 +869,7 @@ document.addEventListener('pointermove', e => {
 });
 const endDrag = () => { if (!S.drag) return; cancelAnimationFrame(S.drag.raf); S.drag = null; document.documentElement.classList.remove('dragging'); render() };
 document.addEventListener('pointerup', endDrag); document.addEventListener('pointercancel', endDrag);
+S.mode = store.get('lab.mode', 'bars');
 start();
 </script>
 </body>
