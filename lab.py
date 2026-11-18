@@ -67,8 +67,12 @@ def ticket(channel_id, opts, user=""):
         _tickets[str(channel_id)] = {"at": now, "player": (opts.get("player") or "").strip(), "sport": opts.get("sport") or "", "user": user}
 
 
-def session(q):
+def session(q, signed_in=False):
     """-> (status, obj)"""
+    if not q.get("t") and not q.get("channel_id"):   # opened straight in a browser: a site login is enough
+        if signed_in:
+            return 200, {"token": make_pass("site"), "player": q.get("player") or "", "sport": q.get("sport") or ""}
+        return 403, {"error": "Type /lab in the Floodlight Discord to open the Lab, or log in to Floodlight first.", "need": "lab"}
     if q.get("t"):
         if not check_pass(q["t"]):
             return 403, {"error": "This Lab link has expired. Use /lab in Discord for a new one."}
@@ -191,7 +195,7 @@ def handle(path, q, signed_in=False):
         st, ct, data = img(q.get("u"))
         return st, (ct, data)
     if path == "session":
-        return session(q)
+        return session(q, signed_in)
     if not signed_in and not check_pass(q.get("_pass")):
         return 401, {"error": "Your Lab pass expired. Type /lab in Discord again.", "need": "lab"}
     try:

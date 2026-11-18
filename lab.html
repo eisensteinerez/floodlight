@@ -218,8 +218,8 @@ async function start() {
   let want = { player: QS.get('player') || '', sport: QS.get('sport') || '' };
   try {
     const q = IN_DISCORD ? `channel_id=${encodeURIComponent(QS.get('channel_id') || '')}&instance_id=${encodeURIComponent(QS.get('instance_id') || '')}`
-      : QS.get('t') ? 't=' + encodeURIComponent(QS.get('t')) + (want.player ? '&player=' + encodeURIComponent(want.player) : '') + (want.sport ? '&sport=' + want.sport : '') : '';
-    if (q) { const s = await api('session?' + q); S.pass = s.token; want = { player: s.player || want.player, sport: s.sport || want.sport } }
+      : (QS.get('t') ? 't=' + encodeURIComponent(QS.get('t')) : '') + (want.player ? '&player=' + encodeURIComponent(want.player) : '') + (want.sport ? '&sport=' + want.sport : '');
+    const s = await api('session?' + q); S.pass = s.token; want = { player: s.player || want.player, sport: s.sport || want.sport };
   } catch (e) { return gate(e.message) }
   S.sport = want.sport || store.get('lab.sport', 'nba');
   $('#sport').value = S.sport;
