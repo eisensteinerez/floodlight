@@ -39,7 +39,7 @@ import storage
 DEFAULT_CHANNELS = ["codex-props", "claude-props", "instinct-props", "codex-soccer", "claude-soccer", "instinct-soccer",
                     "cafe-picks", "parlay-predictor"]
 EPOCH_MS = 1420070400000
-VERSION = 3
+VERSION = 4
 LOOK_BACK_H = 48          # posts read each run
 REGRADE_DAYS = 3          # cards re-graded each run (the double check)
 D = {}
@@ -270,6 +270,13 @@ def card_block(c, correction=None):
     return head + "\n" + "\n".join(leg_line(g) for g in c["legs"])
 
 
+def short_block(c):
+    when = B.parse_date(c["at"]).astimezone(ET)
+    res = wl(stats([c])) if c["single"] else {"won": "✅", "lost": "❌", "void": "⚪", "unknown": "❔", None: "⏳"}[c.get("result")]
+    legs = ", ".join(f"{MARK[g.get('result')]}{g['label']}" for g in c["legs"])
+    return f"**{res}** {c['slate'][5:]} {c['play']} ({when:%a} {when.strftime('%I:%M%p').lstrip('0').lower()}): {legs}"
+
+
 def channel_report(ch, new, fixed, everything, update=False):
     name, icon = STATE["channels"].get(ch, ch), STATE.get("icons", {}).get(ch, "🎯")
     today, alltime = stats(new + [c for c, _ in fixed]), stats(everything)
@@ -322,35 +329,49 @@ def report(update=False):
         n = [c for c in new if c["ch"] == ch]
         f = [x for x in fixed if x[0]["ch"] == ch]
         if n or f:
-            out.append(("", channel_report(ch, sorted(n, key=lambda c: c["at"]), f, [c for c in cards if c["ch"] == ch], update)))
+            out.append(("", channel_report(ch, sorted(n, key=lambda c: c["at"]), f, [c for c in cards if c["ch"] == ch], update),
+                        [c["id"] for c in n] + [c["id"] for c, _ in f]))
     by_all = {}
     for c in cards:
         by_all.setdefault(c["ch"], []).append(c)
     waiting = sum(1 for c in cards if not settled(c))
     out.append(("", {"title": "🏆 LEADERBOARD · ALL-TIME", "color": B.BLUE, "description": board_block(by_all) or "–",
                      "footer": {"text": "Props: each card is one play · Soccer: each pick is one play · ESPN & FotMob results"
-                                + (f" · {waiting} card(s) still waiting on a final" if waiting else "")}}))
+                                + (f" · {waiting} card(s) still waiting on a final" if waiting else "")}}, []))
     d = now_et() - dt.timedelta(hours=9)
-    out[0] = (f"📊 **{'UPDATED RESULTS' if update else 'NIGHTLY RESULTS'} — {d:%A, %B} {d.day}**", out[0][1])
+    out[0] = (f"📊 **{'UPDATED RESULTS' if update else 'NIGHTLY RESULTS'} — {d:%A, %B} {d.day}**",) + out[0][1:]
     return out
 
 
+def send(dest, payload):
+    """POST a message, waiting out Discord's rate limit (it allows about five messages per five seconds)."""
+    for attempt in range(4):
+        try:
+            return api("POST", f"/channels/{dest}/messages", payload)
+        except Exception as e:
+            if "429" not in str(e) or attempt == 3:
+                raise
+            time.sleep(3 * (attempt + 1))
+
+
 def post(dest, msgs):
-    """Post the results; False (and nothing marked as reported) if Discord refused."""
+    """Post the results. Returns the ids of the cards whose message went out (only those are marked as reported)."""
     if not dest:
         STATE["postError"] = "There's no #verified-records channel."
-        return False
+        return []
+    done = []
     try:
-        for content, embed in msgs:
-            api("POST", f"/channels/{dest}/messages", {"content": content, "embeds": [embed], "allowed_mentions": {"parse": []}})
-            time.sleep(0.6)
+        for content, embed, ids in msgs:
+            send(dest, {"content": content, "embeds": [embed], "allowed_mentions": {"parse": []}})
+            done += ids
+            time.sleep(1.5)
     except Exception as e:
         STATE["postError"] = ("The bot isn't allowed to post in #verified-records. Give the Floodlight role Send Messages and Embed Links there."
                               if "403" in str(e) else f"Posting the results failed: {e}")
         print(f"pick tracker: {STATE['postError']}", file=sys.stderr)
-        return False
+        return done
     STATE.pop("postError", None)
-    return True
+    return done
 
 
 def run(final=False, dry=False, hours=LOOK_BACK_H):
@@ -359,10 +380,11 @@ def run(final=False, dry=False, hours=LOOK_BACK_H):
     collect(hours)
     grade_all()
     msgs = report(update=final)
-    if msgs and not dry and post(STATE.get("dest"), msgs):
+    if msgs and not dry:
+        sent = set(post(STATE.get("dest"), msgs))
         with _lock:
             for c in live_cards():
-                if settled(c):
+                if c["id"] in sent:
                     c["reported"] = snapshot(c)
     with _lock:   # keep four months
         cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=120)).isoformat()
@@ -446,23 +468,28 @@ def cmd_leaderboard(o):
 
 
 def cmd_check(o):
-    """/checkpicks: the nightly run, on demand."""
-    msgs = run(final=False)
+    """/checkpicks: read and grade now. Shows every card it found and how each pick graded; posts only with post:True."""
+    go = bool(o.get("post"))
+    msgs = run(final=False, dry=not go)
     cards = live_cards()
-    lines = []
+    embeds = []
     for cid, n in STATE["channels"].items():
-        cs = [c for c in cards if c["ch"] == cid]
-        picks = sum(len(c["legs"]) for c in cs)
-        waiting = sum(1 for c in cs if not settled(c))
-        unsure = sum(1 for c in cs for g in c["legs"] if g.get("result") == "unknown")
-        lines.append(f"{STATE.get('icons', {}).get(cid, '🎯')} #{n}: {len(cs)} card(s), {picks} pick(s)"
-                     + (f" · {waiting} waiting" if waiting else "") + (f" · ❔ {unsure} couldn't verify" if unsure else ""))
+        cs = sorted((c for c in cards if c["ch"] == cid), key=lambda c: c["at"])
+        icon = STATE.get("icons", {}).get(cid, "🎯")
+        body = "\n".join(short_block(c) for c in cs) or "No cards in the last two days."
+        if len(body) > 640:      # Discord allows 6,000 characters across a message's embeds
+            body = body[:640] + "…"
+        embeds.append({"author": {"name": f"{icon}  #{n}"}, "description": body, "color": B.BLUE})
     errs = STATE.get("readErrors") or []
-    foot = STATE.get("postError") or ("Posted finished results in #verified-records" if msgs else "Nothing new finished yet")
+    if go:
+        foot = STATE.get("postError") or ("Posted finished results in #verified-records" if msgs else "Nothing new finished yet")
+    else:
+        foot = "Preview only, nothing posted. Results post on their own at 12:30 AM and 8 AM ET (or run /checkpicks post:True)."
     if errs:
         foot += " · couldn't read " + ", ".join("#" + e for e in errs)
-    return {"embeds": [{"title": "Pick check done", "color": B.BLUE, "description": "\n".join(lines) or "No pick channels found.",
-                        "footer": {"text": foot}}]}
+    embeds = embeds[:9] or [{"description": "No pick channels found.", "color": B.BLUE}]
+    embeds.append({"title": "Pick check done", "color": B.BLUE, "description": foot})
+    return {"embeds": embeds}
 
 
 if __name__ == "__main__":
