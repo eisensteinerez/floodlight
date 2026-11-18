@@ -52,4 +52,15 @@
       ${o.panel ? `<span class="ftr-panel">${o.panel}</span>` : ''}</button>`;
   };
   window.flCard.untilText = untilText;
+
+  /* <fl-tilt>: a card that leans toward the pointer, like a trading card held in the hand (transform only, off for reduced motion) */
+  customElements.define('fl-tilt', class extends HTMLElement {
+    connectedCallback() {
+      if (matchMedia('(prefers-reduced-motion:reduce)').matches || document.documentElement.dataset.motion === 'reduce' || matchMedia('(hover:none)').matches) return;
+      let raf = 0;
+      this.addEventListener('pointermove', ev => { const r = this.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+        cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { this.style.setProperty('--ry', ((x - .5) * 22).toFixed(1) + 'deg'); this.style.setProperty('--rx', ((.5 - y) * 18).toFixed(1) + 'deg'); this.style.setProperty('--mx', (x * 100).toFixed(0) + '%'); this.style.setProperty('--my', (y * 100).toFixed(0) + '%'); this.classList.add('tilting') }) });
+      this.addEventListener('pointerleave', () => { cancelAnimationFrame(raf); this.classList.remove('tilting'); this.style.setProperty('--rx', '0deg'); this.style.setProperty('--ry', '0deg') });
+    }
+  });
 })();
