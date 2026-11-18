@@ -1187,7 +1187,8 @@ def command_defs():
             {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
         {"name": "leaderboard", "description": "Each pick channel's W-L record (props cards as one play, soccer picks one by one)", "options": [
             {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
-        {"name": "checkpicks", "description": "Admins: grade the pick channels now and post finished results", "default_member_permissions": "8"},
+        {"name": "checkpicks", "description": "Admins: grade the pick channels now and show every card (post:True also posts results)", "default_member_permissions": "8",
+         "options": [{"type": 5, "name": "post", "description": "Also post finished results in #verified-records", "required": False}]},
         {"name": "help", "description": "What the Floodlight bot can do"},
     ]
 

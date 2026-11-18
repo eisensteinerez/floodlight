@@ -108,6 +108,13 @@ def test_slate_date():
     assert P.slate_date("Saturday, January 2", dt.date(2026, 12, 31)) == dt.date(2027, 1, 2)
 
 
+def test_discord_markdown():
+    m = {"content": "## 🏁 UPDATED FINAL CARD\n### **NBA — -115** • 1u\n1. **Luka Doncic OVER 27.5 pts** — -750\n"
+                    "2. **Josh Hart** OVER 1.5 ast — -875\n-# Bet responsibly <:fire:1234>"}
+    cs = P.cards_in({"text": P.text_of(m)}, "props", TUE)
+    assert [g["label"] for g in cs[0]["legs"]] == ["Luka Doncic O27.5 Points", "Josh Hart O1.5 Assists"]
+
+
 # ---------- team names ----------
 def test_names():
     assert G.name_score("Ireland", "Northern Ireland") == 0

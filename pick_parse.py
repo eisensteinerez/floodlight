@@ -39,7 +39,10 @@ def text_of(m):
         if (e.get("footer") or {}).get("text"):
             parts.append(e["footer"]["text"])
     t = "\n".join(p for p in parts if p)
-    return re.sub(r"[*_`~]|<a?:\w+:\d+>|\|\|", "", t)
+    t = re.sub(r"<a?:\w+:\d+>|<t:\d+(?::\w)?>|<[@#&!]+\d+>", "", t)       # custom emoji, timestamps, mentions
+    t = re.sub(r"\[([^\]]+)\]\(<?https?://[^)]+>?\)", r"\1", t)             # [text](link)
+    t = re.sub(r"(?m)^[ \t]*(?:#{1,3}|-#|>>>|>)[ \t]+", "", t)                # # headings, -# subtext, > quotes
+    return re.sub(r"\*\*|__|~~|\|\||`|(?<![\w*])[*_](?=\S)|(?<=\S)[*_](?![\w*])", "", t)
 
 
 def group_posts(msgs):
