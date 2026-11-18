@@ -91,7 +91,8 @@ STAT_EXTRA = {"rushyds": "ryd", "rushyd": "ryd", "rushingyds": "ryd", "recyds": 
               "rebsasts": "ra", "pointsandrebounds": "pr", "pointsrebounds": "pr", "ptsrebs": "pr", "pointsandassists": "pa",
               "pointsassists": "pa", "ptsasts": "pa", "threes": "3pm", "3s": "3pm", "3ptm": "3pm", "3pointers": "3pm", "reception": "rec",
               "recs": "rec", "catches": "rec", "rushrecyds": "rryd", "passingrushing": "pryd", "passrush": "pryd", "passingrushingyds": "pryd",
-              "passrushyds": "pryd", "passingandrushing": "pryd", "passingandrushingyards": "pryd", "rushingreceiving": "rryd",
+              "passrushyds": "pryd", "passingandrushing": "pryd", "passingandrushingyards": "pryd", "passingrushingyards": "pryd",
+              "passingrushingyard": "pryd", "passrushyard": "pryd", "passingrushyds": "pryd", "rushingreceivingyards": "rryd", "rushingreceiving": "rryd",
               "rushingandreceiving": "rryd", "passtd": "ptd", "stls": "stl", "blks": "blk", "td": "td", "tds": "td",
               "shotsontarget": "sot", "sot": "sot", "shot": "shots"}
 PROP = re.compile(
@@ -118,7 +119,8 @@ def stat_key(sport, s):
 
 
 def clean_line(l):
-    l = fold(l).strip()
+    l = re.sub(r"[0-9#*]\ufe0f?\u20e3|\U0001F51F", " ", fold(l))       # keycap numbers 1️⃣ ... 🔟
+    l = re.sub(r"[\ufe0e\ufe0f\u200b-\u200d\u2060]", "", l).strip()
     l = re.sub(r"^[^\w#(+-]+", "", l)
     l = re.sub(r"^(?:(?:#|leg\s*)?\d{1,2}\s*[.):]\s*|#\d{1,2}\s*[—–-]?\s*|leg\s*\d{1,2}\s*[—–:-]\s*)", "", l, flags=re.I)
     l = re.sub(r"^(?:lock|best value|value|safest)\s*:\s*", "", l, flags=re.I)
