@@ -1479,7 +1479,7 @@ if __name__ == "__main__":
     record.setup(fetch=fetch, fm_matchstats=fm_matchstats, forecaster=forecaster, cache_dir=CACHE_DIR)
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
-                          odds=odds, dfs=dfs, record=record, cache_dir=CACHE_DIR)
+                          odds=odds, dfs=dfs, record=record, forecaster=forecaster, cache_dir=CACHE_DIR)
         import pick_tracker
         pick_tracker.setup(similar=similar, fetch=fetch, cache_dir=CACHE_DIR)
         print("Discord bot: listening at /api/discord/interactions")
