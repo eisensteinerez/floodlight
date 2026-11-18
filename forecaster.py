@@ -43,8 +43,12 @@ FB = {
     "d2": {"path": "college-football", "group": 57, "hfa": 2.8, "sd": 17.0, "ppg": 28.0, "qb": 6.5},
     "d3": {"path": "college-football", "group": 58, "hfa": 2.8, "sd": 17.0, "ppg": 28.0, "qb": 6.5},
     "ufl": {"path": "ufl", "group": None, "hfa": 2.0, "sd": 14.0, "ppg": 20.0, "qb": 5.5},
+    # basketball runs through the same points model (on request only, from Discord's /predict); no quarterback,
+    # a missing scorer is weighed instead
+    "nba": {"path": "nba", "fam": "basketball", "group": None, "hfa": 2.3, "sd": 12.0, "ppg": 114.0, "qb": 0, "star": 3.0},
+    "wnba": {"path": "wnba", "fam": "basketball", "group": None, "hfa": 2.0, "sd": 11.0, "ppg": 82.0, "qb": 0, "star": 2.5},
 }
-FB_NAMES = {"nfl": "NFL", "fbs": "College football (FBS)", "fcs": "College football (FCS)", "d2": "NCAA Division II", "d3": "NCAA Division III", "ufl": "UFL"}
+FB_NAMES = {"nba": "NBA", "wnba": "WNBA", "nfl": "NFL", "fbs": "College football (FBS)", "fcs": "College football (FCS)", "d2": "NCAA Division II", "d3": "NCAA Division III", "ufl": "UFL"}
 # points a missing starter costs, by position (quarterbacks use the league value above)
 POS_PTS = {"RB": .4, "WR": .6, "TE": .4, "OT": .6, "T": .6, "G": .4, "OG": .4, "C": .5, "OL": .5, "DE": .6, "DT": .5, "DL": .5,
            "EDGE": .6, "LB": .4, "OLB": .5, "ILB": .4, "MLB": .4, "CB": .6, "S": .4, "FS": .4, "SS": .4, "K": .5, "PK": .5, "P": .2}
@@ -754,7 +758,7 @@ def soccer_reasons(d, M):
 def gather_football(m):
     fetch = D["fetch"]
     L = FB[m["lg"]]
-    summ = fetch(f"{ESPN}/football/{L['path']}/summary?event={m['id']}", 120, as_json=True)
+    summ = fetch(f"{ESPN}/{L.get('fam', 'football')}/{L['path']}/summary?event={m['id']}", 120, as_json=True)
     comp = ((summ.get("header") or {}).get("competitions") or [{}])[0]
     st = ((comp.get("status") or {}).get("type") or {})
     d = {"sport": "football", "lg": m["lg"], "id": m["id"], "league": FB_NAMES.get(m["lg"]), "state": st.get("state") or "pre", "status": st.get("detail") or "",
@@ -816,6 +820,10 @@ def gather_football(m):
         side = "home" if str((t.get("team") or {}).get("id")) == d["home"]["id"] else "away"
         d["leaders"][side] = {cat.get("displayName") or cat.get("name"): f"{((cat.get('leaders') or [{}])[0].get('athlete') or {}).get('displayName')}: {(cat.get('leaders') or [{}])[0].get('displayValue')}"
                               for cat in t.get("leaders") or [] if cat.get("leaders")}
+    d["stars"] = {}
+    for t in summ.get("leaders") or []:
+        side = "home" if str((t.get("team") or {}).get("id")) == d["home"]["id"] else "away"
+        d["stars"][side] = sorted({((cat.get("leaders") or [{}])[0].get("athlete") or {}).get("displayName") for cat in t.get("leaders") or []} - {None})
     d["form"] = _last_five(summ)
     ats = {}
     for t in summ.get("againstTheSpread") or []:
@@ -823,7 +831,7 @@ def gather_football(m):
         ats[side] = [r.get("result") or r.get("description") for r in (t.get("records") or [])][:3]
     d["ats"] = ats
     try:
-        d["table"] = _standings_espn(f"football/{L['path']}", L["group"])
+        d["table"] = _standings_espn(f"{L.get('fam', 'football')}/{L['path']}", L["group"])
     except Exception:
         d["table"] = {}
     for k in ("home", "away"):
@@ -865,9 +873,14 @@ def model_football(d):
             if x.get("pos") == "QB" and qb.get("id") and x.get("id") == qb.get("id"):
                 hits[side] += L["qb"] * w
                 qb_out[side] = {"name": x["name"], "status": x["status"]}
+            elif L.get("fam") == "basketball":
+                star = x.get("name") in ((d.get("stars") or {}).get(side) or [])
+                hits[side] += (L["star"] if star else .7) * w
+                if star and w >= .75:
+                    qb_out.setdefault("stars", {}).setdefault(side, []).append(f"{x['name']} ({x['status'].lower()})")
             elif x.get("pos") != "QB":
                 hits[side] += POS_PTS.get(x.get("pos") or "", .3) * w
-        hits[side] = min(hits[side], L["qb"] + 4)
+        hits[side] = min(hits[side], max(L["qb"] + 4, 8))
     margin += -hits["home"] + hits["away"]
     total = (off(H) + dfn(A)) / 2 + (off(A) + dfn(H)) / 2
     model = {"margin": margin, "pH": phi(margin / L["sd"]), "total": total}
@@ -900,7 +913,13 @@ def football_reasons(d, M):
     f = lambda tid: "".join((g.get("res") or "?")[0] for g in (f5.get(tid) or [])[:5])
     if f5:
         out.append(f"Last five (latest first): {hn} {f(d['home']['id']) or '–'}, {an} {f(d['away']['id']) or '–'}.")
+    bb = FB[d["lg"]].get("fam") == "basketball"
     for side, n in (("home", hn), ("away", an)):
+        if bb:
+            st = (M["qbOut"].get("stars") or {}).get(side)
+            if st:
+                out.append(f"{n} without a top player: {', '.join(st)}.")
+            continue
         qb = (d.get("qb") or {}).get(side)
         if M["qbOut"].get(side):
             st_ = M['qbOut'][side]['status'].lower()
@@ -910,7 +929,7 @@ def football_reasons(d, M):
             out.append(f"{n} quarterback: {qb['name']}, no injury designation.")
     if M["hits"]["home"] or M["hits"]["away"]:
         out.append(f"Injury cost (model points): {hn} {M['hits']['home']:.1f}, {an} {M['hits']['away']:.1f}.")
-    out.append("Neutral site." if d.get("neutral") else f"Home field is worth about {M['hfa']} points to {hn}.")
+    out.append("Neutral site." if d.get("neutral") else f"Home {'court' if bb else 'field'} is worth about {M['hfa']} points to {hn}.")
     if d.get("weather"):
         out.append(f"Weather: {d['weather']}.")
     mk = d.get("market") or {}
@@ -1051,16 +1070,14 @@ def _count_use():
 
 # ---------- one forecast ----------
 
-def run(key, stage):
-    m = TRACKED.get(key)
-    if not m:
-        return
+def compute(m, stage, prev=None, allow_ai=True):
+    """One forecast for a match: gathers the latest data, runs the model and (if allowed and set up) Claude's research.
+    None when the game has already started."""
     d = gather_soccer(m) if m["sport"] == "soccer" else gather_football(m)
     if d.get("state") and d["state"] != "pre":
-        m["over"] = True                     # started, finished or postponed: nothing more to forecast
-        return
+        return None
     board = None
-    if D.get("odds"):
+    if D.get("odds") and m["sport"] in ("soccer", "football"):
         try:
             board = D["odds"].board(D["odds"].query_for(m["sport"], m["lg"], m["id"], d["home"]["name"], d["away"]["name"], d.get("kickoff") or m["ko"]))
         except Exception:
@@ -1069,10 +1086,8 @@ def run(key, stage):
         d["props"] = [[p["player"], p["label"], p.get("line"), round((p.get("fair") or {}).get("over") or (p.get("fair") or {}).get("yes") or 0, 3)]
                       for p in board.get("props") or [] if (p.get("fair") or {})][:60]
     M = model_soccer(d) if m["sport"] == "soccer" else model_football(d)
-    f = FORECASTS.setdefault(key, {"ko": m["ko"], "snaps": []})
-    prev = f["snaps"][-1] if f["snaps"] else None
     ai = None
-    if _research_allowed(m):
+    if allow_ai and _research_allowed(m):
         _count_use()
         ai = research(m, d, M, stage, prev)
     final = dict(M["blend"])
@@ -1083,7 +1098,7 @@ def run(key, stage):
     pick = max(final, key=final.get)
     top = final[pick]
     snap = {"stage": stage, "at": time.time(), "final": final, "pick": pick, "top": top, "blend": M["blend"],
-            "model": M["model"] if m["sport"] == "football" else M["model"], "market": d.get("market"),
+            "model": M["model"], "market": d.get("market"), "league": d.get("league"), "kickoff": d.get("kickoff"),
             "home": d["home"]["name"], "away": d["away"]["name"], "ai": ai,
             "value": D["odds"].value_picks(board) if board else [], "books": [b_["name"] for b_ in (board or {}).get("books") or []]}
     if m["sport"] == "soccer":
@@ -1103,16 +1118,57 @@ def run(key, stage):
                 total = .5 * total + .5 * num(ai["total"], total)
         # keep the shown margin consistent with the shown win chance
         margin = .5 * margin + .5 * L["sd"] * phi_inv(final["home"])
-        snap["conf"] = "Strong" if top >= .72 else "Lean" if top >= .58 else "Toss-up"
+        strong, lean = (.72, .58)
+        snap["conf"] = "Strong" if top >= strong else "Lean" if top >= lean else "Toss-up"
         snap.update({"margin": round(margin, 1), "total": round(total, 1),
                      "score": [max(0, round((total + margin) / 2)), max(0, round((total - margin) / 2))],
                      "fpi": d.get("fpi"), "qbOut": M["qbOut"], "qb": d.get("qb"), "weather": d.get("weather"),
                      "reasons": football_reasons(d, M)})
+    return snap
+
+
+def run(key, stage):
+    m = TRACKED.get(key)
+    if not m:
+        return
+    f = FORECASTS.setdefault(key, {"ko": m["ko"], "snaps": []})
+    snap = compute(m, stage, f["snaps"][-1] if f["snaps"] else None)
+    if snap is None:
+        m["over"] = True                     # started, finished or postponed: nothing more to forecast
+        return
     with _lock:
         f["snaps"] = [s for s in f["snaps"] if s["stage"] != stage] + [snap]
         f["snaps"].sort(key=lambda s: s["at"])
         f["ko"] = m["ko"]
         f.pop("error", None)
+
+
+def predict_now(sport, lg, mid, date, home, away, fresh_h=3):
+    """For Discord's /predict: the latest scheduled forecast if it is recent, else a new one from the statistical model
+    and the betting market (never Claude's research, so it costs nothing). Soccer and NFL matches are then tracked,
+    so the scheduled updates (a week, 3 days, the morning, 1 hour and 30 minutes before) keep coming.
+    Returns (snapshot or None, the update plan)."""
+    fam = "soccer" if sport == "soccer" else "basketball" if FB.get(lg, {}).get("fam") == "basketball" else "football"
+    m = {"sport": fam, "id": str(mid), "lg": lg, "ko": parse_time(date), "home": home, "away": away, "src": "espn"}
+    if fam == "basketball":
+        return compute(m, "now", allow_ai=False), []
+    track([{"sport": fam, "id": str(mid), "lg": lg, "date": date, "home": home, "away": away}], source="discord")
+    key = f"{fam}:{mid}"
+    m = TRACKED.get(key) or m
+    f = FORECASTS.get(key) or {}
+    latest = (f.get("snaps") or [None])[-1]
+    if latest and time.time() - latest["at"] < fresh_h * 3600:
+        snap = latest
+    else:
+        snap = compute(m, "now", latest, allow_ai=False)
+        if snap and key in TRACKED:
+            with _lock:
+                f = FORECASTS.setdefault(key, {"ko": m["ko"], "snaps": []})
+                f["snaps"] = [s for s in f["snaps"] if s["stage"] != "now"] + [snap]
+                f["snaps"].sort(key=lambda s: s["at"])
+            _persist()
+    done = {s["stage"] for s in (FORECASTS.get(key) or {}).get("snaps", [])}
+    return snap, [{"stage": st, "label": STAGE_LABEL[st], "at": t, "done": st in done} for st, t in plan(m)] if key in TRACKED else []
 
 
 # ---------- what the app reads ----------

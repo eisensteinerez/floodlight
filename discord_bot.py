@@ -7,7 +7,7 @@ out in the background with the same functions and caches the site uses, and then
   /research   a player's hit rate on a stat and line: last 5 / 10 / 20 games, this season, against one opponent
   /props      today's PrizePicks and Sleeper lines ranked by how often each player has cleared them lately
   /scores     live scores, finals and today's schedule
-  /predict    win chances from the betting market; with a team, every book's price and the value bets for that game
+  /predict    the day's leans; with a team, Floodlight's full forecast for that game (lean, predicted score, chances, reasons)
   /lineup     predicted or confirmed soccer lineups (FotMob), MLB batting orders and probable pitchers, injuries
 
 Optional scheduled posts: set DISCORD_WEBHOOK_URL (a channel webhook) and the bot posts a digest of top props and
@@ -749,7 +749,7 @@ def market(e):
 def find_game(sport, team, lg=None):
     nt = norm(team)
     today = dt.datetime.now(dt.timezone.utc)
-    for add in range(0, 4):
+    for add in range(0, 8 if sport in ("nfl", "soccer") else 4):
         day = (today + dt.timedelta(days=add)).strftime("%Y%m%d")
         for e in events(sport, lg, day if add else None):
             if e["state"] == "post":
@@ -778,6 +778,77 @@ def game_board(sport, e):
     return memo(("board", sport, e["id"]), 600, lambda: (lambda b: {**b, "value": odds.value_picks(b)})(odds.board(q)))
 
 
+MODEL_LG = {"nfl": "nfl", "nba": "nba", "wnba": "wnba"}     # sports the forecaster models (soccer by league slug)
+
+
+def forecast_for(sport, e):
+    """Floodlight's own forecast for one game (the site's forecaster: stats model + betting market, no paid AI)."""
+    fc = D.get("forecaster")
+    lg = e["lg"] if sport == "soccer" else MODEL_LG.get(sport)
+    if not fc or not lg or not e.get("date"):
+        return None, []
+    return memo(("fc", sport, e["id"]), 600, lambda: fc.predict_now("soccer" if sport == "soccer" else "football", lg, e["id"], e["date"].isoformat(),
+                                                                     e["home"]["name"], e["away"]["name"]))
+
+
+def forecast_embed(sport, e, snap, plan):
+    hm, aw = e["home"], e["away"]
+    name = {"home": hm["name"], "away": aw["name"], "draw": "Draw"}
+    pick, top, conf = snap["pick"], snap["top"], snap.get("conf") or ""
+    fin = snap["final"]
+    soccer = sport == "soccer"
+    sh, sa = snap["score"]
+    lines = [f"{ts(e['date'], 'F')} · {snap.get('league') or e['lgName']}", ""]
+    lines.append(f"## {'🟰 Lean: Draw' if pick == 'draw' else '✅ Lean: ' + name[pick]} · {pct(top)}")
+    lines.append(f"**{conf}** · predicted score **{hm['name']} {sh} – {sa} {aw['name']}**")
+    lines.append(" · ".join(f"{name[k]} {pct(fin.get(k))}" for k in ("home", "draw", "away") if fin.get(k) is not None))
+    fields = []
+    if soccer:
+        xg = snap.get("xg") or [None, None]
+        likely = ", ".join(f"{i}-{j} ({pct(p)})" for i, j, p in (snap.get("likely") or [])[:3])
+        fields.append({"name": "Goals", "value": f"Expected goals {hm['short']} {xg[0]} · {aw['short']} {xg[1]}\nOver 2.5 {pct(snap.get('o25'))} · Both score {pct(snap.get('btts'))}"
+                       + (f"\nMost likely: {likely}" if likely else ""), "inline": False})
+        lu = snap.get("lineup") or {}
+        kind = {"standard": "Confirmed lineups", "confirmed": "Confirmed lineups", "predicted": "Predicted lineups"}.get(lu.get("type"))
+        if kind:
+            fields.append({"name": kind + " used", "value": " · ".join(
+                f"{n}: {round(x['strength'] * 100)}% of best XI" for n, x in ((hm["short"], lu.get("home") or {}), (aw["short"], lu.get("away") or {})) if x.get("strength") is not None) or "In the model", "inline": False})
+    else:
+        mg = snap.get("margin") or 0
+        fav = hm["name"] if mg >= 0 else aw["name"]
+        fields.append({"name": "Spread and total", "value": f"{fav} by {abs(mg):.1f} · total {snap.get('total'):.1f}"
+                       + (f"\nMarket: {snap['market']['details']}" + (f", O/U {fmt(num(snap['market']['total']))}" if snap['market'].get('total') else "")
+                          if (snap.get("market") or {}).get("details") else ""), "inline": False})
+    why = "\n".join("• " + r for r in (snap.get("reasons") or [])[:8])
+    if why:
+        fields.append({"name": "Why", "value": why[:1020], "inline": False})
+    if plan:
+        fields.append({"name": "Updates", "value": " · ".join(f"{'✓' if p['done'] else '○'} {p['label']}" + ("" if p["done"] else f" <t:{int(p['at'])}:R>")
+                                                             for p in plan if p["done"] or p["at"] > time.time())[:1000], "inline": False})
+    upd = int(snap.get("at") or time.time())
+    return {"title": f"{aw['name']} @ {hm['name']}", "description": "\n".join(lines)[:4000], "color": GREEN if conf == "Strong" else BLUE, "fields": fields,
+            "footer": {"text": "Floodlight forecast · stats model + betting market · free, no AI usage"}, "timestamp": dt.datetime.fromtimestamp(upd, dt.timezone.utc).isoformat()}
+
+
+def projected(e, m):
+    """A projected score from the spread and total, e.g. "NY 116-111 TOR"."""
+    if not m.get("ou") or not m.get("details"):
+        return None
+    mt = re.match(r"\s*(\S+)\s+([+-]?[\d.]+)", m["details"])
+    if not mt:
+        return None
+    tot, sp = num(m["ou"]), abs(num(mt.group(2)))
+    hm, aw = e["home"], e["away"]
+    fav_home = mt.group(1).upper() == (hm["abbr"] or "").upper()
+    if not fav_home and mt.group(1).upper() != (aw["abbr"] or "").upper():
+        return None
+    hs, as_ = (tot + sp) / 2, (tot - sp) / 2
+    if not fav_home:
+        hs, as_ = as_, hs
+    r = (lambda x: round(x)) if tot > 20 else (lambda x: round(x, 1))
+    return f"{aw['abbr']} {r(as_)}-{r(hs)} {hm['abbr']}"
+
+
 def cmd_predict(o):
     sport, team = o.get("sport") or "nba", o.get("team")
     if team:
@@ -785,6 +856,23 @@ def cmd_predict(o):
         if not e:
             return err(f"No upcoming {SPORTS[sport]} game found for {team} in the next few days.")
         hm, aw = e["home"], e["away"]
+        snap = None
+        if e["state"] == "pre":
+            try:
+                snap, plan = forecast_for(sport, e)
+            except Exception as ex:
+                print(f"/predict forecast failed: {type(ex).__name__}: {ex}")
+        if snap:
+            emb = forecast_embed(sport, e, snap, plan)
+            try:
+                b = game_board(sport, e)
+            except Exception:
+                b = None
+            vals = (b or {}).get("value") or []
+            if vals:
+                emb["fields"].insert(len(emb["fields"]) - (1 if plan else 0), {"name": "Value bets (best price beats the consensus)", "value": "\n".join(
+                    f"{label_of(v, hm, aw)} · {am_txt(v['price'])} at {v['book']} · edge {round(v['ev'] * 100)}%" for v in vals[:4])[:1000], "inline": False})
+            return {"embeds": [emb]}
         m = market(e)
         desc = [f"{ts(e['date'], 'F')} · {e['lgName']}"]
         if m:
@@ -826,13 +914,15 @@ def cmd_predict(o):
             continue
         side = max(("home", "away", "draw"), key=lambda k: m.get(k) or 0)
         pick = "Draw" if side == "draw" else e[side]["name"]
+        proj = projected(e, m)
         rows.append((m[side], f"{'🔴 ' if e['state'] == 'in' else ''}{ts(e['date'])} {e['away']['abbr'] or e['away']['short']} @ {e['home']['abbr'] or e['home']['short']} → **{pick} {pct(m[side])}**"
+                              + (f" · proj {proj}" if proj else "")
                               + (f" · {m['details']}" if m["details"] else "") + (f" · O/U {fmt(num(m['ou']))}" if m["ou"] else "")))
     if not rows:
         return err(f"No {SPORTS[sport]} games with prices posted right now.")
     rows.sort(key=lambda r: -r[0])
     return {"embeds": [{"title": f"{SPORTS[sport]} predictions", "description": "\n".join(r[1] for r in rows[:20])[:4000], "color": BLUE,
-                        "footer": {"text": "Most likely result from the betting market (DraftKings via ESPN) · /predict team:<name> for every book · Floodlight"}}]}
+                        "footer": {"text": "Lean from the betting market, projected score from the spread and total · /predict team:<name> for the full forecast · Floodlight"}}]}
 
 
 def am_txt(p):
@@ -871,7 +961,7 @@ def soccer_lineup(team):
     nt = norm(team)
     best = None
     today = dt.datetime.now(dt.timezone.utc)
-    for add in range(0, 4):
+    for add in range(0, 8 if sport in ("nfl", "soccer") else 4):
         day = (today + dt.timedelta(days=add)).strftime("%Y%m%d")
         try:
             data = get_json(f"https://www.fotmob.com/api/data/matches?date={day}", 600) or {}
@@ -943,7 +1033,7 @@ def cmd_help(o):
         "`/research` a player's hit rate on any stat and line: last 5 / 10 / 20 games, this season, vs an opponent. Leave the line empty to use today's PrizePicks line.",
         "`/props` today's PrizePicks and Sleeper lines ranked by recent hit rate.",
         "`/scores` live scores, finals and today's schedule.",
-        "`/predict` win chances from the betting market. Add a team for every book's price and the value bets.",
+        "`/predict` the day's leans with a projected score. Add a team for Floodlight's full forecast: lean, predicted score, chances, the reasons, value bets.",
         "`/lineup` predicted or confirmed soccer lineups, MLB batting orders and probable pitchers, injury reports.",
         "`/record` Floodlight's own prediction record: W-L, hit rate, streak and the latest results.",
         "`/leaderboard` each pick channel's record (props: a card is one play; soccer: every pick counts). Results post in #verified-records at 12:30 AM ET, re-checked at 8 AM.",
@@ -1183,8 +1273,8 @@ def command_defs():
             {"type": 4, "name": "count", "description": "How many (default 10)", "min_value": 3, "max_value": 20}]},
         {"name": "scores", "description": "Live scores, finals and today's schedule", "options": [
             sport(True, "Sport"), {"type": 3, "name": "league", "description": "Soccer league code, e.g. eng.1, esp.1, uefa.champions"}]},
-        {"name": "predict", "description": "Win chances from the betting market; add a team for every book and the value bets", "options": [
-            sport(True, "Sport"), {"type": 3, "name": "team", "description": "One team's next game in detail"}]},
+        {"name": "predict", "description": "Floodlight's forecast: lean, predicted score and why; add a team for one game in detail", "options": [
+            sport(True, "Sport"), {"type": 3, "name": "team", "description": "One team's next game: lean, score, chances and reasons"}]},
         {"name": "lineup", "description": "Predicted or confirmed lineups, probable pitchers and injuries", "options": [
             {"type": 3, "name": "team", "description": "Team name, e.g. Arsenal or Yankees", "required": True}, sport(False, "Sport (default soccer)")]},
         {"name": "record", "description": "Floodlight's prediction record: W-L, hit rate, streak and latest results", "options": [
