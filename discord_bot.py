@@ -1033,7 +1033,7 @@ def mlb_lineup(team):
 def cmd_help(o):
     return {"embeds": [{"title": "Floodlight bot", "color": BLUE, "url": SITE or None, "description": "\n".join([
         "`/research` a player's hit rate on any stat and line: last 5 / 10 / 20 games, this season, vs an opponent. Leave the line empty to use today's PrizePicks line.",
-        "`/lab` opens **Floodlight Lab** right in the channel: every stat, hit rates at any line, trends, splits and the full game log for any player.",
+        "`/lab` opens **Floodlight Lab** right in the channel: any player or team, every stat, hit rates at any line, trends, splits and the full game log.",
         "`/props` today's PrizePicks and Sleeper lines ranked by recent hit rate.",
         "`/scores` live scores, finals and today's schedule.",
         "`/predict` the day's leans with a projected score. Add a team for Floodlight's full forecast: lean, predicted score, chances, the reasons, value bets.",
@@ -1315,7 +1315,8 @@ def command_defs():
         {"name": "checkpicks", "description": "Admins: grade the pick channels now and show every card (post:True also posts results)", "default_member_permissions": "8",
          "options": [{"type": 5, "name": "post", "description": "Also post finished results in #verified-records", "required": False}]},
         {"name": "lab", "description": "Open Floodlight Lab: a full research screen for any player, right here in Discord", "options": [
-            {"type": 3, "name": "player", "description": "Open straight to this player, e.g. Jayson Tatum"}, sport(False, "Sport (default NBA)")]},
+            {"type": 3, "name": "player", "description": "Open straight to this player, e.g. Jayson Tatum"},
+            {"type": 3, "name": "team", "description": "Or open straight to this team, e.g. Celtics or Arsenal"}, sport(False, "Sport (default NBA)")]},
         {"name": "help", "description": "What the Floodlight bot can do"},
     ]
 
