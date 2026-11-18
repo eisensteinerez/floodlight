@@ -9,31 +9,29 @@
 /* Floodlight Lab. One page for the site's Research screen, the Discord Activity and the browser link.
    Colours and type follow theme.css ("night shift"): FL Slant (Archivo, condensed), Manrope, Geist Mono; slanted blocks for the chosen control. */
 :root{
-  --bg:#06050B; --surface:#100E1A; --surface-2:#191628; --line:#2B2642; --fg:#F6F4FF; --muted:#9891B6;
-  --accent:#C6FF2E; --accent-2:#4DFFB4; --accent-ink:#0B1400; --win:#35E8A2; --draw:#8780A6; --loss:#FF5C7C;
-  --beam:rgba(150,90,255,.20); --beam-2:rgba(0,214,255,.13); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(13,11,22,.72);
-  --pill:linear-gradient(100deg,var(--accent),var(--accent-2)); --slant:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%);
+  --bg:#07090C; --surface:#0E1116; --surface-2:#161A21; --line:#252B36; --fg:#F3F4F6; --muted:#8E97A8;
+  --accent:#FFC53D; --accent-2:#FF9D2E; --accent-ink:#1A1000; --win:#35D996; --draw:#7F8898; --loss:#FF6B7A;
+  --beam:rgba(255,214,140,.13); --beam-2:rgba(190,215,255,.09); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(9,11,15,.72);
+  --pill:var(--accent); --slant:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%);
   --shadow-lg:0 2px 0 rgba(0,0,0,.4),0 30px 80px -20px rgba(0,0,0,.8);
-  --glow:0 0 0 1px color-mix(in oklab,var(--accent) 55%,transparent),0 8px 30px -8px color-mix(in oklab,var(--accent) 45%,transparent);
+  --glow:0 0 0 1px color-mix(in oklab,var(--accent) 60%,transparent);
   --f-display:"FL Slant","Archivo Narrow","Barlow Condensed","Arial Narrow",Impact,sans-serif;
   --f-body:"Manrope","Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
   --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.3,1.5,.5,1); --r:16px; --rc:11px; color-scheme:dark;
 }
 :root[data-theme="light"]{
-  --bg:#F3F1FB; --surface:#FFFFFF; --surface-2:#EFEBFA; --line:#DCD5F0; --fg:#0F0B1E; --muted:#635B80;
-  --accent:#5B2BFF; --accent-2:#B02BFF; --accent-ink:#FFFFFF; --win:#0F8F5E; --draw:#857E9E; --loss:#D43F5C;
-  --beam:rgba(110,60,255,.13); --beam-2:rgba(0,170,230,.10); --dots:rgba(15,11,30,.07); --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.78);
+  --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#ECEEF2; --line:#D9DDE5; --fg:#0D1117; --muted:#5A6373;
+  --accent:#C2410C; --accent-2:#EA580C; --accent-ink:#FFFFFF; --win:#0F8F5E; --draw:#7D8594; --loss:#D43F5C;
+  --beam:rgba(255,176,60,.12); --beam-2:rgba(70,130,220,.06); --dots:rgba(13,17,23,.06); --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.78);
   --shadow-lg:0 2px 4px rgba(12,14,19,.05),0 24px 60px -18px rgba(12,14,19,.25); color-scheme:light;
 }
 *{box-sizing:border-box}
 html{background:var(--bg)}
 body{margin:0;min-height:100vh;color:var(--fg);font:14px/1.5 var(--f-body);letter-spacing:-.003em;-webkit-font-smoothing:antialiased}
 body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:
-  conic-gradient(from 112deg at -4% -12%,transparent 0deg,var(--beam) 16deg,transparent 34deg),
-  conic-gradient(from 214deg at 104% -12%,transparent 0deg,var(--beam-2) 16deg,transparent 34deg),
-  radial-gradient(1100px 560px at 50% -260px,var(--beam),transparent 70%),
-  radial-gradient(circle at 1px 1px,var(--dots) 1px,transparent 1.5px) 0 0/26px 26px}
+  conic-gradient(from 116deg at -3% -12%,transparent 0deg,var(--beam) 14deg,transparent 30deg),
+  conic-gradient(from 214deg at 103% -12%,transparent 0deg,var(--beam-2) 14deg,transparent 30deg);-webkit-mask-image:linear-gradient(#000 20%,transparent 70%);mask-image:linear-gradient(#000 20%,transparent 70%)}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
@@ -73,7 +71,7 @@ body.embed .brand{display:none}
 .err{border:1px solid color-mix(in oklab,var(--loss) 45%,transparent);background:color-mix(in oklab,var(--loss) 9%,transparent);border-radius:12px;padding:12px 14px;margin-top:14px}
 
 /* hero */
-.hero{--fg:#F6F4FF;--muted:#B3ACD0;--line:rgba(255,255,255,.13);--surface:#0C0A16;--surface-2:#1B1830;--win:#35E8A2;--loss:#FF5C7C;--draw:#8780A6;--accent:#C6FF2E;--accent-2:#4DFFB4;--accent-ink:#0B1400;color:var(--fg);
+.hero{--fg:#F3F4F6;--muted:#A9B2C3;--line:rgba(255,255,255,.13);--surface:#0A0D13;--surface-2:#171D28;--win:#35D996;--loss:#FF6B7A;--draw:#7F8898;--accent:#FFC53D;--accent-2:#FF9D2E;--accent-ink:#1A1000;color:var(--fg);
   position:relative;isolation:isolate;overflow:hidden;display:flex;flex-wrap:wrap;align-items:center;gap:18px 28px;border-radius:28px;margin:16px 0 14px;padding:24px 26px;
   background:#0A0814;border:1px solid rgba(255,255,255,.1);box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.08)}
 .hero-bg{position:absolute;inset:0;z-index:-3;background:radial-gradient(60% 120% at 0% 50%,color-mix(in oklab,var(--accent) 18%,transparent),transparent 70%)}
@@ -397,8 +395,8 @@ body,input,select,button{font-variation-settings:normal}
 /* states */
 .empty{text-align:center;padding:70px 20px;color:var(--muted)}
 .empty h2{font:900 44px/.95 var(--f-display);text-transform:uppercase;color:var(--fg);margin:14px 0 8px}
-.beam{width:120px;height:120px;margin:0 auto;border-radius:50%;background:radial-gradient(circle,color-mix(in oklab,var(--accent) 60%,transparent),color-mix(in oklab,var(--accent) 6%,transparent) 60%,transparent 70%);animation:pulse 2.4s ease-in-out infinite}
-@keyframes pulse{50%{transform:scale(1.08);opacity:.75}}
+/* a small bank of lamps, the floodlight itself */
+.beam{width:64px;height:40px;margin:0 auto 6px;background:radial-gradient(circle at 50% 50%,var(--accent) 0 5px,transparent 5.5px) 0 0/16px 20px}
 .skel{border-radius:20px;background:linear-gradient(90deg,var(--surface) 0%,var(--surface-2) 50%,var(--surface) 100%);background-size:200% 100%;animation:sh 1.2s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
 .foot{color:var(--muted);font-size:12px;text-align:center;margin-top:26px}

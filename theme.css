@@ -4,10 +4,10 @@
    over the styles each sport file adds.
    Type: Big Shoulders Display for headlines and scores, Geist for reading, Geist Mono for numbers and small labels. */
 :root{
-  --bg:#F3F1FB; --surface:#FFFFFF; --surface-2:#EFEBFA; --line:#DCD5F0; --fg:#0F0B1E; --muted:#635B80;
-  --accent:#5B2BFF; --accent-2:#B02BFF; --accent-ink:#FFFFFF; --live:#E0204F; --win:#0F8F5E; --draw:#857E9E; --loss:#D43F5C;
+  --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#ECEEF2; --line:#D9DDE5; --fg:#0D1117; --muted:#5A6373;
+  --accent:#C2410C; --accent-2:#EA580C; --accent-ink:#FFFFFF; --live:#E0204F; --win:#0F8F5E; --draw:#7D8594; --loss:#D43F5C;
   --pitch:#2F7A4C; --pitch-2:#2B7146; --chalk:rgba(255,255,255,.85);
-  --beam:rgba(110,60,255,.13); --beam-2:rgba(0,170,230,.10); --dots:rgba(15,11,30,.07); --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.72);
+  --beam:rgba(255,176,60,.12); --beam-2:rgba(70,130,220,.06); --dots:rgba(13,17,23,.06); --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.72);
   --shadow:0 1px 1px rgba(12,14,19,.04),0 8px 28px -8px rgba(12,14,19,.12);
   --shadow-lg:0 2px 4px rgba(12,14,19,.05),0 24px 60px -18px rgba(12,14,19,.25);
   --glow:0 0 0 1px color-mix(in oklab,var(--accent) 55%,transparent),0 8px 30px -8px color-mix(in oklab,var(--accent) 45%,transparent);
@@ -19,18 +19,18 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#06050B; --surface:#100E1A; --surface-2:#191628; --line:#2B2642; --fg:#F6F4FF; --muted:#9891B6;
-  --accent:#C6FF2E; --accent-2:#4DFFB4; --accent-ink:#0B1400; --live:#FF2E63; --win:#35E8A2; --draw:#8780A6; --loss:#FF5C7C;
+  --bg:#07090C; --surface:#0E1116; --surface-2:#161A21; --line:#252B36; --fg:#F3F4F6; --muted:#8E97A8;
+  --accent:#FFC53D; --accent-2:#FF9D2E; --accent-ink:#1A1000; --live:#FF3B52; --win:#35D996; --draw:#7F8898; --loss:#FF6B7A;
   --pitch:#0F4A33; --pitch-2:#0D422D; --chalk:rgba(255,255,255,.7);
-  --beam:rgba(150,90,255,.20); --beam-2:rgba(0,214,255,.13); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(13,11,22,.66);
+  --beam:rgba(255,214,140,.13); --beam-2:rgba(190,215,255,.09); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(9,11,15,.66);
   --shadow:0 1px 0 rgba(0,0,0,.4),0 12px 34px -12px rgba(0,0,0,.6);
   --shadow-lg:0 2px 0 rgba(0,0,0,.4),0 30px 80px -20px rgba(0,0,0,.8);
   color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#06050B; --surface:#100E1A; --surface-2:#191628; --line:#2B2642; --fg:#F6F4FF; --muted:#9891B6;
-  --accent:#C6FF2E; --accent-2:#4DFFB4; --accent-ink:#0B1400; --live:#FF2E63; --win:#35E8A2; --draw:#8780A6; --loss:#FF5C7C;
+  --bg:#07090C; --surface:#0E1116; --surface-2:#161A21; --line:#252B36; --fg:#F3F4F6; --muted:#8E97A8;
+  --accent:#FFC53D; --accent-2:#FF9D2E; --accent-ink:#1A1000; --live:#FF3B52; --win:#35D996; --draw:#7F8898; --loss:#FF6B7A;
   --pitch:#0F4A33; --pitch-2:#0D422D; --chalk:rgba(255,255,255,.7);
-  --beam:rgba(150,90,255,.20); --beam-2:rgba(0,214,255,.13); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(13,11,22,.66);
+  --beam:rgba(255,214,140,.13); --beam-2:rgba(190,215,255,.09); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(9,11,15,.66);
   --shadow:0 1px 0 rgba(0,0,0,.4),0 12px 34px -12px rgba(0,0,0,.6);
   --shadow-lg:0 2px 0 rgba(0,0,0,.4),0 30px 80px -20px rgba(0,0,0,.8);
   color-scheme:dark}
@@ -306,16 +306,16 @@ html.rs-dragging .rs-tt{display:none}
    Showpieces: the marquee match, the player card, the dials. These are always lit like a night match,
    in light mode too.
    ===================================================================================================== */
-.spot,.rs-hero{--fg:#F4F6F9;--muted:#A9B2C3;--line:rgba(255,255,255,.13);--surface:#0A0D13;--surface-2:#171D28;--win:#2BDB8C;--loss:#FF6272;--draw:#8792A6;--accent:#C6FF2E;--live:#FF3D57;color:var(--fg)}
+.spot,.rs-hero{--fg:#F4F6F9;--muted:#A9B2C3;--line:rgba(255,255,255,.13);--surface:#0A0D13;--surface-2:#171D28;--win:#2BDB8C;--loss:#FF6272;--draw:#8792A6;--accent:#FFC53D;--live:#FF3D57;color:var(--fg)}
 
 /* ---------- the marquee ---------- */
 .spot{position:relative;isolation:isolate;display:block;width:100%;overflow:hidden;text-align:left;border-radius:28px;padding:20px 26px 18px;margin:0 0 26px;
-  border:1px solid color-mix(in oklab,#fff 14%,transparent);background:#06050B;
+  border:1px solid color-mix(in oklab,#fff 14%,transparent);background:#07090C;
   box-shadow:0 40px 90px -40px color-mix(in oklab,var(--hc) 70%,transparent),0 40px 90px -50px color-mix(in oklab,var(--ac) 70%,transparent),var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.12);
   transition:transform .35s var(--ease),box-shadow .35s}
 .spot:hover{transform:translateY(-3px) scale(1.004)}
 .spot.sel{border-color:var(--accent)}
-.spot-bg{position:absolute;inset:0;z-index:-3;background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 62%,#06050B) 0%,#06050B 44%,#06050B 56%,color-mix(in oklab,var(--ac) 62%,#06050B) 100%)}
+.spot-bg{position:absolute;inset:0;z-index:-3;background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 62%,#07090C) 0%,#07090C 44%,#07090C 56%,color-mix(in oklab,var(--ac) 62%,#07090C) 100%)}
 .spot-bg img{position:absolute;top:50%;width:115px;height:115px;margin-top:-57px;object-fit:contain;transform:scale(4);filter:blur(18px) saturate(2.4);opacity:.8}
 .spot-bg img.h{left:22px}.spot-bg img.a{right:22px}
 .spot::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
@@ -373,7 +373,7 @@ html.rs-dragging .rs-tt{display:none}
 
 /* ---------- the player card ---------- */
 .rs-hero{position:relative;isolation:isolate;overflow:hidden;display:flex;flex-wrap:wrap;align-items:center;gap:18px 28px;border-radius:28px;margin:18px 0 14px;padding:24px 26px;
-  border:1px solid rgba(255,255,255,.14);background:#06050B;box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.12)}
+  border:1px solid rgba(255,255,255,.14);background:#07090C;box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.12)}
 .rs-hero-bg{position:absolute;inset:0;z-index:-3;background:radial-gradient(60% 120% at 0% 50%,color-mix(in oklab,var(--accent) 18%,transparent),transparent 70%)}
 .rs-hero-bg img{position:absolute;left:90px;top:50%;width:140px;height:140px;margin-top:-70px;object-fit:contain;transform:scale(4);filter:blur(21px) saturate(2.6);opacity:.85}
 .rs-hero::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
@@ -387,7 +387,7 @@ html.rs-dragging .rs-tt{display:none}
 .rs-face::before{content:"";position:absolute;inset:0;border-radius:inherit;background:conic-gradient(from 0deg,var(--accent),transparent 28%,rgba(255,255,255,.75) 50%,transparent 72%,var(--accent));animation:fl-spin 7s linear infinite}
 .rs-face::after{content:"";position:absolute;inset:-14px;border-radius:inherit;background:radial-gradient(circle,color-mix(in oklab,var(--accent) 38%,transparent),transparent 68%);z-index:-1}
 @keyframes fl-spin{to{transform:rotate(1turn)}}
-.rs-hero .rs-ph .face{position:relative;width:100%;height:100%;border-radius:inherit;border:3px solid #06050B;background:radial-gradient(circle at 50% 25%,#2A3344,#11161F 75%);box-shadow:none}
+.rs-hero .rs-ph .face{position:relative;width:100%;height:100%;border-radius:inherit;border:3px solid #07090C;background:radial-gradient(circle at 50% 25%,#2A3344,#11161F 75%);box-shadow:none}
 .rs-hero.team .rs-face{border-radius:26px}.rs-hero.team .rs-ph .face{object-fit:contain;padding:12px}
 .rs-hero .rs-ph h3{font:900 66px/.84 var(--f-display);letter-spacing:.012em;text-shadow:0 4px 30px rgba(0,0,0,.5);text-wrap:balance}
 .rs-hero .rs-ph p{font-size:13.5px;margin-top:10px;color:rgba(255,255,255,.76)}
@@ -531,10 +531,10 @@ body.fl-pointer #flLight{opacity:1}
 .rs-meterbox svg{width:132px;height:auto;overflow:visible}
 .rs-meterbox path{fill:none;stroke-linecap:round}
 .rs-meterbox path.t{stroke:rgba(255,255,255,.12);stroke-width:9}
-.rs-meterbox path.v{stroke-width:9;filter:drop-shadow(0 0 8px rgba(198,255,46,.45))}
+.rs-meterbox path.v{stroke-width:9;filter:drop-shadow(0 0 8px rgba(255,197,61,.45))}
 .rs-meterbox path.k{stroke:rgba(255,255,255,.4);stroke-width:1.2}
 .rs-meterbox path.n{stroke:#fff;stroke-width:2.5}
-.rs-meterbox circle.h{fill:#fff;stroke:#06050B;stroke-width:2.5}
+.rs-meterbox circle.h{fill:#fff;stroke:#07090C;stroke-width:2.5}
 .rs-meterbox b{font:900 40px/.8 var(--f-display);margin-top:-30px;position:relative;text-shadow:0 2px 12px #000;padding-bottom:2px}
 .rs-meterbox>span{font:500 9px/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.62);margin-top:8px}
 .rs-meterbox small{font:600 11px/1.2 var(--f-body);color:rgba(255,255,255,.8)}
@@ -632,8 +632,8 @@ body.fl-pointer #flLight{opacity:1}
 .flg-lead{font-size:17.5px;line-height:1.6}
 .flg-sports span{font:500 10.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;border-radius:8px;padding:8px 11px;background:color-mix(in oklab,var(--surface) 70%,transparent)}
 .flg-demo{--fg:#F4F6F9;--muted:#A9B2C3;--line:rgba(255,255,255,.13);--surface-2:rgba(255,255,255,.07);--win:#2BDB8C;--loss:#FF6272;color:var(--fg);position:relative;isolation:isolate;overflow:hidden;border-radius:24px;padding:20px 22px;max-width:560px;border:1px solid rgba(255,255,255,.14);
-  background:radial-gradient(90% 130% at 0% 0%,#5B2A91,transparent 60%),radial-gradient(70% 110% at 100% 100%,rgba(253,185,39,.28),transparent 60%),#090B10;
-  box-shadow:0 50px 100px -40px rgba(91,42,145,.7),var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.14);transform:perspective(1400px) rotateY(-5deg) rotateX(2.5deg);transform-origin:0 50%;transition:transform .6s var(--ease)}
+  background:radial-gradient(90% 130% at 0% 0%,#7A4A12,transparent 60%),radial-gradient(70% 110% at 100% 100%,rgba(253,185,39,.28),transparent 60%),#090B10;
+  box-shadow:0 50px 100px -40px rgba(0,0,0,.7),var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.14);transform:perspective(1400px) rotateY(-5deg) rotateX(2.5deg);transform-origin:0 50%;transition:transform .6s var(--ease)}
 .flg-demo:hover{transform:perspective(1400px) rotateY(0) rotateX(0)}
 .flg-demo::before{content:"";position:absolute;inset:0;z-index:-1;background:conic-gradient(from 130deg at 10% -30%,transparent 0deg,rgba(255,255,255,.16) 12deg,transparent 26deg),radial-gradient(circle at 1px 1px,rgba(255,255,255,.07) 1px,transparent 1.5px) 0 0/22px 22px}
 .flg-demo-top b{font:800 26px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
@@ -1063,7 +1063,7 @@ body.fl-pointer #flLight{opacity:1}
 /* ── match header: a broadcast scoreboard, always lit like a night game ── */
 .hero.mh{color:#fff;isolation:isolate;overflow:hidden;padding:16px 22px 20px;background:
   radial-gradient(95% 150% at 0% 10%,color-mix(in oklab,var(--hc) 82%,#000) 0%,transparent 60%),
-  radial-gradient(95% 150% at 100% 10%,color-mix(in oklab,var(--ac) 82%,#000) 0%,transparent 60%),#06050B}
+  radial-gradient(95% 150% at 100% 10%,color-mix(in oklab,var(--ac) 82%,#000) 0%,transparent 60%),#07090C}
 .hero.mh::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:
   conic-gradient(from 150deg at 12% -30%,transparent 0deg,rgba(255,255,255,.16) 12deg,transparent 26deg),
   conic-gradient(from 184deg at 88% -30%,transparent 0deg,rgba(255,255,255,.13) 12deg,transparent 26deg),
@@ -1384,7 +1384,7 @@ input[type=search],input[type=text],input[type=number]{transition:border-color .
 input[type=search]:focus,input[type=text]:focus,input[type=number]:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 20%,transparent)}
 @media (max-width:520px){.mt-h,.mt-r{grid-template-columns:24px minmax(0,1fr) 24px 34px 46px}.mt-h span:nth-child(n+5):nth-child(-n+7),.mt-r > span:nth-child(n+5):nth-child(-n+7){display:none}.mt-t em{display:none}}
 /* league header */
-.hero.solo.h-league{isolation:isolate;overflow:hidden;background:radial-gradient(110% 160% at 0 0,color-mix(in oklab,var(--accent) 55%,#000),transparent 62%),radial-gradient(90% 140% at 100% 0,color-mix(in oklab,var(--accent-2) 30%,#000),transparent 60%),#06050B;color:#fff}
+.hero.solo.h-league{isolation:isolate;overflow:hidden;background:radial-gradient(110% 160% at 0 0,color-mix(in oklab,var(--accent) 55%,#000),transparent 62%),radial-gradient(90% 140% at 100% 0,color-mix(in oklab,var(--accent-2) 30%,#000),transparent 60%),#07090C;color:#fff}
 .hero.solo.h-league::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:conic-gradient(from 150deg at 10% -30%,transparent 0deg,rgba(255,255,255,.18) 12deg,transparent 26deg),linear-gradient(180deg,transparent 50%,rgba(0,0,0,.45))}
 .hero.solo.h-league h3{color:#fff}
 
@@ -1557,7 +1557,7 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 
 /* match header: hazard stripes and a hard diagonal split */
 .hero.mh{background:
-  linear-gradient(115deg,color-mix(in oklab,var(--hc) 88%,#000) 0%,color-mix(in oklab,var(--hc) 40%,#06050B) 38%,#06050B 49.6%,#06050B 50.4%,color-mix(in oklab,var(--ac) 40%,#06050B) 62%,color-mix(in oklab,var(--ac) 88%,#000) 100%)}
+  linear-gradient(115deg,color-mix(in oklab,var(--hc) 88%,#000) 0%,color-mix(in oklab,var(--hc) 40%,#07090C) 38%,#07090C 49.6%,#07090C 50.4%,color-mix(in oklab,var(--ac) 40%,#07090C) 62%,color-mix(in oklab,var(--ac) 88%,#000) 100%)}
 .hero.mh::before{background:
   repeating-linear-gradient(115deg,transparent 0 26px,rgba(255,255,255,.035) 26px 28px),
   linear-gradient(115deg,transparent 49.7%,var(--accent) 49.7% 50.3%,transparent 50.3%),
@@ -1601,7 +1601,7 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
   border:0;border-radius:0;clip-path:var(--cut);overflow:hidden;
   background:
     linear-gradient(90deg,rgba(0,0,0,0) 40%,rgba(6,5,11,.5)),
-    linear-gradient(174deg,color-mix(in oklab,var(--hc) 46%,#100E1A) 0 calc(50% + 18px),color-mix(in oklab,var(--ac) 46%,#100E1A) calc(50% + 19px) 100%);
+    linear-gradient(174deg,color-mix(in oklab,var(--hc) 46%,#0E1116) 0 calc(50% + 18px),color-mix(in oklab,var(--ac) 46%,#0E1116) calc(50% + 19px) 100%);
   box-shadow:none;transition:transform .25s var(--ease),filter .25s}
 .m::before{display:none}
 .m:hover{transform:translateY(-5px) scale(1.015);filter:brightness(1.12) saturate(1.15);box-shadow:none}
@@ -1646,7 +1646,7 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 .spot,.spot.mini{border-radius:0;clip-path:polygon(0 0,calc(100% - 34px) 0,100% 34px,100% 100%,34px 100%,0 calc(100% - 34px))}
 .spots > .spot{min-height:min(62vh,560px);padding:26px 40px 26px;display:flex;flex-direction:column}
 .spots > .spot .spot-main{margin:auto 0}
-.spots > .spot .spot-bg{background:linear-gradient(115deg,color-mix(in oklab,var(--hc) 92%,#000) 0%,color-mix(in oklab,var(--hc) 46%,#06050B) 36%,#06050B 49.7%,#06050B 50.3%,color-mix(in oklab,var(--ac) 46%,#06050B) 64%,color-mix(in oklab,var(--ac) 92%,#000) 100%)}
+.spots > .spot .spot-bg{background:linear-gradient(115deg,color-mix(in oklab,var(--hc) 92%,#000) 0%,color-mix(in oklab,var(--hc) 46%,#07090C) 36%,#07090C 49.7%,#07090C 50.3%,color-mix(in oklab,var(--ac) 46%,#07090C) 64%,color-mix(in oklab,var(--ac) 92%,#000) 100%)}
 .spots > .spot .spot-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 49.75%,var(--accent) 49.75% 50.25%,transparent 50.25%),repeating-linear-gradient(115deg,transparent 0 30px,rgba(255,255,255,.03) 30px 32px)}
 .spots > .spot .spot-bg img{width:min(46vh,420px);height:min(46vh,420px);margin-top:calc(min(46vh,420px) / -2);transform:rotate(-8deg);filter:saturate(1.2);opacity:.22}
 .spots > .spot .spot-bg img.h{left:-70px}.spots > .spot .spot-bg img.a{right:-70px;transform:rotate(8deg)}
@@ -1656,8 +1656,8 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 .spots > .spot .spot-t img{width:clamp(84px,9vw,140px);height:clamp(84px,9vw,140px)}
 /* tennis tiles: players and set scores */
 .m.tn-m{grid-template-columns:minmax(0,1fr);grid-template-areas:"st" "tms";
-  background:linear-gradient(174deg,color-mix(in oklab,var(--accent-2) 16%,#100E1A) 0 calc(50% + 10px),color-mix(in oklab,#7A4DFF 26%,#100E1A) calc(50% + 11px) 100%)}
-.m.tn-m:has(.st.live){background:linear-gradient(174deg,color-mix(in oklab,var(--live) 30%,#100E1A) 0 calc(50% + 10px),color-mix(in oklab,#7A4DFF 30%,#100E1A) calc(50% + 11px) 100%)}
+  background:linear-gradient(174deg,color-mix(in oklab,var(--accent-2) 16%,#0E1116) 0 calc(50% + 10px),color-mix(in oklab,#3B82C4 26%,#0E1116) calc(50% + 11px) 100%)}
+.m.tn-m:has(.st.live){background:linear-gradient(174deg,color-mix(in oklab,var(--live) 30%,#0E1116) 0 calc(50% + 10px),color-mix(in oklab,#3B82C4 30%,#0E1116) calc(50% + 11px) 100%)}
 .m.tn-m .tms{padding:0 16px 10px;gap:0}
 .m.tn-m .tn-row{grid-template-columns:36px minmax(0,1fr) auto;gap:11px;height:56px}
 .m.tn-m .tn-face,.m.tn-m .tn-pair{width:36px;height:36px}.m.tn-m .tn-pair img{width:24px;height:24px}
@@ -1685,17 +1685,48 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 .pulse,.empty-state,.tile,.ml,.rs-tile,.fx-card{border-radius:3px 22px 3px 22px}
 .m .tm .rec{white-space:nowrap}
 .m.tn-m .tm > span{color:#fff}.m .tn-sets .tn-g{color:rgba(255,255,255,.7)}.m .tn-sets .tn-g.w{color:#fff}
-:root:not([data-theme="dark"]) .m:has(.st.live) .sc span,:root:not([data-theme="dark"]) .m.tn-m .tn-sets .tn-s{color:#C6FF2E}
-:root:not([data-theme="dark"]) .m .oddrow span.fav{background:#C6FF2E;color:#0B1400}
-:root:not([data-theme="dark"]) .m .st .cd{color:#C6FF2E}
+:root:not([data-theme="dark"]) .m:has(.st.live) .sc span,:root:not([data-theme="dark"]) .m.tn-m .tn-sets .tn-s{color:#FFC53D}
+:root:not([data-theme="dark"]) .m .oddrow span.fav{background:#FFC53D;color:#1A1000}
+:root:not([data-theme="dark"]) .m .st .cd{color:#FFC53D}
 /* prediction tiles: the verdict is a strip along the foot */
 .cards:has(> .pred-card){grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
 .m.pred-card{grid-template-columns:minmax(0,1fr);grid-template-areas:"st" "tms" "side"}
 .m.pred-card .tms{padding:0 16px 12px}
 .m.pred-card .st .min{font:900 19px/1 var(--f-display);margin-right:8px}
 .m.pred-card .pc-chips span{background:rgba(0,0,0,.38);color:rgba(255,255,255,.75)}.m.pred-card .pc-chips b{color:#fff}
-.m.pred-card .pc-chips .edge-c{background:#C6FF2E;color:#0B1400}.m.pred-card .pc-chips .edge-c b{color:#0B1400}
-.m.pred-card .pc-side{grid-area:side;grid-column:auto;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:6px 12px;text-align:left;padding:12px 16px 14px;margin-top:auto;background:rgba(6,5,11,.72);border-top:2px solid #C6FF2E}
-.m.pred-card .pc-side b{font:900 22px/1 var(--f-display);color:#C6FF2E;order:-1;flex:1 1 100%}
+.m.pred-card .pc-chips .edge-c{background:#FFC53D;color:#1A1000}.m.pred-card .pc-chips .edge-c b{color:#1A1000}
+.m.pred-card .pc-side{grid-area:side;grid-column:auto;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:6px 12px;text-align:left;padding:12px 16px 14px;margin-top:auto;background:rgba(6,5,11,.72);border-top:2px solid #FFC53D}
+.m.pred-card .pc-side b{font:900 22px/1 var(--f-display);color:#FFC53D;order:-1;flex:1 1 100%}
 .m.pred-card .pc-side small{color:rgba(255,255,255,.7);font-size:11px}
 .m.pred-card .pc-side .conf{margin:0}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   IDENTITY 3 · "Lamplight": graphite night, one lamp-amber accent, team colour as the only rich colour.
+   The chrome goes quiet (no colour blobs, no glows, no two-colour fills) so the scoreboard tiles and the billboard carry the page.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{--pill:var(--accent);--glow:0 0 0 1px color-mix(in oklab,var(--accent) 60%,transparent)}
+#flAurora{display:none}
+/* page: no weave or grain, only two soft lamp beams from the top corners */
+body::after{background:
+  conic-gradient(from 116deg at -3% -12%,transparent 0deg,var(--beam) 14deg,transparent 30deg),
+  conic-gradient(from 214deg at 103% -12%,transparent 0deg,var(--beam-2) 14deg,transparent 30deg)}
+.rs::before{background:
+  conic-gradient(from 116deg at -3% -12%,transparent 0deg,var(--beam) 14deg,transparent 30deg),
+  conic-gradient(from 214deg at 103% -12%,transparent 0deg,var(--beam-2) 14deg,transparent 30deg)}
+#flLight{display:none}
+/* nothing glows: depth comes from surface steps and hairlines */
+.brand svg,.flg-brand svg,.rs-tile.hi .rs-ring svg,.rs-tile.lo .rs-ring svg,.st-ring circle.p,.rs-meterbox path.v,.ob circle.v,.pg svg .pg-a{filter:none}
+.dt.on{box-shadow:none!important}
+.vc.pick{box-shadow:0 0 0 1px var(--accent)}
+.search input:focus{box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 22%,transparent)}
+.flg-hero h1 em{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--accent);filter:none}
+@media (min-width:821px){.top{box-shadow:none}}
+.hero.mh::after{height:2px}
+/* the poster title keeps its offset block, a touch tighter */
+.livebar h2{text-shadow:.032em .032em 0 var(--accent)}
+/* numbers line up everywhere */
+.sc,.sc *,.tk .s,.score .big,.score .big *,.rs-tile b,.tile b,.ml b,.date strong,.m .st,.oddrow,.pulse b{font-variant-numeric:tabular-nums}
+body::after,.rs::before{-webkit-mask-image:linear-gradient(#000 20%,transparent 70%);mask-image:linear-gradient(#000 20%,transparent 70%)}
+.dt.today::after{box-shadow:none}
+@media (max-width:640px){.dt.today::after{top:4px;right:5px;width:4px;height:4px}}

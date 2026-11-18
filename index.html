@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Floodlight">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#06050B">
+<meta name="theme-color" content="#07090C">
 <link rel="preconnect" href="https://site.api.espn.com" crossorigin>
 <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin>
 <link rel="preconnect" href="https://a.espncdn.com">
@@ -4004,7 +4004,7 @@ const FM_SOURCE = { 'isr.1': 127 };
 const FM_IMGS = 'https://images.fotmob.com/image_resources';
 if (LG['isr.1']) LG['isr.1'].logo = `${FM_IMGS}/logo/leaguelogo/127.png`;
 const FM_TABS = [['lineups','Lineups'],['stats','Stats'],['events','Timeline'],['odds','Odds'],['insight','Prediction'],['table','Table']];
-const FM_PALETTE = ['#C8102E','#1D4ED8','#15803D','#D97706','#7C3AED','#0E7490','#BE185D','#4D7C0F','#B45309','#1E3A8A','#9F1239','#047857'];
+const FM_PALETTE = ['#C8102E','#1D4ED8','#15803D','#D97706','#0F766E','#0E7490','#BE185D','#4D7C0F','#B45309','#1E3A8A','#9F1239','#047857'];
 const fmColor = name => { let h = 0; for (const c of name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0; return FM_PALETTE[h % FM_PALETTE.length].slice(1) };
 const abbrOf = n => { const w = (n || '').replace(/\b(FC|SC|F\.C\.)\b/g, '').split(/[\s-]+/).filter(Boolean); const a = w.map(x => x[0]).join('').toUpperCase(); return (a.length >= 3 ? a : (a + (w[w.length - 1] || '').slice(1).toUpperCase())).slice(0, 3) };
 function normFM(f, slug){
