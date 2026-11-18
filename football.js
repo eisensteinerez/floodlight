@@ -301,8 +301,13 @@ function fbHero(e, back){
       ${[e.away, e.home].map(t => `<tr><td class="t">${esc(t.abbr)}</td>${t.lines.map(x => `<td>${esc(x)}</td>`).join('')}<td class="pts">${esc(t.score)}</td></tr>`).join('')}</tbody></table></div>` : ''}
     <div class="meta-row">${e.venue ? `<span>${esc(e.venue)}${e.city ? ', ' + esc(e.city) : ''}</span>` : ''}${e.tv ? `<span>TV: ${esc(e.tv)}</span>` : ''}${e.espnOdds?.details ? `<span>Line: ${esc(e.espnOdds.details)}${e.espnOdds.ou ? ` · O/U ${esc(e.espnOdds.ou)}` : ''}</span>` : ''}</div></div>`;
 }
-function wpChart(e, wp){
+function wpChart(e, wp, sum){
   if (!wp?.length) return '';
+  // the creative timeline (statfx.js): momentum strip, hover for every play; falls back to the plain line below
+  if (window.flViz) { const W = sum ? flViz.wp.fromEspn(sum) : null;
+    const pts = W ? W.pts : wp.map((p, i) => ({ t: i / (wp.length - 1), p: +p.homeWinPercentage }));
+    const out = flViz.wp(pts, { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac, id: String(e.id).replace(/\W/g, ''), marks: W?.marks || [.25, .5, .75], live: e.state === 'in' });
+    if (out) return out }
   const W = 600, H = 150, xs = i => i / (wp.length - 1) * W, ys = p => H - p * H;
   const path = wp.map((p, i) => `${i ? 'L' : 'M'}${xs(i).toFixed(1)} ${ys(p.homeWinPercentage).toFixed(1)}`).join(' ');
   const last = wp[wp.length - 1].homeWinPercentage;
@@ -327,7 +332,7 @@ function fbPane(v){
     const leaders = (d.leaders || []).map(t => { const side = t.team?.id === e.home.id ? e.home : e.away;
       return `<div><div class="head"><img src="${esc(side.logo)}" alt="" style="width:18px;height:18px">${esc(side.name)}</div>${(t.leaders || []).map(c => { const a = c.leaders?.[0]; if (!a) return '';
         return `<button class="ldr fbl" data-fbplayer="${esc(a.athlete?.id)}" data-fbl="${esc(e.lg)}"><span class="cat">${esc(c.displayName || c.name)}</span><img class="face-s espn-shot" src="${esc(fbShot(a.athlete, e.lg))}" alt="" onerror="this.onerror=null;this.src=SIL"><span class="nm"><span>${esc(a.athlete?.displayName || '')}</span><small>${esc(a.displayValue || '')}</small></span></button>` }).join('')}</div>` }).join('');
-    return wpChart(e, d.winprobability) + (leaders ? `<div class="sub-h"><h5>Game leaders</h5></div><div class="bench fb-leaders">${leaders}</div>` : '')
+    return wpChart(e, d.winprobability, d) + (window.flViz ? flViz.gameStory(e, { ...d, winprobability: null }, { periodName: i => i < 4 ? 'Q' + (i + 1) : 'OT' }) : '') + (leaders ? `<div class="sub-h"><h5>Game leaders</h5></div><div class="bench fb-leaders">${leaders}</div>` : '')
       + `<div class="sub-h"><h5>Scoring plays</h5><small>${sp.length}</small></div>${sp.length ? `<ol class="plays">${sp.map(p => { const t = p.team?.id === e.home.id ? e.home : e.away;
         return `<li><img src="${esc(t.logo)}" alt=""><span class="pq">Q${p.period?.number}<br>${esc(p.clock?.displayValue || '')}</span><span class="ptx"><strong>${esc(p.type?.abbreviation || p.type?.text || '')}</strong> ${esc(p.text)}</span><b class="num">${esc(p.awayScore)}–${esc(p.homeScore)}</b></li>` }).join('')}</ol>` : `<div class="note">${e.state === 'pre' ? 'Scoring plays appear here once the game starts.' : 'No scoring plays yet.'}</div>`}`;
   }

@@ -444,7 +444,7 @@ function hkPane(v){
   if (v.tab === 'box') return e.src === 'espn' ? hkEspnBox(v) : hkFsBox(v);
   if (v.tab === 'team') return hkTeamStatsPane(v);
   if (v.tab === 'rink') { if (!v.sum) return hkLoading(); return flFx.rink(flFx.rink.fromEspn(v.sum, e.home.id), { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac }) || `<div class="note">Shot locations are not available for this game yet.</div>` }
-  if (v.tab === 'summary') return e.src === 'espn' ? hkEspnSummary(v) : hkFsSummary(v);
+  if (v.tab === 'summary') return e.src === 'espn' ? (v.sum && window.flViz ? flViz.gameStory(e, v.sum, { periodName: i => i < 3 ? 'P' + (i + 1) : i === 3 ? 'OT' : 'SO' }) : '') + hkEspnSummary(v) : hkFsSummary(v);
   return '';
 }
 // goals and penalties, period by period

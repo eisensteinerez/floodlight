@@ -853,3 +853,66 @@ button.bx-hero:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* tennis: tournaments below the fold are laid out only when scrolled near (a busy day has 60+ tournaments) */
 #tn .group{content-visibility:auto;contain-intrinsic-size:auto 620px}
+
+/* ---------- creative statistics (statfx.js) ---------- */
+/* mirrored comparison rows: bars grow out from the centre, the bigger side glows */
+.stat.vz-m{grid-template-columns:minmax(58px,auto) 1fr minmax(58px,auto);gap:12px;padding:6px 8px;margin:0 -8px 4px;border-radius:12px;transition:background .15s}
+.stat.vz-m:hover{background:color-mix(in oklab,var(--surface-2) 70%,transparent)}
+.stat.vz-m .v{display:flex;align-items:center;gap:6px;font:700 20px/1 var(--f-display);color:var(--muted);letter-spacing:.01em}
+.stat.vz-m .v:last-child{justify-content:flex-end}
+.stat.vz-ll > .v:first-child,.stat.vz-lr > .v:last-child{color:var(--fg)}
+.stat.vz-m .lbl{font:600 11px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.stat.vz-m .bars{gap:3px}
+.stat.vz-m .bars span{height:8px;background:color-mix(in oklab,var(--surface-2) 80%,transparent)}
+.stat.vz-m .bars i{opacity:.45;transition:width .7s var(--ease),opacity .3s,box-shadow .3s}
+.stat.vz-ll .bars span:first-child i,.stat.vz-lr .bars span:last-child i{opacity:1;box-shadow:0 0 12px 1px color-mix(in oklab,currentColor 0%,transparent)}
+.stat.vz-ll .bars span:first-child,.stat.vz-lr .bars span:last-child{box-shadow:0 0 14px -2px color-mix(in oklab,var(--accent) 45%,transparent)}
+.fx-tab .stat.vz-m .bars i{animation:vzGrow .8s var(--ease) both}
+@keyframes vzGrow{from{width:0!important}}
+.vz-ring circle{fill:none;stroke:var(--surface-2);stroke-width:4}.vz-ring circle.a{stroke:var(--c);stroke-linecap:round;animation:vzRing 1s var(--ease) both}
+.vz-ring text{font:700 11px/1 var(--f-body);fill:var(--fg);text-anchor:middle}
+.stat.vz-m .vz-ring{width:20px;height:20px}.stat.vz-m .vz-ring circle{stroke-width:3.4}
+@keyframes vzRing{from{stroke-dasharray:0 200}}
+.vz-spark{overflow:visible;vertical-align:middle}.vz-spark path{fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linejoin:round}.vz-spark circle{fill:var(--accent)}
+.vz-pct{display:grid;grid-template-columns:minmax(90px,1fr) 2fr 34px auto;align-items:center;gap:10px;padding:6px 0;font-size:13px}
+.vz-pct-t{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.vz-pct-t i{display:block;height:100%;width:var(--p);border-radius:99px;background:hsl(var(--h) 75% 52%);box-shadow:0 0 10px hsl(var(--h) 75% 52% / .5);animation:vzGrow .9s var(--ease) both}
+.vz-pct b{font:700 18px/1 var(--f-display);text-align:right}.vz-pct small{font:700 10px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:hsl(var(--h) 70% 60%)}
+/* win probability */
+.vz-wp-box{position:relative;height:170px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,color-mix(in oklab,var(--hc) 10%,transparent),transparent 45%,transparent 55%,color-mix(in oklab,var(--ac) 10%,transparent))}
+.vz-wp-box svg{width:100%;height:100%;display:block}
+.vz-wp-lab{position:absolute;left:10px;font:700 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);z-index:1}.vz-wp-lab.top{top:10px}.vz-wp-lab.bot{bottom:10px}
+.vz-mid{stroke:var(--line-2);stroke-dasharray:4 4}.vz-mark{stroke:var(--line);stroke-width:1}
+.vz-area{opacity:.32}.vz-area.h{fill:var(--hc)}.vz-area.a{fill:var(--ac)}
+.vz-line{fill:none;stroke:var(--fg);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.vz-line.draw{stroke-dasharray:1;stroke-dashoffset:1;animation:vzDraw 1.4s var(--ease) forwards}
+@keyframes vzDraw{to{stroke-dashoffset:0}}
+.vz-hit rect{fill:transparent}.vz-hit rect:hover{fill:color-mix(in oklab,var(--fg) 7%,transparent)}
+.vz-mom{display:flex;align-items:center;gap:2px;height:26px;margin-top:8px}
+.vz-mom i{flex:1;height:calc(4px + var(--v) * 22px);border-radius:3px;opacity:calc(.35 + var(--v) * .65)}
+.vz-wp-k{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12px;color:var(--muted)}
+.vz-wp-k span{display:inline-flex;align-items:center;gap:6px}.vz-wp-k i{width:10px;height:10px;border-radius:3px}.vz-wp-k b{color:var(--fg);font:700 14px/1 var(--f-display)}
+/* scoring by period */
+.vz-cols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:8px;align-items:end;height:150px}
+.vz-col{display:grid;grid-template-rows:1fr auto;height:100%;text-align:center}
+.vz-col small{font:700 11px/1 var(--f-body);color:var(--muted);letter-spacing:.06em;margin-top:6px}
+.vz-bars{display:flex;align-items:flex-end;justify-content:center;gap:4px;height:100%}
+.vz-bars i{position:relative;width:min(26px,40%);height:max(3px,var(--h));border-radius:7px 7px 3px 3px;background:var(--c);opacity:.4;transform-origin:bottom;animation:vzCol .7s var(--ease) both;animation-delay:calc(var(--i) * 60ms)}
+.vz-bars i.win{opacity:1;box-shadow:0 0 16px -2px var(--c)}
+.vz-bars b{position:absolute;bottom:calc(100% + 4px);left:50%;translate:-50% 0;font:700 13px/1 var(--f-display);color:var(--fg)}
+@keyframes vzCol{from{transform:scaleY(0)}}
+/* story cards */
+.vz-story-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.vz-story{position:relative;overflow:hidden;padding:16px 16px 14px;border-radius:14px;border:1px solid var(--line);background:radial-gradient(120% 100% at 100% 0%,color-mix(in oklab,var(--c) 26%,transparent),transparent 60%),var(--surface-2);min-height:150px;transition:transform .2s var(--ease),box-shadow .2s}
+.vz-story:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.vz-story-face{position:absolute;right:-8px;bottom:-6px;width:96px;height:96px;object-fit:cover;object-position:50% 10%;opacity:.9;-webkit-mask:linear-gradient(180deg,#000 60%,transparent);mask:linear-gradient(180deg,#000 60%,transparent)}
+.vz-story-n{position:relative;display:block;font:700 54px/.9 var(--f-display);color:var(--fg)}.vz-story-n small{font:700 16px/1 var(--f-display);color:var(--c);margin-left:4px;letter-spacing:.04em}
+.vz-story strong{position:relative;display:block;margin-top:8px;font:700 16px/1.05 var(--f-display);text-transform:uppercase;max-width:70%}
+.vz-story p{position:relative;margin:4px 0 0;font-size:12px;color:var(--muted);max-width:68%}
+.vz-share{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 11px/1 var(--f-body);transition:color .15s,border-color .15s,transform .15s}
+.vz-share:hover{color:var(--fg);border-color:var(--line-2);transform:translateY(-1px)}
+.vz-story .vz-share{position:absolute;top:10px;right:10px;padding:6px;opacity:0;transition:opacity .2s}.vz-story:hover .vz-share,.vz-story .vz-share:focus-visible{opacity:1}
+.sfx-h .vz-share{margin-left:auto}.sfx-h:has(.vz-share) small{margin-left:auto}
+.vz-block{margin-bottom:8px}
+@media (prefers-reduced-motion:reduce){.vz-line.draw{animation:none;stroke-dasharray:none}.vz-bars i,.vz-pct-t i,.stat.vz-m .bars i{animation:none}}
+@media (max-width:520px){.vz-cols{gap:4px}.vz-bars i{width:44%}.vz-story-n{font-size:44px}.stat.vz-m .v{font-size:17px}}

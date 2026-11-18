@@ -378,7 +378,7 @@ function bbPane(v){
   if (v.tab === 'odds') return bbOddsPane(v);
   if (v.tab === 'stand') { if (!S.bb.stand[e.lg]) bbStandings(e.lg).then(() => S.stack.includes(v) && renderSheet()); return bbStandingsHTML(e.lg, [e.home.id, e.away.id]) }
   if (v.tab === 'h2h') return bbH2HPane(v);
-  if (v.tab === 'box') return e.src === 'espn' ? bbEspnBox(v) : bbFsBox(v);
+  if (v.tab === 'box') return e.src === 'espn' ? (e.state !== 'pre' && v.sum && window.flViz ? flViz.gameStory(e, v.sum, { periodName: (i, n) => i < (e.lg === 'cbb' || e.lg === 'wcbb' ? 2 : 4) ? (e.lg === 'cbb' ? 'H' : 'Q') + (i + 1) : 'OT' }) : '') + bbEspnBox(v) : bbFsBox(v);
   if (v.tab === 'team') return bbTeamStatsPane(v);
   if (v.tab === 'shots') { if (!v.sum) return bbLoading(); return flFx.court(flFx.court.fromEspn(v.sum, e.home.id), { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac }) || `<div class="note">Shot locations are not available for this game yet.</div>` }
   return '';

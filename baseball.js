@@ -423,6 +423,9 @@ function bsSummary(v){
   const dec = f.liveData?.decisions;
   if (dec?.winner) h += `<div class="tiles bs-dec">${[['Win', dec.winner], ['Loss', dec.loser], ['Save', dec.save]].filter(x => x[1]).map(([k, p]) => `<div class="tile"><img class="face-s" src="${esc(bsShot(p.id, BSL[e.lg].sport === 1))}" alt="" ${bsImgErr}><b>${bsPlayerLink(p, e)}</b><span>${k}</span></div>`).join('')}</div>`;
   if (v.wp?.length > 2) h += wpChart(e, v.wp.map(p => ({ homeWinPercentage: (p.homeTeamWinProbability ?? 50) / 100 })));
+  // runs inning by inning, as paired columns
+  const inn = f.liveData?.linescore?.innings || [];
+  if (inn.length && window.flViz) h += flViz.periods([{ name: e.away.abbr || e.away.name, c: e.ac, lines: inn.map(i => i.away?.runs ?? '') }, { name: e.home.abbr || e.home.name, c: e.hc, lines: inn.map(i => i.home?.runs ?? '') }], inn.map(i => i.ordinalNum || i.num), { title: 'Runs by inning' });
   const top = f.liveData?.boxscore?.topPerformers || [];
   if (top.length) h += `<div class="sub-h"><h5>Top performers</h5></div><div class="bench fb-leaders"><div>${top.map(t => { const p = t.player?.person, s = t.player?.stats;
     const line = t.type === 'pitcher' ? s?.pitching?.summary : s?.batting?.summary;
