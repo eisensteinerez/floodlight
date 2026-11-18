@@ -1,9 +1,13 @@
 /* Floodlight · the finishing layer: the design sheet gets the last word, and cards light up under the pointer. */
 document.head.appendChild(document.getElementById('flTheme'));
-document.addEventListener('pointermove', ev => {
-  const c = ev.target.closest?.('.m,.spot,.rs-tile,.tile,.ml,.rs-game,.fx-card,.flg-grid article'); if (!c) return;
-  const b = c.getBoundingClientRect(); c.style.setProperty('--mx', ev.clientX - b.left + 'px'); c.style.setProperty('--my', ev.clientY - b.top + 'px');
-}, { passive: true });
+{ // at most once a frame, and only on devices with a mouse
+  let pend = null, raf = 0;
+  if (matchMedia('(hover:hover) and (pointer:fine)').matches) document.addEventListener('pointermove', ev => {
+    pend = ev; if (raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; const e = pend, c = e.target.closest?.('.m,.spot,.rs-tile,.tile,.ml,.rs-game,.fx-card,.flg-grid article'); if (!c) return;
+      const b = c.getBoundingClientRect(); c.style.setProperty('--mx', e.clientX - b.left + 'px'); c.style.setProperty('--my', e.clientY - b.top + 'px') });
+  }, { passive: true });
+}
 /* a soft pool of light follows the mouse across the page (desktop only) */
 if (matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches) {
   const light = document.createElement('div'); light.id = 'flLight'; light.setAttribute('aria-hidden', 'true'); document.body.prepend(light);
@@ -42,3 +46,11 @@ if (matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(pref
   document.addEventListener('pointerdown', ev => { if (!ev.target.closest?.('[data-tip]')) hide() });
   addEventListener('scroll', hide, { passive: true, capture: true });
 })();
+
+/* a ring of light where you press, on anything you can press */
+document.addEventListener('pointerdown', ev => {
+  const el = ev.target.closest?.('.m,.btn,.tab,.qf,.dt,.pod-c,.lt-r,.ob,.oc,.mk-row,.mk-head,.spot,.pulse-m,.rail-i,.seg button,.prow,.ldr,.fx,.pred-card');
+  if (!el || matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const r = document.createElement('span'); r.className = 'fx-rip'; r.style.left = ev.clientX + 'px'; r.style.top = ev.clientY + 'px';
+  document.body.appendChild(r); r.addEventListener('animationend', () => r.remove());
+}, { passive: true });

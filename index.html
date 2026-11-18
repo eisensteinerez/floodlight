@@ -1140,9 +1140,10 @@ document.addEventListener('error', ev => {
   <section id="list" aria-label="Fixtures">
     <div class="datebar"><button class="dnav" data-act="dprev" aria-label="Previous day">‹</button>
       <button class="dtoggle" id="dateToggle" data-act="dtoggle" aria-expanded="false" aria-controls="datePanel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span id="dateLabel">Today</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg></button>
-      <button class="dnav" data-act="dnext" aria-label="Next day">›</button></div>
-    <div class="datepanel" id="datePanel" hidden><div class="dates" id="dates" role="group" aria-label="Choose a day"></div>
-      <label class="cal-pick" title="Open a calendar to jump to any date back to 2001"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><b>Pick a date</b><input type="date" id="datePick" min="2001-01-01" aria-label="Pick any date"></label></div>
+      <div class="drail" id="drail" role="group" aria-label="Choose a day"></div>
+      <button class="dnav" data-act="dnext" aria-label="Next day">›</button>
+      <label class="cal-pick drail-cal" title="Open a calendar to jump to any date back to 2001"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><b id="drailMonth">Pick a date</b><input type="date" id="datePick" min="2001-01-01" aria-label="Pick any date"></label></div>
+    <div class="datepanel" id="datePanel" hidden><div class="dates" id="dates" role="group" aria-label="Choose a day"></div></div>
     <div class="quick" id="quick" role="toolbar" aria-label="Quick filters"></div>
     <div class="livebar"><h2 id="listTitle">Today</h2><span class="count" id="listCount"></span></div>
     <div id="groups"><div class="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>
@@ -1487,6 +1488,15 @@ function renderDates(){
     const off = offOf(d), sel = sameDay(d, S.date);
     out.push(`<button class="date${sel?' on':''}${off===0?' today':''}" data-date="${isoDay(d)}" aria-pressed="${sel}" aria-label="${esc((off===0?'Today, ':'') + d.toLocaleDateString([], {weekday:'long', day:'numeric', month:'long', year:'numeric'}))}"><small>${off===0 ? 'Today' : esc(d.toLocaleDateString([], {weekday:'short'}))}</small><strong>${d.getDate()}</strong></button>`) }
   $('dates').innerHTML = out.join('');
+  // the day rail: a week centred on the chosen day, sliding the way you moved
+  const rail = $('drail'); if (rail) {
+    const dir = S.railAt == null ? 0 : Math.sign(new Date(S.date.toDateString()) - S.railAt); S.railAt = +new Date(S.date.toDateString());
+    const tiles = []; for (let i = -3; i <= 3; i++) { const d = new Date(S.date); d.setDate(S.date.getDate() + i); const off = offOf(d);
+      tiles.push(`<button class="dt${i === 0 ? ' on' : ''}${off === 0 ? ' today' : ''}${d.getDay() === 0 || d.getDay() === 6 ? ' wk' : ''}" style="--d:${Math.abs(i)};--i:${i + 3}" data-date="${isoDay(d)}" aria-pressed="${i === 0}" aria-label="${esc((off === 0 ? 'Today, ' : '') + d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}">
+        <small>${off === 0 ? 'Today' : off === -1 ? 'Yest.' : off === 1 ? 'Tmrw' : esc(d.toLocaleDateString([], { weekday: 'short' }))}</small><strong class="num">${d.getDate()}</strong><em>${esc(d.toLocaleDateString([], { month: 'short' }))}</em></button>`) }
+    rail.className = 'drail' + (dir > 0 ? ' fwd' : dir < 0 ? ' back' : ''); rail.innerHTML = tiles.join('');
+    const mo = $('drailMonth'); if (mo) mo.textContent = S.date.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  }
   const off = offOf(S.date), yr = S.date.getFullYear() !== today.getFullYear();
   const long = S.date.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short', ...(yr ? {year:'numeric'} : {})});
   $('dateLabel').textContent = off === 0 ? `Today · ${long}` : off === -1 ? `Yesterday · ${long}` : off === 1 ? `Tomorrow · ${long}` : long;
@@ -1629,8 +1639,16 @@ function renderSheet(){
     <div class="tabs" role="tablist">${TB.map(([k,l])=>`<button class="tab${S.tab===k?' on':''}" role="tab" aria-selected="${S.tab===k}" data-tab="${k}" tabindex="${S.tab===k?0:-1}" aria-controls="pane">${l}</button>`).join('')}</div>
     <div class="pane" id="pane" role="tabpanel">${pane(e)}</div></div>`;
   sheet.querySelector('.sheet-body').scrollTop = scroll;
+  fxEnter(sheet, 'm' + e.id, S.tab);
+  wiPaint();
   if (S.focusTab) { sheet.querySelector('.tab.on')?.focus(); S.focusTab = false }
   if (S.tab === 'table') loadTable(e);
+}
+// Play the opening motion once per page and the tab motion once per tab, never on the quiet live refreshes in between.
+function fxEnter(sheet, page, tab){
+  const body = sheet.querySelector('.sheet-body'); if (!body) return;
+  if (S.fxPage !== page) body.classList.add('fx-open', 'fx-tab'); else if (S.fxTab !== tab) body.classList.add('fx-tab');
+  S.fxPage = page; S.fxTab = tab;
 }
 function tabsHTML(list, cur){ return `<div class="tabs" role="tablist">${list.map(([k,l])=>`<button class="tab${cur===k?' on':''}" role="tab" aria-selected="${cur===k}" data-tab="${k}" tabindex="${cur===k?0:-1}" aria-controls="pane">${l}</button>`).join('')}</div>` }
 function pane(e){
@@ -2337,6 +2355,7 @@ function renderInfo(v){
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${heroHTML}${tabs.length ? tabsHTML(tabs, v.tab) : ''}<div class="pane" id="pane" ${tabs.length ? 'role="tabpanel"' : ''} style="--tc:${esc(v.color || 'var(--accent)')}">${body}</div></div>`;
   stageDress(sheet, v);
+  fxEnter(sheet, v.type + v.id, v.tab);
   sheet.querySelector('.sheet-body').scrollTop = scroll;
   if (S.focusTab) { sheet.querySelector('.tab.on')?.focus(); S.focusTab = false }
   if (v.type === 'team' && v.tab === 'table' && v.data && !v.data.error) loadTeamTable(v);
@@ -2655,6 +2674,7 @@ function act(a, el, ev){
   if (a === 'slip') { const sl = S.slip || (S.slip = { id: S.sel, legs: [], stake: 10 }), k = el.dataset.k, i = sl.legs.findIndex(l => l.k === k);
     if (i >= 0) sl.legs.splice(i, 1); else { const fam = k.startsWith('ml') ? 'ml' : k.startsWith('t') ? 't' : k.slice(0, 2); sl.legs = sl.legs.filter(l => !(fam === 'ml' ? l.k.startsWith('ml') : fam === 't' ? l.k.startsWith('t') : l.k.startsWith(fam))); sl.legs.push({ k, label: el.dataset.label, p: +el.dataset.p }) }
     return renderSheet() }
+  if (a === 'wireset') { S.wi = null; return wiPaint() }
   if (a === 'slipclear') { if (S.slip) S.slip.legs = []; return renderSheet() }
   if (a === 'slipstake') { if (S.slip) S.slip.stake = +el.dataset.to; return renderSheet() }
   if (a === 'lgsort') { v.sort = el.dataset.to; return renderSheet() }
@@ -4457,6 +4477,37 @@ function predDepth(e, P){
     <div class="pd-2"><div><div class="sub-h"><h5>Total goals</h5></div>${totals}</div><div><div class="sub-h"><h5>Winning margin</h5></div>${margins}</div></div>
     <div class="sub-h"><h5>Markets</h5><small>Chance · fair price</small></div>${markets}`;
 }
+// What if: slide either attack up or down and the chances, the likely score and the goal markets follow.
+function wiCalc(lh, la){
+  let h = 0, d = 0, a = 0, o25 = 0, btts = 0, best = [0, 0, 0];
+  for (let i = 0; i <= 9; i++) for (let j = 0; j <= 9; j++) {
+    const tau = !i && !j ? 1 - lh * la * DC_RHO : !i && j === 1 ? 1 + lh * DC_RHO : i === 1 && !j ? 1 + la * DC_RHO : i === 1 && j === 1 ? 1 - DC_RHO : 1, p = pois(i, lh) * pois(j, la) * Math.max(.2, tau);
+    if (i > j) h += p; else if (i === j) d += p; else a += p; if (i + j > 2) o25 += p; if (i && j) btts += p; if (p > best[2]) best = [i, j, p] }
+  const t = h + d + a; return { home: h / t, draw: d / t, away: a / t, o25: o25 / t, btts: btts / t, score: best };
+}
+function whatIfHTML(e, P){
+  const w = S.wi?.id === e.id ? S.wi : { h: 0, a: 0 };
+  const sl = (k, name, col) => `<label class="wi-s" style="--c:${col}"><span>${esc(name)} attack</span><input type="range" min="-50" max="50" step="5" value="${w[k]}" data-wi="${k}" aria-label="${esc(name)} attack, percent change"><b class="num" data-wiv="${k}">${w[k] > 0 ? '+' : ''}${w[k]}%</b></label>`;
+  return `<div class="wi" id="wi" data-id="${esc(e.id)}" data-lh="${P.lh}" data-la="${P.la}" data-f="${P.final.home},${P.final.draw},${P.final.away}" style="--hc:${e.hc};--ac:${e.ac}">
+    <div class="wi-h"><h5>What if</h5><small>Slide an attack up or down and watch the match tilt</small><button class="linkbtn" data-act="wireset">Reset</button></div>
+    ${sl('h', e.home.abbr || e.home.name, e.hc)}${sl('a', e.away.abbr || e.away.name, e.ac)}
+    <div class="pbar wi-bar" aria-hidden="true"><i data-wib="home" style="background:${e.hc}"><span></span></i><i data-wib="draw" style="background:var(--draw)"><span></span></i><i data-wib="away" style="background:${e.ac}"><span></span></i></div>
+    <div class="wi-out" aria-live="polite"><div><b class="num" data-wio="xg"></b><span>Expected goals</span></div><div><b class="num" data-wio="score"></b><span>Likeliest score</span></div><div><b class="num" data-wio="o25"></b><span>Over 2.5</span></div><div><b class="num" data-wio="btts"></b><span>Both score</span></div></div></div>`;
+}
+function wiPaint(){
+  const el = document.getElementById('wi'); if (!el) return;
+  const w = S.wi?.id === el.dataset.id ? S.wi : { h: 0, a: 0 }, lh0 = +el.dataset.lh, la0 = +el.dataset.la, f = el.dataset.f.split(',').map(Number);
+  const lh = lh0 * (1 + w.h / 100), la = la0 * (1 + w.a / 100), base = wiCalc(lh0, la0), now = wiCalc(lh, la);
+  // keep the headline numbers (which carry the market and the lineups) as the starting point, and move them by how much the goal model moved
+  const raw = ['home', 'draw', 'away'].map((k, i) => f[i] * now[k] / Math.max(1e-6, base[k])), t = raw.reduce((a, b) => a + b, 0);
+  ['home', 'draw', 'away'].forEach((k, i) => { const seg = el.querySelector(`[data-wib="${k}"]`), p = raw[i] / t; seg.style.flexGrow = p; seg.firstChild.textContent = pct(p) + '%' });
+  const set = (k, v) => { el.querySelector(`[data-wio="${k}"]`).textContent = v };
+  set('xg', `${lh.toFixed(2)}–${la.toFixed(2)}`); set('score', `${now.score[0]}–${now.score[1]}`); set('o25', pct(now.o25) + '%'); set('btts', pct(now.btts) + '%');
+  for (const k of ['h', 'a']) { el.querySelector(`[data-wiv="${k}"]`).textContent = (w[k] > 0 ? '+' : '') + w[k] + '%'; const inp = el.querySelector(`[data-wi="${k}"]`); if (document.activeElement !== inp) inp.value = w[k]; inp.style.setProperty('--v', (w[k] + 50) + '%') }
+  el.classList.toggle('moved', !!(w.h || w.a));
+}
+document.addEventListener('input', ev => { const k = ev.target.dataset?.wi; if (!k) return; const el = document.getElementById('wi'); if (!el) return;
+  if (S.wi?.id !== el.dataset.id) S.wi = { id: el.dataset.id, h: 0, a: 0 }; S.wi[k] = +ev.target.value; wiPaint() });
 function predEdge(e, P){
   let edge = '';
   if (P.market) {
@@ -4497,7 +4548,7 @@ function insightPane(e){
         return `<div><span>${esc(k === 'draw' ? 'Draw' : e[k].name)}</span><b class="num">${pct(P.model[k])}%</b><b class="num">${pct(P.market[k])}%</b><em class="num ${g > .03 ? 'up' : g < -.03 ? 'down' : ''}">${g > 0 ? '+' : ''}${pct(g)}</em></div>` }).join('')}
         <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div></div>${predEdge(e, P)}` : ''}
     <div class="sub-h"><h5>Why</h5></div><ul class="why">${reasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
-    ${predDepth(e, P)}`;
+    ${whatIfHTML(e, P)}${predDepth(e, P)}`;
   html = html.replace('<div class="sub-h"><h5>Why</h5></div>', teamNewsBlock(e, P) + propsBlock(e) + (S.serverOK !== false ? fcBlock(e) : timelineBlock(e)) + '<div class="sub-h"><h5>Why</h5></div>');
   html += deepResearchBlock(e, P);
   return html + RG;
