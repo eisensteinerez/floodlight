@@ -59,6 +59,10 @@ ranking for 15 minutes, game prices for 10 minutes) so a busy channel doesn't mu
 7. Add the bot to your server: **OAuth2 > URL Generator**, tick `applications.commands` and `bot`, open the link it
    makes and pick your server.
 
+Members only (optional): set `DISCORD_MEMBER_ROLES` to one or more role ids (comma separated) and only people with
+one of those roles can use the commands. Server admins always can, and `/help` stays open to everyone. To copy a role
+id, turn on Developer Mode (Discord settings > Advanced), then Server Settings > Roles > right-click the role > Copy Role ID.
+
 Scheduled posts (optional): in your Discord channel, **Edit Channel > Integrations > Webhooks > New Webhook**, copy its
 URL into `DISCORD_WEBHOOK_URL`. Every day at the hours in `DISCORD_DIGEST_HOURS` (UTC, comma separated, default 14)
 the bot posts the top props and predictions for the sports in `DISCORD_DIGEST_SPORTS` (default `nba,nfl,nhl,mlb,soccer`;

@@ -22,6 +22,7 @@ Environment:
   DISCORD_BOT_TOKEN       the bot token; with it the server registers the commands itself when they change
                           (or run python3 discord_bot.py register)
   DISCORD_GUILD_ID        optional: register the commands to one server, where they show up instantly
+  DISCORD_MEMBER_ROLES    optional: role ids allowed to use the commands (server admins always can)
   DISCORD_WEBHOOK_URL     optional: channel webhook for scheduled posts
   DISCORD_DIGEST_HOURS    optional: UTC hours for scheduled posts, default "14"
   DISCORD_DIGEST_SPORTS   optional: sports in the scheduled posts, default "nba,nfl,nhl,mlb,soccer"
@@ -1028,6 +1029,8 @@ def handle(body, headers):
     if t != 2:
         return 200, {"type": 4, "data": {"content": "Not supported.", "flags": 64}}
     name, opts = data.get("name"), options(data)
+    if name != "help" and not is_member(it):
+        return 200, {"type": 4, "data": {"flags": 64, "content": "Floodlight's commands are for members. Ask a server admin for the member role."}}
     if name == "help":
         return 200, {"type": 4, "data": clean(cmd_help(opts))}
 
@@ -1039,6 +1042,21 @@ def handle(body, headers):
             print(f"discord: couldn't send the reply: {e}", file=sys.stderr)
     threading.Thread(target=work, daemon=True, name=f"discord-{name}").start()
     return 200, {"type": 5}   # "Floodlight is thinking..."; the reply is edited in when ready
+
+
+def is_member(it):
+    """DISCORD_MEMBER_ROLES (role ids, comma separated) limits the commands to people with one of those roles.
+    Server admins always get in; with the variable unset, everyone does."""
+    want = set(re.findall(r"\d{5,25}", os.environ.get("DISCORD_MEMBER_ROLES", "")))
+    if not want:
+        return True
+    m = it.get("member") or {}
+    try:
+        if int(m.get("permissions") or 0) & 0x8:   # Administrator
+            return True
+    except ValueError:
+        pass
+    return bool(want & set(m.get("roles") or []))
 
 
 def autocomplete(data):
