@@ -678,12 +678,13 @@ function bbPlayerPane(v){
         const rad = items.length >= 3 ? radarSVG({ items }, v.color || '#3D6FD9') : '';
         const strong = rows.filter(x => x.r.pc >= 80 && x.r.qualified).sort((a, b) => b.r.pc - a.r.pc).slice(0, 5), weak = rows.filter(x => x.r.pc <= 25 && x.r.qualified).sort((a, b) => a.r.pc - b.r.pc).slice(0, 4);
         const chip = x => `<li><span>${esc(x.label)}</span><b class="num">${bbFix(x.r.val, /%/.test(x.ab) ? 1 : x.ab === 'DD2' ? 0 : 1)}</b><small>${bbOrd(x.r.rank)} of ${x.r.n}</small></li>`;
-        h += `<div class="bb-viz">${rad ? `<div class="radar"><h5>Compared with the league</h5>${rad}<small>Percentile among ${esc(l.name)} players with enough games (100 = best).</small></div>` : ''}
-          <div class="bb-sw">${strong.length ? `<h5>Best at</h5><ul class="bb-chips hi">${strong.map(chip).join('')}</ul>` : ''}${weak.length ? `<h5>Below average</h5><ul class="bb-chips lo">${weak.map(chip).join('')}</ul>` : ''}
-          ${rows[0] && !rows[0].r.qualified ? `<p class="bb-q">Not enough games yet to be ranked with the regulars, so these are rough.</p>` : ''}</div></div>
-          <div class="sub-h"><h5>Per game and league rank</h5><small>${esc(last.season?.displayName || '')}${me ? ` · ${me.gp} games` : ''}</small></div>
-          <div class="bb-rh"><span>Stat</span><span>Value</span><span>Rank</span><span>Percentile</span></div>${rows.map(x => { const pc = x.r.pc, cls = pc >= 70 ? 'hi' : pc < 30 ? 'lo' : '';
-            return `<div class="bb-rr"><span>${esc(x.label)}</span><b class="num">${bbFix(x.r.val, x.ab === 'DD2' ? 0 : 1)}</b><span class="num">${bbOrd(x.r.rank)}<small>/${x.r.n}</small></span><span class="bb-pc"><span class="ps-bar"><i class="${cls}" style="width:${Math.max(2, pc)}%"></i></span><span class="num ${cls}">${pc}</span></span></div>` }).join('')}`;
+        // last 10 games per stat, from the game log, for the sparklines
+        const gl = v.log, lab = gl?.labels || [], evs = (gl?.seasonTypes || []).flatMap(st => st.categories.filter(c => c.type === 'event').flatMap(c => c.events || [])).slice(0, 10).reverse();
+        const col = { PTS: 'PTS', REB: 'REB', AST: 'AST', STL: 'STL', BLK: 'BLK', TO: 'TO', '3PM': '3PT', 'FG%': 'FG%', 'FT%': 'FT%', MIN: 'MIN', PF: 'PF' };
+        const sparkOf = ab => { const k = lab.indexOf(col[ab]); if (k < 0) return null; return evs.map(e => parseFloat(String(e.stats?.[k] ?? '').split('-')[0])).filter(x => isFinite(x)) };
+        h += flViz.playerBoard(rows.map(x => ({ label: x.label, short: x.ab, val: bbFix(x.r.val, /%/.test(x.ab) ? 1 : x.ab === 'DD2' ? 0 : 1), rank: x.r.rank, n: x.r.n, pc: x.r.pc, spark: sparkOf(x.ab) })), {
+          color: v.color || '#3D6FD9', peers: `${l.name} players`, season: last.season?.displayName || '', name: (v.bio?.displayName || '').split(' ').slice(-1)[0],
+          radar: ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%'], note: rows[0] && !rows[0].r.qualified ? 'Not enough games yet to rank with the regulars, so treat these as rough.' : '' });
       }
     }
     // full season table: every row ESPN returns (regular season by year)

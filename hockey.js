@@ -684,7 +684,16 @@ function hkPlayerPane(v){
   if (v.tab === 'stats') {
     const cats = (v.stats?.categories || []).filter(c => c.statistics?.length);
     if (!cats.length) return `<div class="note">No stats for this player yet.</div>`;
-    return cats.map(c => `<div class="sub-h"><h5>${esc(c.displayName || c.name)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${(c.labels || []).map((x, i) => `<th title="${esc(c.displayNames?.[i] || c.descriptions?.[i] || '')}">${esc(x)}</th>`).join('')}</tr></thead><tbody>
+    // this season at a glance: the main numbers, each with its last 10 games and how that compares with the season
+    const c0 = cats[0], cur = c0.statistics[c0.statistics.length - 1], L = c0.labels || [];
+    const gl = v.log, gL = gl?.labels || [], evs = (gl?.seasonTypes || []).flatMap(st => (st.categories || []).flatMap(c => c.events || [])).slice(0, 10).reverse();
+    const glance = ['G', 'A', 'PTS', '+/-', 'SOG', 'SV%', 'GAA', 'W'].filter(k => L.includes(k)).slice(0, 4).map(k => {
+      const val = cur.stats[L.indexOf(k)], gi = gL.indexOf(k), sp = gi < 0 ? [] : evs.map(e => parseFloat(e.stats?.[gi])).filter(x => isFinite(x));
+      const gp = parseFloat(cur.stats[L.indexOf('GP')]) || 0, per = gp && !/%|GAA/.test(k) ? parseFloat(val) / gp : null, l10 = sp.length ? sp.reduce((x, y) => x + y, 0) / sp.length : null;
+      const trend = per != null && l10 != null ? (l10 > per * 1.1 ? `Up lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)} for the season` : l10 < per * .9 ? `Quieter lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)}` : `Steady: ${l10.toFixed(2)} a game over the last ${sp.length}`) : (cur.season?.displayName || '');
+      return `<article class="pb-story"><b class="num">${esc(val)}</b><span>${esc(k === 'G' ? 'Goals' : k === 'A' ? 'Assists' : k === 'PTS' ? 'Points' : k === 'SOG' ? 'Shots on goal' : k === 'W' ? 'Wins' : k)}</span>${sp.length > 1 ? flViz.spark(sp, { label: k + ', last ' + sp.length + ' games', w: 120, h: 26 }) : ''}<p>${esc(trend)}</p></article>` }).join('');
+    const top = glance ? `<div class="pb"><div class="pb-stories">${glance}</div></div>` : '';
+    return top + cats.map(c => `<div class="sub-h"><h5>${esc(c.displayName || c.name)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${(c.labels || []).map((x, i) => `<th title="${esc(c.displayNames?.[i] || c.descriptions?.[i] || '')}">${esc(x)}</th>`).join('')}</tr></thead><tbody>
       ${c.statistics.slice().reverse().map(s => `<tr><td class="t">${esc(s.season?.displayName || '')} <small>${esc((s.teamSlug || '').split('-').pop())}</small></td>${(s.stats || []).map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}
       ${c.totals?.length ? `<tr class="tot"><td class="t">Career</td>${c.totals.map(x => `<td>${esc(x)}</td>`).join('')}</tr>` : ''}</tbody></table></div>`).join('')
       + `<p class="srcnote">Every season ESPN keeps for this player. Hover a column for its meaning.</p>`;

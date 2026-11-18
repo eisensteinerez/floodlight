@@ -628,9 +628,10 @@ function fbStatsBody(v){
     const items = K.radar.map(([k, title]) => { const x = ss.raw[k]; const n = fbStatVal(x); const r = x && (n || FBP_LOW.has(k)) ? fbRankIn(v, k, n) : null;
       return x ? { title, value: (r?.pc ?? 0) / 100 } : null }).filter(Boolean);
     const rad = items.length >= 3 ? radarSVG({ title: 'vs ' + fbPeerLabel(v), items }, v.color || '#3D6FD9') : '';
-    if (rad || strong.length || weak.length) h += `<div class="fbp-viz">${rad ? `<div class="radar"><h5>Compared with ${esc(fbPeerLabel(v))}</h5>${rad}<small>Percentile, 0–100 (100 = best). Totals are compared per game.</small></div>` : ''}
-      <div class="fbp-sw">${strong.length ? `<h5>Best at</h5><ul class="fbp-chips hi">${strong.map(chip).join('')}</ul>` : ''}${weak.length ? `<h5>Below average</h5><ul class="fbp-chips lo">${weak.map(chip).join('')}</ul>` : ''}
-        ${!ss.qualified && v.gk !== 'DL' && v.gk !== 'LB' && v.gk !== 'DB' ? `<p class="fbp-q">Not enough plays yet to make ESPN's qualified list, so these comparisons are rough.</p>` : ''}</div></div>`;
+    const radarKeys = new Set(K.radar.map(r => r[0])), title = Object.fromEntries(K.radar);
+    h += flViz.playerBoard(cand.map(c => ({ label: fbLbl(c.k, c.x), short: title[c.k] || fbLbl(c.k, c.x), val: c.x.displayValue, rank: c.r.rank, n: c.r.n, pc: c.r.pc, onRadar: radarKeys.has(c.k) })), {
+      color: v.color || '#3D6FD9', peers: fbPeerLabel(v), name: (v.bio?.displayName || v.name || '').split(' ').slice(-1)[0], radar: K.radar.map(r => r[1]),
+      note: !ss.qualified && !['DL', 'LB', 'DB'].includes(v.gk) ? "Not enough plays yet to make ESPN's qualified list, so treat these as rough." : '' });
   }
   for (const c of shown) {
     const skipIn = FBP_SKIP_IN[c.name] || [], first = FBP_FIRST[c.name] || [];

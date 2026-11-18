@@ -845,9 +845,10 @@ function bsStatsBody(v){
     const strong = cand.filter(c => c.r.pc >= 80).sort((a, b) => b.r.pc - a.r.pc).slice(0, 5), weak = cand.filter(c => c.r.pc <= 20).sort((a, b) => a.r.pc - b.r.pc).slice(0, 4);
     const chip = c => `<li><span>${esc(bsLabel(g, c.k))}</span><b class="num">${esc(st[c.k])}</b><small>${fbOrd(c.r.rank)} of ${c.r.n}</small></li>`;
     const rad = items.length >= 3 ? radarSVG({ title: 'vs league', items }, v.color || '#3D6FD9') : '';
-    if (rad || strong.length || weak.length) h += `<div class="fbp-viz">${rad ? `<div class="radar"><h5>Compared with the league</h5>${rad}<small>Percentile, 0–100 (100 = best). Totals are compared per game.</small></div>` : ''}
-      <div class="fbp-sw">${strong.length ? `<h5>Best at</h5><ul class="fbp-chips hi">${strong.map(chip).join('')}</ul>` : ''}${weak.length ? `<h5>Below average</h5><ul class="fbp-chips lo">${weak.map(chip).join('')}</ul>` : ''}
-        ${!peers.some(p => p.id === String(v.id)) ? `<p class="fbp-q">Not enough ${g === 'pitching' ? 'innings' : 'plate appearances'} yet to count as a regular, so these comparisons are rough.</p>` : ''}</div></div>`;
+    const title = Object.fromEntries(BS_KEY[g].radar);
+    h += flViz.playerBoard(cand.map(c => ({ label: bsLabel(g, c.k), short: title[c.k] || bsLabel(g, c.k), val: String(st[c.k]), rank: c.r.rank, n: c.r.n, pc: c.r.pc })), {
+      color: v.color || '#3D6FD9', peers: `${BSL[v.lg].name} ${g === 'pitching' ? 'pitchers' : 'hitters'}`, season: String(v.season || ''), radar: BS_KEY[g].radar.map(r => r[1]),
+      note: !peers.some(p => p.id === String(v.id)) ? `Not enough ${g === 'pitching' ? 'innings' : 'plate appearances'} yet to count as a regular, so treat these as rough.` : '' });
   }
   const first = BS_FIRST[g], keys = Object.keys(st).filter(k => !BS_SKIP.has(k) && (typeof st[k] === 'number' || /^[-.\d]/.test(String(st[k]))) && !/^[.-]+-*$/.test(String(st[k])))
     .sort((a, b) => { const i = x => { const j = first.indexOf(x); return j < 0 ? 99 : j }; return i(a) - i(b) });
