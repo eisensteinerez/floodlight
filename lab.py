@@ -372,6 +372,25 @@ def _soccer_team(name):
             "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": []}
 
 
+def _next_event(sport, t, nxt):
+    """The scoreboard entry for the team's next game that hasn't started (a game in progress has no pre-game lines)."""
+    import datetime as _dt
+    want = bot.norm(t["name"])
+    when = bot.parse_date(nxt.get("date"))
+    today = dt_now()
+    for add in range(0, 9):
+        d = today + _dt.timedelta(days=add)
+        if when and d.date() > when.date() + _dt.timedelta(days=1):
+            break
+        for e in bot.events(sport, None, d.strftime("%Y%m%d")):
+            if e["state"] != "pre":
+                continue
+            for side in ("home", "away"):
+                if (sport != "soccer" and e[side]["id"] == t["id"]) or bot.norm(e[side]["name"]) == want:
+                    return e
+    return bot.find_game(sport, t["name"])
+
+
 def team(sport, name):
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
@@ -393,7 +412,7 @@ def team(sport, name):
     lines = []
     if nxt:
         try:
-            e = bot.find_game(sport, t["name"])
+            e = _next_event(sport, t, nxt)
             if e:
                 home = bot.norm(e["home"]["name"]) == bot.norm(t["name"]) or e["home"]["id"] == t["id"]
                 od, book = e.get("odds") or {}, ((e.get("odds") or {}).get("provider") or {}).get("name") or "DraftKings"
