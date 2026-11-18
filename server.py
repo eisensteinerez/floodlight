@@ -47,6 +47,7 @@ import dfs
 import odds
 import storage
 import discord_bot
+import lab
 import record
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -1200,6 +1201,27 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def lab(self, u, q):
+        if not u.path.startswith("/api/"):   # the page; Discord opens the Activity at / with frame_id and instance_id
+            body = (ROOT / "lab.html").read_bytes().replace(b"__DISCORD_APP_ID__", (os.environ.get("DISCORD_APP_ID") or "").encode())
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
+        _, user = session_user(self.headers.get("Cookie"))
+        q["_pass"] = self.headers.get("X-Lab-Pass") or ""
+        status, obj = lab.handle(u.path[len("/api/lab/"):], q, signed_in=bool(user and can_research(user)) or not GATED)
+        if isinstance(obj, tuple):
+            ct, data = obj
+            self.send_response(status)
+            self.send_header("Content-Type", ct)
+            self.send_header("Cache-Control", "max-age=86400")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
+        return self.send_json(obj, status)
+
     def do_HEAD(self):
         rel = urllib.parse.unquote(urllib.parse.urlparse(self.path).path).lstrip("/") or "index.html"
         if rel not in PUBLIC_FILES and not re.fullmatch(r"icons/[A-Za-z0-9_-]+\.png", rel):
@@ -1282,6 +1304,8 @@ class Handler(SimpleHTTPRequestHandler):
     def _do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+        if u.path.startswith("/api/lab/") or u.path == "/lab" or (u.path == "/" and "frame_id" in q and "instance_id" in q):
+            return self.lab(u, q)   # Floodlight Lab (lab.py): Discord members get in with a pass, not a site login
         if GATED and u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users"):
             _, user = session_user(self.headers.get("Cookie"))
             if not user:
@@ -1522,10 +1546,12 @@ if __name__ == "__main__":
     record.setup(fetch=fetch, fm_matchstats=fm_matchstats, forecaster=forecaster, cache_dir=CACHE_DIR)
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
-                          odds=odds, dfs=dfs, record=record, forecaster=forecaster, cache_dir=CACHE_DIR)
+                          odds=odds, dfs=dfs, record=record, forecaster=forecaster, fm_team=fm_team, cache_dir=CACHE_DIR)
         import pick_tracker
         pick_tracker.setup(similar=similar, fetch=fetch, cache_dir=CACHE_DIR)
         print("Discord bot: listening at /api/discord/interactions")
+    else:   # the Lab (lab.py) reads players through the bot's loaders even without the bot
+        discord_bot.D.update(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup, odds=odds, dfs=dfs, fm_team=fm_team)
     print(f"Floodlight running at http://localhost:{PORT}")
     if LAN:
         import socket

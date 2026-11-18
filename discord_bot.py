@@ -9,6 +9,7 @@ out in the background with the same functions and caches the site uses, and then
   /scores     live scores, finals and today's schedule
   /predict    the day's leans; with a team, Floodlight's full forecast for that game (lean, predicted score, chances, reasons)
   /lineup     predicted or confirmed soccer lineups (FotMob), MLB batting orders and probable pitchers, injuries
+  /lab        opens Floodlight Lab, the full research screen, as a Discord Activity in the channel (lab.py, lab.html)
 
 Optional scheduled posts: set DISCORD_WEBHOOK_URL (a channel webhook) and the bot posts a digest of top props and
 predictions at DISCORD_DIGEST_HOURS (UTC, comma separated).
@@ -26,6 +27,7 @@ Environment:
   DISCORD_WEBHOOK_URL     optional: channel webhook for scheduled posts
   DISCORD_DIGEST_HOURS    optional: UTC hours for scheduled posts, default "14"
   DISCORD_DIGEST_SPORTS   optional: sports in the scheduled posts, default "nba,nfl,nhl,mlb,soccer"
+  DISCORD_ACTIVITY        optional: "0" makes /lab reply with a browser link instead of opening the Activity
 """
 import concurrent.futures as cf
 import datetime as dt
@@ -1031,6 +1033,7 @@ def mlb_lineup(team):
 def cmd_help(o):
     return {"embeds": [{"title": "Floodlight bot", "color": BLUE, "url": SITE or None, "description": "\n".join([
         "`/research` a player's hit rate on any stat and line: last 5 / 10 / 20 games, this season, vs an opponent. Leave the line empty to use today's PrizePicks line.",
+        "`/lab` opens **Floodlight Lab** right in the channel: any player or team, every stat, hit rates at any line, trends, splits and the full game log.",
         "`/props` today's PrizePicks and Sleeper lines ranked by recent hit rate.",
         "`/scores` live scores, finals and today's schedule.",
         "`/predict` the day's leans with a projected score. Add a team for Floodlight's full forecast: lean, predicted score, chances, the reasons, value bets.",
@@ -1174,6 +1177,8 @@ def handle(body, headers):
         return 200, {"type": 4, "data": {"flags": 64, "content": "Floodlight's commands are for members. Ask a server admin for the member role."}}
     if name == "help":
         return 200, {"type": 4, "data": clean(cmd_help(opts))}
+    if name == "lab" or data.get("type") == 4:   # /lab, or the Activity launcher's entry-point command: open the Lab
+        return lab_launch(it, opts)
     if name == "checkpicks":
         try:
             admin = int((it.get("member") or {}).get("permissions") or 0) & 0x8
@@ -1190,6 +1195,31 @@ def handle(body, headers):
             print(f"discord: couldn't send the reply: {e}", file=sys.stderr)
     threading.Thread(target=work, daemon=True, name=f"discord-{name}").start()
     return 200, {"type": 5}   # "Floodlight is thinking..."; the reply is edited in when ready
+
+
+def lab_launch(it, opts):
+    """Leave a ticket for this channel, open the Lab as an Activity, and follow up (only to the caller) with a browser link."""
+    import lab
+    who = ((it.get("member") or {}).get("user") or it.get("user") or {}).get("id") or ""
+    lab.ticket(it.get("channel_id") or (it.get("channel") or {}).get("id"), opts, who)
+    link = lab.browser_link(opts, who)
+    if os.environ.get("DISCORD_ACTIVITY", "1") == "0":   # Activities turned off for the app: just the link
+        if not link:
+            return 200, {"type": 4, "data": {"flags": 64, "content": "The Lab needs FLOODLIGHT_URL set on the server."}}
+        return 200, {"type": 4, "data": {"flags": 64, "content": "**Floodlight Lab** is ready.", "components": [
+            {"type": 1, "components": [{"type": 2, "style": 5, "label": "Open the Lab", "url": link}]}]}}
+
+    def follow():
+        if not link:
+            return
+        time.sleep(1.5)
+        try:
+            discord("POST", f"/webhooks/{it['application_id']}/{it['token']}", {"flags": 64, "content": "The Lab is opening in this channel. Prefer a full browser window?",
+                    "components": [{"type": 1, "components": [{"type": 2, "style": 5, "label": "Open the Lab in your browser", "url": link}]}]})
+        except Exception as e:
+            print(f"discord: lab link follow-up failed: {e}", file=sys.stderr)
+    threading.Thread(target=follow, daemon=True, name="discord-lab").start()
+    return 200, {"type": 12}   # LAUNCH_ACTIVITY
 
 
 def is_member(it):
@@ -1284,6 +1314,9 @@ def command_defs():
             {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
         {"name": "checkpicks", "description": "Admins: grade the pick channels now and show every card (post:True also posts results)", "default_member_permissions": "8",
          "options": [{"type": 5, "name": "post", "description": "Also post finished results in #verified-records", "required": False}]},
+        {"name": "lab", "description": "Open Floodlight Lab: a full research screen for any player, right here in Discord", "options": [
+            {"type": 3, "name": "player", "description": "Open straight to this player, e.g. Jayson Tatum"},
+            {"type": 3, "name": "team", "description": "Or open straight to this team, e.g. Celtics or Arsenal"}, sport(False, "Sport (default NBA)")]},
         {"name": "help", "description": "What the Floodlight bot can do"},
     ]
 
@@ -1294,15 +1327,38 @@ def register(only_if_changed=False):
         sys.exit("Set DISCORD_APP_ID and DISCORD_BOT_TOKEN first (Discord Developer Portal > your app).")
     path = f"/applications/{app}/guilds/{guild}/commands" if guild else f"/applications/{app}/commands"
     want = command_defs()
-    if only_if_changed:
-        shape = lambda cs: sorted(json.dumps({"n": c["name"], "d": c["description"], "o": [(o["name"], o.get("type")) for o in c.get("options") or []]}) for c in cs)
-        try:
-            if shape(discord("GET", path, token=token) or []) == shape(want):
-                return
-        except Exception:
-            pass
+    try:
+        have = discord("GET", path, token=token) or []
+    except Exception:
+        have = None
+    # Turning on Activities gives the app an "entry point" command (the Activity launcher's button). Discord refuses a
+    # bulk update that leaves it out, so keep it, and have it come to this server so the launcher checks roles too.
+    entry = lab_entry_point(app, token, have if not guild else None)
+    if entry and not guild:
+        want = want + [entry]
+    if only_if_changed and have is not None:
+        shape = lambda cs: sorted(json.dumps({"n": c["name"], "d": c["description"], "o": [(o["name"], o.get("type")) for o in c.get("options") or []]}) for c in cs if c.get("type", 1) != 4)
+        if shape(have) == shape(want):
+            return
     got = discord("PUT", path, want, token=token)
     print(f"Discord bot: registered {len(got)} commands {'in server ' + guild if guild else 'globally (can take up to an hour to appear)'}: " + ", ".join("/" + c["name"] for c in got))
+
+
+def lab_entry_point(app, token, have=None):
+    """The app's Activity entry-point command (global, type 4), set to be handled here (handler 1). None without Activities."""
+    try:
+        if have is None:
+            have = discord("GET", f"/applications/{app}/commands", token=token) or []
+        e = next((c for c in have if c.get("type") == 4), None)
+        if not e:
+            return None
+        desc = "Open Floodlight Lab, the player research screen"
+        if e.get("handler") != 1 or e.get("description") != desc:
+            e = discord("PATCH", f"/applications/{app}/commands/{e['id']}", {"handler": 1, "description": desc}, token=token) or e
+        return {k: e[k] for k in ("id", "name", "type", "description", "handler", "integration_types", "contexts") if e.get(k) is not None}
+    except Exception as ex:
+        print(f"Discord bot: couldn't check the Activity entry point: {ex}", file=sys.stderr)
+        return None
 
 
 def _register_on_start():
