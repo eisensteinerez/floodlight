@@ -505,6 +505,64 @@ def rate(games, get, line, side):
     return {"n": n, "hit": hit, "push": push, "pct": hit / dec if dec else None, "avg": sum(vals) / len(vals) if vals else None, "med": med}
 
 
+def judge(games, get, line, side, opp=None):
+    """The Lab meter (lab.html judge): the estimated chance this side of the line comes in. A recency-weighted hit rate,
+    pulled toward 50% on small samples, blended with where the weighted average and spread sit against the line."""
+    import math
+    use = [g for g in games[:60] if get(g) is not None]
+    vs = [float(get(g)) for g in use]
+    n = len(vs)
+    if n < 3:
+        return None
+    w = [0.5 ** (i / 10) for i in range(n)]
+    W = sum(w)
+    neff = W * W / sum(x * x for x in w)
+    ho = sum(x for v, x in zip(vs, w) if v > line)
+    hd = sum(x for v, x in zip(vs, w) if v != line)
+    emp = (ho + 1.5) / (hd + 3)
+    base = sum(v * x for v, x in zip(vs, w)) / W
+    mu = base
+    if opp:
+        no = norm(opp)
+        h2h = [v for g, v in zip(use, vs) if no and (no in norm(g["opp"]) or no == norm(g.get("oppAbbr")))]
+        if len(h2h) >= 2:
+            mu += min(.3, len(h2h) * .08) * (sum(h2h) / len(h2h) - base)
+    var = sum(x * (v - base) ** 2 for v, x in zip(vs, w)) / W * (neff / (neff - 1) if neff > 1.5 else 1)
+    sd = math.sqrt(var * (1 + 1 / neff)) or .5
+    low = all(v == int(v) for v in vs) and min(vs) >= 0 and base < 6 and var <= max(base, .2) * 1.6
+
+    def pois_cdf(k, lam):
+        t = math.exp(-lam)
+        s = 0
+        for i in range(int(k) + 1):
+            s += t
+            t *= lam / (i + 1)
+        return min(1, s)
+    if set(vs) <= {0.0, 1.0} and line == .5:
+        model = emp
+        fair = None
+    elif low:
+        lam = max(.05, mu)
+        model = 1 - pois_cdf(math.floor(line), lam)
+        fair = .5
+        while fair < 60 and 1 - pois_cdf(math.floor(fair), lam) > .5:
+            fair += 1
+    else:
+        model = 1 - .5 * (1 + math.erf((line - mu) / sd / math.sqrt(2)))
+        fair = math.floor(mu) + .5
+    we = .5 if n >= 20 else .42 if n >= 10 else .3
+    p_over = max(.02, min(.98, we * emp + (1 - we) * model))
+    over = side == "over"
+    return {"p": p_over if over else 1 - p_over, "emp": emp if over else 1 - emp, "model": model if over else 1 - model, "mu": mu, "sd": sd, "n": n,
+            "fair": fair, "conf": "High" if n >= 20 and neff >= 10 else "Medium" if n >= 10 else "Low"}
+
+
+def american(p):
+    if p is None or p <= 0 or p >= 1:
+        return "–"
+    return f"-{round(100 * p / (1 - p))}" if p >= .5 else f"+{round(100 * (1 - p) / p)}"
+
+
 def default_line(games, get):
     vals = [v for v in (get(g) for g in games[:10]) if v is not None]
     if not vals:
@@ -576,16 +634,48 @@ def cmd_research(o):
             continue
         fields.append({"name": lab, "value": f"**{pct(r['pct'])}** · {r['hit']}/{r['n'] - r['push']}" + (f" ({r['push']} push)" if r["push"] else "") + f"\navg {fmt(r['avg'])} · med {fmt(r['med'])}", "inline": True})
     l10 = rate(games[:10], sd["get"], line, side)
+    J = judge(games, sd["get"], line, side, opp)
+    hit = lambda v: None if v == line else ((v > line) if side == "over" else (v < line))
     log = []
     for g in games[:10]:
         v = sd["get"](g)
-        mark = "➖" if v == line else "✅" if ((v > line) if side == "over" else (v < line)) else "❌"
-        log.append(f"{mark} `{fmt(v):>5}` {g['date'].strftime('%b %d')} {'vs' if g['home'] else '@' if g['home'] is False else 'v'} {g['opp']}")
-    desc = f"**{side.title()} {fmt(line)}**{line_from}\n" + (f"Posted: {' · '.join(book_txt(x) for x in posted[:6])}\n" if posted else "") + "\n**Last 10 games**\n" + "\n".join(log)
-    color = GREEN if (l10["pct"] or 0) >= .6 else RED if l10["pct"] is not None and l10["pct"] <= .4 else BLUE
+        mark = "➖" if hit(v) is None else "✅" if hit(v) else "❌"
+        d = v - line
+        log.append(f"{mark} `{fmt(v):>5}` `{'+' if d > 0 else '−' if d < 0 else ' '}{fmt(abs(round(d, 2))):<4}` {g['date'].strftime('%b %d')} {'vs' if g['home'] else '@' if g['home'] is False else 'v'} {g['opp']}")
+    strip = "".join("⬜" if hit(sd["get"](g)) is None else "🟩" if hit(sd["get"](g)) else "🟥" for g in reversed(games[:20]))
+    head = f"## {side.title()} {fmt(line)} {sd['l']}\n" + (f"-# {line_from.strip(' ()').capitalize()}\n" if line_from else "")
+    read = ""
+    color = BLUE
+    if J:
+        pr = J["p"]
+        gap = abs(pr - .5)
+        agree = (J["emp"] > .5) == (J["model"] > .5)
+        strength = 0 if gap < .06 else 2 if gap >= .16 and agree and J["conf"] != "Low" else 1
+        lean_side = side if pr > .5 else ("under" if side == "over" else "over")
+        lean = "No clear lean" if not strength else f"{'Strong' if strength == 2 else 'Slight'} lean {lean_side}"
+        bar = "▰" * round(pr * 12) + "▱" * (12 - round(pr * 12))
+        read = f"### 🧪 Lab meter: {round(pr * 100)}%  {bar}\n**{lean}** · {J['conf'].lower()} confidence ({J['n']} games)\n"
+        bits = [f"Fair price **{american(pr)}**", f"Projection **{fmt(round(J['mu'], 1))}**"] + ([f"Fair line **{fmt(J['fair'])}**"] if J.get("fair") is not None else [])
+        bp = next((x["pOver"] for x in posted if x.get("pOver") is not None and x.get("line") == line), None)
+        if bp is not None:
+            imp = bp if side == "over" else 1 - bp
+            edge = pr - imp
+            verdict = "loves this line" if edge >= .08 else "likes this line" if edge >= .035 else "fairly priced" if edge > -.035 else "dislikes this line" if edge > -.08 else "hates this line"
+            bits.append(f"Books {pct(imp)}, edge **{'+' if edge >= 0 else '−'}{abs(round(edge * 100))}** ({verdict})")
+        read += " · ".join(bits) + "\n"
+        if not agree:
+            read += f"-# Mixed signals: recent hit rate says {pct(J['emp'])}, the average and spread say {pct(J['model'])}.\n"
+        color = GREEN if pr >= .57 else RED if pr <= .43 else BLUE
+    else:
+        color = GREEN if (l10["pct"] or 0) >= .6 else RED if l10["pct"] is not None and l10["pct"] <= .4 else BLUE
+    vals = sorted(sd["get"](g) for g in games[:20])
+    q = lambda f: vals[min(len(vals) - 1, int(round((len(vals) - 1) * f)))]
+    prof = f"**Floor {fmt(q(.1))} · Median {fmt(q(.5))} · Ceiling {fmt(q(.9))}**  (last {len(vals)})\n" if len(vals) >= 5 else ""
+    desc = (head + read + (f"Posted: {' · '.join(book_txt(x) for x in posted[:6])}\n" if posted else "")
+            + f"\n**Last {min(20, len(games))}, oldest to newest**\n{strip}\n" + prof + "\n**Last 10 games**  `value` `vs line`\n" + "\n".join(log))
     return {"embeds": [{"title": f"{p['name']} · {sd['l']}", "description": desc[:4000], "color": color, "fields": fields[:25],
                         "thumbnail": {"url": p["photo"]} if p.get("photo") else None,
-                        "footer": {"text": f"{SPORTS[sport]}{' · ' + p['team'] if p.get('team') else ''} · Floodlight research"}}]}
+                        "footer": {"text": f"{SPORTS[sport]}{' · ' + p['team'] if p.get('team') else ''} · Floodlight research · /lab player:{p['name']} for the full screen · history, not a forecast"}}]}
 
 
 # ---------- /props: today's lines ranked by hit rate ----------
