@@ -28,10 +28,11 @@ import urllib.parse
 import urllib.request
 
 import discord_bot as bot
+import labfight   # UFC and boxing fighters in the same shape as a player
 
 PASS_HOURS = 12
 TICKET_MIN = 15
-IMG_HOSTS = ("fonts.gstatic.com", "a.espncdn.com", "img.mlbstatic.com", "www.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com")
+IMG_HOSTS = ("fonts.gstatic.com", "a.espncdn.com", "img.mlbstatic.com", "www.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com", "upload.wikimedia.org")
 
 _tickets, _instances, _imgs = {}, {}, {}
 _lock = threading.Lock()
@@ -502,12 +503,22 @@ def handle(path, q, signed_in=False):
     if not signed_in and not check_pass(q.get("_pass")):
         return 401, {"error": "Your Lab pass expired. Type /lab in Discord again.", "need": "lab"}
     try:
+        sp = q.get("sport") or "nba"
+        if sp in ("ufc", "boxing"):   # fighters: one fight is one game
+            if path == "player":
+                d = labfight.ufc(q.get("name") or "") if sp == "ufc" else labfight.box(q.get("name") or "")
+                d["photo"] = img_url(d.get("photo"))
+                return 200, d
+            if path == "team":
+                raise LookupError("Fight sports have fighters, not teams. Search a fighter on the Player tab.")
+            if path == "board":
+                return 200, {"sport": sp, "rows": [], "checked": 0, "errors": [], "note": "Sportsbooks don't post player props for fights. Search a fighter to see every fight, stat by stat."}
         if path == "player":
-            return 200, player(q.get("sport") or "nba", q.get("name") or "", q.get("stat") or "")
+            return 200, player(sp, q.get("name") or "", q.get("stat") or "")
         if path == "team":
-            return 200, team(q.get("sport") or "nba", q.get("name") or "")
+            return 200, team(sp, q.get("name") or "")
         if path == "board":
-            return 200, board(q.get("sport") or "nba")
+            return 200, board(sp)
     except LookupError as e:
         return 404, {"error": str(e)}
     except Exception as e:

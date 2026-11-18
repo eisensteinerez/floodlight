@@ -437,6 +437,24 @@ body::after{background:radial-gradient(60% 420px at 50% 0,color-mix(in oklab,var
 .brand i,.sec>i{clip-path:none;border-radius:6px;font-style:normal}
 .top::after{display:none}
 .hero::after{height:2px;opacity:.6}
+
+/* ---------- Lab, redesign pass: a dark analytics bench ---------- */
+/* a faint measuring grid behind everything, and a slow scan line across the hero */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;background:
+  linear-gradient(color-mix(in oklab,var(--accent) 5%,transparent) 1px,transparent 1px) 0 0/100% 48px,
+  linear-gradient(90deg,color-mix(in oklab,var(--accent) 5%,transparent) 1px,transparent 1px) 0 0/48px 100%;
+  -webkit-mask:radial-gradient(120% 80% at 50% 0%,#000 30%,transparent 75%);mask:radial-gradient(120% 80% at 50% 0%,#000 30%,transparent 75%)}
+.card{backdrop-filter:blur(6px)}
+.card:hover{border-color:color-mix(in oklab,var(--accent) 35%,var(--line));box-shadow:0 0 0 1px color-mix(in oklab,var(--accent) 18%,transparent),0 30px 70px -40px color-mix(in oklab,var(--accent) 60%,transparent)}
+@media (prefers-reduced-motion:no-preference){
+  .card:first-of-type::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(100deg,transparent 40%,color-mix(in oklab,var(--accent) 9%,transparent) 50%,transparent 60%) -100% 0/250% 100% no-repeat;animation:labScan 6s ease-in-out infinite}
+}
+@keyframes labScan{0%,15%{background-position:-100% 0}60%,100%{background-position:200% 0}}
+/* fight sports run red: UFC and boxing tint the whole bench */
+:root[data-fight="1"]{--accent:#FF3B4E;--accent-2:#FF8A3D;--accent-ink:#fff;--beam:rgba(255,40,70,.20);--beam-2:rgba(255,140,60,.12)}
+#sports button.fight{position:relative}
+#sports button.fight::before{content:"";position:absolute;left:6px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:#FF3B4E;box-shadow:0 0 8px #FF3B4E}
+#sports button.fight{padding-left:16px}
 </style>
 </head>
 <body>
@@ -465,9 +483,10 @@ const QS = new URLSearchParams(location.search);
 const IN_DISCORD = QS.has('frame_id');
 if (QS.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
 if (QS.get('embed')) document.body.classList.add('embed');
-const SPORTS = [['nba','NBA'],['wnba','WNBA'],['nfl','NFL'],['nhl','NHL'],['mlb','MLB'],['soccer','Soccer']];
+const SPORTS = [['nba','NBA'],['wnba','WNBA'],['nfl','NFL'],['nhl','NHL'],['mlb','MLB'],['soccer','Soccer'],['ufc','UFC'],['boxing','Boxing']];
+const FIGHT = new Set(['ufc','boxing']);   // fighters: one fight is one game, no teams, no prop board
 const HERO = { nba:['pts','reb','ast','3pm','pra'], wnba:['pts','reb','ast','3pm','pra'], nfl:['pyd','ryd','reyd','rec','td'], nhl:['goals','ast','pts','sog','toi'],
-  mlb:['h','tb','hr','rbi','pk'], soccer:['goals','assists','shots','sot','rating'] };
+  mlb:['h','tb','hr','rbi','pk'], soccer:['goals','assists','shots','sot','rating'], ufc:['ss','ssp','td','ctrl','ssm'], boxing:['rnd','ko','w','dist'] };
 const HERO_T = ['pf','pa','tot','mar','win'];
 const YES = new Set(['win','btts','cs','dd','g1']);
 const BK = { prizepicks:'PP', sleeper:'SL', DraftKings:'DK' }, BOOK = { prizepicks:'PrizePicks', sleeper:'Sleeper' };
@@ -524,7 +543,10 @@ function gate(m) {
   for (const id of ['#sf', '#tabs', '#sports']) $(id).classList.add('hidden');
 }
 const sportName = () => (SPORTS.find(s => s[0] === S.sport) || [, ''])[1];
-function drawSports() { $('#sports').innerHTML = SPORTS.map(([k, l]) => `<button data-sp="${k}" class="${k === S.sport ? 'on' : ''}">${l}</button>`).join('') }
+const PH = { ufc: 'Search a fighter, e.g. Alex Pereira', boxing: 'Search a boxer, e.g. Canelo Alvarez' };
+function drawSports() { $('#sports').innerHTML = SPORTS.map(([k, l]) => `<button data-sp="${k}" class="${k === S.sport ? 'on' : ''}${FIGHT.has(k) ? ' fight' : ''}">${l}</button>`).join('');
+  const q = $('#q'); if (q) q.placeholder = PH[S.sport] || (S.tab === 'team' ? 'Search a team, e.g. Boston Celtics' : 'Search a player, e.g. Jayson Tatum');
+  document.documentElement.dataset.fight = FIGHT.has(S.sport) ? '1' : '' }
 function home() {
   const team = S.tab === 'team';
   $('#q').placeholder = team ? 'Search a team, e.g. Celtics or Arsenal' : 'Search a player, e.g. Jayson Tatum';
@@ -944,7 +966,7 @@ async function renderBoard() {
   }
   const rows = b.rows || [], heat = x => `<span class="heat num" style="background:${heatBg(x)}">${pc(x)}</span>`;
   $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Today's ${esc(sportName())} props by hit rate</b>${b.checked ? `<span class="num">${b.checked} lines checked · PrizePicks and Sleeper</span>` : ''}</div>
-    ${b.error ? `<div class="err">${esc(b.error)}</div>` : !rows.length ? `<p class="sub">No ${esc(sportName())} lines posted right now.</p>` : ''}
+    ${b.error ? `<div class="err">${esc(b.error)}</div>` : b.note ? `<p class="sub">${esc(b.note)}</p>` : !rows.length ? `<p class="sub">No ${esc(sportName())} lines posted right now.</p>` : ''}
     ${rows.map((r, i) => `<div class="brow${i < 3 ? ' top3' : ''}" data-n="${esc(r.player)}" data-k="${r.k}" data-l="${r.line}"><div class="rk">${i + 1}</div>
       <div><div class="nm">${esc(r.player)}</div><div class="sub">${esc([r.team, r.opp && 'vs ' + r.opp].filter(Boolean).join(' · '))}</div></div>
       <div><span class="sidec ${r.side}">${r.side === 'over' ? 'O' : 'U'} ${fmt(r.line)}</span> <span class="sub">${esc(r.label)}</span></div>
