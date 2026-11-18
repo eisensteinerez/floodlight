@@ -211,6 +211,58 @@ html.dragging,html.dragging *{cursor:ns-resize!important;user-select:none;-webki
 .chart.trend.dense .b u{width:7px;height:7px;margin:0 0 -3.5px -3.5px}
 .roll.tl polyline.raw{stroke:color-mix(in oklab,var(--fg) 75%,transparent);stroke-width:1.5}
 .chart.trend .roll:not(.tl) polyline{stroke-dasharray:4 4;opacity:.8}
+/* premium layer: cursor light on cards, section eyebrows, sticky mini bar, profile strip, table view, colour-blind palette */
+.card,.tile{--mx:-999px;--my:-999px}
+.card::after,.tile::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .35s;
+  background:radial-gradient(260px circle at var(--mx) var(--my),color-mix(in oklab,var(--accent) 11%,transparent),transparent 70%)}
+.card:hover::after,.tile:hover::after{opacity:1}
+.card{transition:border-color .25s,box-shadow .3s}
+.card:hover{border-color:color-mix(in oklab,var(--fg) 16%,var(--line));box-shadow:inset 0 1px 0 var(--hair),0 18px 50px -28px rgba(0,0,0,.7)}
+.card>*{position:relative;z-index:1}
+.sec{display:flex;align-items:center;gap:10px;margin:26px 2px 10px;scroll-margin-top:120px}
+.sec i{font:600 10px/1 var(--f-mono);font-style:normal;color:var(--accent);border:1px solid color-mix(in oklab,var(--accent) 45%,transparent);border-radius:6px;padding:4px 6px;letter-spacing:.08em}
+.sec b{font:800 22px/1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
+.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+.sec+.card,.sec+.grid2,.sec+.grid3,.sec+div>.card:first-child,.sec+.tiles{margin-top:0}
+.mini{position:fixed;left:0;right:0;z-index:29;transform:translateY(-110%);opacity:0;transition:transform .35s var(--ease),opacity .25s;pointer-events:none;
+  background:var(--glass);backdrop-filter:saturate(1.6) blur(18px);-webkit-backdrop-filter:saturate(1.6) blur(18px);border-bottom:1px solid var(--line)}
+.mini.on{transform:none;opacity:1;pointer-events:auto}
+.mini-in{max-width:1180px;margin:0 auto;padding:7px 16px;display:flex;align-items:center;gap:8px 14px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.mini .who{display:flex;align-items:center;gap:9px;font:800 19px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.mini .who span{width:28px;height:28px;border-radius:50%;overflow:hidden;background:var(--surface-2);display:grid;place-items:center;font-size:11px;color:var(--accent);position:relative;flex:none}
+.mini .who img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 12%}
+.mini .pick{font:600 12px/1 var(--f-mono);color:var(--muted);white-space:nowrap}.mini .pick b{color:var(--fg)}
+.mini .mp{font:900 22px/1 var(--f-display);white-space:nowrap}
+.mini nav{margin-left:auto;display:flex;gap:2px}
+.mini nav a{font:600 11.5px/1 var(--f-body);color:var(--muted);text-decoration:none;padding:7px 9px;border-radius:8px;white-space:nowrap}
+.mini nav a:hover{color:var(--fg);background:color-mix(in oklab,var(--fg) 7%,transparent)}
+.mini .lc button{width:28px;height:28px;font-size:15px}
+.prof{margin-top:12px}
+.rangep{position:relative;height:64px;margin:34px 6px 26px}
+.rangep .trk{position:absolute;left:0;right:0;top:26px;height:12px;border-radius:9px;background:color-mix(in oklab,var(--fg) 8%,transparent)}
+.rangep .mid{position:absolute;top:26px;height:12px;border-radius:9px;background:linear-gradient(90deg,color-mix(in oklab,var(--accent) 35%,transparent),var(--accent),color-mix(in oklab,var(--accent) 35%,transparent))}
+.rangep .pt{position:absolute;top:18px;width:2px;height:28px;background:var(--fg);border-radius:2px}
+.rangep .pt span{position:absolute;top:32px;left:50%;transform:translateX(-50%);font:500 9.5px/1.2 var(--f-mono);color:var(--muted);white-space:nowrap;text-align:center}
+.rangep .pt b{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);font:800 17px/1 var(--f-display);white-space:nowrap}
+.rangep .pt.ln2{background:none;border-left:2px dashed var(--fg);top:8px;height:48px}
+.rangep .pt.ln2 b{bottom:52px;background:var(--fg);color:var(--bg);font:700 10.5px/1 var(--f-mono);padding:4px 6px;border-radius:6px}
+.rangep .dot{position:absolute;top:29px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--loss);opacity:.75}.rangep .dot.hit{background:var(--win)}.rangep .dot.push{background:var(--draw)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+.kpis>div{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:color-mix(in oklab,var(--bg) 45%,transparent)}
+.kpis span{display:block;font:500 9px/1.2 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.kpis b{display:block;font:900 28px/1 var(--f-display);margin:4px 0 2px}.kpis small{font-size:11px;color:var(--muted)}
+.kpis .bar{height:4px;border-radius:4px;background:color-mix(in oklab,var(--fg) 9%,transparent);margin-top:7px;overflow:hidden}.kpis .bar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+.b.miss i{background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.2) 0 4px,transparent 4px 8px),linear-gradient(180deg,var(--loss),color-mix(in oklab,var(--loss) 62%,var(--surface)))}
+.spark .sb i:not(.hit):not(.push),.db:not(.hit):not(.push)>i{background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.2) 0 3px,transparent 3px 6px)}
+.ln:focus-visible{outline:0}.ln:focus-visible span{box-shadow:0 0 0 3px var(--accent)}
+.ico{width:38px;height:38px;border:1px solid var(--line);background:var(--surface);border-radius:var(--rc);color:var(--muted);font-size:16px;flex:none;transition:color .2s,border-color .2s}
+.ico:hover,.ico[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+:root[data-cb],:root[data-cb] .hero{--win:#4DA3FF;--loss:#F2622E}
+:root[data-cb][data-theme="light"]{--win:#1668C9;--loss:#C2410C}
+:root[data-cb] .meter stop:first-child{stop-color:#F2622E}:root[data-cb] .meter stop:last-child{stop-color:#4DA3FF}
+.ou button.on.o{color:#04130B}
+@media (max-width:820px){.mini nav{display:none}.sec{margin-top:20px}}
+.bars[hidden]{display:none}
 /* the read */
 .read{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px 26px;margin-top:12px;overflow:hidden}
 .read::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:radial-gradient(70% 120% at 0% 0%,color-mix(in oklab,var(--muted) 12%,transparent),transparent 70%)}
@@ -354,12 +406,14 @@ html.dragging .tip{display:none!important}
       <label class="box"><span style="color:var(--muted)">⌕</span><input id="q" placeholder="Search a player, e.g. Jayson Tatum" autocomplete="off"></label>
       <button class="go">Go</button>
     </form>
+    <button class="ico" id="cb" type="button" aria-pressed="false" title="Colour-blind friendly colours (blue and orange, with stripes on misses)" aria-label="Colour-blind friendly colours">◐</button>
   </div>
   <div class="recent" id="recent"></div>
   <div id="msg"></div>
   <div id="view"></div>
   <div class="foot">Hit rates describe the past, not the next game. Bet only what you can afford to lose.<br>Lines from PrizePicks, Sleeper and DraftKings · stats from ESPN, MLB StatsAPI and FotMob</div>
 </div>
+<div class="mini" id="mini"></div>
 <div class="tip" id="tip"></div>
 <script>
 'use strict';
@@ -543,17 +597,60 @@ function render() {
       <div class="seg ou"><button class="o${S.side === 'over' ? ' on' : ''}" data-side="over">${yes ? 'Yes' : 'Over'}</button><button class="u${S.side === 'under' ? ' on' : ''}" data-side="under">${yes ? 'No' : 'Under'}</button></div>
       ${posted.length ? `<div class="lines">${posted.map(o => `<button class="lchip${o.line === S.line ? ' on' : ''}" data-line="${o.line}"><b>${esc(BK[o.book] || String(o.book).slice(0, 3).toUpperCase())}</b><span class="num">${yes ? pc(o.pOver) : lineTxt(o.line)}</span>${o.kind && o.kind !== 'standard' ? ` <small>${esc(o.kind)}</small>` : ''}${!yes && o.pOver != null ? ` <small>${pc(o.pOver)} over</small>` : ''}</button>`).join('')}</div>` : ''}
       <p class="sum">${esc(yn('Over', 'Under'))} ${yes ? '' : lineTxt(S.line) + ' '}${esc(label(k).toLowerCase())}: <b>${R.n ? `${R.hit} of ${R.n - R.push}` : 'no games'}</b>${R.avg != null && !yes ? ` · average <b class="num">${f1(R.avg)}</b> · median <b class="num">${fmt(R.med)}</b>` : ''}${bp != null ? ` · the books give the ${esc(yn('over', 'under').toLowerCase())} <b class="num">${pc(S.side === 'over' ? bp : 1 - bp)}</b>` : ''}</p></div>
-    <div class="tiles">${tiles(gs)}</div>
-    <div id="chart">${chart(shown)}</div>
-    ${read(gs, meter, bp)}
-    ${insights(shown, posted)}
-    ${seasonMap(gs)}${duels(gs)}
-    ${filters()}
+    ${sec(1, 'Hit rates', 's-hit')}<div class="tiles">${tiles(gs)}</div>
+    ${sec(2, 'Game by game', 's-chart')}<div id="chart">${chart(shown)}</div>
+    ${profile(shown)}
+    ${(x => x ? sec(3, 'The read', 's-read') + x : '')(read(gs, meter, bp))}
+    ${(x => x ? sec(4, 'Line shopping', 's-lines') + x : '')(insights(shown, posted))}
+    ${(x => x ? sec(5, 'Season and matchups', 's-season') + x : '')(seasonMap(gs) + duels(gs))}
+    ${sec(6, 'Splits', 's-splits')}${filters()}
     <div class="grid3">${splits(gs)}</div>
-    <div class="card" style="margin-top:12px">${propTable()}</div>
+    ${sec(7, p.kind === 'team' ? 'Every market' : 'Every prop', 's-props')}<div class="card">${propTable()}</div>
     ${p.kind === 'team' ? teamExtras() : ''}
-    <div class="card" style="margin-top:12px">${gameLog(shown)}</div>`;
+    ${sec(8, 'Game log', 's-log')}<div class="card">${gameLog(shown)}</div>`;
+  mini(meter); after();
   const on = document.querySelector('.stats .qf.on'); if (on) { const box = on.parentElement; if (on.offsetLeft + on.offsetWidth > box.scrollLeft + box.clientWidth || on.offsetLeft < box.scrollLeft) box.scrollLeft = Math.max(0, on.offsetLeft - 40) }
+}
+const sec = (n, t, id) => `<div class="sec" id="${id}"><i>${String(n).padStart(2, '0')}</i><b>${esc(t)}</b></div>`;
+// the slim bar that follows you down the page: who, the pick, the meter, and jumps to each section
+function mini(meter) {
+  const p = S.p, yes = isYes(S.k), ini = p.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('');
+  $('#mini').innerHTML = `<div class="mini-in"><div class="who"><span>${esc(ini)}${p.photo ? `<img src="${esc(p.photo)}" alt="" onerror="this.remove()">` : ''}</span>${esc(p.name)}</div>
+    <div class="pick">${esc(label(S.k))} · <b>${yes ? (S.side === 'over' ? 'Yes' : 'No') : (S.side === 'over' ? 'Over ' : 'Under ') + lineTxt(S.line)}</b></div>
+    ${yes ? '' : '<div class="lc"><button data-step="-1" aria-label="Lower the line">−</button><button data-step="1" aria-label="Raise the line">+</button></div>'}
+    ${meter == null ? '' : `<div class="mp num ${meter >= .57 ? 'up' : meter <= .43 ? 'down' : ''}" title="Lab meter">${Math.round(meter * 100)}%</div>`}
+    <nav aria-label="Sections">${[['s-hit', 'Hit rates'], ['s-chart', 'Chart'], ['s-read', 'Read'], ['s-lines', 'Lines'], ['s-season', 'Season'], ['s-splits', 'Splits'], ['s-props', 'Props'], ['s-log', 'Log']].filter(x => document.getElementById(x[0])).map(([id, l]) => `<a href="#${id}">${l}</a>`).join('')}</nav></div>`;
+  miniPos();
+}
+function miniPos() { const m = $('#mini'), hero = document.querySelector('.hero'), top = $('.top'); if (!m) return; const th = top ? top.offsetHeight : 0; m.style.top = th + 'px';
+  m.classList.toggle('on', !!hero && S.tab !== 'board' && !!S.p && hero.getBoundingClientRect().bottom < th + 10) }
+addEventListener('scroll', miniPos, { passive: true }); addEventListener('resize', miniPos);
+// numbers count up the first time a player or stat is shown
+function after() {
+  if (S.freshKey === S.chartKey || S.drag || matchMedia('(prefers-reduced-motion:reduce)').matches) return; S.freshKey = S.chartKey;
+  document.querySelectorAll('.ring b,.meter>b,.read-n b.num').forEach(el => { const m = el.textContent.match(/^([+−-]?)(\d+(?:\.\d+)?)(.*)$/); if (!m) return; const to = +m[2], dec = (m[2].split('.')[1] || '').length, t0 = performance.now();
+    const step = t => { const k = Math.min(1, (t - t0) / 650), e = 1 - Math.pow(1 - k, 3); el.textContent = m[1] + (to * e).toFixed(dec) + m[3]; if (k < 1 && el.isConnected) requestAnimationFrame(step) }; requestAnimationFrame(step) });
+}
+// The stat profile: where this player's games usually land (floor, middle, ceiling) against the line, and the numbers behind it.
+function profile(games) {
+  const k = S.k; if (isYes(k) || games.length < 5) return '';
+  const vs = games.map(g => g.v[k]), lo = Math.min(...vs), hi = Math.max(...vs), line = S.line; if (hi <= lo) return '';
+  const a = Math.min(lo, line), b = Math.max(hi, line), X = v => ((v - a) / (b - a) * 100).toFixed(2), q = p => quant(vs, p), mean = avg(vs), sd = Math.sqrt(avg(vs.map(v => (v - mean) ** 2)));
+  const cons = Math.max(0, Math.min(100, Math.round(100 - (mean ? sd / Math.abs(mean) : 1) * 140))), over = S.side === 'over';
+  let best = 0, cur = 0; for (const v of [...vs].reverse()) { if (hitCls(v, line, S.side) === 'hit') { cur++; best = Math.max(best, cur) } else cur = 0 }
+  const by = d => vs.filter(v => over ? v >= line + d : v <= line - d).length / vs.length, unit = Math.max(1, Math.round(sd / 2));
+  const mins = games.filter(g => g.min).map(g => g.v[k] / g.min), per = k !== 'min' && S.p.kind !== 'team' && mins.length >= 5 ? avg(mins) * (S.p.sport === 'soccer' ? 90 : S.p.sport === 'nhl' ? 20 : 36) : null;
+  const pt = (v, l, c = '') => `<div class="pt ${c}" style="left:${X(v)}%"><b class="num">${f1(v)}</b><span>${l}</span></div>`;
+  const kp = (l, v, s, bar) => `<div><span>${l}</span><b class="num">${v}</b><small>${s}</small>${bar == null ? '' : `<div class="bar"><i style="width:${Math.max(3, Math.min(100, bar))}%"></i></div>`}</div>`;
+  return `<div class="card prof"><div class="chh"><b>Stat profile</b><span>${games.length} games · where ${esc(label(k).toLowerCase())} usually lands</span></div>
+    <div class="rangep" role="img" aria-label="Floor ${f1(q(.1))}, median ${f1(q(.5))}, ceiling ${f1(q(.9))}, line ${lineTxt(line)}"><div class="trk"></div><div class="mid" style="left:${X(q(.25))}%;width:${(X(q(.75)) - X(q(.25))).toFixed(2)}%"></div>
+      ${games.map(g => `<i class="dot ${hitCls(g.v[k], line, S.side)}" style="left:${X(g.v[k])}%"></i>`).join('')}
+      ${pt(q(.1), 'floor')}${pt(q(.5), 'median')}${pt(q(.9), 'ceiling')}<div class="pt ln2" style="left:${X(line)}%"><b class="num">line ${lineTxt(line)}</b></div></div>
+    <div class="kpis">${kp('Average', f1(mean), `median ${f1(q(.5))}`)}${kp('Floor to ceiling', `${f1(q(.1))}–${f1(q(.9))}`, '8 in 10 games land here')}
+      ${kp('Consistency', cons, cons >= 70 ? 'very steady' : cons >= 50 ? 'fairly steady' : cons >= 30 ? 'swingy' : 'boom or bust', cons)}
+      ${kp('Best run', best, `straight ${over ? 'overs' : 'unders'}`)}${kp(`${over ? 'Cleared' : 'Under'} by ${unit}+`, pc(by(unit)), 'comfortable hits', by(unit) * 100)}
+      ${kp(`Missed by ${unit}+`, pc(vs.filter(v => over ? v <= line - unit : v >= line + unit).length / vs.length), 'clear misses')}
+      ${per == null ? '' : kp(`Per ${S.p.sport === 'soccer' ? 90 : S.p.sport === 'nhl' ? 20 : 36} minutes`, f1(per), 'pace when on the floor')}</div></div>`;
 }
 function hero(gs, meter) {
   const p = S.p, k = S.k, team = p.kind === 'team', glow = p.crest || (team ? p.photo : ''), last = team ? p.name : p.name.trim().split(/\s+/).slice(-1)[0];
@@ -602,7 +699,7 @@ function backBar(n) {
   const tot = pool(S.k).length, cur = Math.min(n, tot), opts = [5, 10, 15, 20, 30, 50].filter(x => x < tot);
   return `<div class="back"><span class="lbl">Games back</span><div class="seg sm">${opts.map(x => `<button data-back="${x}" class="${cur === x && /^(l\d+|n)$/.test(S.range) ? 'on' : ''}">${x}</button>`).join('')}<button data-back="${tot}" class="${S.range === 'all' ? 'on' : ''}">All ${tot}</button></div>
     <input type="range" id="backR" min="${Math.min(3, tot)}" max="${tot}" value="${cur}" aria-label="Games back"><b class="num" id="backN">${cur}</b>
-    ${isYes(S.k) ? '' : `<div class="seg sm" style="margin-left:auto"><button data-mode="bars" class="${S.mode === 'bars' ? 'on' : ''}">Bars</button><button data-mode="trend" class="${S.mode === 'trend' ? 'on' : ''}">Trend</button></div>`}</div>`;
+    ${isYes(S.k) ? '' : `<div class="seg sm" style="margin-left:auto"><button data-mode="bars" class="${S.mode === 'bars' ? 'on' : ''}">Bars</button><button data-mode="trend" class="${S.mode === 'trend' ? 'on' : ''}">Trend</button><button data-mode="table" class="${S.mode === 'table' ? 'on' : ''}" title="The same games as a table, for screen readers or a closer look">Table</button></div>`}</div>`;
 }
 function chart(games) {
   if (!games.length) return `<div class="card chart"><p class="sub" style="margin:0">No games match these filters.</p></div>`;
@@ -618,7 +715,8 @@ function chart(games) {
     <div class="chh"><b>${esc(lab)}</b><span>last ${n} game${n === 1 ? '' : 's'}, oldest to newest</span>
       <span class="key"><i class="hit"></i>${S.side === 'over' ? over : under}<i class="miss"></i>${S.side === 'over' ? under : over}${n > 2 && !yes ? '<i class="avg"></i>5-game average' : ''}</span></div>
     ${backBar(n)}
-    <div class="bars" data-max="${max}" data-min="${min}">
+    ${S.mode === 'table' && !yes ? `<div class="scroll" style="max-height:340px"><table class="tbl num"><thead><tr><th>Date</th><th style="text-align:left">Opponent</th><th>Result</th><th>${esc(lab)}</th><th>vs line ${lineTxt(S.line)}</th><th>5-game avg</th></tr></thead><tbody>${[...gs].reverse().map((g, j) => { const i = n - 1 - j, v = vals[i], c = hitCls(v, S.line, S.side), d = Math.round((v - S.line) * 100) / 100; return `<tr><td>${esc(day(g.date))}</td><td style="text-align:left">${g.home === false ? '@ ' : 'vs '}${esc(g.opp)}</td><td>${esc(g.res)} ${esc(g.score)}</td><td class="${c === 'hit' ? 'cell-h' : c === 'miss' ? 'cell-m' : ''}"><b>${fmt(v)}</b></td><td>${c === 'push' ? 'push' : (c === 'hit' ? '✓ ' : '✕ ') + (d > 0 ? '+' : '−') + fmt(Math.abs(d))}</td><td>${f1(roll[i])}</td></tr>` }).join('')}</tbody></table></div>` : ''}
+    <div class="bars" data-max="${max}" data-min="${min}"${S.mode === 'table' && !yes ? ' hidden' : ''}>
       <div class="zn ${S.side === 'over' ? 'hit' : 'miss'}" style="bottom:${y(S.line)}%;top:0"></div><div class="zn ${S.side === 'over' ? 'miss' : 'hit'}" style="bottom:0;height:${y(S.line)}%;transform:scaleY(-1)"></div>
       ${ticks.map(t => `<div class="gl" style="bottom:${y(t)}%"><span class="num">${fmt(t)}</span></div>`).join('')}${min < 0 ? `<div class="gl zero" style="bottom:${y0}%"><span class="num">0</span></div>` : ''}
       ${gs.map((g, i) => { const v = vals[i], cls = hitCls(v, S.line, S.side), d = Math.round((v - S.line) * 100) / 100, neg = v < 0, b = neg ? y(v) : y0, h = Math.max(v ? 1.4 : .8, Math.abs(y(v) - y0));
@@ -630,7 +728,7 @@ function chart(games) {
       ${!yes && n > 2 ? `<div class="avgl" style="bottom:${y(avg(vals))}%"><span class="num">avg ${f1(avg(vals))}</span></div>` : ''}
       ${S.mode === 'trend' && !yes ? `<svg class="roll tl" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".3"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs><path d="M.5,${100 - y0} ${vals.map((v, i) => `L${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')} L${n - .5},${100 - y0}Z" fill="url(#tg)"/><polyline class="raw" points="${vals.map((v, i) => `${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')}"/></svg>` : ''}
       ${n > 2 && !yes ? `<svg class="roll" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${roll.map((v, i) => `${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')}"/></svg>` : ''}
-      <div class="ln${yes ? ' fixed' : ''}" style="bottom:${y(S.line)}%"${yes ? '' : ' data-drag title="Drag to move the line"'}><span class="num">${yes ? 'Yes' : lineTxt(S.line)}${yes ? '' : '<svg viewBox="0 0 10 14" aria-hidden="true"><path d="M5 1 1.5 5h7zM5 13 1.5 9h7z" fill="currentColor"/></svg>'}</span></div></div></div>`;
+      <div class="ln${yes ? ' fixed' : ''}" style="bottom:${y(S.line)}%"${yes ? '' : ' data-drag tabindex="0" role="slider" aria-label="Line" aria-valuenow="${S.line}" title="Drag to move the line, or use the arrow keys"'}><span class="num">${yes ? 'Yes' : lineTxt(S.line)}${yes ? '' : '<svg viewBox="0 0 10 14" aria-hidden="true"><path d="M5 1 1.5 5h7zM5 13 1.5 9h7z" fill="currentColor"/></svg>'}</span></div></div></div>`;
 }
 // The read: what the numbers add up to, in plain words. Every line is a count or an average of games already played,
 // and a lean is only called when recent form and the averages agree.
@@ -793,6 +891,7 @@ function teamExtras() {
 
 /* ---------- hot props ---------- */
 async function renderBoard() {
+  $('#mini').classList.remove('on');
   const sp = S.sport, b = S.board[sp];
   if (!b) {
     $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Today's ${esc(sportName())} props by hit rate</b></div>${'<div class="skel" style="height:46px;margin:8px 0;border-radius:10px"></div>'.repeat(8)}</div>`;
@@ -870,6 +969,11 @@ document.addEventListener('pointermove', e => {
 const endDrag = () => { if (!S.drag) return; cancelAnimationFrame(S.drag.raf); S.drag = null; document.documentElement.classList.remove('dragging'); render() };
 document.addEventListener('pointerup', endDrag); document.addEventListener('pointercancel', endDrag);
 S.mode = store.get('lab.mode', 'bars');
+document.addEventListener('keydown', e => { if (!e.target.matches || !e.target.matches('.ln[data-drag]')) return; const d = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? -1 : 0; if (!d) return; e.preventDefault(); const y = scrollY; setLine(S.line + .5 * d); scrollTo(0, y); document.querySelector('.ln[data-drag]')?.focus() });
+const setCb = on => { document.documentElement.toggleAttribute('data-cb', on); $('#cb').setAttribute('aria-pressed', on); store.set('lab.cb', on) };
+$('#cb').addEventListener('click', () => setCb(!document.documentElement.hasAttribute('data-cb'))); setCb(store.get('lab.cb', false));
+document.addEventListener('pointermove', e => { const c = e.target.closest && e.target.closest('.card,.tile'); if (!c) return; const r = c.getBoundingClientRect(); c.style.setProperty('--mx', e.clientX - r.left + 'px'); c.style.setProperty('--my', e.clientY - r.top + 'px') }, { passive: true });
+document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('.mini nav a'); if (!a) return; e.preventDefault(); const el = document.getElementById(a.getAttribute('href').slice(1)); if (el) scrollTo({ top: el.getBoundingClientRect().top + scrollY - ($('.top').offsetHeight + $('#mini').offsetHeight + 8), behavior: 'smooth' }) });
 start();
 </script>
 </body>
