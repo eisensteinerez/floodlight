@@ -114,18 +114,15 @@ function fbRail(){
 }
 function fbCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail.replace(/ - /, ' '))}</span>LIVE</div>`
-    : e.state === 'pre' ? `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>${esc(e.date.toLocaleDateString([], { weekday: 'short' }))}</div>` : `<div class="st">${esc(e.detail)}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy"><span>${t.rank ? `<em class="rk">${t.rank}</em>` : ''}${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const ml = S.odds.get(e.id)?.ml;
   const odds = e.state !== 'post' && ml?.home && ml?.away ? `<div class="oddrow" aria-hidden="true"><span class="${ml.home.p >= ml.away.p ? 'fav' : ''}">${esc(e.home.abbr)} ${pct(ml.home.p)}%</span><span class="${ml.away.p > ml.home.p ? 'fav' : ''}">${esc(e.away.abbr)} ${pct(ml.away.p)}%</span>${e.espnOdds?.details ? `<span>${esc(e.espnOdds.details)}</span>` : ''}</div>`
     : e.espnOdds?.details && e.state === 'pre' ? `<div class="oddrow" aria-hidden="true"><span>${esc(e.espnOdds.details)}</span>${e.espnOdds.ou ? `<span>O/U ${esc(e.espnOdds.ou)}</span>` : ''}</div>` : '';
   const sit = e.state === 'in' && e.situation?.text ? `<div class="fb-sit">${e.situation.red ? '<b>RED ZONE</b> ' : ''}${esc(e.situation.text)}</div>` : '';
   // ESPN lists the away team first in American football; keep that convention
-  return `<button class="m fb" data-fbgame="${esc(e.id)}" data-fbl="${esc(e.lg)}" style="--hc:${e.ac};--ac:${e.hc}"
-    aria-label="${esc(`${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'Kick-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}`)}">
-    ${st}<div class="tms">${team(e.away, al)}${team(e.home, hl)}${sit}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${al ? 'lose' : ''}">${esc(e.away.score)}</span><span class="${hl ? 'lose' : ''}">${esc(e.home.score)}</span>` : `<span class="tv">${esc(e.tv.split(',')[0] || '')}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win });
+  return flCard({ id: e.id, attrs: `data-fbgame="${esc(e.id)}" data-fbl="${esc(e.lg)}"`, hc: e.ac, ac: e.hc, state: e.state, a: T(e.away, al, hl), b: T(e.home, hl, al), clock: e.detail.replace(/ - /, ' '), final: e.detail,
+    date: e.date, tv: (e.tv || '').split(',')[0], extra: sit + odds,
+    label: `${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'Kick-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}` });
 }
 async function renderFootball(){
   const el = $('fb'); if (!el) return;

@@ -250,17 +250,14 @@ function hkRail(){
 }
 function hkCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail.replace(/ - /, ' '))}</span>LIVE</div>`
-    : e.state === 'pre' ? (/postpon|cancel|delay/i.test(e.detail) ? `<div class="st">${esc(e.detail)}</div>` : `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div>`) : `<div class="st">${esc(e.detail.replace('Final', 'FT'))}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy" ${hkErr}><span>${t.rank ? `<em class="rk">${t.rank}</em>` : ''}${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const P = S.hk.pred.get(e.id), ab = t => esc(t.abbr || t.name);
   const books = e.state !== 'post' ? S.hk.odds.get(e.id)?.books || [] : [], best = k => Math.max(0, ...books.map(b => b.ml?.[k] || 0)), to = books.map(bbMainTotal).find(Boolean);
   const odds = e.state !== 'post' && (P || books.length || e.line?.details) ? `<div class="oddrow" aria-hidden="true">${P && e.state === 'pre' ? `<span class="${P.pH >= .5 ? 'fav' : ''}">${ab(e.home)} ${pct(P.pH)}%</span><span class="${P.pH < .5 ? 'fav' : ''}">${ab(e.away)} ${pct(1 - P.pH)}%</span>` : ''}${best('home') && best('away') ? `<span class="bb-ml" title="Best moneyline">${ab(e.home)} ${decAm(best('home'))} · ${ab(e.away)} ${decAm(best('away'))}</span>` : e.line?.details ? `<span>${esc(e.line.details)}</span>` : ''}${to ? `<span>O/U ${esc(to.line)}</span>` : e.line?.ou ? `<span>O/U ${esc(e.line.ou)}</span>` : ''}</div>` : '';
   const us = hkUS(e), [A, B, la, lb] = us ? [e.away, e.home, al, hl] : [e.home, e.away, hl, al];
-  return `<button class="m fb bb" data-hkgame="${esc(e.id)}" style="--hc:${us ? e.ac : e.hc};--ac:${us ? e.hc : e.ac}"
-    aria-label="${esc(`${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Puck drop ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}`)}">
-    ${st}<div class="tms">${team(A, la)}${team(B, lb)}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${la ? 'lose' : ''}">${esc(A.score)}</span><span class="${lb ? 'lose' : ''}">${esc(B.score)}</span>` : `<span class="tv">${esc((e.tv || '').split(',')[0])}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: hkErr });
+  return flCard({ id: e.id, attrs: `data-hkgame="${esc(e.id)}"`, hc: us ? e.ac : e.hc, ac: us ? e.hc : e.ac, state: e.state, a: T(A, la, lb), b: T(B, lb, la), clock: e.detail.replace(/ - /, ' '), final: e.detail,
+    note: e.state === 'pre' && /postpon|cancel|delay/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: odds,
+    label: `${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Puck drop ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}` });
 }
 function hkDateBar(off){
   const day = new Date(); day.setDate(day.getDate() + off);

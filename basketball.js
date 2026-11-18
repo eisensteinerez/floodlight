@@ -115,9 +115,6 @@ function bbRail(){
 }
 function bbCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail.replace(/ - /, ' '))}</span>LIVE</div>`
-    : e.state === 'pre' ? (/postpon|cancel|delay/i.test(e.detail) ? `<div class="st">${esc(e.detail)}</div>` : `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div>`) : `<div class="st">${esc(e.detail.replace('Final', 'FT'))}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>${t.rank ? `<em class="rk">${t.rank}</em>` : ''}${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const P = S.bb.pred?.get(e.id);
   const O = e.state !== 'post' ? bbCardOdds(e) : null, ab = t => esc(t.abbr || t.name);
   const spTxt = O?.sp ? `${ab(O.sp.line < 0 ? e.home : e.away)} ${O.sp.line < 0 ? O.sp.line : -O.sp.line}` : e.line?.details ? esc(e.line.details) : '';
@@ -125,10 +122,10 @@ function bbCard(e){
   const odds = e.state !== 'post' && (O || e.line?.details || P) ? `<div class="oddrow" aria-hidden="true">${P && e.state === 'pre' ? `<span class="${P.pH >= .5 ? 'fav' : ''}">${ab(e.home)} ${pct(P.pH)}%</span><span class="${P.pH < .5 ? 'fav' : ''}">${ab(e.away)} ${pct(1 - P.pH)}%</span>` : ''}${O?.h && O?.a ? `<span class="bb-ml" title="Best moneyline">${ab(e.home)} ${decAm(O.h)} · ${ab(e.away)} ${decAm(O.a)}</span>` : ''}${spTxt ? `<span>${spTxt}</span>` : ''}${ouTxt ? `<span>O/U ${esc(ouTxt)}</span>` : ''}</div>` : '';
   // US leagues list the away team first; everywhere else the home team comes first
   const us = e.src === 'espn' && e.lg !== 'nbl', [A, B, la, lb] = us ? [e.away, e.home, al, hl] : [e.home, e.away, hl, al];
-  return `<button class="m fb bb" data-bbgame="${esc(e.id)}" style="--hc:${us ? e.ac : e.hc};--ac:${us ? e.hc : e.ac}"
-    aria-label="${esc(`${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Tip-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}`)}">
-    ${st}<div class="tms">${team(A, la)}${team(B, lb)}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${la ? 'lose' : ''}">${esc(A.score)}</span><span class="${lb ? 'lose' : ''}">${esc(B.score)}</span>` : `<span class="tv">${esc((e.tv || '').split(',')[0])}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: `onerror="this.style.visibility='hidden'"` });
+  return flCard({ id: e.id, attrs: `data-bbgame="${esc(e.id)}"`, hc: us ? e.ac : e.hc, ac: us ? e.hc : e.ac, state: e.state, a: T(A, la, lb), b: T(B, lb, la), clock: e.detail.replace(/ - /, ' '), final: e.detail,
+    note: e.state === 'pre' && /postpon|cancel|delay/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: odds,
+    label: `${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Tip-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}` });
 }
 async function renderBasketball(){
   const el = $('bb'); if (!el) return;

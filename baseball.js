@@ -149,9 +149,6 @@ function bsBases(s, size = 30){
 const bsOuts = n => `<span class="bs-outs" aria-label="${n} out${n === 1 ? '' : 's'}">${[0, 1, 2].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
 function bsCard(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score, hl = post && hs < as, al = post && as < hs;
-  const st = e.state === 'in' ? `<div class="st live"><span class="min">${esc(e.detail)}</span>LIVE</div>`
-    : e.state === 'pre' ? `<div class="st"><span class="ko">${e.detail ? esc(e.detail) : e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>${esc(e.date.toLocaleDateString([], { weekday: 'short' }))}</div>` : `<div class="st">${esc(e.detail)}</div>`;
-  const team = (t, lose) => `<div class="tm${lose ? ' lose' : ''}"><img src="${esc(t.logo)}" alt="" loading="lazy" ${bsLogoErr}><span>${esc(t.name)}</span>${t.record ? `<small class="rec">${esc(t.record)}</small>` : ''}</div>`;
   const ml = S.odds.get(e.id)?.ml;
   const odds = e.state !== 'post' && ml?.home && ml?.away ? `<div class="oddrow" aria-hidden="true"><span class="${ml.home.p >= ml.away.p ? 'fav' : ''}">${esc(e.home.abbr)} ${pct(ml.home.p)}%</span><span class="${ml.away.p > ml.home.p ? 'fav' : ''}">${esc(e.away.abbr)} ${pct(ml.away.p)}%</span></div>` : '';
   let extra = '';
@@ -159,10 +156,10 @@ function bsCard(e){
   else if (e.state === 'pre' && (e.away.sp || e.home.sp)) extra = `<div class="bs-sp">${esc(e.away.sp?.name || 'TBD')} <span>vs</span> ${esc(e.home.sp?.name || 'TBD')}</div>`;
   else if (post && e.dec?.w) extra = `<div class="bs-sp">W ${esc(e.dec.w.fullName)}${e.dec.l ? ` · L ${esc(e.dec.l.fullName)}` : ''}${e.dec.s ? ` · SV ${esc(e.dec.s.fullName)}` : ''}</div>`;
   const ser = e.series || e.seriesStatus ? `<div class="bs-ser">${esc([e.series, e.seriesStatus].filter(Boolean).join(' · '))}</div>` : '';
-  return `<button class="m fb bs" data-bsgame="${esc(e.id)}" style="--hc:${e.ac};--ac:${e.hc}"
-    aria-label="${esc(`${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'First pitch ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}`)}">
-    ${st}<div class="tms">${team(e.away, al)}${team(e.home, hl)}${ser}${extra}${odds}</div>
-    <div class="sc num">${e.state !== 'pre' ? `<span class="${al ? 'lose' : ''}">${esc(e.away.score)}</span><span class="${hl ? 'lose' : ''}">${esc(e.home.score)}</span>` : `<span class="tv">${esc(e.tv.split(',')[0] || '')}</span><span>&nbsp;</span>`}</div></button>`;
+  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: bsLogoErr });
+  return flCard({ id: e.id, cls: 'bs', attrs: `data-bsgame="${esc(e.id)}"`, hc: e.ac, ac: e.hc, state: e.state, a: T(e.away, al, hl), b: T(e.home, hl, al), clock: e.detail, final: e.detail,
+    note: e.state === 'pre' && /postpon|cancel|delay|suspend/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: ser + extra + odds,
+    label: `${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'First pitch ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}` });
 }
 function bsLgSelect(){ const key = S.bsb.view === 'games' ? S.bsb.lg : '_' + S.bsb.view, l = S.bsb.lg;
   return `<select class="bs-lgsel" id="bsLgSel" aria-label="League"><option value="all" ${key === 'all' ? 'selected' : ''}>All leagues</option><option value="_futures" ${key === '_futures' ? 'selected' : ''}>Futures & title odds</option><option value="_picks" ${key === '_picks' ? 'selected' : ''}>Predictions</option>${BS_GROUPS.map(([g, lab]) => `<optgroup label="${lab}">${BS_LEAGUES.filter(l => l.grp === g).map(l => `<option value="${l.key}" ${key === l.key ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</optgroup>`).join('')}</select>` }
