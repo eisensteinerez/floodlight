@@ -90,14 +90,26 @@ straight to it with `/#record`.
 
 `pick_tracker.py` grades the cards posted in the server's pick channels (codex-props, claude-props, instinct-props,
 codex-soccer, claude-soccer, instinct-soccer, cafe-picks, parlay-predictor; ez-picks is left out because its picks are
-screenshots). Each card counts as one play, like a parlay: every pick hits = a win, one miss = a loss, and a push or a
-player who didn't play doesn't break it (4-0-1 is a win). The same card posted twice in a channel, or a short headline
-version of a bigger card, counts once.
+screenshots). It's built to run with nobody checking it:
 
-At 12:30 AM Eastern it reads the last day and a half of posts, grades each card from ESPN box scores and results, and
-posts in #verified-records: one post per channel (each card with every pick's result, today's record, all-time record,
-win rate, streak and picks hit) and a leaderboard. At 8:00 AM it checks again and posts only what finished since.
-No AI, no paid APIs.
+- **Counting.** In the props channels a card is one play, like a parlay: every pick hits = a win, one miss = a loss,
+  and a push or a player who didn't play doesn't break it (4-0-1 is a win). In the soccer channels every pick is its
+  own play (four picks that all hit = 4-0).
+- **Reading cards** (`pick_parse.py`). Posts split over several messages are joined. TRACK lines win; otherwise the
+  FINAL CARD; otherwise the picks under a card heading (NBA PARLAY, PLAY #2, LADDER BET, TODAY'S PICK, QUICK CARD).
+  Breakdowns, add-ons, backups, tout notes and change logs are skipped, the parlay math line trims "insurance" legs,
+  and practice posts and format previews are ignored. A later card for the same day and play replaces the earlier one
+  (the 6 PM update replaces the 11:30 card); separate plays (Play #1 and Play #2, a best bet and a ladder) both count.
+- **Grading** (`pick_grade.py`). NBA/NFL props from the player's ESPN game log for the card's date; NBA/NFL team bets
+  from ESPN's scoreboard; soccer from FotMob's results (ESPN as backup) on the 90-minute score. Team names match
+  strictly: "Ireland" is never "Northern Ireland" or "Ireland U21", and a pick two games could fit isn't graded.
+- **Never guessing.** A pick that can't be verified for certain is shown as "couldn't verify" and its card stays out
+  of the record. A player is called a DNP only after the day is over.
+
+At 12:30 AM Eastern it reads the last two days of posts, grades them and posts in #verified-records: one post per
+channel (every card with each pick's result, today's record, all-time record, win rate, streak and picks hit) and a
+leaderboard. At 8:00 AM it grades everything again from fresh numbers: it posts what finished since, and if a result
+changed it posts the correction. No AI, no paid APIs. Tests on real posts: `python3 tests/test_picks.py`.
 
 It needs **Message Content Intent** turned on (Discord Developer Portal › your app › Bot › Privileged Gateway Intents)
 so the bot can read the posts. Optional settings: `DISCORD_TRACK_CHANNELS`, `DISCORD_RECORDS_CHANNEL`,
