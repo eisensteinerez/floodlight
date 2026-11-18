@@ -476,6 +476,9 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;op
 .lh-hot button:hover{background:var(--surface-2)}.lh-hot b{display:block;font-size:14px}.lh-hot small{color:var(--muted);font-size:12px}.lh-hot em{font:700 18px/1 var(--f-display);font-style:normal;color:var(--accent)}
 .lh-small{margin:8px 0 0;color:var(--muted);font-size:12px}
 @media (max-width:700px){.lh-steps{grid-template-columns:1fr}.lh-hero{padding:20px}}
+
+.filters input[type=number]{width:84px;min-height:40px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);font-variant-numeric:tabular-nums}
+.backt{width:70px;min-height:36px;padding:0 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);font:700 16px/1 var(--f-display);text-align:center}
 </style>
 </head>
 <body>
@@ -511,7 +514,7 @@ const HERO = { nba:['pts','reb','ast','3pm','pra'], wnba:['pts','reb','ast','3pm
 const HERO_T = ['pf','pa','tot','mar','win'];
 const YES = new Set(['win','btts','cs','dd','g1']);
 const BK = { prizepicks:'PP', sleeper:'SL', DraftKings:'DK' }, BOOK = { prizepicks:'PrizePicks', sleeper:'Sleeper' };
-const S = { tab:'player', sport:'nba', pass:'', p:null, k:null, line:null, side:'over', range:'l10', back:10, mode:'bars', opp:'', venue:'all', comp:'all', res:'all', minMin:0,
+const S = { tab:'player', sport:'nba', pass:'', p:null, k:null, line:null, side:'over', range:'l10', back:10, mode:'bars', opp:'', venue:'all', comp:'all', res:'all', minMin:0, maxMin:0, season:'all', rest:'all',
   sort:{ col:'l10', dir:-1 }, board:{}, drag:null, chartKey:'' };
 const store = { get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
 const $ = s => document.querySelector(s);
@@ -627,7 +630,11 @@ async function load(name, kind, o = {}) {
   try {
     const p = await api(`${kind}?sport=${S.sport}&name=${encodeURIComponent(name)}${o.stat ? '&stat=' + encodeURIComponent(o.stat) : ''}`);
     if (seq !== loadSeq) return;
-    p.kind = kind; S.p = p; S.venue = 'all'; S.comp = 'all'; S.res = 'all'; S.minMin = 0; S.range = 'l10';
+    p.kind = kind; S.p = p; S.venue = 'all'; S.comp = 'all'; S.res = 'all'; S.minMin = 0; S.maxMin = 0; S.season = 'all'; S.rest = 'all'; S.range = 'l10';
+    // season label and days of rest before each game, for the filters
+    p.games.forEach((g, i) => { const d = new Date(String(g.date).slice(0, 10) + 'T12:00:00'), y = d.getFullYear(), m = d.getMonth();
+      g.season = ['nba', 'nhl'].includes(p.sport) ? (m >= 7 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`) : p.sport === 'nfl' ? String(m >= 6 ? y : y - 1) : p.sport === 'soccer' ? (m >= 6 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`) : String(y);
+      const prev = p.games[i + 1]; g.rest = prev ? Math.round((d - new Date(String(prev.date).slice(0, 10) + 'T12:00:00')) / 864e5) - 1 : null });
     const nx = p.next?.opp; S.opp = nx ? (p.games.find(g => sameOpp(g, nx))?.opp || nx) : '';
     const rec = store.get('lab.recent', []).filter(r => !(r.n === p.name && r.s === p.sport));
     rec.unshift({ n: p.name, s: p.sport, t: kind }); store.set('lab.recent', rec.slice(0, 8)); drawRecent();
@@ -646,7 +653,9 @@ const isYes = k => YES.has(k);
 // the games that count for a stat, after the filters
 function pool(k) {
   return S.p.games.filter(g => g.v[k] != null && (S.venue === 'all' || (S.venue === 'home' ? g.home === true : g.home === false)) && (S.comp === 'all' || g.comp === S.comp)
-    && (S.res === 'all' || g.res === S.res) && (!S.minMin || (g.min != null && g.min >= S.minMin)));
+    && (S.res === 'all' || g.res === S.res) && (!S.minMin || (g.min != null && g.min >= S.minMin)) && (!S.maxMin || (g.min != null && g.min <= S.maxMin))
+    && (S.season === 'all' || g.season === S.season)
+    && (S.rest === 'all' || (g.rest != null && (S.rest === 'b2b' ? g.rest === 0 : S.rest === '1' ? g.rest === 1 : g.rest >= 2))));
 }
 function inRange(gs, r) {
   if (r === 'l5') return gs.slice(0, 5); if (r === 'l10') return gs.slice(0, 10); if (r === 'l20') return gs.slice(0, 20);
@@ -823,9 +832,9 @@ function tiles(gs) {
 }
 // The main chart: one bar per game against the line. Drag the line to move it; the thin curve is the 5-game running average.
 function backBar(n) {
-  const tot = pool(S.k).length, cur = Math.min(n, tot), opts = [5, 10, 15, 20, 30, 50].filter(x => x < tot);
+  const tot = pool(S.k).length, cur = Math.min(n, tot), opts = [5, 10, 20, 50, 100].filter(x => x < tot);
   return `<div class="back"><span class="lbl">Games back</span><div class="seg sm">${opts.map(x => `<button data-back="${x}" class="${cur === x && /^(l\d+|n)$/.test(S.range) ? 'on' : ''}">${x}</button>`).join('')}<button data-back="${tot}" class="${S.range === 'all' ? 'on' : ''}">All ${tot}</button></div>
-    <input type="range" id="backR" min="${Math.min(3, tot)}" max="${tot}" value="${cur}" aria-label="Games back"><b class="num" id="backN">${cur}</b>
+    <input type="range" id="backR" min="${Math.min(3, tot)}" max="${tot}" value="${cur}" aria-label="Games back"><input type="number" id="backT" class="num backt" inputmode="numeric" min="1" max="${tot}" value="${cur}" aria-label="Type how many games back"><span class="lbl" id="backN" hidden>${cur}</span><span class="lbl">of ${tot}</span>
     ${isYes(S.k) ? '' : `<div class="seg sm" style="margin-left:auto"><button data-mode="bars" class="${S.mode === 'bars' ? 'on' : ''}">Bars</button><button data-mode="trend" class="${S.mode === 'trend' ? 'on' : ''}">Trend</button><button data-mode="table" class="${S.mode === 'table' ? 'on' : ''}" title="The same games as a table, for screen readers or a closer look">Table</button></div>`}</div>`;
 }
 function chart(games) {
@@ -835,7 +844,7 @@ function chart(games) {
   const max = S.drag?.max ?? Math.max(S.line * 1.25, hi * 1.04, 1), min = S.drag?.min ?? Math.min(lo * 1.1, S.line < 0 ? S.line * 1.25 : 0);
   const y = v => Math.max(0, Math.min(100, (v - min) / (max - min) * 100)), y0 = y(0);
   const tick = nice((max - min) / 4), ticks = []; for (let t = Math.ceil(min / tick) * tick; t < max * .98; t += tick) if (Math.abs(t) > 1e-9) ticks.push(Math.round(t * 100) / 100);
-  const key = [S.p.name, k, S.range, S.venue, S.comp, S.res, S.opp, S.minMin, n].join('|'), fresh = key !== S.chartKey && !S.drag; S.chartKey = key;
+  const key = [S.p.name, k, S.range, S.venue, S.comp, S.res, S.opp, S.minMin, S.maxMin, S.season, S.rest, n].join('|'), fresh = key !== S.chartKey && !S.drag; S.chartKey = key;
   const roll = vals.map((_, i) => avg(vals.slice(Math.max(0, i - 4), i + 1)));
   const over = yes ? 'Yes' : 'Over', under = yes ? 'No' : 'Under', lab = label(k);
   return `<div class="card chart${fresh ? ' fresh' : ''}${n > 22 ? ' dense' : n > 12 ? ' mid' : ''}${S.mode === 'trend' && !yes ? ' trend' : ''}">
@@ -952,11 +961,14 @@ function filters() {
   const p = S.p, comps = [...new Set(p.games.map(g => g.comp).filter(Boolean))], hasMin = p.games.some(g => g.min != null);
   const minOpts = p.sport === 'soccer' ? [0, 45, 60, 75] : p.sport === 'nba' || p.sport === 'wnba' ? [0, 15, 20, 25, 30] : p.sport === 'nhl' ? [0, 10, 14, 18, 22] : [];
   const opps = [...new Map(p.games.map(g => [g.opp, g])).values()].sort((a, b) => a.opp.localeCompare(b.opp)), nx = p.next?.opp;
+  const seasons = [...new Set(p.games.map(g => g.season).filter(Boolean))];
   const sel = (f, body) => `<select data-f="${f}">${body}</select>`, o = (v, l, on) => `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(l)}</option>`;
   return `<div class="filters">
     <label>Venue${sel('venue', o('all', 'Home and away', S.venue === 'all') + o('home', 'Home only', S.venue === 'home') + o('away', 'Away only', S.venue === 'away'))}</label>
     ${comps.length > 1 ? `<label>${p.sport === 'soccer' ? 'Competition' : 'Games'}${sel('comp', o('all', p.sport === 'soccer' ? 'All competitions' : 'All games', S.comp === 'all') + comps.map(c => o(c, c, S.comp === c)).join(''))}</label>` : ''}
-    ${hasMin && minOpts.length && p.kind !== 'team' ? `<label>Minutes${sel('minMin', minOpts.map(m => o(m, m ? `${m}+ minutes` : 'Any minutes', S.minMin === m)).join(''))}</label>` : ''}
+    ${hasMin && p.kind !== 'team' ? `<label>Minutes from<input type="number" inputmode="numeric" min="0" max="130" step="1" data-f="minMin" value="${S.minMin || ''}" placeholder="any" aria-label="Fewest minutes played"></label><label>to<input type="number" inputmode="numeric" min="0" max="130" step="1" data-f="maxMin" value="${S.maxMin || ''}" placeholder="any" aria-label="Most minutes played"></label>` : ''}
+    ${seasons.length > 1 ? `<label>Season${sel('season', o('all', 'All seasons', S.season === 'all') + seasons.map(x => o(x, x, S.season === x)).join(''))}</label>` : ''}
+    ${FIGHT.has(p.sport) ? '' : `<label>Rest${sel('rest', o('all', 'Any rest', S.rest === 'all') + o('b2b', 'Back-to-back', S.rest === 'b2b') + o('1', '1 day off', S.rest === '1') + o('2', '2+ days off', S.rest === '2'))}</label>`}
     <label>Result${sel('res', o('all', 'Any result', S.res === 'all') + o('W', 'Wins', S.res === 'W') + (p.sport === 'soccer' ? o('D', 'Draws', S.res === 'D') : '') + o('L', 'Losses', S.res === 'L'))}</label>
     <label>Opponent (H2H)${sel('opp', o('', 'None', !S.opp) + (S.opp && !opps.some(g => sameOpp(g, S.opp)) ? o(S.opp, S.opp + ' (next, no games yet)', true) : '') + opps.map(g => o(g.opp, g.opp + (nx && sameOpp(g, nx) ? ' (next)' : ''), sameOpp(g, S.opp))).join(''))}</label></div>`;
 }
@@ -1043,7 +1055,7 @@ $('#sports').addEventListener('click', e => { const b = e.target.closest('button
 $('#tabs').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; S.tab = t.dataset.t; tabs(); $('#msg').innerHTML = ''; render() });
 $('#recent').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.sport = b.dataset.s; load(b.dataset.n, b.dataset.t) });
 function setBack(nn) { const tot = pool(S.k).length; S.back = Math.max(1, Math.min(tot, nn)); S.range = S.back >= tot ? 'all' : S.back === 5 ? 'l5' : S.back === 10 ? 'l10' : S.back === 20 ? 'l20' : 'n'; const y = scrollY; render(); scrollTo(0, y) }
-document.addEventListener('input', e => { if (e.target.id === 'backR') { const o = $('#backN'); if (o) o.textContent = e.target.value } });
+document.addEventListener('input', e => { if (e.target.id === 'backR') { const o = $('#backT'); if (o) o.value = e.target.value } });
 const setLine = v => { S.line = Math.round(v * 100) / 100; S.lineFrom = 'custom'; render() };
 document.addEventListener('click', e => {
   const t = e.target;
@@ -1061,9 +1073,9 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.id === 'backR') return setBack(+t.value);
+  if (t.id === 'backR' || t.id === 'backT') return setBack(+t.value || 1);
   if (t.id === 'line') { const v = parseFloat(t.value); if (!isNaN(v)) setLine(v); return }
-  if (t.dataset.f) { const f = t.dataset.f; S[f] = f === 'minMin' ? +t.value : t.value; if (f === 'opp') S.range = t.value ? 'h2h' : (S.range === 'h2h' ? 'l10' : S.range); render() }
+  if (t.dataset.f) { const f = t.dataset.f; S[f] = f === 'minMin' || f === 'maxMin' ? (+t.value || 0) : t.value; if (f === 'opp') S.range = t.value ? 'h2h' : (S.range === 'h2h' ? 'l10' : S.range); render() }
 });
 // hover cards
 const tip = $('#tip');

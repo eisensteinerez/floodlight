@@ -195,6 +195,24 @@ def _r(v, d=2):
     return None if v is None else round(v, d) if isinstance(v, float) else v
 
 
+def _deeper(sport, p):
+    """Two more seasons behind the two the bot loads, so the Lab can go back 100+ games. Cached by the bot's fetcher."""
+    try:
+        if sport == "mlb":
+            y = time.gmtime().tm_year
+            more = bot.mlb_season(p["id"], y - 2) + bot.mlb_season(p["id"], y - 3)
+        else:
+            o = bot.find_player(sport, p["name"]) or {}
+            path = f"{bot.ESPN_PATH[sport].split('/')[0]}/{o.get('lg') or sport}"
+            y = bot.cur_season(sport)
+            more = bot.espn_season(path, p["id"], y - 2) + bot.espn_season(path, p["id"], y - 3)
+    except Exception:
+        return p
+    seen = {g["id"] for g in p["games"]}
+    games = p["games"] + [g for g in more if g["id"] not in seen]
+    return {**p, "games": sorted(games, key=lambda g: g["date"], reverse=True)}
+
+
 def player(sport, name, stat=""):
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
@@ -203,10 +221,12 @@ def player(sport, name, stat=""):
     p = bot.load_player(sport, name.strip())
     if sport == "soccer":
         bot.soccer_deep(p, 20)
+    else:
+        p = _deeper(sport, p)
     sp = bot.stat_sport(sport)
     defs = bot.STAT[sp]
     games = []
-    for g in p["games"][:82]:
+    for g in p["games"][:400]:
         v = {}
         for k, sd in defs.items():
             try:
