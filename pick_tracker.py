@@ -277,49 +277,98 @@ def short_block(c):
     return f"**{res}** {c['slate'][5:]} {c['play']} ({when:%a} {when.strftime('%I:%M%p').lstrip('0').lower()}): {legs}"
 
 
+def card_sport(c):
+    """NBA, NFL, WNBA or Mixed, from the card's picks."""
+    sp = {(g.get("sport") or c.get("sport") or "").lower() for g in c["legs"]} - {""}
+    return sp.pop().upper() if len(sp) == 1 else "Mixed" if sp else (c.get("sport") or "").upper() or "Other"
+
+
+def sport_records(cards):
+    """{"NBA": stats, "NFL": stats, ...} for a props channel: the sub-records, NBA and NFL first."""
+    by = {}
+    for c in cards:
+        by.setdefault(card_sport(c), []).append(c)
+    order = ["NBA", "NFL", "WNBA", "Mixed"]
+    return {k: stats(by[k]) for k in sorted(by, key=lambda k: order.index(k) if k in order else 9) if stats(by[k])["n"]}
+
+
+def outcome_of(snap, c):
+    """What a correction is about: a props card's result, or a soccer post's picks. A late leg that doesn't change
+    the card (a pending pick on a card that already lost) isn't a correction."""
+    return tuple(snap["legs"]) if c["single"] else snap["result"]
+
+
+def recap_day():
+    """The slate a run recaps: at 12:30 AM and 8 AM that is the day before."""
+    return (now_et() - dt.timedelta(hours=9)).date().isoformat()
+
+
 def channel_report(ch, new, fixed, everything, update=False):
+    """One channel's recap of the day: that day's cards, the day's record, then the all-time record (props channels
+    also by sport)."""
     name, icon = STATE["channels"].get(ch, ch), STATE.get("icons", {}).get(ch, "🎯")
+    soccer = is_soccer(ch)
     today, alltime = stats(new + [c for c, _ in fixed]), stats(everything)
     blocks = [card_block(c) for c in new] + [card_block(c, was) for c, was in fixed]
     desc = "\n\n".join(blocks)
     if len(desc) > 3900:
         desc = desc[:3900] + "\n…"
     color = B.GREY if not today["n"] else B.GREEN if today["won"] >= today["lost"] else B.RED
-    soccer = is_soccer(ch)
+    unit = "picks" if soccer else "cards"
+    fields = [{"name": "Today", "value": f"**{wl(today)}** {unit}", "inline": True},
+              {"name": "All-time", "value": f"**{wl(alltime)}** · {pct(alltime['pct'])}", "inline": True},
+              {"name": "Streak", "value": f"**{alltime['streak']}**", "inline": True}]
+    if not soccer:
+        subs = sport_records(everything)
+        if subs:
+            fields.append({"name": "All-time by sport", "value": " · ".join(f"{k} **{wl(v)}** ({pct(v['pct'])})" for k, v in subs.items()), "inline": False})
     return {"author": {"name": f"{icon}  {name.upper().replace('-', ' ')}"},
-            "title": ("Updated results" if update else "Results") + f" · {wl(today)} " + ("picks" if soccer else "cards"),
-            "color": color, "description": desc,
-            "fields": [{"name": "All-time", "value": f"**{wl(alltime)}**", "inline": True},
-                       {"name": "Win rate", "value": f"**{pct(alltime['pct'])}**", "inline": True},
-                       {"name": "Streak", "value": f"**{alltime['streak']}**", "inline": True},
-                       {"name": "Picks hit", "value": f"{alltime['lw']}-{alltime['ll']}", "inline": True}],
+            "title": ("Updated results" if update else "Results") + f" · {wl(today)} {unit}",
+            "color": color, "description": desc, "fields": fields,
             "footer": {"text": "Every pick counts on its own" if soccer else
                        "A card is one play: all picks hit = win, one miss = loss · pushes and DNPs don't break it"}}
 
 
 def board_block(by_ch):
-    rows = [(STATE["channels"].get(ch, ch), stats(cs), is_soccer(ch)) for ch, cs in by_ch.items()]
-    rows = [r for r in rows if r[1]["n"]]
-    rows.sort(key=lambda x: (-(x[1]["pct"] or 0), -x[1]["won"], x[1]["lost"]))
-    if not rows:
-        return ""
-    w = max(len(n) for n, _, _ in rows)
-    medal = ["🥇", "🥈", "🥉"]
-    lines = [f"{'':3}{'CHANNEL'.ljust(w)}  {'W-L':>7}  {'WIN%':>4}  STRK"]
-    for i, (n, s, _) in enumerate(rows):
-        lines.append(f"{str(i + 1) + '.':3}{n.ljust(w)}  {wl(s):>7}  {pct(s['pct']):>4}  {s['streak']}")
-    top = " ".join(f"{medal[i]} #{n}" for i, (n, _, _) in enumerate(rows[:3]))
-    return top + "\n```\n" + "\n".join(lines) + "\n```"
+    """The all-time chart: every channel's record, in channel order (they all play differently, so no ranking)."""
+    props, soccer = [], []
+    for ch in STATE["channels"]:
+        cs = by_ch.get(ch) or []
+        st = stats(cs)
+        if not st["n"]:
+            continue
+        name = STATE["channels"][ch]
+        (soccer if is_soccer(ch) else props).append((name, st, None if is_soccer(ch) else sport_records(cs)))
+    out = []
+    if props:
+        w = max(len(n) for n, _, _ in props)
+        sub = lambda subs, k: wl(subs[k]) if k in subs else "–"
+        lines = [f"{'CHANNEL'.ljust(w)}  {'ALL':>6} {'WIN%':>4}  {'NBA':>5}  {'NFL':>5}"]
+        lines += [f"{n.ljust(w)}  {wl(s):>6} {pct(s['pct']):>4}  {sub(subs, 'NBA'):>5}  {sub(subs, 'NFL'):>5}" for n, s, subs in props]
+        out.append("**Props** (each card is one play)\n```\n" + "\n".join(lines) + "\n```")
+    if soccer:
+        w = max(len(n) for n, _, _ in soccer)
+        lines = [f"{'CHANNEL'.ljust(w)}  {'ALL':>6} {'WIN%':>4}"]
+        lines += [f"{n.ljust(w)}  {wl(s):>6} {pct(s['pct']):>4}" for n, s, _ in soccer]
+        out.append("**Soccer** (each pick is one play)\n```\n" + "\n".join(lines) + "\n```")
+    return "\n".join(out)
 
 
 def report(update=False):
-    """[(content, embed)]: one post per channel with newly finished plays and corrections, then the leaderboard."""
+    """[(content, embed, card ids)]: one post per channel with that day's finished plays (and any change to them),
+    then the all-time chart. Earlier days aren't recapped again; a late change to them still counts in the records."""
     cards = live_cards()
-    new = [c for c in cards if settled(c) and not c.get("reported")]
+    day = recap_day()
+    with _lock:   # older days: never posted again, only counted
+        for c in cards:
+            if c["slate"] < day and settled(c) and not c.get("reported"):
+                c["reported"] = snapshot(c)
+    mine = [c for c in cards if c["slate"] == day]
+    new = [c for c in mine if settled(c) and not c.get("reported")]
     fixed = []
-    for c in cards:
+    for c in mine:
         r = c.get("reported")
-        if r and settled(c) and snapshot(c) != r:
+        if r and settled(c) and outcome_of(snapshot(c), c) != outcome_of(r, c):
             was = r["result"] if not c["single"] else "-".join(str(r["legs"].count(x)) for x in ("won", "lost"))
             fixed.append((c, TAG.get(was, was).replace("*", "") if not c["single"] else was))
     if not new and not fixed:
@@ -334,11 +383,10 @@ def report(update=False):
     by_all = {}
     for c in cards:
         by_all.setdefault(c["ch"], []).append(c)
-    waiting = sum(1 for c in cards if not settled(c))
-    out.append(("", {"title": "🏆 LEADERBOARD · ALL-TIME", "color": B.BLUE, "description": board_block(by_all) or "–",
-                     "footer": {"text": "Props: each card is one play · Soccer: each pick is one play · ESPN & FotMob results"
-                                + (f" · {waiting} card(s) still waiting on a final" if waiting else "")}}, []))
-    d = now_et() - dt.timedelta(hours=9)
+    waiting = sum(1 for c in mine if not settled(c))
+    out.append(("", {"title": "📈 ALL-TIME RECORDS", "color": B.BLUE, "description": board_block(by_all) or "–",
+                     "footer": {"text": "ESPN & FotMob results" + (f" · {waiting} card(s) from today still waiting on a final" if waiting else "")}}, []))
+    d = dt.date.fromisoformat(day)
     out[0] = (f"📊 **{'UPDATED RESULTS' if update else 'NIGHTLY RESULTS'} — {d:%A, %B} {d.day}**",) + out[0][1:]
     return out
 
@@ -618,7 +666,7 @@ def cmd_leaderboard(o):
     if not lb:
         return {"embeds": [{"title": "🏆 Leaderboard", "color": B.BLUE,
                             "description": "Nothing graded yet. Picks are graded every night at 12:30 AM ET and checked again at 8 AM."}]}
-    return {"embeds": [{"title": "🏆 LEADERBOARD · " + (f"LAST {days} DAYS" if days else "ALL-TIME"), "color": B.BLUE, "description": lb,
+    return {"embeds": [{"title": "📈 RECORDS · " + (f"LAST {days} DAYS" if days else "ALL-TIME"), "color": B.BLUE, "description": lb,
                         "footer": {"text": "Props: each card is one play · Soccer: each pick is one play"}}]}
 
 
@@ -670,5 +718,15 @@ if __name__ == "__main__":
             print(f"\n#{STATE['channels'].get(c['ch'])} {c['slate']} {c['play']} -> {c['result']}")
             for g in c["legs"]:
                 print("   " + leg_line(g))
+        print("\n\n========== what the next post would look like (as if nothing was posted yet) ==========")
+        for c in live_cards():
+            c["reported"] = None
+        for content, e, _ in report():
+            print("\n" + (content or ""))
+            print((e.get("author") or {}).get("name", ""), "|", e.get("title", ""))
+            print(e.get("description", ""))
+            for f in e.get("fields") or []:
+                print(f"  [{f['name']}] {f['value']}")
+            print(f"  ({(e.get('footer') or {}).get('text', '')})")
     else:
         print(__doc__)
