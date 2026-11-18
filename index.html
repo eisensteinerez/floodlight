@@ -3925,6 +3925,20 @@ function favPlayerRow(p){
   return `<div class="pf-item"><button class="pf-open" data-player="${esc(p.id)}">${face(p.name, p.team, p.photo || '', 'mini')}<span>${esc(p.name)}<small>${esc(p.team || '')}</small></span></button>
     <button class="x" data-act="unfavP" data-to="${esc(p.id)}" aria-label="Stop following ${esc(p.name)}">✕</button></div>`;
 }
+// your pick record at a glance: hit rate ring, totals, current streak and the latest picks
+function profilePicksHTML(){
+  const settled = S.picks.filter(p => p.result).sort((a, b) => new Date(a.date) - new Date(b.date)), won = settled.filter(p => p.result === 'won').length, open = S.picks.length - settled.length;
+  let other = 0; try { other = Object.keys(JSON.parse(localStorage.getItem('fl.sidepicks') || '{}')).length } catch {}
+  if (!S.picks.length && !other) return `<section class="pf-sec pf-rec"><h5>Your picks</h5><p class="pf-empty">No picks yet. Open any game's Prediction tab and tap a side to start your record.</p></section>`;
+  const rate = settled.length ? won / settled.length : 0, C = 2 * Math.PI * 30;
+  let streak = 0; for (let i = settled.length - 1; i >= 0 && settled[i].result === settled[settled.length - 1].result; i--) streak++;
+  const last = settled.slice(-8);
+  return `<section class="pf-sec pf-rec"><h5>Your picks</h5><div class="pf-rec-in">
+      <div class="pf-ring"><svg viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><circle class="a" cx="36" cy="36" r="30" stroke-dasharray="${(rate * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 36 36)"/></svg><b class="num">${settled.length ? Math.round(rate * 100) + '%' : '–'}</b><small>Hit rate</small></div>
+      <div class="pf-rec-n"><span><b class="num">${won}–${settled.length - won}</b>Right, wrong</span><span><b class="num">${open}</b>Waiting</span><span><b class="num">${settled.length ? streak + (settled[settled.length - 1].result === 'won' ? 'W' : 'L') : '–'}</b>Streak</span>${other ? `<span><b class="num">${other}</b>Other sports</span>` : ''}</div></div>
+    ${last.length ? `<div class="pf-dots" role="img" aria-label="Last ${last.length} picks: ${last.map(p => p.result).join(', ')}">${last.map(p => `<i class="${p.result}" title="${esc(`${p.home} v ${p.away}: ${p.result}`)}"></i>`).join('')}</div>` : ''}
+    <button class="btn ghost pf-editbtn" data-shell="pred" data-act="pfclose">See all predictions</button></section>`;
+}
 function renderProfile(){
   const el = $('profile'); if (!el || el.hidden) return;
   const P = S.prof, me = S.me, keep = document.activeElement?.id, caret = document.activeElement?.selectionStart;
@@ -3960,7 +3974,7 @@ function renderProfile(){
   const teamResults = P.resT.map(t => `<button class="pf-res" data-act="addT" data-to="${esc(t.id)}"><img src="${esc(t.logo)}" alt=""><span>${esc(t.name)}<small>${esc(t.lgName)}</small></span><b>${isFav(t.id) ? '★' : '+'}</b></button>`).join('');
   const playerResults = P.resP.map(p => `<button class="pf-res" data-act="addP" data-to="${esc(p.id)}">${face(p.name, p.team, p.photo, 'mini')}<span>${esc(p.name)}<small>${esc(p.team)}</small></span><b>${isFavPlayer(p.id) ? '★' : '+'}</b></button>`).join('');
   el.innerHTML = `<div class="pf-head"><h2 id="profileTitle">${me ? 'Your profile' : 'Profile'}</h2><button class="icon-btn x" data-act="pfclose" aria-label="Close profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-    <div class="pf-body">${body}
+    <div class="pf-body">${body}${profilePicksHTML()}
       <section class="pf-sec" aria-labelledby="fT"><h5 id="fT">Favourite teams</h5>${S.fav.map(favTeamRow).join('') || '<p class="pf-empty">No teams yet. Add one below, or tap ☆ Follow on any team page.</p>'}
         <label class="mk-q pf-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="pfAddT" type="search" placeholder="Add a team" value="${esc(P.addT)}" aria-label="Search for a team to follow"></label>${teamResults}</section>
       <section class="pf-sec" aria-labelledby="fP"><h5 id="fP">Favourite players</h5>${S.favPlayers.map(favPlayerRow).join('') || '<p class="pf-empty">No players yet. Add one below, or tap ☆ Follow on a player page.</p>'}
