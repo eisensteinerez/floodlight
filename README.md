@@ -36,6 +36,7 @@ and its disk is wiped whenever it sleeps or redeploys. Without `DATABASE_URL`, m
 - `/predict sport [team]` – win chances from the betting market; with a team, every book's price and the value bets.
 - `/lineup team [sport]` – FotMob predicted or confirmed soccer lineups, MLB batting orders and probable pitchers,
   and injury reports for the NBA, WNBA, NFL and NHL.
+- `/record [sport] [days]` – Floodlight's own prediction record (see below).
 - `/help`
 
 It runs inside `server.py` on the same free Render service, so there's nothing extra to host. Discord sends each
@@ -74,3 +75,11 @@ opens `https://<your-site>.onrender.com/api/version` every 10 minutes keeps it a
 month cover one service running all the time.
 
 Try a command without Discord: `python3 discord_bot.py try research player="Jayson Tatum" stat=pts`.
+
+## Track record
+
+`record.py` locks in each tracked match's last forecast at kick-off and grades it at full time (ESPN results, or
+FotMob for FotMob-only leagues). Predictions › Track record shows the W-L, hit rate, streaks, a 30-day chart,
+results by confidence, sport and league, the full history with filters, your own picks next to Floodlight's, and a
+shareable record card image. It's saved in `record.json` (and in the database when `DATABASE_URL` is set). Link
+straight to it with `/#record`.

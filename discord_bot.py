@@ -940,10 +940,39 @@ def cmd_help(o):
         "`/scores` live scores, finals and today's schedule.",
         "`/predict` win chances from the betting market. Add a team for every book's price and the value bets.",
         "`/lineup` predicted or confirmed soccer lineups, MLB batting orders and probable pitchers, injury reports.",
+        "`/record` Floodlight's own prediction record: W-L, hit rate, streak and the latest results.",
         "", "Hit rates are past results, not guarantees. Bet responsibly."])}]}
 
 
-COMMANDS = {"research": cmd_research, "props": cmd_props, "scores": cmd_scores, "predict": cmd_predict, "lineup": cmd_lineup, "help": cmd_help}
+# ---------- /record ----------
+def cmd_record(o):
+    rec = D.get("record")
+    if not rec:
+        raise LookupError("The record isn't available on this server.")
+    sport = o.get("sport") if o.get("sport") in ("soccer", "football") else None
+    days = int(o.get("days") or 0)
+    since = time.time() - days * 86400 if days else None
+    s = rec.summary(sport, since)
+    if not s["won"] and not s["lost"]:
+        return {"embeds": [{"title": "Floodlight's record", "color": BLUE, "description": "No graded predictions yet. Picks are logged at kick-off and graded at full time."
+                            + (f" {s['pending']} waiting on a result." if s["pending"] else "")}]}
+    st = s["streak"] or {}
+    mark = {"won": "✅", "lost": "❌"}
+    lines = []
+    for e in s["last"] or []:
+        side = "Draw" if e["pick"] == "draw" else e[e["pick"]]
+        lines.append(f"{mark.get(e['result'], '•')} {e['home']} {e['final'][0]}-{e['final'][1]} {e['away']} · picked **{side}** ({round((e['top'] or 0) * 100)}%)")
+    scope = ("Soccer" if sport == "soccer" else "American football" if sport == "football" else "All sports") + (f", last {days} days" if days else ", all time")
+    return {"embeds": [{"title": "Floodlight's record", "url": (SITE + "/#record") if SITE else None, "color": GREEN if (s["rate"] or 0) >= .5 else RED,
+                        "description": scope, "fields": [
+                            {"name": "Record", "value": f"**{s['won']}-{s['lost']}**", "inline": True},
+                            {"name": "Hit rate", "value": f"**{round(s['rate'] * 100)}%**", "inline": True},
+                            {"name": "Streak", "value": f"{'W' if st.get('kind') == 'won' else 'L'}{st.get('n', 0)}", "inline": True},
+                            {"name": "Latest results", "value": "\n".join(lines)[:1000] or "–", "inline": False}],
+                        "footer": {"text": f"Logged at kick-off, graded at full time · {s['pending']} pending · Past results, not guarantees"}}]}
+
+
+COMMANDS = {"research": cmd_research, "props": cmd_props, "scores": cmd_scores, "predict": cmd_predict, "lineup": cmd_lineup, "record": cmd_record, "help": cmd_help}
 
 
 def err(msg):
@@ -1129,6 +1158,9 @@ def command_defs():
             sport(True, "Sport"), {"type": 3, "name": "team", "description": "One team's next game in detail"}]},
         {"name": "lineup", "description": "Predicted or confirmed lineups, probable pitchers and injuries", "options": [
             {"type": 3, "name": "team", "description": "Team name, e.g. Arsenal or Yankees", "required": True}, sport(False, "Sport (default soccer)")]},
+        {"name": "record", "description": "Floodlight's prediction record: W-L, hit rate, streak and latest results", "options": [
+            {"type": 3, "name": "sport", "description": "Only this sport", "choices": [{"name": "Soccer", "value": "soccer"}, {"name": "American football", "value": "football"}]},
+            {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
         {"name": "help", "description": "What the Floodlight bot can do"},
     ]
 
