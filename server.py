@@ -1481,7 +1481,7 @@ if __name__ == "__main__":
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
                           odds=odds, dfs=dfs, record=record, cache_dir=CACHE_DIR)
         import pick_tracker
-        pick_tracker.setup(similar=similar, cache_dir=CACHE_DIR)
+        pick_tracker.setup(similar=similar, fetch=fetch, cache_dir=CACHE_DIR)
         print("Discord bot: listening at /api/discord/interactions")
     print(f"Floodlight running at http://localhost:{PORT}")
     if LAN:
