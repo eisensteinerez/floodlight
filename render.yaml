@@ -29,3 +29,5 @@ services:
         value: "14"
       - key: DISCORD_GUILD_ID
         sync: false
+      - key: DISCORD_MEMBER_ROLES
+        sync: false

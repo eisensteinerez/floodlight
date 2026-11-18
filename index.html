@@ -1083,11 +1083,35 @@ img.lg-dark{background:#fff;border-radius:7px;padding:2px;box-sizing:border-box;
 .hero.solo .thead .crest{background:#fff;border-radius:50%;padding:8px;box-sizing:border-box;width:64px;height:64px;filter:none;box-shadow:0 3px 10px rgba(0,0,0,.3)}
 :root[data-theme="dark"] .lg > img,:root[data-theme="dark"] .group-h img,:root[data-theme="dark"] .chip img,:root[data-theme="dark"] .hero-top .lgname img,:root[data-theme="dark"] .cal-lg,:root[data-theme="dark"] .ag-lg,:root[data-theme="dark"] .conf-logo{background:rgba(255,255,255,.92);border-radius:5px;padding:1px;box-sizing:border-box}
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .lg > img,:root:not([data-theme="light"]) .group-h img,:root:not([data-theme="light"]) .chip img,:root:not([data-theme="light"]) .hero-top .lgname img,:root:not([data-theme="light"]) .cal-lg,:root:not([data-theme="light"]) .ag-lg,:root:not([data-theme="light"]) .conf-logo{background:rgba(255,255,255,.92);border-radius:5px;padding:1px;box-sizing:border-box} }
+
+/* phone header: logo and buttons on one row, the sport switch full width under it, then search */
+@media (max-width:520px){
+  .top-in{flex-wrap:wrap;gap:10px 8px;padding-block:10px 8px}
+  .top-in > .avatar-btn{order:0}
+  .top-in > .brand{order:1;flex:1 1 auto;min-width:0;font-size:22px}
+  .top-in > .brand svg{width:24px;height:24px}
+  .top-in > .sync{display:none}
+  .top-in > .rs-open,.top-in > .flm-btn,.top-in > .prefwrap,.top-in > #themeBtn{order:2;margin:0}
+  .top-in > .sport-sw{order:5;flex:1 1 100%;margin:0;overflow-x:auto;scrollbar-width:none;-webkit-mask:linear-gradient(90deg,#000 88%,transparent);mask:linear-gradient(90deg,#000 88%,transparent)}
+  .top-in > .sport-sw::-webkit-scrollbar{display:none}
+  .top-in > .sport-sw button{flex:none;padding:7px 11px;font-size:12.5px}
+  .top-in > .search{order:10;flex:1 1 100%}
+}
+@media (max-width:360px){ .top-in > .brand{font-size:0} }
 </style>
 <script src="access.js"></script>
 </head>
 <body>
 <a class="skip" href="#groups">Skip to matches</a>
+<script>
+document.addEventListener('error', ev => {
+  const img = ev.target;
+  if (!(img instanceof HTMLImageElement) || img.dataset.fallback) return;
+  img.dataset.fallback = '1';
+  if (img.closest('.lg')) img.outerHTML = '<span class="dot"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>';
+  else if (img.closest('.chip, .qf, .lg-order')) img.remove();
+}, true);
+</script>
 <header class="top"><div class="top-in">
   <button class="avatar-btn" id="profileBtn" aria-haspopup="dialog" aria-controls="profile" aria-label="Log in or create a profile"></button>
   <div class="brand">
@@ -1289,7 +1313,8 @@ function visibleEvents(){
 }
 const stateRank = s => s === 'in' ? 0 : s === 'pre' ? 1 : 2;
 function render(){
-  document.querySelectorAll('.sport-sw button').forEach(b => { const on = b.dataset.sport === S.sport; b.classList.toggle('on', on); b.setAttribute('aria-selected', on) });
+  document.querySelectorAll('.sport-sw button').forEach(b => { const on = b.dataset.sport === S.sport; b.classList.toggle('on', on); b.setAttribute('aria-selected', on);
+    if (on && b.parentElement.scrollWidth > b.parentElement.clientWidth) b.parentElement.scrollLeft = Math.max(0, b.offsetLeft - b.parentElement.offsetLeft - 40) });
   if (S.sport === 'basketball') {   // basketball has its own screen (basketball.js)
     $('list').hidden = true; $('market').hidden = true; $('picks').hidden = true; $('fb').hidden = true; $('bb').hidden = false; $('chips').classList.remove('mk-hide');
     document.querySelector('.shell').classList.remove('mk-page');

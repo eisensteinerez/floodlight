@@ -1039,6 +1039,14 @@ def admin_action(path, body):
             if body.get("role") not in ROLES:
                 return 400, {"error": "Pick viewer, research or pending."}
             u["role"] = body["role"]
+        elif path == "/api/admin/password":   # the member forgot it: a temporary one the admin passes on
+            temp = "-".join(secrets.token_hex(2) for _ in range(3))
+            u["salt"] = secrets.token_hex(16)
+            u["hash"] = _hash(temp, u["salt"])
+            for t in [t for t, v in _sessions.items() if v["user"] == key]:
+                _sessions.pop(t, None)
+            _save_accounts()
+            return 200, {"users": admin_list(), "password": temp}
         elif path == "/api/admin/remove":
             _users.pop(key, None)
             for t in [t for t, v in _sessions.items() if v["user"] == key]:
