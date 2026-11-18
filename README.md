@@ -111,12 +111,13 @@ channel (every card with each pick's result, today's record, all-time record, wi
 leaderboard. At 8:00 AM it grades everything again from fresh numbers: it posts what finished since, and if a result
 changed it posts the correction. No AI, no paid APIs. Tests on real posts: `python3 tests/test_picks.py`.
 
-Discord often blocks requests from Render's shared address (Cloudflare "error 1015"), so the grading runs on
-GitHub Actions (`.github/workflows/grade-picks.yml`, free). Add one repository secret under **Settings > Secrets and
-variables > Actions**: `DISCORD_BOT_TOKEN`, the same value as on Render. The record is kept on the `pick-data` branch,
-encrypted with a key made from the bot token, and the server reads it for `/leaderboard`. Once GitHub has run, the
-server leaves the posting to it; until then the server grades on its own. To grade and post right away:
-**Actions > Grade pick channels > Run workflow** with "now" ticked.
+Discord often blocks requests from Render's shared address (Cloudflare "error 1015"), so the grading runs first on
+GitHub Actions (`.github/workflows/grade-picks.yml`, free), with one repository secret under **Settings > Secrets and
+variables > Actions**: `DISCORD_BOT_TOKEN`, the same value as on Render. GitHub's timer is best-effort (it can run late
+or not at all), so if a set time isn't posted within 35 minutes, the server posts it from minute 40. They share one
+record, encrypted with a key made from the bot token (the `pick-data` branch and the server's `/api/picks/state`; the
+newest wins), so nothing posts twice. To grade and post right away: **Actions > Grade pick channels > Run workflow**
+with "now" ticked.
 `/checkpicks` shows every card the bot read and how each pick graded, without posting (`post:True` posts).
 
 It needs **Message Content Intent** turned on (Discord Developer Portal › your app › Bot › Privileged Gateway Intents)
