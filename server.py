@@ -42,6 +42,7 @@ import baseball
 import basketball
 import hockey
 import tennis
+import boxing
 import forecaster
 import dfs
 import odds
@@ -85,7 +86,7 @@ def signup_allowed(addr):
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
-                "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js"}
+                "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -1419,6 +1420,12 @@ class Handler(SimpleHTTPRequestHandler):
                 try:
                     status, obj, age = hockey.handle(u.path[len("/api/hk/"):], q)
                 except (OSError, ValueError):   # HTTP errors, refused connections, timeouts, bad JSON
+                    status, obj, age = 502, {"error": "source unavailable"}, 0
+                return self.send_json(obj, status, max_age=age)
+            if u.path.startswith("/api/box/"):   # boxing (boxing.py)
+                try:
+                    status, obj, age = boxing.handle(u.path[len("/api/box/"):], q)
+                except (OSError, ValueError):
                     status, obj, age = 502, {"error": "source unavailable"}, 0
                 return self.send_json(obj, status, max_age=age)
             if u.path.startswith("/api/tn/"):   # tennis (tennis.py)

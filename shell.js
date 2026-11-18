@@ -13,6 +13,7 @@
     baseball: '<circle cx="12" cy="12" r="9"/><path d="M6.500 5c2.500 4 2.500 10 0 14M17.500 5c-2.500 4-2.500 10 0 14"/>',
     hockey: '<path d="M6 3l7 14h5a2 2 0 0 1 0 4h-7L4 4"/><path d="M3 20.500h3.500"/>',
     tennis: '<circle cx="12" cy="12" r="9"/><path d="M5 6c4 2 6 6 5 13M19 18c-4-2-6-6-5-13"/>',
+    boxing: '<path d="M7 20h8v-4l3-3V8a3 3 0 0 0-3-3h-.5A2.5 2.5 0 0 0 12 3H9a3 3 0 0 0-3 3v2.5A2.5 2.5 0 0 0 4 11v1a3 3 0 0 0 3 3zM7 16h8M10 9h5"/>',
     research: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.300-4.300"/>',
     pred: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
     fav: '<path d="M12 3l2.800 5.700 6.200.9-4.500 4.400 1.100 6.200L12 17.300l-5.600 2.900 1.100-6.200L3 9.600l6.200-.9z"/>',
@@ -23,7 +24,7 @@
     bolt: '<path d="M13 3 5 13h6l-1 8 8-10h-6z"/>',
   };
   const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
-  const SPORTS = [['soccer', 'Soccer'], ['football', 'Football'], ['basketball', 'Basketball'], ['baseball', 'Baseball'], ['hockey', 'Hockey'], ['tennis', 'Tennis']];
+  const SPORTS = [['soccer', 'Soccer'], ['football', 'Football'], ['basketball', 'Basketball'], ['baseball', 'Baseball'], ['hockey', 'Hockey'], ['tennis', 'Tennis'], ['boxing', 'Boxing']];
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
   const root = document.documentElement;
   root.dataset.sport = S.sport || 'soccer';
