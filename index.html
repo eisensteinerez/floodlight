@@ -4695,7 +4695,7 @@ function insightPane(e, lite){
       <div class="vs-table">${['home','draw','away'].map(k => { const g = P.model[k] - P.market[k];
         return `<div><span>${esc(k === 'draw' ? 'Draw' : e[k].name)}</span><b class="num">${pct(P.model[k])}%</b><b class="num">${pct(P.market[k])}%</b><em class="num ${g > .03 ? 'up' : g < -.03 ? 'down' : ''}">${g > 0 ? '+' : ''}${pct(g)}</em></div>` }).join('')}
         <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div>${predEdge(e, P)}` : ''}
-      ${teamNewsBlock(e, P)}${propsBlock(e)}${S.serverOK !== false ? fcBlock(e) : timelineBlock(e)}`;
+      ${teamNewsBlock(e, P)}${propsBlock(e)}${S.serverOK !== false ? fcBlock(e) : ''}`;
   } else if (pv === 'why') {
     body = `<div class="sub-h"><h5>Why ${esc(pickLabel(e, P.pick).toLowerCase())}</h5><small>What the model looked at</small></div>
       <ol class="why2">${reasons(e, P).map((r, i) => `<li style="--i:${i}"><b class="num">${String(i + 1).padStart(2, '0')}</b><p>${esc(r)}</p></li>`).join('')}</ol>${deepResearchBlock(e, P)}`;

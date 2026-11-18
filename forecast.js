@@ -82,7 +82,10 @@ function fcApplyFootball(e, P){
 }
 const fcTag = P => P.fromServer ? ` <small class="fc-tag">${esc(FC_LABEL[P.fromServer.stage] || '')} update${P.fromServer.ai && !P.fromServer.ai.error ? ' · Claude research' : ''}</small>` : '';
 
-/* ---------- the timeline ---------- */
+/* ---------- the timeline ----------
+   Hidden from visitors (Erez, 2026-11-18). Tracking and fetching still run here, so the latest scheduled forecast
+   keeps driving the prediction. Set FC_SHOW_TIMELINE to true to show the timeline again. */
+const FC_SHOW_TIMELINE = false;
 const fcPending = new Set();
 function fcBlock(e){
   if (document.documentElement.classList.contains('fl-noresearch')) return '';
@@ -90,8 +93,9 @@ function fcBlock(e){
   const key = fcKeyOf(e), f = S.fc.get(key);
   if (!f) {
     if (e.state === 'pre' && !fcPending.has(key)) { fcPending.add(key); fcTrack([e]).then(() => fcFetch([key])).then(() => fcRerender(key)).catch(() => {}).finally(() => fcPending.delete(key)) }
-    return e.state === 'pre' ? `<div class="sub-h"><h5>Scheduled forecasts</h5><small>Loading…</small></div>` : '';
+    return '';
   }
+  if (!FC_SHOW_TIMELINE) return '';   // the schedule keeps running and feeds the prediction; the timeline itself stays hidden
   if (!f.snaps.length && !f.plan) return '';
   const fb = isFbEv(e), morning = fb ? '9:00' : '7:00';
   const asItem = s => ({ stage: s.stage, at: s.at, done: true, snap: s });

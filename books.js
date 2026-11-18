@@ -133,7 +133,7 @@ function propsBlock(e){
   let h = `<div class="sub-h"><h5>Player props</h5><small>${d.props?.length ? `${d.props.length} props across ${esc(d.books.map(b => b.name).join(', '))}` : ''}</small></div>`;
   if (picks.length) h += `<ul class="pp">${picks.slice(0, 3).map(x => { const p = lineFor(x.player, x.market), side = /under/i.test(x.pick) ? 'under' : /score|anytime|yes/i.test(x.pick) ? 'yes' : 'over', b = p?.best?.[side];
     return `<li><span class="fc-ai">Claude</span><div><strong>${esc(x.player)} · ${esc(x.pick)}</strong> <small>${esc(x.market || '')}</small>${b ? ` <span class="bk-tag">best ${amTxt(b.price)} at ${esc(BOOK_NAME[b.book])}</span>` : ''}<p>${esc(x.why || '')}</p></div></li>` }).join('')}</ul>`;
-  else if (L) h += `<p class="pf-hint">${ai ? 'Claude didn’t find a prop it likes at its last update.' : 'Turn on Claude research in the scheduled forecasts below to get prop picks with reasons.'}</p>`;
+  else if (L && ai) h += `<p class="pf-hint">Claude didn’t find a prop it likes at its last update.</p>`;
   if (value.length) h += `<div class="sub-h"><h5>Best prices vs the market</h5><small>Line shopping, not a prediction</small></div><ul class="pp">${value.map(v => `<li><span class="bk-val">+${(v.ev * 100).toFixed(1)}%</span><div><strong>${esc(v.label)}</strong> <span class="bk-tag">${amTxt(v.price)} at ${esc(BOOK_NAME[v.book])}</span><p>The books' consensus chance is about ${pct(v.fair)}%, so this price pays more than that chance suggests.</p></div></li>`).join('')}</ul>`;
   if (d.props?.length) h += `<button class="btn ghost sm" data-bk-open="1">See every prop and book on the Odds tab</button>`;
   return h;
