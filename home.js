@@ -230,7 +230,8 @@
     if (seq === opening) toast('That game is on the ' + sport + ' page; it may be under another league or day.');
   }
   function openFight(kind, id) {
-    if (window.S?.bx) { S.bx.tab = kind === 'ufc' ? 'ufc' : 'boxing'; store.set('fl.bxTab', S.bx.tab) }
+    if (kind === 'ufc') { switchTo('ufc'); if (typeof render === 'function') render(); return }
+    if (window.S?.bx) { S.bx.tab = 'boxing'; store.set('fl.bxTab', 'boxing') }
     switchTo('boxing');
     if (typeof render === 'function') render();
     if (kind === 'boxing' && id) setTimeout(() => document.querySelector(`[data-bxfight="${CSS.escape(id)}"]`)?.click(), 600);

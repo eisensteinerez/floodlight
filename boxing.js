@@ -3,7 +3,7 @@
    (/api/box/…, see boxing.py). UFC: ESPN's fight cards, read directly, with every bout on the card.
    A fight page has the tale of the tape, the card and a prediction; a fighter has a profile page.
    Loaded after tennis.js and reuses the shared helpers (flPred, tabsHTML, pushView, getJSON). */
-S.bx = { tab: store.get('fl.bxTab', 'boxing'), cards: null, at: 0, ufc: null, ufcAt: 0, fighters: new Map(), ath: new Map() };
+S.bx = { tab: 'boxing', cards: null, at: 0, ufc: null, ufcAt: 0, fighters: new Map(), ath: new Map() };
 if (!['boxing', 'ufc'].includes(S.bx.tab)) S.bx.tab = 'boxing';
 const BX_UFC = 'https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard';
 const BX_ATH = 'https://site.web.api.espn.com/apis/common/v3/sports/mma/ufc/athletes/';
@@ -259,6 +259,7 @@ function bxRenderSheet(v){
 document.addEventListener('click', ev => {
   const t = ev.target.closest('[data-bxtab],[data-bxfight],[data-bxbout],[data-bxfighter]'); if (!t) return;
   ev.stopPropagation(); if (typeof hideResults === 'function') hideResults();
+  if (t.dataset.bxtab === 'ufc' && typeof setSport === 'function') return setSport('ufc');   // UFC is its own sport now (ufc.js)
   if (t.dataset.bxtab) { S.bx.tab = t.dataset.bxtab; store.set('fl.bxTab', S.bx.tab); window.scrollTo({ top: 0 }); return render() }
   if (t.dataset.bxfighter) return bxOpenFighter(t.dataset.bxfighter);
   if (t.dataset.bxfight) return bxOpenFight(t.dataset.bxfight);
