@@ -1179,7 +1179,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Cache-Control", f"max-age={max_age}")
         if len(body) > 1024 and self.wants_gzip():   # data travels four to eight times smaller
-            body = gzip.compress(body, 4)
+            body = gzip.compress(body, 1)   # the quickest setting: nearly the same size for a third of the work
             self.send_header("Content-Encoding", "gzip")
             self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(body)))
@@ -1495,21 +1495,25 @@ class Handler(SimpleHTTPRequestHandler):
             st = path.stat()
         except OSError:
             return self.send_error(404)
-        tag = f'"{int(st.st_mtime)}-{st.st_size}"'
+        stamp = (st.st_mtime_ns, st.st_size)
+        with _static_lock:
+            hit = _static.get(rel)
+            if not hit or hit[3] != stamp:
+                raw = path.read_bytes()
+                # the tag follows the file's contents, so a new deploy only re-sends the files that really changed
+                hit = _static[rel] = ('"' + hashlib.sha1(raw).hexdigest()[:16] + '"', raw, gzip.compress(raw, 9), stamp)
+        tag = hit[0]
         if self.headers.get("If-None-Match") == tag:
             self.send_response(304)
             self.send_header("ETag", tag)
+            self.send_header("Cache-Control", "no-cache")
             return self.end_headers()
-        with _static_lock:
-            hit = _static.get(rel)
-            if not hit or hit[0] != tag:
-                raw = path.read_bytes()
-                hit = _static[rel] = (tag, raw, gzip.compress(raw, 9))
         zipped = self.wants_gzip()
         body = hit[2] if zipped else hit[1]
         self.send_response(200)
         self.send_header("Content-Type", self.guess_type(str(path)) + ("; charset=utf-8" if not rel.endswith(".webmanifest") else ""))
         self.send_header("ETag", tag)
+        self.send_header("Cache-Control", "no-cache")
         self.send_header("Vary", "Accept-Encoding")
         if zipped:
             self.send_header("Content-Encoding", "gzip")
