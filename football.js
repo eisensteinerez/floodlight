@@ -370,16 +370,13 @@ function fbPredPane(e){
   const P = fcApplyFootball(e, fbPredict(e)), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
   const o = S.odds.get(e.id), mainTotal = o?.total?.length ? o.total.reduce((a, b) => Math.abs(b.p - .5) < Math.abs(a.p - .5) ? b : a) : null;
   const pickTeam = e[P.pick];
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}${fcTag(P)}</h5><strong class="pred-pick">${esc(pickTeam.name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(e.away.score)}–${esc(e.home.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${P.score[1]}–${P.score[0]}</b><small>${esc(e.away.abbr)} – ${esc(e.home.abbr)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.away.name} ${pct(1 - P.pH)} percent, ${e.home.name} ${pct(P.pH)} percent`)}"><i style="flex-grow:${1 - P.pH};background:${e.ac}"><span>${pct(1 - P.pH)}%</span></i><i style="flex-grow:${P.pH};background:${e.hc}"><span>${pct(P.pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${e.ac}"></i>${esc(e.away.name)}</span><span><i style="background:${e.hc}"></i>${esc(e.home.name)}</span></div>
+  return flPred({ key: 'fb:' + e.id, flip: true, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf, tag: fcTag(P),
+      line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(fbReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${e.away.score}–${e.home.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.effMargin >= 0 ? esc(e.home.abbr) : esc(e.away.abbr)} −${Math.abs(P.effMargin).toFixed(1)}</b><span>Projected spread</span></div>
       <div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total${mainTotal ? ` · Kalshi ${mainTotal.line}` : ''}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.abbr)} on Kalshi</span></div></div>
     ${propsBlock(e)}${fcBlock(e)}
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${fbReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     <p class="srcnote">Model: each team's points scored and allowed per game (shrunk toward average early in the season), home field, AP rank for college games and the injury report. The shown chance weighs the betting market (Kalshi, or the sportsbook line) at 55%, ESPN's matchup predictor at 25% and the model at 20%, using whichever are available. Once the scheduled forecasts start, the latest one replaces these numbers.</p>${RG}`;
 }
 

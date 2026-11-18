@@ -556,15 +556,12 @@ function bsPredPane(v){
   const e = v.e;
   if (!S.bsb.stand[e.lg]) { bsStandings(e.lg).then(() => renderSheet()); return `<div class="skel" style="height:260px"></div>` }
   const P = bsPredict(e, v), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[P.pick].name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(e.away.score)}–${esc(e.home.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${P.score[1]}–${P.score[0]}</b><small>${esc(e.away.abbr)} – ${esc(e.home.abbr)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.away.name} ${pct(1 - P.pH)} percent, ${e.home.name} ${pct(P.pH)} percent`)}"><i style="flex-grow:${1 - P.pH};background:${e.ac}"><span>${pct(1 - P.pH)}%</span></i><i style="flex-grow:${P.pH};background:${e.hc}"><span>${pct(P.pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${e.ac}"></i>${esc(e.away.name)}</span><span><i style="background:${e.hc}"></i>${esc(e.home.name)}</span></div>
+  return flPred({ key: 'bsb:' + e.id, flip: true, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[P.pick].name + ' win', conf: P.conf,
+      line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(bsReasons(e, P, v), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${e.away.score}–${e.home.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total ${e.src === 'bb' ? 'points' : 'runs'}</span></div>
       <div class="tile"><b class="num">${P.rA.toFixed(1)}–${P.rH.toFixed(1)}</b><span>Model ${e.src === 'bb' ? 'points' : 'runs'} ${esc(e.away.abbr)}–${esc(e.home.abbr)}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : P.books != null ? pct(P.books) + '%' : '–'}</b><span>${esc(e.home.abbr)} ${P.market != null ? 'on Kalshi' : 'at the books'}</span></div></div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${bsReasons(e, P, v).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     <p class="srcnote">Model: each team's runs scored and allowed per game (shrunk toward the league average early in the season), the probable starters' ERA and FIP, and home field. The shown chance weighs the betting market (Kalshi, or the sportsbooks' consensus) at 60% and the model at 40% when a market exists.</p>${RG}`;
 }
 function bsGamePane(v){

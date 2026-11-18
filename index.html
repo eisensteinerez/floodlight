@@ -4463,6 +4463,9 @@ function keyFactors(e, P){
     out.push({ ico: 'market', side: fav === 'draw' ? '' : fav, title: 'The market', text: `Kalshi traders ${fav === 'draw' ? 'see a draw as the likeliest result' : `make ${e[fav].name} the favourite`} at ${pct(P.market[fav])}%. The model alone says ${pct(P.model[fav])}%.` }) }
   return out;
 }
+// one plain sentence for a two-way prediction, shared by the other sports
+function bbLine(e, P, solo){ const fav = e[P.pick].name, other = e[P.pick === 'home' ? 'away' : 'home'].name, are = solo ? 'is' : 'are', have = solo ? 'has' : 'have';
+  return P.top >= .72 ? `${fav} ${are} the clear favourite${solo ? '' : 's'}. An upset would be a surprise.` : P.top >= .6 ? `${fav} ${are} favoured, but ${other} ${have} a real chance.` : `Close to a coin flip. ${fav} ${have} a slight edge.` }
 const pickLabel = (e, k) => k === 'draw' ? 'Draw' : `${e[k].name} win`;
 const ord = n => n + (['th','st','nd','rd'][(n % 100 > 10 && n % 100 < 14) || n % 10 > 3 ? 0 : n % 10]);
 function reasons(e, P){

@@ -565,11 +565,9 @@ function hkPredPane(v){
   const us = hkUS(e), [L, R, lc, rc, pL] = us ? [e.away, e.home, e.ac, e.hc, 1 - P.pH] : [e.home, e.away, e.hc, e.ac, P.pH];
   const [sL, sR] = us ? [P.score[1], P.score[0]] : P.score, fav = P.pick, dog = fav === 'home' ? 'away' : 'home';
   const likely = P.likely.map(([i, j, p]) => { const [a, b] = us ? [j, i] : [i, j]; return `<div class="tile"><b class="num">${a}–${b}</b><span>${pct(p)}%${i === j ? ' · then OT' : ''}</span></div>` }).join('');
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[fav].name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(L.score)}–${esc(R.score)}${e.ot ? ' (OT)' : ''}</span>` : ''}</div>
-      <div class="pred-score"><small>Most likely winning score</small><b class="num">${sL}–${sR}</b><small>${esc(L.abbr || L.name)} – ${esc(R.abbr || R.name)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${L.name} ${pct(pL)} percent, ${R.name} ${pct(1 - pL)} percent`)}"><i style="flex-grow:${pL};background:${lc}"><span>${pct(pL)}%</span></i><i style="flex-grow:${1 - pL};background:${rc}"><span>${pct(1 - pL)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${lc}"></i>${esc(L.name)}</span><span><i style="background:${rc}"></i>${esc(R.name)}</span></div>
+  return flPred({ key: 'hk:' + e.id, flip: us, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[fav].name + ' win', conf: P.conf,
+      line: bbLine(e, P), score: P.score, scoreNote: 'The likeliest winning score.', factors: flPred.fromReasons(hkReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${L.score}–${R.score}${e.ot ? ' (OT)' : ''}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected goals${P.M.total != null ? ` · line ${bbFix(P.M.total)}` : ''}</span></div>
       <div class="tile"><b class="num">${pct(P.ou.over)}%</b><span>Over ${P.ou.line}</span></div>
       <div class="tile"><b class="num">${pct(P.ot)}%</b><span>Goes to overtime</span></div>
@@ -579,7 +577,6 @@ function hkPredPane(v){
       <div class="tile"><b class="num">${pct(P.pModel)}%</b><span>${esc(e.home.abbr || e.home.name)} on goals alone</span></div>
       <div class="tile"><b class="num">${pct(P.reg.home)}–${pct(P.reg.draw)}–${pct(P.reg.away)}</b><span>Regulation: home, tie, away</span></div></div>
     <div class="sub-h"><h5>Most likely scores after 60 minutes</h5></div><div class="tiles">${likely}</div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${hkReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     ${hkSeasonCompare(v)}
     <p class="srcnote">Starting goalies are usually confirmed at the morning skate; a backup in net can swing an NHL game by several points. The model doesn't know the starter yet, but the market adjusts quickly once it's announced.</p>${RG}`;
 }

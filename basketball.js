@@ -505,16 +505,13 @@ function bbPredPane(v){
   const post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null, pickTeam = e[P.pick];
   const us = e.src === 'espn' && e.lg !== 'nbl', [L, R, lc, rc, pL] = us ? [e.away, e.home, e.ac, e.hc, 1 - P.pH] : [e.home, e.away, e.hc, e.ac, P.pH];
   const [sL, sR] = us ? [P.score[1], P.score[0]] : P.score;
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(pickTeam.name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(L.score)}–${esc(R.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${sL}–${sR}</b><small>${esc(L.abbr || L.name)} – ${esc(R.abbr || R.name)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${L.name} ${pct(pL)} percent, ${R.name} ${pct(1 - pL)} percent`)}"><i style="flex-grow:${pL};background:${lc}"><span>${pct(pL)}%</span></i><i style="flex-grow:${1 - pL};background:${rc}"><span>${pct(1 - pL)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${lc}"></i>${esc(L.name)}</span><span><i style="background:${rc}"></i>${esc(R.name)}</span></div>
+  return flPred({ key: 'bb:' + e.id, flip: us, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf,
+      line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(bbReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post ? { actual: win, text: `final ${L.score}–${R.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${esc((P.margin >= 0 ? e.home : e.away).abbr || (P.margin >= 0 ? e.home : e.away).name)} −${Math.abs(P.margin).toFixed(1)}</b><span>Projected spread</span></div>
       <div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total${P.M.total != null ? ` · books ${bbFix(P.M.total)}` : ''}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.abbr || e.home.name)} in the market</span></div>
       <div class="tile"><b class="num">${pct(P.pModel)}%</b><span>${esc(e.home.abbr || e.home.name)} on form alone</span></div></div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${bbReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     ${bbSeasonCompare(v)}
     <p class="srcnote">Model: each team's average winning margin this season (shrunk toward zero early on) plus home court, turned into a win chance. When sportsbooks list the game, their no-vig consensus carries 70% of the chance, spread and total${BBL[e.lg].kx ? ' (Kalshi included)' : ''}; ESPN's matchup predictor adds 20% where it exists.</p>${RG}`;
 }

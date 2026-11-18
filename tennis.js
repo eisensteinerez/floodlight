@@ -397,19 +397,17 @@ function tnPredPane(v){
   if (!P) return `<div class="note">Not enough information to predict this match: neither player has a known ranking and no bookmaker prices it.</div>`;
   const post = e.state === 'post', pH = post ? P.pPre : P.pH, fav = pH >= .5 ? 'home' : 'away';
   const top = P.scores.slice(0, 6).map(x => `<div class="tile"><b class="num">${x.a}–${x.b}</b><span>${esc(e[x.w].name)} · ${pct(x.p)}%</span></div>`).join('');
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-match prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[fav].name)} to win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${PFX.confOf(Math.max(pH, 1 - pH))} · ${pct(Math.max(pH, 1 - pH))}%</span>${post && e.winner ? `<span class="pred-out ${e.winner === fav ? 'ok' : 'miss'}">${e.winner === fav ? 'Called it' : 'Missed'} — ${e.home.sets}–${e.away.sets} in sets</span>` : ''}</div>
-      <div class="pred-score"><small>Most likely result</small><b class="num">${P.scores[0].a}–${P.scores[0].b}</b><small>sets, ${esc(e.home.name.split(' ')[0])} – ${esc(e.away.name.split(' ')[0])}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.home.name} ${pct(pH)} percent, ${e.away.name} ${pct(1 - pH)} percent`)}"><i style="flex-grow:${pH};background:var(--accent)"><span>${pct(pH)}%</span></i><i style="flex-grow:${1 - pH};background:color-mix(in oklab,var(--muted) 55%,var(--surface-2))"><span>${pct(1 - pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:var(--accent)"></i>${esc(e.home.name)}</span><span><i style="background:color-mix(in oklab,var(--muted) 55%,var(--surface-2))"></i>${esc(e.away.name)}</span></div>
+  const tp = t => ({ name: e[t].name, short: e[t].name.split(' ').pop(), logo: e[t].flag || e[t].logo || '', col: t === 'home' ? 'var(--tint)' : 'var(--muted)' }), tc = Math.max(pH, 1 - pH);
+  return flPred({ key: 'tn:' + e.id, home: tp('home'), away: tp('away'), probs: { home: pH, away: 1 - pH }, pick: fav, pickLabel: e[fav].name + ' to win', conf: tc >= .72 ? 'Strong' : tc >= .6 ? 'Lean' : 'Toss-up',
+      line: bbLine(e, { pick: fav, top: tc }, true), score: [P.scores[0].a, P.scores[0].b], scoreNote: 'The likeliest result in sets.', factors: flPred.fromReasons(tnReasons(e, P), { home: e.home.name, away: e.away.name }),
+      final: post && e.winner ? { actual: e.winner, text: `${e.home.sets}–${e.away.sets} in sets` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${pct(P.s)}%</b><span>${esc(e.home.name)} wins a set</span></div>
       <div class="tile"><b class="num">${pct(P.pDecider)}%</b><span>Goes to a deciding set</span></div>
       <div class="tile"><b class="num">${pct(P.straight[fav])}%</b><span>${esc(e[fav].name)} in straight sets</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.name)} in the market</span></div>
       <div class="tile"><b class="num">${P.pModel != null ? pct(P.pModel) + '%' : '–'}</b><span>${esc(e.home.name)} on ranking alone</span></div>
       <div class="tile"><b class="num">${P.rH || '–'} · ${P.rA || '–'}</b><span>World rankings</span></div></div>
-    <div class="sub-h"><h5>Set scores</h5><small>Best of ${P.bo}</small></div><div class="tiles">${top}</div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${tnReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>${RG}`;
+    <div class="sub-h"><h5>Set scores</h5><small>Best of ${P.bo}</small></div><div class="tiles">${top}</div>${RG}`;
 }
 
 /* ---------- player page ---------- */
