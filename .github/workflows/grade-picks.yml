@@ -15,6 +15,10 @@ on:
         description: "Grade and post right away"
         type: boolean
         default: false
+      preview:
+        description: "Only show what it reads and how each pick grades (posts nothing)"
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -34,12 +38,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "cryptography>=42"
-      - run: python3 pick_tracker.py ${{ inputs.now && 'now' || 'scheduled' }}
+      - run: python3 pick_tracker.py ${{ inputs.preview && 'try' || inputs.now && 'now' || 'scheduled' }}
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           PICKS_DATA_DIR: data
       - name: Save the record
-        if: always()
+        if: always() && !inputs.preview
         run: |
           [ -f data/pick-tracker.enc ] || exit 0
           cd data
