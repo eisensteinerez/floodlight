@@ -377,6 +377,7 @@ def post(dest, msgs):
 def run(final=False, dry=False, hours=LOOK_BACK_H):
     """Read, grade, post what finished (and any correction). Returns the messages."""
     G.RUN["id"] = str(int(time.time()) // 300)
+    reload()
     collect(hours)
     grade_all()
     msgs = report(update=final)
@@ -415,48 +416,78 @@ def times():
     return out or [(0, 30), (8, 0)]
 
 
+def due_slots(delay=0):
+    """The set times due now and not done yet: [(index, slot)]. Each runs inside the two hours after its time."""
+    t = now_et()
+    out = []
+    for i, (hh, mm) in enumerate(times()):
+        at = t.replace(hour=hh, minute=mm, second=0, microsecond=0) + dt.timedelta(minutes=delay)
+        slot = f"{t.date()} {hh:02d}:{mm:02d}"
+        if at <= t < at + dt.timedelta(hours=2) and slot not in STATE["posted"]:
+            out.append((i, slot))
+    return out
+
+
+def scheduled(delay=0, runner="server"):
+    """Run whatever set time is due. A run that fails (Discord or a data source down) is tried again on the next call."""
+    reload()
+    for i, slot in due_slots(delay):
+        tried = STATE.setdefault("tries", {}).get(slot, 0)
+        if time.time() - tried < 540:
+            continue
+        STATE["tries"][slot] = time.time()
+        try:
+            run(final=i > 0)
+            ok = not STATE.get("postError")
+        except Exception as e:
+            print(f"pick tracker: run at {slot} failed: {type(e).__name__}: {e}", file=sys.stderr)
+            ok = False
+        if ok:
+            STATE["posted"][slot] = int(time.time())
+            STATE["ranBy"] = {"who": runner, "at": int(time.time())}
+        for k in sorted(STATE["posted"])[:-60]:
+            STATE["posted"].pop(k, None)
+        for k in sorted(STATE["tries"])[:-10]:
+            STATE["tries"].pop(k, None)
+        save()
+        print(f"pick tracker: {slot} {'done' if ok else 'will retry'} ({runner})")
+
+
 def _loop():
-    """Each set time runs once. If Discord or a data source fails, it tries again every 10 minutes for two hours."""
+    """The server's own schedule. When GitHub Actions runs the grading (it reaches Discord more reliably than Render's
+    shared address), the server waits 45 minutes and only steps in if that run didn't happen."""
     time.sleep(60)
     while True:
         try:
-            t = now_et()
-            for i, (hh, mm) in enumerate(times()):
-                at = t.replace(hour=hh, minute=mm, second=0, microsecond=0)
-                slot = f"{t.date()} {hh:02d}:{mm:02d}"
-                tried = STATE.setdefault("tries", {}).get(slot, 0)
-                if at <= t < at + dt.timedelta(hours=2) and slot not in STATE["posted"] and time.time() - tried > 600:
-                    STATE["tries"][slot] = time.time()
-                    try:
-                        run(final=i > 0)
-                        ok = not STATE.get("postError")
-                    except Exception as e:
-                        print(f"pick tracker: run at {slot} failed: {type(e).__name__}: {e}", file=sys.stderr)
-                        ok = False
-                    if ok:
-                        STATE["posted"][slot] = int(time.time())
-                    for k in sorted(STATE["posted"])[:-60]:
-                        STATE["posted"].pop(k, None)
-                    for k in sorted(STATE["tries"])[:-10]:
-                        STATE["tries"].pop(k, None)
-                    save()
+            gh = (STATE.get("ranBy") or {}).get("who") == "github" and time.time() - (STATE.get("ranBy") or {}).get("at", 0) < 3 * 86400
+            if due_slots(45 if gh else 0):
+                scheduled(45 if gh else 0)
         except Exception as e:
             print(f"pick tracker: {type(e).__name__}: {e}", file=sys.stderr)
         time.sleep(60)
+
+
+def reload():
+    """The saved state, fresh: GitHub Actions and the server share it through the database."""
+    if not D.get("cache_dir"):
+        return
+    got = storage.load(_path(), {})
+    if isinstance(got, dict) and got:
+        with _lock:
+            STATE.clear()
+            STATE.update({"v": VERSION, "cards": {}, "posted": {}, "channels": {}, "icons": {}, "dest": None})
+            STATE.update(got)
+    if STATE.get("v", 0) < VERSION:
+        # the card reader and grader were rebuilt: start the record over from the posts (nothing older was right)
+        STATE["cards"] = {}
+        STATE["v"] = VERSION
 
 
 def setup(**deps):
     D.update(deps)
     if deps.get("fetch"):
         G.D["fetch"] = deps["fetch"]
-    if D.get("cache_dir"):
-        got = storage.load(_path(), {})
-        if isinstance(got, dict):
-            STATE.update(got)
-    if STATE.get("v", 0) < VERSION:
-        # the card reader and grader were rebuilt: start the record over from the posts (nothing older was right)
-        STATE["cards"] = {}
-        STATE["v"] = VERSION
+    reload()
     if os.environ.get("DISCORD_BOT_TOKEN"):
         threading.Thread(target=_loop, daemon=True, name="pick-tracker").start()
 
@@ -503,7 +534,21 @@ def cmd_check(o):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) >= 2 and sys.argv[1] == "try":   # read, grade and print; posts nothing, saves nothing
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd in ("scheduled", "now"):   # GitHub Actions: .github/workflows/grade-picks.yml
+        if not os.environ.get("DISCORD_BOT_TOKEN") or not storage.URL:
+            print("Add the DISCORD_BOT_TOKEN and DATABASE_URL secrets to the repository to run the grading here.")
+            sys.exit(0)
+        D["cache_dir"] = os.environ.get("CACHE_DIR") or "/tmp/floodlight-cache"
+        if cmd == "now":
+            reload()
+            msgs = run(final=False)
+            print(f"posted {len(msgs)} message(s)" + (f" · {STATE['postError']}" if STATE.get("postError") else ""))
+        else:
+            scheduled(runner="github")
+            STATE["ranBy"] = {"who": "github", "at": int(time.time())}
+            save()
+    elif cmd == "try":   # read, grade and print; posts nothing, saves nothing
         h = int(sys.argv[2]) if len(sys.argv) > 2 else LOOK_BACK_H
         run(dry=True, hours=h)
         for c in sorted(live_cards(), key=lambda c: c["at"]):
