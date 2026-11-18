@@ -671,3 +671,63 @@ body.fl-pointer #flLight{opacity:1}
 .flm{backdrop-filter:blur(8px);background:rgba(0,0,0,.6)}
 @media (max-width:600px){.flg-demo{transform:none}.flg-feat h2{font-size:40px}}
 @media (max-width:900px){.rs-open svg{width:19px;height:19px}}
+
+/* ───── prediction depth: scoreline grid, goal and margin spreads, markets ───── */
+.fx-tip{position:fixed;z-index:9999;pointer-events:none;transform:translate(-50%,-100%);background:var(--fg);color:var(--bg);font:600 12px/1.35 var(--f-body);padding:7px 10px;border-radius:9px;max-width:280px;box-shadow:0 10px 30px rgba(0,0,0,.35);white-space:nowrap}
+.fx-tip.below{transform:translate(-50%,0)}
+.fx-tip[hidden]{display:none}
+.edge{display:grid;gap:4px;margin:16px 0 4px;padding:13px 15px;border-radius:14px;border:1px solid var(--line);background:var(--surface-2)}
+.edge b{font:700 10.5px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.edge p{margin:0;font-size:13.5px;line-height:1.5;color:var(--fg)}
+.edge.up{border-color:color-mix(in oklab,var(--accent) 45%,var(--line));background:linear-gradient(120deg,color-mix(in oklab,var(--accent) 13%,var(--surface-2)),var(--surface-2) 70%)}
+.edge.up b{color:var(--accent)}
+.sg{position:relative;padding:22px 0 0 24px}
+.sg-x,.sg-y{position:absolute;font:600 10px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.sg-x{top:0;left:50%;transform:translateX(-50%)}
+.sg-y{left:0;top:50%;transform:rotate(-90deg) translateX(-30%);transform-origin:0 0;white-space:nowrap}
+.sg-g{display:grid;grid-template-columns:22px repeat(6,minmax(0,1fr));gap:3px}
+.sg-g u{text-decoration:none;display:grid;place-items:center;font:600 11px/1 var(--f-mono);color:var(--muted);min-height:18px}
+.sg-g i{--c:var(--draw);position:relative;display:grid;place-items:center;aspect-ratio:1.55;border-radius:7px;font-style:normal;cursor:default;outline:0;
+  background:color-mix(in oklab,var(--c) calc(8% + var(--v)*72%),var(--surface-2));transition:transform .18s var(--ease,ease),box-shadow .18s}
+.sg-g i.h{--c:var(--hc)}.sg-g i.a{--c:var(--ac)}
+.sg-g i b{font:700 12.5px/1 var(--f-mono);color:var(--fg);opacity:calc(.45 + var(--v)*.55)}
+.sg-g i.on{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.sg-g i:hover,.sg-g i:focus-visible{transform:scale(1.08);z-index:1;box-shadow:0 0 0 2px var(--fg)}
+.sg-k{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0;font-size:11.5px;color:var(--muted)}
+.sg-k i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.sg-k .sg-n{margin-left:auto}
+.pd-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+.gd{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;height:132px;align-items:end;padding-bottom:0}
+.gd-c{display:grid;grid-template-rows:16px minmax(0,1fr) 18px;height:100%;justify-items:center;align-items:end;cursor:default}
+.gd-c b{font:600 10.5px/1 var(--f-mono);color:var(--muted);align-self:start}
+.gd-c i{width:min(100%,30px);border-radius:4px 4px 0 0;background:color-mix(in oklab,var(--fg) 26%,transparent);transition:background .15s}
+.gd-c.on i{background:var(--accent)}.gd-c.on b{color:var(--fg)}
+.gd-c span{font:600 11px/1 var(--f-mono);color:var(--muted);align-self:end;border-top:1px solid var(--line);width:100%;text-align:center;padding-top:5px}
+.gd-c:hover i{background:var(--fg)}
+.mg .gd-c.h i{background:var(--hc)}.mg .gd-c.a i{background:var(--ac)}.mg .gd-c.d i{background:var(--draw)}
+.mg{margin-bottom:16px}
+.mg small{position:absolute;bottom:-16px;font:600 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.mg-l{left:0}.mg-r{right:0}
+.mk{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 22px}
+.mk-g h6{margin:0 0 4px;font:700 10px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.mk-r{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(40px,1fr) 38px 46px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.mk-r span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk-r i{height:4px;border-radius:2px;background:color-mix(in oklab,var(--fg) 9%,transparent);overflow:hidden}
+.mk-r s{display:block;height:100%;border-radius:2px;background:var(--accent)}
+.mk-r b{text-align:right;font:700 12.5px/1 var(--f-mono)}
+.mk-r em{text-align:right;font:500 11.5px/1 var(--f-mono);font-style:normal;color:var(--muted)}
+@media (max-width:640px){.pd-2,.mk{grid-template-columns:1fr}.sg-g i b{font-size:11px}.sg-k .sg-n{margin-left:0;flex-basis:100%}.sg{padding-left:20px}}
+
+/* the marquee sizes itself to the column it sits in, so it still fits when the match sheet is open beside it */
+#groups{container:groups/inline-size}
+@container groups (max-width:700px){
+  .spots.trio{grid-template-columns:1fr}.spot-side{grid-template-rows:none;grid-template-columns:1fr 1fr}
+  .spot-ghost{display:none}.spot-main{gap:8px}
+  .spot-sc b{font-size:84px}.spot-sc.pre b{font-size:54px}.spot-t img{width:64px;height:64px}.spot-t strong{font-size:22px}
+  .spot.mini .spot-sc b{font-size:52px}.spot.mini .spot-t strong{font-size:18px}
+}
+@container groups (max-width:460px){.spot-side{grid-template-columns:1fr}.spot-sc b{font-size:64px}.spot-t strong{font-size:18px}.spot-t img{width:52px;height:52px}}
+.pc-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.pc-chips span{display:inline-flex;align-items:baseline;gap:5px;padding:4px 8px;border-radius:7px;background:color-mix(in oklab,var(--fg) 6%,transparent);font:600 9.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pc-chips b{font:700 11.5px/1 var(--f-mono);color:var(--fg);letter-spacing:0}
+.pc-chips .edge-c{background:color-mix(in oklab,var(--accent) 16%,transparent);color:var(--accent)}.pc-chips .edge-c b{color:var(--accent)}

@@ -24,3 +24,21 @@ if (matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(pref
   };
   document.querySelectorAll('.sport-sw button[data-sport]').forEach(b => { const d = I[b.dataset.sport]; if (d && !b.querySelector('svg')) b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`) });
 })();
+
+/* one floating tooltip for every chart mark that carries data-tip (the pitch keeps its own) */
+(() => {
+  let tip;
+  const hide = () => { if (tip) tip.hidden = true };
+  const show = ev => {
+    const el = ev.target.closest?.('[data-tip]');
+    if (!el || el.closest('.pitch-wrap')) return hide();
+    if (!tip) { tip = document.createElement('div'); tip.className = 'fx-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip) }
+    tip.textContent = el.dataset.tip; tip.hidden = false;
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, x = Math.min(Math.max(r.left + r.width / 2, w / 2 + 8), innerWidth - w / 2 - 8);
+    const up = r.top > tip.offsetHeight + 14;
+    tip.style.left = x + 'px'; tip.style.top = (up ? r.top - 8 : r.bottom + 8) + 'px'; tip.classList.toggle('below', !up);
+  };
+  document.addEventListener('pointerover', show); document.addEventListener('focusin', show);
+  document.addEventListener('pointerdown', ev => { if (!ev.target.closest?.('[data-tip]')) hide() });
+  addEventListener('scroll', hide, { passive: true, capture: true });
+})();

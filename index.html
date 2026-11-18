@@ -4313,6 +4313,65 @@ function probBar(e, f){
   return `<div class="pbar" role="img" aria-label="${esc(`${e.home.name} ${pct(f.home)} percent, draw ${pct(f.draw)} percent, ${e.away.name} ${pct(f.away)} percent`)}">
     <i style="flex-grow:${f.home};background:${e.hc}"><span>${pct(f.home)}%</span></i><i style="flex-grow:${f.draw};background:var(--draw)"><span>${pct(f.draw)}%</span></i><i style="flex-grow:${f.away};background:${e.ac}"><span>${pct(f.away)}%</span></i></div>`;
 }
+/* the full picture behind a soccer prediction: every scoreline, and every market that falls out of it */
+const DC_RHO = -0.08;       // low scores are a little more linked than plain Poisson says (Dixon-Coles)
+function scoreGrid(P){
+  const N = 9, g = []; let wh = 0, wd = 0, wa = 0;
+  for (let i = 0; i <= N; i++) { g.push([]); for (let j = 0; j <= N; j++) {
+    const tau = !i && !j ? 1 - P.lh * P.la * DC_RHO : !i && j === 1 ? 1 + P.lh * DC_RHO : i === 1 && !j ? 1 + P.la * DC_RHO : i === 1 && j === 1 ? 1 - DC_RHO : 1;
+    const p = pois(i, P.lh) * pois(j, P.la) * Math.max(.2, tau); g[i].push(p); if (i > j) wh += p; else if (i === j) wd += p; else wa += p } }
+  // tilt the grid so its home/draw/away totals equal the headline numbers, which also carry the market and the lineups
+  const kh = P.final.home / wh, kd = P.final.draw / wd, ka = P.final.away / wa;
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) g[i][j] *= i > j ? kh : i === j ? kd : ka;
+  return g;
+}
+function predDepthData(P){
+  const g = scoreGrid(P), sum = f => { let s = 0; for (let i = 0; i < g.length; i++) for (let j = 0; j < g.length; j++) if (f(i, j)) s += g[i][j]; return s };
+  const f = P.final, tot = [0, 1, 2, 3, 4].map(n => sum((i, j) => i + j === n)); tot.push(Math.max(0, 1 - tot.reduce((a, b) => a + b, 0)));
+  const margin = [-3, -2, -1, 0, 1, 2, 3].map(m => [m, sum((i, j) => m === -3 ? i - j <= -3 : m === 3 ? i - j >= 3 : i - j === m)]);
+  return { g, tot, margin, o15: sum((i, j) => i + j > 1), o25: P.o25 ?? sum((i, j) => i + j > 2), o35: sum((i, j) => i + j > 3), btts: P.btts ?? sum((i, j) => i && j),
+    csH: sum((i, j) => !j), csA: sum((i, j) => !i), nilH: sum((i, j) => i > j && !j), nilA: sum((i, j) => j > i && !i),
+    dnbH: f.home / (f.home + f.away), dnbA: f.away / (f.home + f.away), hx: f.home + f.draw, xa: f.away + f.draw, ha: f.home + f.away,
+    h2: sum((i, j) => i >= 2), a2: sum((i, j) => j >= 2) };
+}
+const fairUS = p => p <= 0 || p >= 1 ? '—' : p >= .5 ? '−' + Math.round(100 * p / (1 - p)) : '+' + Math.round(100 * (1 - p) / p);
+function predDepth(e, P){
+  const D = predDepthData(P), hn = e.home.abbr || e.home.name, an = e.away.abbr || e.away.name, H = esc(e.home.name), A = esc(e.away.name);
+  const top = Math.max(...D.g.slice(0, 6).flatMap(r => r.slice(0, 6)));
+  const cell = (i, j) => { const p = D.g[i][j], on = i === P.score[0] && j === P.score[1];
+    return `<i class="${i > j ? 'h' : i < j ? 'a' : 'd'}${on ? ' on' : ''}" style="--v:${(p / top).toFixed(3)}" tabindex="0" data-tip="${H} ${i}–${j} ${A} · ${(p * 100).toFixed(1)}% · fair ${fairUS(p)}"><b class="num">${p >= .005 ? Math.round(p * 100) : ''}</b></i>` };
+  const grid = `<div class="sg" role="img" aria-label="Chance of every scoreline up to five goals each" style="--hc:${e.hc};--ac:${e.ac}">
+      <span class="sg-x">${esc(an)} goals</span><span class="sg-y">${esc(hn)} goals</span>
+      <div class="sg-g"><u></u>${[0, 1, 2, 3, 4, 5].map(j => `<u class="num">${j}</u>`).join('')}
+        ${[0, 1, 2, 3, 4, 5].map(i => `<u class="num">${i}</u>` + [0, 1, 2, 3, 4, 5].map(j => cell(i, j)).join('')).join('')}</div>
+      <p class="sg-k"><span><i style="background:${e.hc}"></i>${H} win</span><span><i style="background:var(--draw)"></i>Draw</span><span><i style="background:${e.ac}"></i>${A} win</span><span class="sg-n">Numbers are % chance. Hover a square for the fair price.</span></p></div>`;
+  const tmax = Math.max(...D.tot), totals = `<div class="gd" role="img" aria-label="Chance of each total number of goals">${D.tot.map((p, n) =>
+      `<div class="gd-c${p === tmax ? ' on' : ''}" data-tip="${n === 5 ? '5 or more' : n} goal${n === 1 ? '' : 's'} · ${(p * 100).toFixed(1)}%"><b class="num">${pct(p)}%</b><i style="height:${Math.max(4, p / tmax * 100).toFixed(1)}%"></i><span class="num">${n === 5 ? '5+' : n}</span></div>`).join('')}</div>`;
+  const mmax = Math.max(...D.margin.map(x => x[1])), margins = `<div class="gd mg" role="img" aria-label="Chance of each winning margin" style="--hc:${e.hc};--ac:${e.ac}">${D.margin.map(([m, p]) =>
+      `<div class="gd-c ${m > 0 ? 'h' : m < 0 ? 'a' : 'd'}" data-tip="${m === 0 ? 'Draw' : `${m > 0 ? H : A} by ${Math.abs(m)}${Math.abs(m) === 3 ? ' or more' : ''}`} · ${(p * 100).toFixed(1)}%"><b class="num">${pct(p)}%</b><i style="height:${Math.max(4, p / mmax * 100).toFixed(1)}%"></i><span class="num">${m === 0 ? 'X' : (Math.abs(m) === 3 ? '3+' : Math.abs(m))}</span></div>`).join('')}
+      <small class="mg-l">${esc(an)} by</small><small class="mg-r">${esc(hn)} by</small></div>`;
+  const row = (label, p) => `<div class="mk-r"><span>${label}</span><i><s style="width:${(p * 100).toFixed(1)}%"></s></i><b class="num">${pct(p)}%</b><em class="num">${fairUS(p)}</em></div>`;
+  const group = (t, rows) => `<div class="mk-g"><h6>${t}</h6>${rows.map(r => row(...r)).join('')}</div>`;
+  const markets = `<div class="mk">${group('Result', [[`${H}`, P.final.home], ['Draw', P.final.draw], [`${A}`, P.final.away]])}
+      ${group('Double chance', [[`${esc(hn)} or draw`, D.hx], [`${esc(an)} or draw`, D.xa], ['No draw', D.ha]])}
+      ${group('Draw no bet', [[H, D.dnbH], [A, D.dnbA]])}
+      ${group('Total goals', [['Over 1.5', D.o15], ['Over 2.5', D.o25], ['Over 3.5', D.o35], ['Under 2.5', 1 - D.o25]])}
+      ${group('Goals by team', [['Both teams score', D.btts], [`${esc(hn)} score 2+`, D.h2], [`${esc(an)} score 2+`, D.a2]])}
+      ${group('Clean sheets', [[`${esc(hn)} clean sheet`, D.csH], [`${esc(an)} clean sheet`, D.csA], [`${esc(hn)} win to nil`, D.nilH], [`${esc(an)} win to nil`, D.nilA]])}</div>`;
+  return `<div class="sub-h"><h5>Every scoreline</h5><small>${P.lh.toFixed(2)} v ${P.la.toFixed(2)} expected goals</small></div>${grid}
+    <div class="pd-2"><div><div class="sub-h"><h5>Total goals</h5></div>${totals}</div><div><div class="sub-h"><h5>Winning margin</h5></div>${margins}</div></div>
+    <div class="sub-h"><h5>Markets</h5><small>Chance · fair price</small></div>${markets}`;
+}
+function predEdge(e, P){
+  let edge = '';
+  if (P.market) {
+    const ks = ['home', 'draw', 'away'].map(k => ({ k, g: P.model[k] - P.market[k] })).sort((a, b) => b.g - a.g), b = ks[0];
+    const name = b.k === 'draw' ? 'the draw' : esc(e[b.k].name);
+    edge = b.g >= .04 ? `<div class="edge up"><b>Model edge</b><p>The stats model rates ${name} at <strong class="num">${pct(P.model[b.k])}%</strong>, the market prices it at <strong class="num">${pct(P.market[b.k])}%</strong>. That is a <strong class="num">${pct(b.g)}</strong> point gap, with a fair price of <strong class="num">${fairUS(P.model[b.k])}</strong> against the market's <strong class="num">${fairUS(P.market[b.k])}</strong>.</p></div>`
+      : `<div class="edge"><b>No edge</b><p>The stats model and the market are within ${Math.max(1, pct(Math.abs(b.g)))} points on every outcome, so the price looks fair.</p></div>`;
+  }
+  return edge;
+}
 function insightPane(e){
   if (e.state === 'pre' && S.serverOK !== false && !e.tnLoading && (!e.news || (!e.fm && e.src !== 'fm'))) {
     e.tnLoading = true; ensureTeamNews(e, false).finally(() => { e.tnLoading = false; rerenderPredictions() });
@@ -4341,9 +4400,9 @@ function insightPane(e){
     ${P.market ? `<div class="sub-h"><h5>Model vs market</h5><small>Kalshi</small></div>
       <div class="vs-table">${['home','draw','away'].map(k => { const g = P.model[k] - P.market[k];
         return `<div><span>${esc(k === 'draw' ? 'Draw' : e[k].name)}</span><b class="num">${pct(P.model[k])}%</b><b class="num">${pct(P.market[k])}%</b><em class="num ${g > .03 ? 'up' : g < -.03 ? 'down' : ''}">${g > 0 ? '+' : ''}${pct(g)}</em></div>` }).join('')}
-        <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div>` : ''}
+        <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div></div>${predEdge(e, P)}` : ''}
     <div class="sub-h"><h5>Why</h5></div><ul class="why">${reasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
-    <div class="sub-h"><h5>Likely scores</h5></div><div class="likely">${P.likely.map(([i, j, p]) => `<span><b class="num">${i}–${j}</b>${pct(p)}%</span>`).join('')}</div>`;
+    ${predDepth(e, P)}`;
   html = html.replace('<div class="sub-h"><h5>Why</h5></div>', teamNewsBlock(e, P) + propsBlock(e) + (S.serverOK !== false ? fcBlock(e) : timelineBlock(e)) + '<div class="sub-h"><h5>Why</h5></div>');
   html += deepResearchBlock(e, P);
   return html + RG;
@@ -4430,7 +4489,8 @@ function renderPicks(){
     <div class="cards">${shown.map(({ e, P }) => `<button class="m pred-card" data-ev="${esc(e.id)}" data-tab-to="insight" style="--hc:${e.hc};--ac:${e.ac}" aria-label="${esc(`${e.home.full} versus ${e.away.full}: prediction ${pickLabel(e, P.pick)}, ${pct(P.top)} percent, ${P.conf}. Most likely score ${P.score.join(' to ')}`)}">
         <div class="st">${e.state === 'in' ? `<span class="min" style="color:var(--live)">${esc(e.clock)}</span>LIVE` : `<span class="ko">${e.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`}</div>
         <div class="tms"><div class="tm"><img src="${esc(e.home.logo)}" alt="" loading="lazy"><span>${esc(e.home.name)}</span></div><div class="tm"><img src="${esc(e.away.logo)}" alt="" loading="lazy"><span>${esc(e.away.name)}</span></div>
-          ${probBar(e, P.final)}</div>
+          ${probBar(e, P.final)}
+          <div class="pc-chips"><span><b class="num">${P.lh.toFixed(1)}–${P.la.toFixed(1)}</b>xG</span><span><b class="num">${pct(P.o25)}%</b>O2.5</span><span><b class="num">${pct(P.btts)}%</b>BTTS</span>${(() => { if (!P.market) return ''; const b = ['home', 'draw', 'away'].map(k => [k, P.model[k] - P.market[k]]).sort((x, y) => y[1] - x[1])[0]; return b[1] >= .04 ? `<span class="edge-c"><b class="num">+${pct(b[1])}</b>${esc(b[0] === 'draw' ? 'Draw' : e[b[0]].abbr || e[b[0]].name)} edge</span>` : '' })()}</div></div>
         <div class="pc-side"><span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf}</span><b>${esc(pickLabel(e, P.pick))}</b><small class="num">${P.score.join('–')} · ${pct(P.top)}%${S.picks.find(p => p.id === e.id) ? ' · ★ picked' : ''}</small><small class="pfx-lg">${esc(LG[e.slug] && e.slug !== 'all' ? LG[e.slug].name : e.league?.name || '')}</small>${(() => { const sn = snapsOf(e).slice(-1)[0]; return sn && sn.stage !== 'early' ? `<small class="cp-tag ${sn.stage}">${sn.stage === 'final' ? 'Lineups in' : 'Day-before update'}</small>` : '' })()}</div></button>`).join('')
       || (typeof PFX !== 'undefined' && PFX.empty('soccer', items.length)) || (pending ? '<div class="skel"></div><div class="skel"></div>' : `<div class="empty-state"><strong>No upcoming matches</strong>Pick another day with the date bar on the match list, or choose a different league.</div>`)}</div>
     <p class="srcnote">The model uses each team's goals scored and conceded per game, points per game, recent form, home advantage and reported absences; where Kalshi trades a match, the prediction is 60% market, 40% model. Tap a match for the full explanation.</p>${RG}`;

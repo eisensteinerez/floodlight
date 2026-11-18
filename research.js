@@ -1086,11 +1086,11 @@ function rsChart(games, def, line, side){
     <div class="rs-ch-h"><b>${esc(def.l)}</b><span>last ${n} game${n === 1 ? '' : 's'}, oldest to newest</span>
       <span class="rs-key"><i class="hit"></i>${side === 'over' ? over : under}<i class="miss"></i>${side === 'over' ? under : over}${n > 2 ? '<i class="avg"></i>5-game average' : ''}</span></div>
     ${games.length > 40 ? '<p class="rs-wait" style="margin:0 0 8px">The chart shows the newest 40; the table below has them all.</p>' : ''}
-    <div class="rs-bars" style="--n:${n}" data-max="${max}">
+    <div class="rs-bars" style="--n:${n}" data-max="${max}" data-side="${side}">
       <div class="rs-zn ${side === 'over' ? 'hit' : 'miss'}" style="bottom:${pct(line)}%"></div><div class="rs-zn lo ${side === 'over' ? 'miss' : 'hit'}" style="height:${pct(line)}%"></div>
       ${ticks.map(t => `<div class="rs-gl" style="bottom:${pct(t)}%"><span class="num">${rsFmt(t, { dec: tick < 1 ? 1 : 0 })}</span></div>`).join('')}
       ${gs.map((g, i) => { const v = vals[i], cls = rsHitCls(v, line, side), d = Math.round((v - line) * 100) / 100, edge = i < n * .22 ? ' tl' : i > n * .78 - 1 ? ' tr' : '';
-      return `<div class="rs-b ${cls}${edge}" style="--i:${i}" tabindex="0"><em class="num">${rsFmt(v, def)}</em><i style="height:${Math.max(v ? 3 : 1.5, pct(v))}%"></i>
+      return `<div class="rs-b ${cls}${edge}" style="--i:${i}" data-v="${v}" tabindex="0"><em class="num">${rsFmt(v, def)}</em><i style="height:${Math.max(v ? 3 : 1.5, pct(v))}%"></i>
         <span class="rs-bl">${g.oppLogo ? `<img src="${esc(g.oppLogo)}" alt="" onerror="this.remove()">` : ''}${g.home === false ? '@' : ''}${esc((g.oppAbbr || g.opp || '').slice(0, 3))}<small>${esc(fmtDate(g.date, { day: 'numeric', month: 'numeric' }))}</small>${g.res ? `<b class="rs-wl ${esc(g.res)}">${esc(g.res)}</b>` : ''}</span>
         <span class="rs-tt"><small>${esc(fmtDate(g.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</small><strong>${g.home === false ? '@ ' : g.home ? 'vs ' : ''}${esc(g.opp || '')}</strong>
           <span class="rs-tv"><b class="num">${rsFmt(v, def)}</b> ${esc(def.l.toLowerCase())}</span>
@@ -1415,6 +1415,14 @@ function rsWarm(t){
 }
 document.addEventListener('pointerover', ev => { const t = S.rs.open && ev.target.closest?.('[data-rs="pick"],[data-rs="recent"],[data-rs="bteam"]'); if (t && !t.dataset.warm) { t.dataset.warm = 1; rsWarm(t) } }, { passive: true });
 document.addEventListener('pointerdown', ev => { const t = S.rs.open && ev.target.closest?.('[data-rs="pick"],[data-rs="recent"],[data-rs="bteam"]'); if (t && !t.dataset.warm) { t.dataset.warm = 1; rsWarm(t) } }, { passive: true });
+function rsDragPaint(){
+  const bars = document.querySelector('.rs-bars'), ln = bars?.querySelector('.rs-ln'); if (!bars || !ln || !rsDrag) return;
+  const line = S.rs.line, side = bars.dataset.side, h = Math.max(0, Math.min(100, line / rsDrag.max * 100)) + '%';
+  ln.style.bottom = h; const lab = ln.querySelector('span'); if (lab?.firstChild) lab.firstChild.nodeValue = rsLineTxt(line);
+  const z = bars.querySelectorAll('.rs-zn'); if (z[0]) z[0].style.bottom = h; if (z[1]) z[1].style.height = h;
+  for (const b of bars.querySelectorAll('.rs-b')) { const c = rsHitCls(+b.dataset.v, line, side); if (!b.classList.contains(c)) { b.classList.remove('hit', 'miss', 'push'); b.classList.add(c) } }
+  const inp = $('rsLine'); if (inp && document.activeElement !== inp) inp.value = line;
+}
 // drag the line on the chart: the bars, tiles and tables follow as it moves
 document.addEventListener('pointerdown', ev => {
   const h = ev.target.closest?.('[data-rsdrag]'); if (!h || !S.rs.open) return;
@@ -1425,8 +1433,11 @@ document.addEventListener('pointerdown', ev => {
 document.addEventListener('pointermove', ev => {
   if (rsDrag) {
     const d = rsDrag, raw = (d.top + d.h - ev.clientY) / d.h * d.max;
-    let v = d.step === .5 ? Math.round(raw - .5) + .5 : Math.round(raw / d.step) * d.step; v = Math.round(Math.max(d.team ? -d.max : d.off, Math.min(d.max, v)) * 100) / 100;
-    if (v !== S.rs.line) { S.rs.line = v; if (!d.raf) d.raf = requestAnimationFrame(() => { d.raf = 0; rsRender() }) }
+    let v = d.step === .5 ? Math.round(raw - .5) + .5 : Math.round(raw / d.step) * d.step; if (v > d.max) v -= Math.ceil((v - d.max) / d.step) * d.step; v = Math.round(Math.max(d.team ? -d.max : d.off, v) * 100) / 100;
+    if (v !== S.rs.line) { S.rs.line = v;
+      // move the line and recolour the bars straight away; the heavier tiles and tables catch up when the pointer rests
+      if (!d.raf) d.raf = requestAnimationFrame(() => { d.raf = 0; rsDragPaint() });
+      clearTimeout(d.t); d.t = setTimeout(() => { if (rsDrag === d) rsRender() }, 110) }
     return;
   }
   const lad = ev.target.closest?.('.rs-ladp'); if (!lad) return;
@@ -1434,11 +1445,13 @@ document.addEventListener('pointermove', ev => {
   const L = pts[0][0] + f * (pts[pts.length - 1][0] - pts[0][0]), pt = pts.reduce((a, b) => Math.abs(b[0] - L) < Math.abs(a[0] - L) ? b : a);
   const hov = lad.querySelector('.rs-ladh'); hov.hidden = false; hov.style.left = (pt[0] - pts[0][0]) / (pts[pts.length - 1][0] - pts[0][0]) * 100 + '%'; hov.firstChild.style.top = (1 - pt[1]) * 100 + '%';
   lad.dataset.at = pt[0];
-  lad.parentNode.querySelector('.rs-ladr').innerHTML = `<b class="num">${rsPctTxt(pt[1])}</b> ${lad.parentNode.dataset.side.toLowerCase()} ${rsLineTxt(pt[0])} · ${pt[2]} of ${pt[3]}`;
+  const lr = lad.parentNode.querySelector('.rs-ladr'); if (lad._was == null) lad._was = lr.innerHTML;
+  lr.innerHTML = `<b class="num">${rsPctTxt(pt[1])}</b> ${lad.parentNode.dataset.side.toLowerCase()} ${rsLineTxt(pt[0])} · ${pt[2]} of ${pt[3]}`;
 }, { passive: true });
-document.addEventListener('pointerup', () => { if (!rsDrag) return; cancelAnimationFrame(rsDrag.raf); rsDrag = null; document.documentElement.classList.remove('rs-dragging'); rsRender() });
-document.addEventListener('pointercancel', () => { if (rsDrag) { rsDrag = null; document.documentElement.classList.remove('rs-dragging'); rsRender() } });
-document.addEventListener('pointerout', ev => { const lad = ev.target.closest?.('.rs-ladp'); if (lad && !lad.contains(ev.relatedTarget) && S.rs.open) rsRender() });
+document.addEventListener('pointerup', () => { if (!rsDrag) return; cancelAnimationFrame(rsDrag.raf); clearTimeout(rsDrag.t); rsDrag = null; document.documentElement.classList.remove('rs-dragging'); rsRender() });
+document.addEventListener('pointercancel', () => { if (rsDrag) { clearTimeout(rsDrag.t); rsDrag = null; document.documentElement.classList.remove('rs-dragging'); rsRender() } });
+document.addEventListener('pointerout', ev => { const lad = ev.target.closest?.('.rs-ladp'); if (!lad || lad.contains(ev.relatedTarget) || !S.rs.open) return;
+  lad.querySelector('.rs-ladh').hidden = true; delete lad.dataset.at; if (lad._was != null) { lad.parentNode.querySelector('.rs-ladr').innerHTML = lad._was; lad._was = null } });
 document.addEventListener('click', ev => { const lad = ev.target.closest?.('.rs-ladp'); if (!lad || ev.target.closest('[data-rs]') || lad.dataset.at == null) return; S.rs.line = +lad.dataset.at; rsRender() });
 document.addEventListener('keydown', ev => {
   if (!S.rs.open) return;
