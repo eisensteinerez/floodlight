@@ -1,0 +1,13 @@
+# Keeps the free Render instance awake so Discord slash commands answer within Discord's 3-second limit.
+# Render's free plan sleeps after 15 minutes without visitors; this opens a tiny page every few minutes.
+name: Keep Floodlight awake
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: curl -fsS --max-time 90 --retry 2 https://floodlight-x9sl.onrender.com/api/version
