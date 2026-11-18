@@ -54,3 +54,6 @@ document.addEventListener('pointerdown', ev => {
   const r = document.createElement('span'); r.className = 'fx-rip'; r.style.left = ev.clientX + 'px'; r.style.top = ev.clientY + 'px';
   document.body.appendChild(r); r.addEventListener('animationend', () => r.remove());
 }, { passive: true });
+
+/* the sport switcher lives in a floating dock at the foot of the screen */
+{ const sw = document.querySelector('.top .sport-sw'); if (sw) { sw.classList.add('dock'); document.body.appendChild(sw) } }
