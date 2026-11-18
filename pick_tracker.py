@@ -416,6 +416,7 @@ def times():
 
 
 def _loop():
+    """Each set time runs once. If Discord or a data source fails, it tries again every 10 minutes for two hours."""
     time.sleep(60)
     while True:
         try:
@@ -423,13 +424,22 @@ def _loop():
             for i, (hh, mm) in enumerate(times()):
                 at = t.replace(hour=hh, minute=mm, second=0, microsecond=0)
                 slot = f"{t.date()} {hh:02d}:{mm:02d}"
-                # once, inside the hour after the set time (the server may be waking up at the exact minute)
-                if at <= t < at + dt.timedelta(hours=1) and slot not in STATE["posted"]:
-                    STATE["posted"][slot] = int(time.time())
+                tried = STATE.setdefault("tries", {}).get(slot, 0)
+                if at <= t < at + dt.timedelta(hours=2) and slot not in STATE["posted"] and time.time() - tried > 600:
+                    STATE["tries"][slot] = time.time()
+                    try:
+                        run(final=i > 0)
+                        ok = not STATE.get("postError")
+                    except Exception as e:
+                        print(f"pick tracker: run at {slot} failed: {type(e).__name__}: {e}", file=sys.stderr)
+                        ok = False
+                    if ok:
+                        STATE["posted"][slot] = int(time.time())
                     for k in sorted(STATE["posted"])[:-60]:
                         STATE["posted"].pop(k, None)
+                    for k in sorted(STATE["tries"])[:-10]:
+                        STATE["tries"].pop(k, None)
                     save()
-                    run(final=i > 0)
         except Exception as e:
             print(f"pick tracker: {type(e).__name__}: {e}", file=sys.stderr)
         time.sleep(60)
