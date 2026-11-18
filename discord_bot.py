@@ -749,7 +749,7 @@ def market(e):
 def find_game(sport, team, lg=None):
     nt = norm(team)
     today = dt.datetime.now(dt.timezone.utc)
-    for add in range(0, 4):
+    for add in range(0, 8 if sport in ("nfl", "soccer") else 4):
         day = (today + dt.timedelta(days=add)).strftime("%Y%m%d")
         for e in events(sport, lg, day if add else None):
             if e["state"] == "post":
@@ -824,7 +824,7 @@ def forecast_embed(sport, e, snap, plan):
         fields.append({"name": "Why", "value": why[:1020], "inline": False})
     if plan:
         fields.append({"name": "Updates", "value": " · ".join(f"{'✓' if p['done'] else '○'} {p['label']}" + ("" if p["done"] else f" <t:{int(p['at'])}:R>")
-                                                             for p in plan if p["at"] > time.time() - 86400 * 8)[:1000], "inline": False})
+                                                             for p in plan if p["done"] or p["at"] > time.time())[:1000], "inline": False})
     upd = int(snap.get("at") or time.time())
     return {"title": f"{aw['name']} @ {hm['name']}", "description": "\n".join(lines)[:4000], "color": GREEN if conf == "Strong" else BLUE, "fields": fields,
             "footer": {"text": "Floodlight forecast · stats model + betting market · free, no AI usage"}, "timestamp": dt.datetime.fromtimestamp(upd, dt.timezone.utc).isoformat()}
@@ -961,7 +961,7 @@ def soccer_lineup(team):
     nt = norm(team)
     best = None
     today = dt.datetime.now(dt.timezone.utc)
-    for add in range(0, 4):
+    for add in range(0, 8 if sport in ("nfl", "soccer") else 4):
         day = (today + dt.timedelta(days=add)).strftime("%Y%m%d")
         try:
             data = get_json(f"https://www.fotmob.com/api/data/matches?date={day}", 600) or {}

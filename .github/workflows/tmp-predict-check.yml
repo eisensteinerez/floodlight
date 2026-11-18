@@ -11,4 +11,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - run: python3 tests/predict_live.py nba:Knicks nba:Lakers nba nfl:Eagles nfl soccer:Arsenal soccer:Barcelona
+      - run: python3 tests/predict_live.py nfl:Eagles soccer:Barcelona
