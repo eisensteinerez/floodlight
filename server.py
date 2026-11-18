@@ -1250,6 +1250,13 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
+        if u.path == "/api/picks/state":   # GitHub Actions hands over the pick record (encrypted with the bot token)
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > 16_000_000:
+                return self.send_json({"error": "too large"}, 413)
+            import pick_tracker
+            ok = pick_tracker.accept_blob(self.rfile.read(length))
+            return self.send_json({"ok": ok}, 200 if ok else 409)
         if u.path == "/api/discord/interactions":   # Discord slash commands (discord_bot.py); signed by Discord, not a member login
             length = int(self.headers.get("Content-Length") or 0)
             if not discord_bot.enabled() or length > 64_000:
@@ -1327,6 +1334,15 @@ class Handler(SimpleHTTPRequestHandler):
     def _do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+        if u.path == "/api/picks/state":
+            import pick_tracker
+            data = pick_tracker.state_blob()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
         if u.path.startswith("/api/lab/") or u.path == "/lab" or (u.path == "/" and "frame_id" in q and "instance_id" in q):
             return self.lab(u, q)   # Floodlight Lab (lab.py): Discord members get in with a pass, not a site login
         if GATED and u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users"):

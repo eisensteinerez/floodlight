@@ -1,14 +1,15 @@
 # Grades the pick channels and posts the results in #verified-records at 12:30 AM and 8:00 AM Eastern.
-# It runs here, not on the server, because Discord often blocks requests from Render's shared address
-# (Cloudflare "error 1015"). Every run checks what is due and exits in seconds when nothing is; a run that failed is
-# tried again on the next one. The record lives on the pick-data branch, encrypted with a key made from the bot token,
-# and the server reads it from there for /leaderboard.
+# It runs here first because Discord often blocks requests from Render's shared address (Cloudflare "error 1015").
+# GitHub's timer is best-effort, so if a set time isn't posted within 35 minutes the server posts it (from minute 40).
+# Both share one record (pick-data branch here, /api/picks/state on the server, encrypted with a key made from the bot
+# token; the newest wins), so nothing is posted twice. Runs with nothing due exit in seconds.
 # Needs one repository secret (Settings > Secrets and variables > Actions): DISCORD_BOT_TOKEN, the same value as on Render.
 name: Grade pick channels
 on:
   schedule:
-    - cron: "*/20 4,5,6,7 * * *"      # around 12:30 AM Eastern (summer and winter time)
-    - cron: "*/20 12,13,14,15 * * *"  # around 8:00 AM Eastern
+    - cron: "30,40,50 4,5 * * *"       # 12:30 AM Eastern (summer and winter time)
+    - cron: "0,10,20,30 12,13 * * *"   # 8:00 AM Eastern
+    - cron: "45 6,7,14,15 * * *"       # copies a record the server posted into the pick-data branch
   workflow_dispatch:
     inputs:
       now:
@@ -47,6 +48,7 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           PICKS_DATA_DIR: data
+          PICKS_RESET: ${{ inputs.reset && 'true' || 'false' }}
       - name: Save the record
         if: always() && !inputs.preview
         run: |

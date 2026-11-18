@@ -374,13 +374,11 @@ def post(dest, msgs):
     return done
 
 
-def run(final=False, dry=False, hours=LOOK_BACK_H):
+def run(final=False, dry=False, hours=LOOK_BACK_H, fresh=True):
     """Read, grade, post what finished (and any correction). Returns the messages."""
     G.RUN["id"] = str(int(time.time()) // 300)
-    note = STATE.get("_note")
-    reload()
-    if note:
-        STATE["_note"] = note
+    if fresh:
+        reload()
     collect(hours)
     grade_all()
     msgs = report(update=final)
@@ -406,9 +404,12 @@ def _path():
 
 def save():
     with _lock:
+        STATE["savedAt"] = time.time()
         if D.get("data_dir"):
-            (Path(D["data_dir"]) / DATA_FILE).write_bytes(seal({k: v for k, v in STATE.items() if not k.startswith("_")}))
-        elif D.get("cache_dir") and not STATE.get("_mirror"):
+            blob = seal({k: v for k, v in STATE.items() if not k.startswith("_")})
+            (Path(D["data_dir"]) / DATA_FILE).write_bytes(blob)
+            push(blob)
+        elif D.get("cache_dir"):
             storage.save(_path(), STATE)
 
 
@@ -421,28 +422,29 @@ def times():
     return out or [(0, 30), (8, 0)]
 
 
-def due_slots(delay=0):
-    """The set times due now and not done yet: [(index, slot)]. Each runs inside the two hours after its time."""
+def due_slots(delay=0, window=120):
+    """The set times due now and not done yet: [(index, slot)]. Each runs inside `window` minutes from its time plus
+    `delay`."""
     t = now_et()
     out = []
     for i, (hh, mm) in enumerate(times()):
         at = t.replace(hour=hh, minute=mm, second=0, microsecond=0) + dt.timedelta(minutes=delay)
         slot = f"{t.date()} {hh:02d}:{mm:02d}"
-        if at <= t < at + dt.timedelta(hours=2) and slot not in STATE["posted"]:
+        if at <= t < at + dt.timedelta(minutes=window) and slot not in STATE["posted"]:
             out.append((i, slot))
     return out
 
 
-def scheduled(delay=0, runner="server"):
+def scheduled(delay=0, runner="server", window=120):
     """Run whatever set time is due. A run that fails (Discord or a data source down) is tried again on the next call."""
     reload()
-    for i, slot in due_slots(delay):
+    for i, slot in due_slots(delay, window):
         tried = STATE.setdefault("tries", {}).get(slot, 0)
         if time.time() - tried < 540:
             continue
         STATE["tries"][slot] = time.time()
         try:
-            run(final=i > 0)
+            run(final=i > 0, fresh=False)
             ok = not STATE.get("postError")
         except Exception as e:
             print(f"pick tracker: run at {slot} failed: {type(e).__name__}: {e}", file=sys.stderr)
@@ -452,32 +454,36 @@ def scheduled(delay=0, runner="server"):
             STATE["ranBy"] = {"who": runner, "at": int(time.time())}
         for k in sorted(STATE["posted"])[:-60]:
             STATE["posted"].pop(k, None)
-        for k in sorted(STATE["tries"])[:-10]:
+        for k in sorted(STATE.setdefault("tries", {}))[:-10]:
             STATE["tries"].pop(k, None)
         save()
         print(f"pick tracker: {slot} {'done' if ok else 'will retry'} ({runner})")
 
 
+SERVER_DELAY = 40     # minutes the server leaves GitHub Actions to post a set time before posting it itself
+
+
 def _loop():
-    """The server's own schedule. When GitHub Actions runs the grading (it reaches Discord more reliably than Render's
-    shared address), the server leaves it to GitHub."""
+    """The server's own schedule, the backup for GitHub Actions: GitHub's timer is best-effort (it can run late or
+    skip), so if a set time hasn't been posted 40 minutes after it's due, the server posts it. Both share one record,
+    so nothing is posted twice."""
     time.sleep(60)
     while True:
         try:
-            if due_slots():
-                m = mirror()
-                if not (m and github_runs(m)):        # GitHub hasn't run lately: the server grades on its own
-                    scheduled()
+            if due_slots(SERVER_DELAY):
+                scheduled(SERVER_DELAY)
         except Exception as e:
             print(f"pick tracker: {type(e).__name__}: {e}", file=sys.stderr)
         time.sleep(60)
 
 
 # ---------- the record, shared with GitHub Actions ----------
-# GitHub Actions runs the grading (Discord often blocks Render's shared address) and keeps the record in the repo's
-# pick-data branch, encrypted with a key made from the bot token so the public repo doesn't show the picks. The server
-# reads that copy for /leaderboard and only grades on its own when GitHub hasn't run.
+# GitHub Actions does the grading first (Discord often blocks Render's shared address) and keeps the record in the
+# repo's pick-data branch, encrypted with a key made from the bot token so the public repo doesn't show the picks. It
+# also sends each saved record to the server (/api/picks/state) and starts from the server's copy when that is newer,
+# so whichever of the two posted last, the other knows. The newest record (savedAt) always wins.
 MIRROR = "https://raw.githubusercontent.com/eisensteinerez/floodlight/pick-data/pick-tracker.enc"
+SERVER = os.environ.get("PICKS_SERVER_URL") or "https://floodlight-x9sl.onrender.com/api/picks/state"
 DATA_FILE = "pick-tracker.enc"
 
 
@@ -512,6 +518,57 @@ def mirror():
         return None
 
 
+def _http(url, data=None, timeout=60):
+    import urllib.request
+    req = urllib.request.Request(url, data=data, headers={"User-Agent": "floodlight", "Content-Type": "application/octet-stream"},
+                                 method="POST" if data is not None else "GET")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def push(blob):
+    """GitHub Actions: hand the saved record to the server."""
+    try:
+        _http(SERVER, blob)
+    except Exception as e:
+        print(f"pick tracker: couldn't send the record to the server ({type(e).__name__}: {e})")
+
+
+def from_server():
+    try:
+        return unseal(_http(SERVER, timeout=90))       # the free server may need a minute to wake
+    except Exception as e:
+        print(f"pick tracker: couldn't read the server's record ({type(e).__name__})")
+        return None
+
+
+def state_blob():
+    """GET /api/picks/state: the server's record, encrypted."""
+    with _lock:
+        return seal({k: v for k, v in STATE.items() if not k.startswith("_")})
+
+
+def accept_blob(blob):
+    """POST /api/picks/state from GitHub Actions: kept if it decrypts (so it was made with the bot token) and is newer."""
+    try:
+        got = unseal(blob)
+    except Exception:
+        return False
+    if not isinstance(got, dict) or got.get("savedAt", 0) < STATE.get("savedAt", 0):
+        return False
+    with _lock:
+        STATE.clear()
+        STATE.update(got)
+        if D.get("cache_dir"):
+            storage.save(_path(), STATE)
+    return True
+
+
+def _newest(*states):
+    states = [x for x in states if isinstance(x, dict) and x]
+    return max(states, key=lambda x: x.get("savedAt", 0), default={})
+
+
 def github_runs(st=None):
     st = st if st is not None else STATE
     rb = st.get("ranBy") or {}
@@ -521,18 +578,13 @@ def github_runs(st=None):
 def reload():
     """The saved state, fresh. On GitHub it's the pick-data file; on the server, GitHub's copy when GitHub is running
     the grading, else the server's own."""
-    STATE.pop("_mirror", None)
     if D.get("data_dir"):
         f = Path(D["data_dir"]) / DATA_FILE
-        got = unseal(f.read_bytes()) if f.exists() else {}
+        got = _newest(unseal(f.read_bytes()) if f.exists() else {}, None if D.get("reset") else from_server())
     elif not D.get("cache_dir"):
         return
     else:
-        got = storage.load(_path(), {})
-        m = mirror()
-        if m and github_runs(m):
-            got = m
-            STATE["_mirror"] = True
+        got = _newest(dict(STATE), storage.load(_path(), {}), mirror())
     if isinstance(got, dict) and got:
         with _lock:
             STATE.clear()
@@ -573,10 +625,6 @@ def cmd_leaderboard(o):
 def cmd_check(o):
     """/checkpicks: read and grade now. Shows every card it found and how each pick graded; posts only with post:True."""
     go = bool(o.get("post"))
-    reload()
-    if go and STATE.get("_mirror"):
-        go = False
-        STATE["_note"] = "Posting runs on GitHub now: Actions > Grade pick channels > Run workflow (tick now)."
     msgs = run(final=False, dry=not go)
     cards = live_cards()
     embeds = []
@@ -591,7 +639,7 @@ def cmd_check(o):
     if go:
         foot = STATE.get("postError") or ("Posted finished results in #verified-records" if msgs else "Nothing new finished yet")
     else:
-        foot = STATE.pop("_note", None) or "Preview only, nothing posted. Results post on their own at 12:30 AM and 8 AM ET (or run /checkpicks post:True)."
+        foot = "Preview only, nothing posted. Results post on their own at 12:30 AM and 8 AM ET (or run /checkpicks post:True)."
     if errs:
         foot += " · couldn't read " + ", ".join("#" + e for e in errs)
     embeds = embeds[:9] or [{"description": "No pick channels found.", "color": B.BLUE}]
@@ -606,12 +654,13 @@ if __name__ == "__main__":
             print("Add the DISCORD_BOT_TOKEN secret to the repository (Settings > Secrets and variables > Actions) to run the grading here.")
             sys.exit(0)
         D["data_dir"] = os.environ.get("PICKS_DATA_DIR") or "data"
+        D["reset"] = os.environ.get("PICKS_RESET") == "true"
         Path(D["data_dir"]).mkdir(exist_ok=True)
         if cmd == "now":
             msgs = run(final=False)
             print(f"posted {len(msgs)} message(s)" + (f" · {STATE['postError']}" if STATE.get("postError") else ""))
         else:
-            scheduled(runner="github")
+            scheduled(runner="github", window=SERVER_DELAY - 5)   # after that the server takes the set time
         STATE["ranBy"] = {"who": "github", "at": int(time.time())}
         save()
     elif cmd == "try":   # read, grade and print; posts nothing, saves nothing
