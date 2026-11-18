@@ -55,8 +55,8 @@ document.addEventListener('pointerdown', ev => {
   document.body.appendChild(r); r.addEventListener('animationend', () => r.remove());
 }, { passive: true });
 
-/* the sport switcher lives in a floating dock at the foot of the screen */
-{ const sw = document.querySelector('.top .sport-sw'); if (sw) { sw.classList.add('dock'); document.body.appendChild(sw) } }
+/* the sport switcher sits in the header as a row of channels (styled by .dock in theme.css) */
+{ const sw = document.querySelector('.top .sport-sw'); if (sw) sw.classList.add('dock') }
 
 /* three slow lights behind the page */
 { const a = document.createElement('div'); a.id = 'flAurora'; a.setAttribute('aria-hidden', 'true'); a.innerHTML = '<i></i><i></i><i></i>'; document.body.prepend(a) }
