@@ -377,7 +377,10 @@ def post(dest, msgs):
 def run(final=False, dry=False, hours=LOOK_BACK_H):
     """Read, grade, post what finished (and any correction). Returns the messages."""
     G.RUN["id"] = str(int(time.time()) // 300)
+    note = STATE.get("_note")
     reload()
+    if note:
+        STATE["_note"] = note
     collect(hours)
     grade_all()
     msgs = report(update=final)
@@ -403,7 +406,9 @@ def _path():
 
 def save():
     with _lock:
-        if D.get("cache_dir"):
+        if D.get("data_dir"):
+            (Path(D["data_dir"]) / DATA_FILE).write_bytes(seal({k: v for k, v in STATE.items() if not k.startswith("_")}))
+        elif D.get("cache_dir") and not STATE.get("_mirror"):
             storage.save(_path(), STATE)
 
 
@@ -455,23 +460,79 @@ def scheduled(delay=0, runner="server"):
 
 def _loop():
     """The server's own schedule. When GitHub Actions runs the grading (it reaches Discord more reliably than Render's
-    shared address), the server waits 45 minutes and only steps in if that run didn't happen."""
+    shared address), the server leaves it to GitHub."""
     time.sleep(60)
     while True:
         try:
-            gh = (STATE.get("ranBy") or {}).get("who") == "github" and time.time() - (STATE.get("ranBy") or {}).get("at", 0) < 3 * 86400
-            if due_slots(45 if gh else 0):
-                scheduled(45 if gh else 0)
+            if due_slots():
+                m = mirror()
+                if not (m and github_runs(m)):        # GitHub hasn't run lately: the server grades on its own
+                    scheduled()
         except Exception as e:
             print(f"pick tracker: {type(e).__name__}: {e}", file=sys.stderr)
         time.sleep(60)
 
 
+# ---------- the record, shared with GitHub Actions ----------
+# GitHub Actions runs the grading (Discord often blocks Render's shared address) and keeps the record in the repo's
+# pick-data branch, encrypted with a key made from the bot token so the public repo doesn't show the picks. The server
+# reads that copy for /leaderboard and only grades on its own when GitHub hasn't run.
+MIRROR = "https://raw.githubusercontent.com/eisensteinerez/floodlight/pick-data/pick-tracker.enc"
+DATA_FILE = "pick-tracker.enc"
+
+
+def _fernet():
+    import base64
+    import hashlib
+    from cryptography.fernet import Fernet
+    tok = os.environ.get("DISCORD_BOT_TOKEN") or ""
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(b"floodlight-picks:" + tok.encode()).digest()))
+
+
+def seal(state):
+    import json
+    return _fernet().encrypt(json.dumps(state).encode())
+
+
+def unseal(blob):
+    import json
+    return json.loads(_fernet().decrypt(blob))
+
+
+def mirror():
+    """GitHub's copy of the record, or None."""
+    if os.environ.get("PICKS_MIRROR", "1") == "0":
+        return None
+    try:
+        import urllib.request
+        url = os.environ.get("PICKS_MIRROR_URL") or MIRROR
+        with urllib.request.urlopen(urllib.request.Request(f"{url}?t={int(time.time()) // 60}", headers={"User-Agent": "floodlight"}), timeout=15) as r:
+            return unseal(r.read())
+    except Exception:
+        return None
+
+
+def github_runs(st=None):
+    st = st if st is not None else STATE
+    rb = st.get("ranBy") or {}
+    return rb.get("who") == "github" and time.time() - rb.get("at", 0) < 3 * 86400
+
+
 def reload():
-    """The saved state, fresh: GitHub Actions and the server share it through the database."""
-    if not D.get("cache_dir"):
+    """The saved state, fresh. On GitHub it's the pick-data file; on the server, GitHub's copy when GitHub is running
+    the grading, else the server's own."""
+    STATE.pop("_mirror", None)
+    if D.get("data_dir"):
+        f = Path(D["data_dir"]) / DATA_FILE
+        got = unseal(f.read_bytes()) if f.exists() else {}
+    elif not D.get("cache_dir"):
         return
-    got = storage.load(_path(), {})
+    else:
+        got = storage.load(_path(), {})
+        m = mirror()
+        if m and github_runs(m):
+            got = m
+            STATE["_mirror"] = True
     if isinstance(got, dict) and got:
         with _lock:
             STATE.clear()
@@ -494,6 +555,7 @@ def setup(**deps):
 
 # ---------- commands ----------
 def cmd_leaderboard(o):
+    reload()
     days = int(o.get("days") or 0)
     cut = (now_et().date() - dt.timedelta(days=days)).isoformat() if days else ""
     by = {}
@@ -511,6 +573,10 @@ def cmd_leaderboard(o):
 def cmd_check(o):
     """/checkpicks: read and grade now. Shows every card it found and how each pick graded; posts only with post:True."""
     go = bool(o.get("post"))
+    reload()
+    if go and STATE.get("_mirror"):
+        go = False
+        STATE["_note"] = "Posting runs on GitHub now: Actions > Grade pick channels > Run workflow (tick now)."
     msgs = run(final=False, dry=not go)
     cards = live_cards()
     embeds = []
@@ -525,7 +591,7 @@ def cmd_check(o):
     if go:
         foot = STATE.get("postError") or ("Posted finished results in #verified-records" if msgs else "Nothing new finished yet")
     else:
-        foot = "Preview only, nothing posted. Results post on their own at 12:30 AM and 8 AM ET (or run /checkpicks post:True)."
+        foot = STATE.pop("_note", None) or "Preview only, nothing posted. Results post on their own at 12:30 AM and 8 AM ET (or run /checkpicks post:True)."
     if errs:
         foot += " · couldn't read " + ", ".join("#" + e for e in errs)
     embeds = embeds[:9] or [{"description": "No pick channels found.", "color": B.BLUE}]
@@ -536,18 +602,18 @@ def cmd_check(o):
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd in ("scheduled", "now"):   # GitHub Actions: .github/workflows/grade-picks.yml
-        if not os.environ.get("DISCORD_BOT_TOKEN") or not storage.URL:
-            print("Add the DISCORD_BOT_TOKEN and DATABASE_URL secrets to the repository to run the grading here.")
+        if not os.environ.get("DISCORD_BOT_TOKEN"):
+            print("Add the DISCORD_BOT_TOKEN secret to the repository (Settings > Secrets and variables > Actions) to run the grading here.")
             sys.exit(0)
-        D["cache_dir"] = os.environ.get("CACHE_DIR") or "/tmp/floodlight-cache"
+        D["data_dir"] = os.environ.get("PICKS_DATA_DIR") or "data"
+        Path(D["data_dir"]).mkdir(exist_ok=True)
         if cmd == "now":
-            reload()
             msgs = run(final=False)
             print(f"posted {len(msgs)} message(s)" + (f" · {STATE['postError']}" if STATE.get("postError") else ""))
         else:
             scheduled(runner="github")
-            STATE["ranBy"] = {"who": "github", "at": int(time.time())}
-            save()
+        STATE["ranBy"] = {"who": "github", "at": int(time.time())}
+        save()
     elif cmd == "try":   # read, grade and print; posts nothing, saves nothing
         h = int(sys.argv[2]) if len(sys.argv) > 2 else LOOK_BACK_H
         run(dry=True, hours=h)
