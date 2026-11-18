@@ -1596,7 +1596,8 @@ function hero(e){
   const sh = scorers('home'), sa = scorers('away');
   const pre = e.state === 'pre';
   const countdown = pre ? kickoffIn(e.date) : '';
-  return `<div class="hero" style="--hc:${e.hc};--ac:${e.ac}">
+  return `<div class="hero mh${e.state === 'in' ? ' is-live' : ''}" style="--hc:${e.hc};--ac:${e.ac}">
+    <div class="mh-fx" aria-hidden="true"><b>${esc(e.home.abbr || '')}</b><b>${esc(e.away.abbr || '')}</b></div>
     <div class="hero-top"><div class="lgname">${e.league.logo?`<img src="${esc(e.league.logo)}" width="16" height="16" alt="">`:''}<span>${esc(e.league.name)}${e.note?' · '+esc(e.note):''}</span></div>
       <button class="icon-btn expand" data-act="expand" aria-pressed="${!!S.big}" aria-label="${S.big ? 'Exit large view' : 'View larger'}" title="${S.big ? 'Exit large view' : 'View larger'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="board">
@@ -1623,6 +1624,15 @@ function teamSide(t){
   return null;
 }
 
+const TAB_ICO = { pitch: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/><circle cx="12" cy="12" r="2.6"/>', stats: '<path d="M5 20V10M12 20V4M19 20v-7"/>', odds: '<circle cx="12" cy="12" r="9"/><path d="M9 15l6-6M9.2 9.2h.01M14.8 14.8h.01"/>',
+  insight: '<path d="M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z"/>', flow: '<path d="M3 12h3l3-7 4 14 3-7h5"/>', lineups: '<circle cx="12" cy="6" r="2.4"/><circle cx="6" cy="16" r="2.4"/><circle cx="18" cy="16" r="2.4"/>', events: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  table: '<path d="M4 6h16M4 12h16M4 18h10"/>', feed: '<path d="M4 5h16v11H9l-5 4z"/>', overview: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  profile: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>', calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', squad: '<circle cx="9" cy="8" r="3"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.400 1.900 6 5.500"/><path d="M16 5.200a3 3 0 0 1 0 5.600M21 20c-.3-2.600-1.500-4.300-3.300-5"/>',
+  xi: '<path d="M12 3l7 3v6c0 4.500-3 7.500-7 9-4-1.500-7-4.500-7-9V6z"/>', transfers: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>', fixtures: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', news: '<path d="M5 5h11v14H5zM16 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5"/>',
+  scorers: '<circle cx="12" cy="12" r="9"/><path d="M12 7.500l4 3-1.500 4.500h-5L8 10.500z"/>', assists: '<path d="M4 18c5 0 5-12 10-12h6M17 3l3 3-3 3"/>', winner: '<path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4c0 3 1.500 4.500 3.500 5M17 6h3c0 3-1.500 4.500-3.500 5M12 14v4M8 20h8"/>',
+  zones: '<path d="M12 21c4-4.500 6-7.800 6-11a6 6 0 0 0-12 0c0 3.200 2 6.500 6 11z"/><circle cx="12" cy="10" r="2"/>', matches: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>', career: '<path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/>', value: '<path d="M4 17l5-5 4 3 7-8M15 7h5v5"/>' };
+for (const [k, t] of Object.entries({ roster: 'squad', sched: 'calendar', schedule: 'calendar', stand: 'table', standings: 'table', log: 'matches', splits: 'value', box: 'stats', plays: 'feed', pbp: 'feed', top: 'winner', leaders: 'scorers', summary: 'overview', game: 'pitch', props: 'insight', pred: 'insight', lines: 'odds', draw: 'table', h2h: 'transfers', bio: 'profile' })) TAB_ICO[k] ??= TAB_ICO[t];
+const tabIco = k => TAB_ICO[k] ? `<svg class="tab-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICO[k]}</svg>` : '';
 const TABS = [['pitch','Pitch'],['stats','Stats'],['odds','Odds'],['insight','Prediction'],['flow','Momentum'],['lineups','Lineups'],['table','Table'],['feed','Commentary']];
 function renderSheet(){
   const v = S.stack[S.stack.length-1]; syncStage();
@@ -1636,8 +1646,8 @@ function renderSheet(){
   const sheet = $('sheet');
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${hero(e)}
-    <div class="tabs" role="tablist">${TB.map(([k,l])=>`<button class="tab${S.tab===k?' on':''}" role="tab" aria-selected="${S.tab===k}" data-tab="${k}" tabindex="${S.tab===k?0:-1}" aria-controls="pane">${l}</button>`).join('')}</div>
-    <div class="pane" id="pane" role="tabpanel">${pane(e)}</div></div>`;
+    <div class="tabs" role="tablist">${TB.map(([k,l])=>`<button class="tab${S.tab===k?' on':''}" role="tab" aria-selected="${S.tab===k}" data-tab="${k}" tabindex="${S.tab===k?0:-1}" aria-controls="pane">${tabIco(k)}<span>${l}</span></button>`).join('')}</div>
+    <div class="pane" id="pane" role="tabpanel" data-pane="${S.tab}" style="--hc:${e.hc};--ac:${e.ac}">${pane(e)}</div></div>`;
   sheet.querySelector('.sheet-body').scrollTop = scroll;
   fxEnter(sheet, 'm' + e.id, S.tab);
   wiPaint();
@@ -1650,7 +1660,7 @@ function fxEnter(sheet, page, tab){
   if (S.fxPage !== page) body.classList.add('fx-open', 'fx-tab'); else if (S.fxTab !== tab) body.classList.add('fx-tab');
   S.fxPage = page; S.fxTab = tab;
 }
-function tabsHTML(list, cur){ return `<div class="tabs" role="tablist">${list.map(([k,l])=>`<button class="tab${cur===k?' on':''}" role="tab" aria-selected="${cur===k}" data-tab="${k}" tabindex="${cur===k?0:-1}" aria-controls="pane">${l}</button>`).join('')}</div>` }
+function tabsHTML(list, cur){ return `<div class="tabs" role="tablist">${list.map(([k,l])=>`<button class="tab${cur===k?' on':''}" role="tab" aria-selected="${cur===k}" data-tab="${k}" tabindex="${cur===k?0:-1}" aria-controls="pane">${tabIco(k)}<span>${l}</span></button>`).join('')}</div>` }
 function pane(e){
   if (S.tab === 'insight') return insightPane(e);
   if (['pitch','lineups'].includes(S.tab)) prefetchStats(e);
@@ -1741,18 +1751,26 @@ function statsPane(e, s){
   const H = get('home'), A = get('away');
   if (!Object.keys(H).length || (e.state==='pre')) return `<div class="note">${e.state==='pre' ? 'Live team stats appear here from kick-off.' : 'No team stats published for this match.'}</div>${e.state==='pre'?preview(e,s):''}`;
   const ph = parseFloat(H.possessionPct)||0, pa = parseFloat(A.possessionPct)||0;
-  let html = (ph||pa) ? `<div class="poss"><div class="poss-n num"><span style="color:${e.hc}">${ph}%</span><small>Possession</small><span style="color:${e.ac}">${pa}%</span></div>
-    <div class="poss-bar"><div style="flex-grow:${ph};background:${e.hc}"></div><div style="flex-grow:${pa};background:${e.ac}"></div></div></div>` : '';
-  for (const [k, label, pct] of STAT_ROWS) {
-    if (H[k] == null && A[k] == null) continue;
-    let h = parseFloat(H[k])||0, a = parseFloat(A[k])||0;
-    const fmt = v => pct ? Math.round(v*100)+'%' : v;
-    const max = pct ? 1 : Math.max(h, a, 1);
-    html += `<div class="stat"><span class="v num ${h>=a&&h>0?'lead':''}">${fmt(h)}</span><div><div class="lbl">${label}</div>
-      <div class="bars"><span><i style="width:${h/max*100}%;background:${e.hc}"></i></span><span><i style="width:${a/max*100}%;background:${e.ac}"></i></span></div></div>
-      <span class="v num ${a>=h&&a>0?'lead':''}">${fmt(a)}</span></div>`;
-  }
-  return html;
+  const crest = k => e[k].logo ? `<img src="${esc(e[k].logo)}" alt="" loading="lazy">` : '';
+  const C = 2 * Math.PI * 52, arc = ph / Math.max(1, ph + pa) * C;
+  let html = `<div class="sx">`;
+  if (ph || pa) html += `<div class="sx-poss" role="img" aria-label="${esc(`Possession: ${e.home.name} ${ph} percent, ${e.away.name} ${pa} percent`)}">
+      <div class="sx-side h${ph >= pa ? ' lead' : ''}">${crest('home')}<b class="num">${ph}<i>%</i></b><span>${esc(e.home.name)}</span></div>
+      <svg class="sx-ring" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" fill="none" stroke="${e.ac}" stroke-width="11"/><circle class="sx-arc" cx="60" cy="60" r="52" fill="none" stroke="${e.hc}" stroke-width="11" stroke-linecap="butt" stroke-dasharray="${arc.toFixed(1)} ${C.toFixed(1)}" style="--len:${arc.toFixed(1)}" transform="rotate(-90 60 60) scale(1 -1) translate(0 -120)"/>
+        <circle cx="60" cy="8" r="2.4" fill="var(--surface)"/><text x="60" y="56" text-anchor="middle">BALL</text><text x="60" y="72" text-anchor="middle">POSSESSION</text></svg>
+      <div class="sx-side a${pa > ph ? ' lead' : ''}">${crest('away')}<b class="num">${pa}<i>%</i></b><span>${esc(e.away.name)}</span></div></div>`;
+  const KEYS = ['totalShots','shotsOnTarget','wonCorners','passPct'], rows = STAT_ROWS.filter(([k]) => H[k] != null || A[k] != null);
+  const val = (M, k) => parseFloat(M[k]) || 0, fmt = (v, pc) => pc ? Math.round(v * 100) + '%' : v;
+  const keys = rows.filter(([k]) => KEYS.includes(k)), rest = rows.filter(([k]) => !KEYS.includes(k));
+  if (keys.length) html += `<div class="sx-keys">${keys.map(([k, label, pc], i) => { const h = val(H, k), a = val(A, k);
+    return `<div class="sx-key" style="--i:${i}"><span>${label}</span><div class="sx-kn"><b class="num${h >= a && h > 0 ? ' lead h' : ''}">${fmt(h, pc)}</b><b class="num${a > h ? ' lead a' : ''}">${fmt(a, pc)}</b></div>
+      <div class="sx-split"><i style="flex-grow:${Math.max(h, .001)};background:${e.hc}"></i><i style="flex-grow:${Math.max(a, .001)};background:${e.ac}"></i></div></div>` }).join('')}</div>`;
+  if (rest.length) html += `<div class="sx-rows">${rest.map(([k, label, pc], i) => { const h = val(H, k), a = val(A, k), max = pc ? 1 : Math.max(h, a, 1);
+    return `<div class="sx-row" style="--i:${i}"><b class="num${h >= a && h > 0 ? ' lead' : ''}">${fmt(h, pc)}</b>
+      <span class="sx-b l${h >= a && h > 0 ? ' lead' : ''}"><i style="width:${(h / max * 100).toFixed(1)}%;background:${e.hc}"></i></span><em>${label}</em>
+      <span class="sx-b r${a >= h && a > 0 ? ' lead' : ''}"><i style="width:${(a / max * 100).toFixed(1)}%;background:${e.ac}"></i></span>
+      <b class="num${a >= h && a > 0 ? ' lead' : ''}">${fmt(a, pc)}</b></div>` }).join('')}</div>`;
+  return html + `</div>`;
 }
 function preview(e, s){
   const l5 = s.lastFiveGames || [];
@@ -1932,26 +1950,37 @@ async function loadTable(e){
 }
 function tableHTML(e, name, entries, lite){
   const v = (x, n) => { const s = (x.stats||[]).find(s=>s.name===n || s.type===n); return s ? (s.displayValue ?? s.value) : '' };
-  const notes = new Map();
-  const rows = entries.slice().sort((a,b) => (+v(a,'rank')||0) - (+v(b,'rank')||0)).map((x, i) => {
+  const notes = new Map(), sorted = entries.slice().sort((a,b) => (+v(a,'rank')||0) - (+v(b,'rank')||0)), maxPts = Math.max(1, ...sorted.map(x => +v(x,'points') || 0));
+  const rows = sorted.map((x, i) => {
     const t = x.team || {}; const id = t.id || x.id; const nm = t.shortDisplayName || t.displayName || x.team;
     if (x.note) notes.set(x.note.description, x.note.color);
-    const hl = id === e.home.id || id === e.away.id;
-    const logo = t.logos?.[0]?.href;
-    return `<tr class="${hl?'hl':''}"><td class="r num">${x.note?`<i style="background:${esc(x.note.color)}"></i>`:''}${esc(v(x,'rank')||i+1)}</td>
-      <td class="t">${logo?`<img src="${esc(logo)}" alt="" loading="lazy">`:''}${id ? `<button class="linkbtn" data-team="${esc(id)}">${esc(nm)}</button>` : esc(nm)}</td>
-      <td>${esc(v(x,'gamesPlayed'))}</td><td>${esc(v(x,'wins'))}</td><td>${esc(v(x,'ties'))}</td><td>${esc(v(x,'losses'))}</td><td>${esc(v(x,'pointDifferential'))}</td><td class="pts">${esc(v(x,'points'))}</td></tr>`;
+    const side = id === e.home.id ? 'home' : id === e.away.id ? 'away' : '', logo = t.logos?.[0]?.href;
+    const w = +v(x,'wins') || 0, d = +v(x,'ties') || 0, l = +v(x,'losses') || 0, gd = v(x,'pointDifferential'), pts = +v(x,'points') || 0;
+    return `<div class="mt-r${side ? ' hl ' + side : ''}" role="row" style="--i:${Math.min(i, 20)};${side ? `--c:${side === 'home' ? e.hc : e.ac};` : ''}${x.note ? `--z:${esc(x.note.color)}` : ''}">
+      <span class="mt-rk num">${esc(v(x,'rank')||i+1)}</span>
+      <span class="mt-t">${logo?`<img src="${esc(logo)}" alt="" loading="lazy">`:'<i></i>'}${id ? `<button class="linkbtn" data-team="${esc(id)}">${esc(nm)}</button>` : `<b>${esc(nm)}</b>`}${side ? `<em>${side === 'home' ? 'Home' : 'Away'}</em>` : ''}</span>
+      <span class="mt-rec" aria-hidden="true">${w + d + l ? `<i class="w" style="flex-grow:${w}"></i><i class="d" style="flex-grow:${d}"></i><i class="l" style="flex-grow:${l}"></i>` : ''}</span>
+      <span class="num">${esc(v(x,'gamesPlayed'))}</span><span class="num">${w}</span><span class="num">${d}</span><span class="num">${l}</span>
+      <span class="num mt-gd ${parseFloat(gd) > 0 ? 'up' : parseFloat(gd) < 0 ? 'down' : ''}">${esc(gd)}</span>
+      <span class="mt-pts num" style="--f:${(pts / maxPts).toFixed(3)}"><b>${pts}</b></span></div>`;
   }).join('');
-  return `${name?`<div class="grp-name">${esc(name)}</div>`:''}<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead><tbody>${rows}</tbody></table></div>
+  return `${name?`<div class="grp-name">${esc(name)}</div>`:''}<div class="mt" role="table" aria-label="League table"><div class="mt-h" role="row"><span>#</span><span>Team</span><span>Record</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${rows}</div>
     ${notes.size?`<div class="notes">${[...notes].map(([d,c])=>`<span><i style="background:${esc(c)}"></i>${esc(d)}</span>`).join('')}</div>`:''}`;
 }
 
 /* feed */
+function feedKind(t){ t = t || ''; return /goal/.test(t) ? 'goal' : /red-card/.test(t) ? 'red' : /yellow/.test(t) ? 'yellow' : /substitution/.test(t) ? 'sub' : /penalty/.test(t) ? 'pen' : /on-target|saved/.test(t) ? 'on' : /blocked/.test(t) ? 'blk' : /shot|attempt|missed/.test(t) ? 'off' : /corner/.test(t) ? 'corner' : /foul|offside|handball/.test(t) ? 'foul' : /half|kickoff|start|end/.test(t) ? 'whistle' : '' }
+const FEED_LBL = { goal: 'Goal', red: 'Red card', yellow: 'Yellow card', sub: 'Substitution', pen: 'Penalty', on: 'On target', blk: 'Blocked', off: 'Off target', corner: 'Corner', foul: 'Foul', whistle: 'Whistle' };
+const FEED_ICO = { on: '<circle cx="8" cy="8" r="5.500"/><circle cx="8" cy="8" r="1.800" fill="currentColor"/>', off: '<circle cx="8" cy="8" r="5.500"/>', blk: '<path d="M4 4l8 8M12 4l-8 8"/>', corner: '<path d="M4 14V2l8 3-8 3"/>', foul: '<path d="M8 3v6M8 12.500v.01"/>', whistle: '<circle cx="8" cy="8" r="5.500"/><path d="M8 5v3l2 1.500"/>', '': '<circle cx="8" cy="8" r="1.600" fill="currentColor"/>' };
 function feedPane(e, s){
-  const c = (s.commentary||[]).slice().reverse();
-  if (!c.length) return `<div class="note">${e.state==='pre' ? 'Live commentary starts at kick-off.' : 'No commentary for this match.'}</div>`;
-  return `<ul class="feed">${c.map(x => { const t = x.play?.type?.type || ''; const key = /goal|red-card|penalty/.test(t);
-    return `<li class="${key?'key':''}"><span class="min">${esc(x.time?.displayValue||'')}</span><span>${key?icon(t)+' ':''}${esc(x.text)}</span></li>` }).join('')}</ul>`;
+  const all = (s.commentary||[]).slice().reverse();
+  if (!all.length) return `<div class="note">${e.state==='pre' ? 'Live commentary starts at kick-off.' : 'No commentary for this match.'}</div>`;
+  const BIG = ['goal','red','yellow','sub','pen'], items = all.map(x => ({ x, k: feedKind(x.play?.type?.type), side: teamSide(x.play?.team) }));
+  const nKey = items.filter(i => BIG.includes(i.k)).length, only = S.feedKey && nKey, c = only ? items.filter(i => BIG.includes(i.k)) : items;
+  return `<div class="fd-bar"><div class="seg"><button class="${only ? '' : 'on'}" data-act="feedf" data-to="">Everything <small>${items.length}</small></button><button class="${only ? 'on' : ''}" data-act="feedf" data-to="1" ${nKey ? '' : 'disabled'}>Key moments <small>${nKey}</small></button></div></div>
+    <ol class="fd">${c.map(({ x, k, side }, i) => { const t = x.play?.type?.type || '', ic = icon(t) && BIG.includes(k) ? icon(t) : `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round">${FEED_ICO[k] ?? FEED_ICO['']}</svg>`;
+      return `<li class="fd-i ${k || 'plain'}${side ? ' ' + side : ''}" style="--c:${side === 'home' ? e.hc : side === 'away' ? e.ac : 'var(--muted)'};--i:${Math.min(i, 14)}"><span class="fd-min num">${esc(x.time?.displayValue||'')}</span><span class="fd-ico" aria-hidden="true">${ic}</span>
+        <div class="fd-b">${k ? `<small>${FEED_LBL[k]}${side ? ' · ' + esc(e[side].name) : ''}</small>` : ''}<p>${esc(x.text)}</p></div></li>` }).join('')}</ol>`;
 }
 
 /* ---------- image fallbacks ---------- */
@@ -2441,7 +2470,7 @@ function fixtureRow(e, teamId, done){
   const x = resultFor(e, teamId); if (!x) return '';
   const lg = e.league?.abbreviation || e.league?.shortName || LG[e.league?.slug]?.name || e.season?.displayName || '';
   const d = new Date(e.date);
-  return `<div class="fx"><span class="d">${fmtDate(d)}<br>${done ? '' : d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+  return `<div class="fx${done && x.r ? ' ' + x.r : ''}"><span class="d">${fmtDate(d)}<br>${done ? '' : d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
     <div class="vs"><small>${x.home?'vs':'at'}</small><img src="${esc(logoOf(x.op.team))}" alt=""><span><button class="linkbtn" data-team="${esc(x.op.team.id)}" data-lg="${esc(e.league?.slug||'')}">${esc(x.op.team.displayName)}</button></span><small>${esc(lg)}</small></div>
     <span class="r num">${done ? `${esc(x.score)} <span class="res ${x.r}">${x.r}</span>` : ''}</span></div>`;
 }
@@ -2466,7 +2495,12 @@ function teamPane(v){
       <div class="run" role="img" aria-label="Results of the last ${run.length} games">${run.map((o, i) => { const [a, b] = gfs[i], m = a - b;
         return `<i class="${o.x.r}" style="--h:${(Math.abs(m) / mx * 100).toFixed(0)}%" tabindex="0" data-tip="${esc(`${fmtDate(new Date(o.e.date))} · ${o.x.home ? 'vs' : 'at'} ${o.x.op.team.displayName} · ${o.x.score} ${o.x.r === 'W' ? 'won' : o.x.r === 'L' ? 'lost' : 'drew'}`)}"><s></s></i>` }).join('')}</div>
       <div class="run-k"><span><b class="num">${run.filter(o => o.x.r === 'W').length}</b>won</span><span><b class="num">${run.filter(o => o.x.r === 'D').length}</b>drawn</span><span><b class="num">${run.filter(o => o.x.r === 'L').length}</b>lost</span><span><b class="num">${gfs.reduce((t, g) => t + g[0], 0)}–${gfs.reduce((t, g) => t + g[1], 0)}</b>goals</span><span><b class="num">${(pts / run.length).toFixed(2)}</b>points a game</span></div>` : '';
-    return `${runHTML}${next ? `<div class="sub-h"><h5>Next match</h5></div>${fixtureRow(next, id, false)}${kickoffIn(new Date(next.date)) ? `<div class="callout">${kickoffIn(new Date(next.date))}. Open <button class="linkbtn" data-act="tab" data-to="xi">Predicted XI</button> for the likely lineup.</div>` : ''}` : ''}
+    const nx = next && resultFor(next, id), nd = next && new Date(next.date), me = d.team || {};
+    const nxSide = (t, lbl) => `<div class="nx-t"><img src="${esc(logoOf(t))}" alt=""><b>${esc(t.abbreviation || t.shortDisplayName || t.displayName || '')}</b><small>${lbl}</small></div>`;
+    const nxCard = nx ? `<div class="nx">${nxSide(nx.home ? me : nx.op.team, 'Home')}<div class="nx-m"><small>${esc(nd.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' }))}</small><strong class="num">${nd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
+        <em>${esc(next.league?.abbreviation || LG[next.league?.slug]?.name || '')}</em></div>${nxSide(nx.home ? nx.op.team : me, 'Away')}
+        <button class="nx-go linkbtn" data-team="${esc(nx.op.team.id)}" data-lg="${esc(next.league?.slug || '')}">Scout ${esc(nx.op.team.displayName)} →</button></div>` : '';
+    return `${runHTML}${next ? `<div class="sub-h"><h5>Next match</h5></div>${nxCard || fixtureRow(next, id, false)}${kickoffIn(new Date(next.date)) ? `<div class="callout">${kickoffIn(new Date(next.date))}. Open <button class="linkbtn" data-act="tab" data-to="xi">Predicted XI</button> for the likely lineup.</div>` : ''}` : ''}
       <div class="sub-h"><h5>Recent results</h5><small>All competitions</small></div>${d.results.slice(0,6).map(e=>fixtureRow(e,id,true)).join('') || '<div class="note">No results yet this season.</div>'}
       ${typeof fmTops !== 'undefined' && fmTops ? fmTops : `<div class="bench" style="margin-top:22px">${top('totalGoals','Top scorers')}${top('goalAssists','Most assists')}</div>`}${teamTM(v)}`;
   }
@@ -2477,11 +2511,11 @@ function teamPane(v){
     if (!sq.length) return v.tm || S.serverOK === false ? `<div class="note">No squad list is available for this team.</div>` : `<div class="skel" style="height:240px"></div>`;
     return POS.map(([k, label]) => { const list = sq.filter(a => (a.position?.abbreviation||'').startsWith(k)).sort((a,b)=>(+a.jersey||99)-(+b.jersey||99));
       if (!list.length) return '';
-      return `<div class="sub-h"><h5>${label}</h5><small>${list.length}</small></div>` + list.map(a => { const tp = tmMatch(v.tm, a.displayName);
+      return `<div class="sub-h"><h5>${label}</h5><small>${list.length}</small></div><div class="sqg">` + list.map(a => { const tp = tmMatch(v.tm, a.displayName);
         return `<button class="prow ph${tp?.status?' out':''}" data-player="${esc(a.id)}" aria-label="${esc(`${a.displayName}, ${a.citizenship||''}, ${a.age||''} years${tp?.valueText ? ', valued ' + tp.valueText : ''}${tp?.status ? ', ' + tp.status.text : ''}`)}">
         <b>${esc(a.jersey||'–')}</b>${v.tm && !v.tm.error ? face(a.displayName, v.data.team.displayName, tp?.photo) : `<img class="face-s" src="${SIL}" alt="">`}
         <span class="nm"><span>${esc(a.displayName)}</span> ${statusBadge(tp?.status, true)}<small>${a.flag?.href ? `<img src="${esc(a.flag.href)}" alt="" style="width:14px;height:10px;vertical-align:-1px;margin-right:4px">` : ''}${esc([a.citizenship, a.age ? a.age+' yrs' : ''].filter(Boolean).join(' · '))} · ${astat(a,'appearances')} apps${k==='G' ? ` · ${astat(a,'saves')} sv` : ` · ${astat(a,'totalGoals')} g · ${astat(a,'goalAssists')} a`}</small></span>
-        <span class="val">${tp?.valueText ? `${esc(tp.valueText)} ${trendTag(tp)}${tp.previousText ? `<small>was ${esc(tp.previousText)}</small>` : ''}` : ''}</span></button>` }).join('') }).join('')
+        <span class="val">${tp?.valueText ? `${esc(tp.valueText)} ${trendTag(tp)}${tp.previousText ? `<small>was ${esc(tp.previousText)}</small>` : ''}` : ''}</span></button>` }).join('') + '</div>' }).join('')
       + `<p class="note" style="text-align:left;padding-top:16px">Stats are for ${esc(d.roster?.season?.displayName || 'the current season')}. Tap a player for their full profile.</p>`;
   }
   if (v.tab === 'fixtures') {
@@ -2675,6 +2709,8 @@ function act(a, el, ev){
     if (i >= 0) sl.legs.splice(i, 1); else { const fam = k.startsWith('ml') ? 'ml' : k.startsWith('t') ? 't' : k.slice(0, 2); sl.legs = sl.legs.filter(l => !(fam === 'ml' ? l.k.startsWith('ml') : fam === 't' ? l.k.startsWith('t') : l.k.startsWith(fam))); sl.legs.push({ k, label: el.dataset.label, p: +el.dataset.p }) }
     return renderSheet() }
   if (a === 'wireset') { S.wi = null; return wiPaint() }
+  if (a === 'feedf') { S.feedKey = !!el.dataset.to; return renderSheet() }
+  if (a === 'pv') { S.pv = el.dataset.to; S.fxTab = null; return renderSheet() }
   if (a === 'slipclear') { if (S.slip) S.slip.legs = []; return renderSheet() }
   if (a === 'slipstake') { if (S.slip) S.slip.stake = +el.dataset.to; return renderSheet() }
   if (a === 'lgsort') { v.sort = el.dataset.to; return renderSheet() }
@@ -3853,7 +3889,7 @@ function renderProfile(){
           <button class="btn" type="submit" ${P.busy ? 'disabled' : ''}>${P.busy ? 'Creating…' : 'Create account'}</button>
           ${S.fav.length + S.favPlayers.length ? `<p class="pf-hint">Your ${S.fav.length + S.favPlayers.length} guest favourites will move into the new account.</p>` : ''}</form>`}
       <div class="pf-err" role="alert">${esc(P.err)}</div>
-      <p class="pf-hint">Profiles are stored by the Floodlight server on this computer, not online.</p>`;
+      <p class="pf-hint">Your profile and favourites are kept on the Floodlight server, so they follow you to any device.</p>`;
   } else {
     const since = new Date(me.created * 1000).toLocaleDateString([], { month: 'long', year: 'numeric' });
     body = `<div class="pf-card">${avatarHTML('lg')}<div><strong id="pfDisplay">${esc(me.display)}</strong><span>@${esc(me.username)}</span><small>Member since ${esc(since)}</small></div></div>
@@ -4450,7 +4486,7 @@ function predDepthData(P){
     h2: sum((i, j) => i >= 2), a2: sum((i, j) => j >= 2) };
 }
 const fairUS = p => p <= 0 || p >= 1 ? '—' : p >= .5 ? '−' + Math.round(100 * p / (1 - p)) : '+' + Math.round(100 * (1 - p) / p);
-function predDepth(e, P){
+function predDepth(e, P, part){
   const D = predDepthData(P), hn = e.home.abbr || e.home.name, an = e.away.abbr || e.away.name, H = esc(e.home.name), A = esc(e.away.name);
   const top = Math.max(...D.g.slice(0, 6).flatMap(r => r.slice(0, 6)));
   const cell = (i, j) => { const p = D.g[i][j], on = i === P.score[0] && j === P.score[1];
@@ -4473,9 +4509,9 @@ function predDepth(e, P){
       ${group('Total goals', [['Over 1.5', D.o15], ['Over 2.5', D.o25], ['Over 3.5', D.o35], ['Under 2.5', 1 - D.o25]])}
       ${group('Goals by team', [['Both teams score', D.btts], [`${esc(hn)} score 2+`, D.h2], [`${esc(an)} score 2+`, D.a2]])}
       ${group('Clean sheets', [[`${esc(hn)} clean sheet`, D.csH], [`${esc(an)} clean sheet`, D.csA], [`${esc(hn)} win to nil`, D.nilH], [`${esc(an)} win to nil`, D.nilA]])}</div>`;
-  return `<div class="sub-h"><h5>Every scoreline</h5><small>${P.lh.toFixed(2)} v ${P.la.toFixed(2)} expected goals</small></div>${grid}
-    <div class="pd-2"><div><div class="sub-h"><h5>Total goals</h5></div>${totals}</div><div><div class="sub-h"><h5>Winning margin</h5></div>${margins}</div></div>
-    <div class="sub-h"><h5>Markets</h5><small>Chance · fair price</small></div>${markets}`;
+  if (part === 'mk') return `<div class="sub-h"><h5>Every market</h5><small>Chance · fair price</small></div><p class="pv-lead">The fair price is what the odds would be with no bookmaker margin. A book offering better than this is good value by the model.</p>${markets}`;
+  return `<div class="sub-h"><h5>Every scoreline</h5><small>${P.lh.toFixed(2)} v ${P.la.toFixed(2)} expected goals</small></div><p class="pv-lead">Each square is one final score. Brighter means more likely, and the outlined square is the single likeliest.</p>${grid}
+    <div class="pd-2"><div><div class="sub-h"><h5>Total goals</h5></div>${totals}</div><div><div class="sub-h"><h5>Winning margin</h5></div>${margins}</div></div>`;
 }
 // What if: slide either attack up or down and the chances, the likely score and the goal markets follow.
 function wiCalc(lh, la){
@@ -4534,24 +4570,40 @@ function insightPane(e){
   const post = e.state === 'post', hs = +e.home.score, as = +e.away.score;
   const actual = post ? (hs > as ? 'home' : hs < as ? 'away' : 'draw') : null;
   const myPick = S.picks.find(p => p.id === e.id);
-  let html = `<div class="pred-head"><div><h5>${post ? 'Pre-match prediction' : 'Floodlight prediction'}${fcTag(P)}</h5>
-      <strong class="pred-pick">${esc(pickLabel(e, P.pick))}</strong><span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>
-      ${post ? `<span class="pred-out ${actual === P.pick ? 'ok' : 'miss'}">${actual === P.pick ? 'Called it' : 'Missed'} — finished ${esc(e.home.score)}–${esc(e.away.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Most likely score</small><b class="num">${P.score[0]}–${P.score[1]}</b></div></div>
-    ${probBar(e, P.final)}
-    <div class="pred-legend"><span><i style="background:${e.hc}"></i>${esc(e.home.name)}</span><span><i style="background:var(--draw)"></i>Draw</span><span><i style="background:${e.ac}"></i>${esc(e.away.name)}</span></div>
-    ${!post ? `<div class="pick-row" role="group" aria-label="Save your own pick"><span>Your pick</span>${['home','draw','away'].map(k => `<button class="qf" aria-pressed="${myPick?.pick === k}" data-act="mypick" data-to="${k}">${esc(k === 'draw' ? 'Draw' : e[k].name)}</button>`).join('')}</div>` : ''}
-    <div class="tiles pred-tiles"><div class="tile"><b class="num">${pct(P.o25)}%</b><span>Over 2.5 goals</span></div><div class="tile"><b class="num">${pct(P.btts)}%</b><span>Both teams score</span></div>
-      <div class="tile"><b class="num">${P.lh.toFixed(1)}–${P.la.toFixed(1)}</b><span>Expected goals</span></div></div>
-    ${P.market ? `<div class="sub-h"><h5>Model vs market</h5><small>Kalshi</small></div>
+  const PV = [['sum', 'Verdict'], ['why', 'Why'], ['wi', 'What if'], ['scores', 'Scorelines'], ['mk', 'Markets']], pv = PV.some(x => x[0] === S.pv) ? S.pv : 'sum';
+  const nav = `<div class="pv-nav" role="tablist" aria-label="Prediction views">${PV.map(([k, l]) => `<button role="tab" aria-selected="${pv === k}" class="${pv === k ? 'on' : ''}" data-act="pv" data-to="${k}">${l}</button>`).join('')}</div>`;
+  const fav = P.pick === 'draw' ? null : e[P.pick].name, other = P.pick === 'home' ? e.away.name : e.home.name;
+  const line = P.pick === 'draw' ? `Nothing between them. A draw is the single likeliest result.`
+    : P.top >= .62 ? `${fav} are clear favourites. An upset would be a surprise.` : P.top >= .48 ? `${fav} are favourites, but ${other} have a real chance.` : `Close to a coin flip. ${fav} have a slight edge.`;
+  let body = '';
+  if (pv === 'sum') {
+    const card = k => { const p = P.final[k], isPick = P.pick === k, mine = myPick?.pick === k, nm = k === 'draw' ? 'Draw' : e[k].name, col = k === 'home' ? e.hc : k === 'away' ? e.ac : 'var(--draw)';
+      const inner = `${isPick ? `<i class="vc-tag">Our pick</i>` : ''}${actual === k ? `<i class="vc-tag res">Result</i>` : ''}
+        <span class="vc-crest">${k === 'draw' ? '<u>=</u>' : e[k].logo ? `<img src="${esc(e[k].logo)}" alt="">` : ''}</span><span class="vc-n">${esc(nm)}</span>
+        <b class="num">${pct(p)}<i>%</i></b><span class="vc-o num">fair ${fairUS(p)}</span><span class="vc-fill" style="height:${Math.max(6, p * 100).toFixed(1)}%"></span>${mine ? `<span class="vc-mine">✓ Your pick</span>` : ''}`;
+      return post ? `<div class="vc${isPick ? ' pick' : ''}${actual === k ? ' hit' : ''}" style="--c:${col}">${inner}</div>`
+        : `<button class="vc${isPick ? ' pick' : ''}${mine ? ' mine' : ''}" style="--c:${col}" data-act="mypick" data-to="${k}" aria-pressed="${mine}" aria-label="${esc(`${nm}, ${pct(p)} percent. Save as your pick`)}">${inner}</button>` };
+    const ring = (p, label, tip) => { const C = 2 * Math.PI * 26; return `<div class="pg" data-tip="${esc(tip)}" tabindex="0"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle class="pg-a" cx="32" cy="32" r="26" stroke-dasharray="${(p * C).toFixed(1)} ${C.toFixed(1)}" style="--len:${(p * C).toFixed(1)}" transform="rotate(-90 32 32)"/></svg><b class="num">${pct(p)}<i>%</i></b><span>${label}</span></div>` };
+    body = `<div class="vd"><div class="vd-h"><small>${post ? 'Pre-match prediction' : 'Floodlight prediction'}${fcTag(P)}</small>
+        <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}" data-tip="How sure the model is. Strong means one result stands well clear, Lean means a modest edge, Toss-up means it could go any way.">${P.conf === 'Toss-up' ? 'Toss-up' : P.conf + ' confidence'}</span></div>
+      <h4 class="vd-pick">${esc(pickLabel(e, P.pick))}</h4><p class="vd-line">${esc(line)}</p>
+      ${post ? `<p class="pred-out ${actual === P.pick ? 'ok' : 'miss'}">${actual === P.pick ? 'Called it' : 'Missed'}: finished ${esc(e.home.score)}–${esc(e.away.score)}</p>` : ''}
+      <div class="vcs" role="group" aria-label="${post ? 'Chances before kick-off' : 'Chances. Tap one to save your own pick'}">${card('home')}${card('draw')}${card('away')}</div>
+      ${post ? '' : `<p class="vd-hint">Tap a card to save your own pick and track it in your profile.</p>`}</div>
+      <div class="pgs"><div class="pg sc" data-tip="The single most likely final score" tabindex="0"><b class="num">${P.score[0]}–${P.score[1]}</b><span>Likeliest score</span></div>
+        ${ring(P.o25, 'Over 2.5 goals', 'Chance of three or more goals in the match')}${ring(P.btts, 'Both score', 'Chance that both teams score at least once')}
+        <div class="pg sc" data-tip="Goals each side is expected to score on average" tabindex="0"><b class="num">${P.lh.toFixed(1)}–${P.la.toFixed(1)}</b><span>Expected goals</span></div></div>
+      ${P.market ? `<div class="sub-h"><h5>Model vs market</h5><small>Kalshi</small></div>
       <div class="vs-table">${['home','draw','away'].map(k => { const g = P.model[k] - P.market[k];
         return `<div><span>${esc(k === 'draw' ? 'Draw' : e[k].name)}</span><b class="num">${pct(P.model[k])}%</b><b class="num">${pct(P.market[k])}%</b><em class="num ${g > .03 ? 'up' : g < -.03 ? 'down' : ''}">${g > 0 ? '+' : ''}${pct(g)}</em></div>` }).join('')}
-        <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div></div>${predEdge(e, P)}` : ''}
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${reasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
-    ${whatIfHTML(e, P)}${predDepth(e, P)}`;
-  html = html.replace('<div class="sub-h"><h5>Why</h5></div>', teamNewsBlock(e, P) + propsBlock(e) + (S.serverOK !== false ? fcBlock(e) : timelineBlock(e)) + '<div class="sub-h"><h5>Why</h5></div>');
-  html += deepResearchBlock(e, P);
-  return html + RG;
+        <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div>${predEdge(e, P)}` : ''}
+      ${teamNewsBlock(e, P)}${propsBlock(e)}${S.serverOK !== false ? fcBlock(e) : timelineBlock(e)}`;
+  } else if (pv === 'why') {
+    body = `<div class="sub-h"><h5>Why ${esc(pickLabel(e, P.pick).toLowerCase())}</h5><small>What the model looked at</small></div>
+      <ol class="why2">${reasons(e, P).map((r, i) => `<li style="--i:${i}"><b class="num">${String(i + 1).padStart(2, '0')}</b><p>${esc(r)}</p></li>`).join('')}</ol>${deepResearchBlock(e, P)}`;
+  } else if (pv === 'wi') body = whatIfHTML(e, P);
+  else body = predDepth(e, P, pv);
+  return nav + `<div class="pv" data-pv="${pv}">${body}</div>` + RG;
 }
 
 /* deep research with Claude (uses the same saved API key as predicted lineups) */
