@@ -342,6 +342,15 @@ def team_events(sport, after):
     return uniq
 
 
+# Words that make a different team: "Ireland" is not "Northern Ireland", "Korea" is not "North Korea".
+QUALIFIERS = {"north", "northern", "south", "southern", "east", "eastern", "west", "western", "new", "central"}
+
+
+def different_team(a, b):
+    wa, wb = set(B.norm(a).split()), set(B.norm(b).split())
+    return bool((wa ^ wb) & QUALIFIERS)
+
+
 def team_match(t, comp):
     tm = comp.get("team") or {}
     names = [tm.get(k) or "" for k in ("displayName", "shortDisplayName", "name", "location", "abbreviation")]
@@ -349,7 +358,7 @@ def team_match(t, comp):
     if any(n and n == B.norm(x) for x in names):
         return 1.0
     sim = D.get("similar") or (lambda a, b: 1.0 if B.norm(a) == B.norm(b) else 0.0)
-    return max(sim(t, x) for x in names if x) if any(names) else 0
+    return max((sim(t, x) for x in names if x and not different_team(t, x)), default=0)
 
 
 def find_event(g, evs):
@@ -695,6 +704,16 @@ def setup(**deps):
         got = storage.load(_path(), {})
         if isinstance(got, dict):
             STATE.update(got)
+    if STATE.get("v", 0) < 2:   # re-check recent team bets once: "Ireland" used to match "Northern Ireland"
+        cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=3)).isoformat()
+        for c in STATE["cards"].values():
+            if c["at"] >= cut and any(g.get("t") != "prop" and g.get("t") != "raw" for g in c["legs"]):
+                for g in c["legs"]:
+                    if g.get("t") not in ("prop", "raw"):
+                        g.pop("result", None)
+                        g.pop("actual", None)
+                c["result"] = None
+        STATE["v"] = 2
     if os.environ.get("DISCORD_BOT_TOKEN"):
         threading.Thread(target=_loop, daemon=True, name="pick-tracker").start()
 
