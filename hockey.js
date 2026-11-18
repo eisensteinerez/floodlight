@@ -264,9 +264,7 @@ function hkCard(e){
 }
 function hkDateBar(off){
   const day = new Date(); day.setDate(day.getDate() + off);
-  return `<div class="datebar"><button class="dnav" data-hkact="day" data-to="-1" aria-label="Previous day">‹</button>
-    <button class="dtoggle" data-hkact="day" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${off === 0 ? 'Today' : off === -1 ? 'Yesterday' : off === 1 ? 'Tomorrow' : esc(day.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</span></button>
-    <button class="dnav" data-hkact="day" data-to="1" aria-label="Next day">›</button></div>`;
+  return `<div class="datebar">${flDates({ sport: S.sport, sel: day, days: flDates.range(new Date()), attr: (d, o) => `data-hkact="day" data-set="${o}"`, prev: 'data-hkact="day" data-to="-1"', next: 'data-hkact="day" data-to="1"' })}</div>`;
 }
 async function renderHockey(){
   const el = $('hk'); if (!el) return;
@@ -901,7 +899,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.hkfsplayer) return openHkFsPlayer(t.dataset.hkfsplayer, t.dataset.hkslug, t.dataset.hkl);
   if (t.dataset.hknhlp) return openHkNhlPlayer(t.dataset.hknhlp);
   const a = t.dataset.hkact, v = S.stack[S.stack.length - 1];
-  if (a === 'day') { const n = +t.dataset.to; S.hk.off = n ? Math.max(-7, Math.min(7, S.hk.off + n)) : 0; return render() }
+  if (a === 'day') { const n = +t.dataset.to; S.hk.off = t.dataset.set != null ? Math.max(-7, Math.min(7, +t.dataset.set)) : n ? Math.max(-7, Math.min(7, S.hk.off + n)) : 0; return render() }
   if (a === 'league') return openHkLeague(S.hk.lg);
   if (a === 'nhlleague') return openHkLeague('nhl');
   if (a === 'pos') { S.hk.statPos = t.dataset.to; return renderHkStats() }

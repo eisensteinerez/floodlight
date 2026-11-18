@@ -188,9 +188,7 @@ async function renderBaseball(){
     const live = list.filter(e => e.state === 'in').length;
     const groups = new Map(); const order = BS_LEAGUES.map(l => l.key);
     for (const e of [...list].sort((a, b) => order.indexOf(a.lg) - order.indexOf(b.lg) || a.date - b.date)) { if (!groups.has(e.lg)) groups.set(e.lg, []); groups.get(e.lg).push(e) }
-    const navs = `<div class="datebar"><button class="dnav" data-bsact="day" data-to="-1" aria-label="Previous day">‹</button>
-        <label class="dtoggle bs-dpick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(bsDateLabel(ymd))}</span><input type="date" id="bsDate" value="${ymd}" aria-label="Pick a date"></label>
-        <button class="dnav" data-bsact="day" data-to="1" aria-label="Next day">›</button></div>`;
+    const navs = `<div class="datebar">${flDates({ sport: 'baseball', sel: new Date(ymd + 'T12:00:00'), days: flDates.range(Math.abs(new Date(ymd + 'T12:00:00') - new Date(bsToday() + 'T12:00:00')) > 7 * 864e5 ? new Date(ymd + 'T12:00:00') : new Date()), attr: d => `data-bsact="setday" data-to="${isoDay(d)}"`, prev: 'data-bsact="day" data-to="-1"', next: 'data-bsact="day" data-to="1"', cal: flDates.cal(`id="bsDate" value="${ymd}"`, 'Pick a date') })}</div>`;
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ['fav', '★ My teams']].map(([k, l]) => `<button class="qf" data-bsfilter="${k}" aria-pressed="${(S.bsb.filter || 'all') === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}
       ${ymd !== bsToday() ? `<button class="qf" data-bsact="today">Back to today</button>` : ''}
       ${bsLgSelect()}</div>`;
@@ -1246,6 +1244,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.bsteam) return openBsTeam(t.dataset.bsteam, t.dataset.bsl, t.dataset.bsslug);
   if (t.dataset.bsplayer) { openBsPlayer(t.dataset.bsplayer, t.dataset.bsl, t.dataset.bsgroup); if (t.dataset.bsfrom) S.stack[S.stack.length - 1].fromSearch = true; return }
   const a = t.dataset.bsact, v = S.stack[S.stack.length - 1];
+  if (a === 'setday') { S.bsb.date = t.dataset.to === bsToday() ? null : t.dataset.to; return render() }
   if (a === 'day') { const d = new Date(bsDate() + 'T12:00:00'); d.setDate(d.getDate() + +t.dataset.to); S.bsb.date = bsYmd(d) === bsToday() ? null : bsYmd(d); return render() }
   if (a === 'today') { S.bsb.date = null; return render() }
   if (a === 'lginfo') return bsLeagueSheet(S.bsb.lg);

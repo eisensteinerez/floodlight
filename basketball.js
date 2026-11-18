@@ -145,9 +145,7 @@ async function renderBasketball(){
     const day = new Date(); day.setDate(day.getDate() + off);
     const groups = new Map(); for (const e of list) { if (!groups.has(e.lg)) groups.set(e.lg, []); groups.get(e.lg).push(e) }
     const order = BB_LEAGUES.map(l => l.key);
-    const navs = `<div class="datebar"><button class="dnav" data-bbact="day" data-to="-1" aria-label="Previous day">‹</button>
-      <button class="dtoggle" data-bbact="day" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${off === 0 ? 'Today' : off === -1 ? 'Yesterday' : off === 1 ? 'Tomorrow' : esc(day.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</span></button>
-      <button class="dnav" data-bbact="day" data-to="1" aria-label="Next day">›</button></div>`;
+    const navs = `<div class="datebar">${flDates({ sport: S.sport, sel: day, days: flDates.range(new Date()), attr: (d, o) => `data-bbact="day" data-set="${o}"`, prev: 'data-bbact="day" data-to="-1"', next: 'data-bbact="day" data-to="1"' })}</div>`;
     const ranked = d.events.some(e => BBL[e.lg].college && (e.home.rank || e.away.rank) && (key === 'all' || e.lg === key));
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ...(ranked || S.bb.filter === 'top25' ? [['top25', 'Top 25']] : []), ['fav', '★ My teams']].map(([k, l]) => `<button class="qf" data-bbfilter="${k}" aria-pressed="${S.bb.filter === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}</div>`;
     const lgBtn = key !== 'all' ? `<button class="btn ghost lginfo" data-bbact="league">Standings, results & fixtures</button>` : '';
@@ -924,7 +922,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.bbplayer) return openBbPlayer(t.dataset.bbplayer, t.dataset.bbl);
   if (t.dataset.bbfsplayer) return openBbFsPlayer(t.dataset.bbfsplayer, t.dataset.bbslug, t.dataset.bbl === 'fsany' ? 'euroleague' : t.dataset.bbl);
   const a = t.dataset.bbact, v = S.stack[S.stack.length - 1];
-  if (a === 'day') { const n = +t.dataset.to; S.bb.off = n ? Math.max(-7, Math.min(7, S.bb.off + n)) : 0; return render() }
+  if (a === 'day') { const n = +t.dataset.to; S.bb.off = t.dataset.set != null ? Math.max(-7, Math.min(7, +t.dataset.set)) : n ? Math.max(-7, Math.min(7, S.bb.off + n)) : 0; return render() }
   if (a === 'league') return openBbLeague(S.bb.lg);
   if (a === 'period' && v) { v.period = +t.dataset.to; return renderSheet() }
   if (a === 'rk' && v) { v.rk = t.dataset.to; return renderSheet() }

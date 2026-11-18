@@ -184,9 +184,7 @@ function tnCard(e){
 }
 function tnDateBar(off){
   const day = new Date(); day.setDate(day.getDate() + off);
-  return `<div class="datebar"><button class="dnav" data-tnact="day" data-to="-1" aria-label="Previous day">‹</button>
-    <button class="dtoggle" data-tnact="day" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${off === 0 ? 'Today' : off === -1 ? 'Yesterday' : off === 1 ? 'Tomorrow' : esc(day.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</span></button>
-    <button class="dnav" data-tnact="day" data-to="1" aria-label="Next day">›</button></div>`;
+  return `<div class="datebar">${flDates({ sport: S.sport, sel: day, days: flDates.range(new Date()), attr: (d, o) => `data-tnact="day" data-set="${o}"`, prev: 'data-tnact="day" data-to="-1"', next: 'data-tnact="day" data-to="1"' })}</div>`;
 }
 function tnTourHead(t, n){
   return `<div class="group-h tn-gh"><span class="tn-lvl tn-l-${esc(t.level)}">${esc(TNL[t.level]?.short || '')}</span><button class="linkbtn tn-tname" data-tntour="${esc(t.id)}"><strong>${esc(t.name)}</strong></button><span>${t.country ? '· ' + esc(t.country) : ''}${t.disc === 'D' ? ' · Doubles' : t.disc === 'X' ? ' · Mixed' : ''}${t.stage ? ' · ' + esc(t.stage) : ''}</span>${tnSurf(t.surface)}${t.indoor ? '<span class="tn-surf">Indoor</span>' : ''}<small class="tn-gn">${n}</small></div>`;
@@ -617,7 +615,7 @@ document.addEventListener('click', ev => {
   const v = S.stack[S.stack.length - 1];
   if (t.dataset.tnlog && v?.type === 'tnplayer') return tnOpenLogMatch(v, t.dataset.tnlog);
   const a = t.dataset.tnact;
-  if (a === 'day') { const n = +t.dataset.to; S.tn.off = n ? Math.max(-7, Math.min(7, S.tn.off + n)) : 0; return render() }
+  if (a === 'day') { const n = +t.dataset.to; S.tn.off = t.dataset.set != null ? Math.max(-7, Math.min(7, +t.dataset.set)) : n ? Math.max(-7, Math.min(7, S.tn.off + n)) : 0; return render() }
   if (a === 'more') { (S.tn.open ||= {})[t.dataset.to] = true; return renderTennis() }
   if (a === 'ranktour') { S.tn.rankTour = t.dataset.to; store.set('fl.tnRankTour', S.tn.rankTour); return renderTnRank() }
   if (!v) return;

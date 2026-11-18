@@ -1139,12 +1139,7 @@ document.addEventListener('error', ev => {
   <nav class="rail" id="rail" aria-label="Competitions"></nav>
   <div class="chips" id="chips"></div>
   <section id="list" aria-label="Fixtures">
-    <div class="datebar"><button class="dnav" data-act="dprev" aria-label="Previous day">‹</button>
-      <button class="dtoggle" id="dateToggle" data-act="dtoggle" aria-expanded="false" aria-controls="datePanel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span id="dateLabel">Today</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg></button>
-      <div class="drail" id="drail" role="group" aria-label="Choose a day"></div>
-      <button class="dnav" data-act="dnext" aria-label="Next day">›</button>
-      <label class="cal-pick drail-cal" title="Open a calendar to jump to any date back to 2001"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><b id="drailMonth">Pick a date</b><input type="date" id="datePick" min="2001-01-01" aria-label="Pick any date"></label></div>
-    <div class="datepanel" id="datePanel" hidden><div class="dates" id="dates" role="group" aria-label="Choose a day"></div></div>
+    <div class="datebar" id="fldHost"></div>
     <div class="quick" id="quick" role="toolbar" aria-label="Quick filters"></div>
     <div class="livebar"><h2 id="listTitle">Today</h2><span class="count" id="listCount"></span></div>
     <div id="groups"><div class="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>
@@ -1166,6 +1161,7 @@ document.addEventListener('error', ev => {
 <aside class="drawer" id="profile" role="dialog" aria-modal="true" aria-labelledby="profileTitle" tabindex="-1" hidden></aside>
 <nav class="bottomnav" id="bottomnav" aria-label="Sections"></nav>
 
+<script src="dates.js"></script>
 <script>
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const BASE2 = 'https://site.api.espn.com/apis/v2/sports/soccer';
@@ -1278,6 +1274,7 @@ async function loadDay(slugs){
   }
   await fmDone; if (seq !== loadSeq) return;
   await Promise.allSettled(fmList.map(loadFMDay));
+  if (!slugs) flDays.mark('soccer', '', S.date, S.events.size);   // the date strip's dot for this day
   detectGoals();
   S.loading = false; S.lastSync = new Date();
   setSync(false);
@@ -1483,28 +1480,11 @@ function renderQuick(){
     <button data-act="search">${ic.s}Search</button><button data-act="tc" aria-current="${S.page==='transfers'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>Transfers</button><button data-f="fav" data-global aria-current="${S.filter==='fav'&&!S.scope}">${ic.f}My teams</button>`;
 }
 function renderDates(){
-  const today = new Date(); const out = [];
-  const offOf = d => Math.round((new Date(d.toDateString()) - new Date(today.toDateString())) / 864e5);
-  for (let i=-7;i<=7;i++){ const d = new Date(S.date); d.setDate(S.date.getDate()+i);
-    const off = offOf(d), sel = sameDay(d, S.date);
-    out.push(`<button class="date${sel?' on':''}${off===0?' today':''}" data-date="${isoDay(d)}" aria-pressed="${sel}" aria-label="${esc((off===0?'Today, ':'') + d.toLocaleDateString([], {weekday:'long', day:'numeric', month:'long', year:'numeric'}))}"><small>${off===0 ? 'Today' : esc(d.toLocaleDateString([], {weekday:'short'}))}</small><strong>${d.getDate()}</strong></button>`) }
-  $('dates').innerHTML = out.join('');
-  // the day rail: a week centred on the chosen day, sliding the way you moved
-  const rail = $('drail'); if (rail) {
-    const dir = S.railAt == null ? 0 : Math.sign(new Date(S.date.toDateString()) - S.railAt); S.railAt = +new Date(S.date.toDateString());
-    const tiles = []; for (let i = -3; i <= 3; i++) { const d = new Date(S.date); d.setDate(S.date.getDate() + i); const off = offOf(d);
-      tiles.push(`<button class="dt${i === 0 ? ' on' : ''}${off === 0 ? ' today' : ''}${d.getDay() === 0 || d.getDay() === 6 ? ' wk' : ''}" style="--d:${Math.abs(i)};--i:${i + 3}" data-date="${isoDay(d)}" aria-pressed="${i === 0}" aria-label="${esc((off === 0 ? 'Today, ' : '') + d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}">
-        <small>${off === 0 ? 'Today' : off === -1 ? 'Yest.' : off === 1 ? 'Tmrw' : esc(d.toLocaleDateString([], { weekday: 'short' }))}</small><strong class="num">${d.getDate()}</strong><em>${esc(d.toLocaleDateString([], { month: 'short' }))}</em></button>`) }
-    rail.className = 'drail' + (dir > 0 ? ' fwd' : dir < 0 ? ' back' : ''); rail.innerHTML = tiles.join('');
-    const mo = $('drailMonth'); if (mo) mo.textContent = S.date.toLocaleDateString([], { month: 'long', year: 'numeric' });
-  }
-  const off = offOf(S.date), yr = S.date.getFullYear() !== today.getFullYear();
-  const long = S.date.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short', ...(yr ? {year:'numeric'} : {})});
-  $('dateLabel').textContent = off === 0 ? `Today · ${long}` : off === -1 ? `Yesterday · ${long}` : off === 1 ? `Tomorrow · ${long}` : long;
-  const open = !!S.dateOpen; $('datePanel').hidden = !open; $('dateToggle').setAttribute('aria-expanded', open);
-  $('dateToggle').setAttribute('aria-label', `${$('dateLabel').textContent}. ${open ? 'Hide' : 'Show'} the day picker`);
-  if (open) requestAnimationFrame(() => { const on = $('dates').querySelector('.date.on'); if (on) $('dates').scrollLeft = on.offsetLeft - $('dates').clientWidth / 2 + on.offsetWidth / 2 });
-  const pick = $('datePick'); if (pick) { pick.value = isoDay(S.date); pick.max = isoDay(new Date(today.getFullYear() + 1, 11, 31)) }
+  // a fortnight around today; if you jump further away, a fortnight around the day you chose
+  const today = new Date(), far = Math.abs(new Date(S.date.toDateString()) - new Date(today.toDateString())) > 7 * 864e5;
+  $('fldHost').innerHTML = flDates({ sport: 'soccer', scope: scopeLeague() && !FM_SOURCE[scopeLeague()] ? scopeLeague() : '', sel: S.date, days: flDates.range(far ? S.date : today),
+    attr: d => `data-date="${isoDay(d)}"`, prev: 'data-act="dprev"', next: 'data-act="dnext"',
+    cal: flDates.cal(`id="datePick" min="2001-01-01" max="${isoDay(new Date(today.getFullYear() + 1, 11, 31))}" value="${isoDay(S.date)}"`, 'Open a calendar to jump to any date back to 2001') });
 }
 function counts(){
   const c = {}; for (const e of S.events.values()) { c[e.slug] ??= {n:0,live:0}; c[e.slug].n++; if (e.state==='in') c[e.slug].live++ } return c;
@@ -4858,7 +4838,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
   if (!QUICK.includes(S.filter)) { if (LG[S.filter] && S.filter !== 'all') S.scope = S.filter; S.filter = 'all' }   // older saved state kept the league in the filter
   if (S.scope && !LG[S.scope]) S.scope = null;
   S.sort = store.get('fl.sort', 'league');
-  S.dateOpen = store.get('fl.dateOpen', false);
+  S.dateOpen = false;
   render(); loadDay();
   if (scopeLeague() && store.get('fl.sport', 'soccer') === 'soccer' && matchMedia('(min-width:821px)').matches) openLeague(scopeLeague());
 })();
