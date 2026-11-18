@@ -57,3 +57,6 @@ document.addEventListener('pointerdown', ev => {
 
 /* the sport switcher lives in a floating dock at the foot of the screen */
 { const sw = document.querySelector('.top .sport-sw'); if (sw) { sw.classList.add('dock'); document.body.appendChild(sw) } }
+
+/* three slow lights behind the page */
+{ const a = document.createElement('div'); a.id = 'flAurora'; a.setAttribute('aria-hidden', 'true'); a.innerHTML = '<i></i><i></i><i></i>'; document.body.prepend(a) }
