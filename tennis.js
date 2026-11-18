@@ -48,11 +48,11 @@ async function tnLoadDay(off){
     if (old) { Object.assign(old, e); list.push(old) } else { S.tn.matches.set(x.id, e); list.push(e) } }
   return S.tn.days[off] = { events: list.sort((a, b) => a.date - b.date), at: Date.now(), down: false };
 }
-async function tnListOdds(evs){
+async function tnListOdds(evs, onBatch){
   const need = evs.filter(e => e.state !== 'post' && e.home.pid && e.away.pid && !(Date.now() - (S.tn.odds.get(e.id)?.at || 0) < 180000)).slice(0, 240);
   const jobs = [];
   for (let i = 0; i < need.length; i += 30) { const part = need.slice(i, i + 30);
-    jobs.push(getJSON(`/api/tn/odds?ids=${part.map(e => `${e.id}:${e.home.pid}:${e.away.pid}`).join(',')}`).then(r => { for (const e of part) S.tn.odds.set(e.id, { ...(r[e.id] || { books: [] }), at: Date.now() }) }).catch(() => {})) }
+    jobs.push(getJSON(`/api/tn/odds?ids=${part.map(e => `${e.id}:${e.home.pid}:${e.away.pid}`).join(',')}`).then(r => { for (const e of part) S.tn.odds.set(e.id, { ...(r[e.id] || { books: [] }), at: Date.now() }); onBatch?.() }).catch(() => {})) }
   await Promise.allSettled(jobs); return jobs.length > 0;
 }
 // ESPN rankings: top 150 or so of each tour, with points, movement and headshots
@@ -189,13 +189,15 @@ function tnDateBar(off){
 function tnTourHead(t, n){
   return `<div class="group-h tn-gh"><span class="tn-lvl tn-l-${esc(t.level)}">${esc(TNL[t.level]?.short || '')}</span><button class="linkbtn tn-tname" data-tntour="${esc(t.id)}"><strong>${esc(t.name)}</strong></button><span>${t.country ? '· ' + esc(t.country) : ''}${t.disc === 'D' ? ' · Doubles' : t.disc === 'X' ? ' · Mixed' : ''}${t.stage ? ' · ' + esc(t.stage) : ''}</span>${tnSurf(t.surface)}${t.indoor ? '<span class="tn-surf">Indoor</span>' : ''}<small class="tn-gn">${n}</small></div>`;
 }
-const TN_SHOW = 40;   // matches per tournament before "show all"
+const TN_SHOW = 12;   // matches per tournament before "show all" (a busy day has 400+ matches; drawing them all made tennis slow)
 async function renderTennis(){
   const el = $('tn'); if (!el) return;
   tnRail();
   if (S.tn.view === 'picks') return renderTnPicks();
   if (S.tn.view === 'rank') return renderTnRank();
   const off = S.tn.off;
+  // ranks and odds arrive in several pieces: draw at most once a frame, and only when the markup actually changed
+  let queued = 0; const later = () => { if (!queued) queued = requestAnimationFrame(() => { queued = 0; paint() }) };
   const paint = () => {
     const d = S.tn.days[off]; if (!d || S.sport !== 'tennis' || S.tn.view !== 'matches' || S.tn.off !== off) return;
     tnRail();
@@ -205,18 +207,21 @@ async function renderTennis(){
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ['fav', '★ My players']].map(([k, l]) => `<button class="qf" data-tnfilter="${k}" aria-pressed="${S.tn.filter === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}
       <span class="tn-sep"></span>${[['S', 'Singles'], ['D', 'Doubles'], ['all', 'Both']].map(([k, l]) => `<button class="qf" data-tndisc="${k}" aria-pressed="${S.tn.disc === k}">${l}</button>`).join('')}</div>`;
     const title = S.tn.lg === 'all' ? (off === 0 ? 'Today' : day.toLocaleDateString([], { weekday: 'long' })) : TNL[S.tn.lg].name;
-    el.innerHTML = tnDateBar(off) + chips + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} match${list.length === 1 ? '' : 'es'} · ${groups.size} tournament${groups.size === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span></div>`
+    const html = tnDateBar(off) + chips + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} match${list.length === 1 ? '' : 'es'} · ${groups.size} tournament${groups.size === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span></div>`
       + (list.length ? [...groups].sort((a, b) => { const ta = S.tn.tours[a[0]] || {}, tb = S.tn.tours[b[0]] || {}; return order.indexOf(ta.level) - order.indexOf(tb.level) || (ta.disc > tb.disc ? 1 : ta.disc < tb.disc ? -1 : 0) || (b[1].some(e => e.state === 'in') - a[1].some(e => e.state === 'in')) || String(ta.name).localeCompare(tb.name) })
           .map(([k, l]) => { const t = S.tn.tours[k] || {}, open = S.tn.open?.[k] || l.length <= TN_SHOW, sorted = [...l].sort((a, b) => (b.state === 'in') - (a.state === 'in') || (a.state === 'post') - (b.state === 'post') || a.date - b.date);
             return `<div class="group">${tnTourHead(t, l.length)}<div class="cards">${(open ? sorted : sorted.slice(0, TN_SHOW)).map(tnCard).join('')}</div>${open ? '' : `<button class="linkbtn bb-more" data-tnact="more" data-to="${esc(k)}">Show all ${l.length} matches ›</button>`}</div>` }).join('')
         : `<div class="empty-state"><strong>${d.down ? "Couldn't load matches" : 'No matches'}</strong>${d.down ? 'The local server isn\'t answering. Start it with <code>python3 server.py --lan</code>.' : S.tn.filter === 'live' ? 'Nothing live right now.' : 'Try another day, tour or singles/doubles.'}</div>`)
       + `<p class="srcnote">Scores, stats and odds from Flashscore; rankings from ESPN. Times are local.</p>`;
+    if (html !== el._tnHtml) { el._tnHtml = html; el.innerHTML = html }
   };
-  if (S.tn.days[off]) paint(); else el.innerHTML = tnDateBar(off) + '<div class="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+  if (S.tn.days[off]) paint(); else el.innerHTML = el._tnHtml = tnDateBar(off) + '<div class="cards">' + '<div class="skel"></div>'.repeat(6) + '</div>';
   await tnLoadDay(off); paint();
+  // ranks for what is on screen first; odds for the main tours first, the rest after, each batch drawn as it lands
   const vis = tnFiltered(S.tn.days[off]).filter(e => e.state !== 'post');
-  tnLoadRanks(vis.slice(0, 200)).then(paint).catch(() => {});
-  tnListOdds(vis.slice(0, 120)).then(ch => ch && paint()).catch(() => {});
+  const top = e => ['slam', 'atp', 'wta', 'chm', 'chw'].includes(tnTour(e).level);
+  tnLoadRanks(vis.slice(0, 200)).then(later).catch(() => {});
+  tnListOdds(vis.filter(top).slice(0, 90), later).then(() => tnListOdds(vis.filter(e => !top(e)).slice(0, 60), later)).catch(() => {});
 }
 function tnTicker(){
   const all = Object.values(S.tn.days).flatMap(d => d.events || []), seen = new Set(), rankOf = e => Math.min(TN_LEVELS.findIndex(l => l.key === tnTour(e).level) + 1 || 99);
@@ -701,3 +706,10 @@ td.tn-l{text-align:left!important;white-space:nowrap}td.tn-tn{white-space:normal
 @media (max-width:520px){ .tn-sets{font-size:13px} .tn-g{min-width:12px} .tn-rq{width:100%;margin-left:0} .tn-split div{grid-template-columns:minmax(0,1fr) 70px auto 34px;gap:6px} }
 </style>`);
 if (S.sport === 'tennis') { S.stack = []; const sh = $('sheet'); if (sh && !sh.querySelector('.sheet-empty')) { sh.innerHTML = emptySheet(); sh.classList.remove('open') } setTimeout(render, 0) }
+
+/* Tennis opens instantly: once the page is idle, fetch today's matches and the ATP/WTA rankings in the background
+   (data only, nothing is drawn), so the first visit to tennis paints from memory. */
+(window.requestIdleCallback || (f => setTimeout(f, 2500)))(() => setTimeout(() => {
+  if (S.sport === 'tennis' || document.hidden) return;
+  tnLoadDay(0).then(d => tnLoadRanks((d?.events || []).filter(e => e.state !== 'post').slice(0, 200))).catch(() => {});
+}, 3000), { timeout: 6000 });

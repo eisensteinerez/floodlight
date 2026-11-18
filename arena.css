@@ -850,3 +850,6 @@ button.bx-hero:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:1100px){.hub-bento{grid-template-columns:repeat(2,minmax(0,1fr))}.hb-big,.hb-hot,.hb-trend{grid-column:1/-1}.hb-big{grid-row:auto}.hb-big .hb-cards{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}}
 @media (max-width:640px){.hub-bento{grid-template-columns:minmax(0,1fr)}.hb-fight{grid-column:1/-1}.hub-strip{grid-auto-columns:86%}.hub-head{align-items:flex-start;flex-direction:column;gap:6px}.hb{padding:14px}}
 @media (prefers-reduced-motion:reduce){.hub-dot,.hub-live-b i{animation:none}}
+
+/* tennis: tournaments below the fold are laid out only when scrolled near (a busy day has 60+ tournaments) */
+#tn .group{content-visibility:auto;contain-intrinsic-size:auto 620px}
