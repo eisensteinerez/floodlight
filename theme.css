@@ -2234,3 +2234,16 @@ body:has(.sheet.open) .sport-sw.dock,body.drawer-open .sport-sw.dock{display:fle
 .mc.gc .mc-main .tbl-wrap,.mc.gc .mc-wide .tbl-wrap{overflow-x:auto}
 .hero.mh .tbl-wrap{background:none!important;border:0!important;box-shadow:none!important;display:flex;justify-content:center}
 .hero.mh .tbl-wrap .qtr{width:auto;min-width:min(420px,100%)}
+
+/* ==========================================================================
+   SMOOTH SCROLLING · keep the graphics card out of trouble.
+   The background lights stay but no longer move (three viewport-sized layers
+   re-painted every frame under every glass panel), and the panels that sit
+   over scrolling content use a solid tint instead of a live blur.
+   ========================================================================== */
+#flAurora i{animation:none!important;will-change:auto!important}
+#flLight{will-change:auto}
+.tabs,.shell.stage .tabs{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:color-mix(in oklab,var(--surface) 97%,transparent)!important}
+.mc-c,.pane.pgrid > .pcard,.hero.mh .score,.hero.mh .hero-top .icon-btn,.shell.stage .hero.solo .tiles,.rs-strip,.rs-meterbox,.slip,.flg-rates div{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.drawer-scrim{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.sheet{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:color-mix(in oklab,var(--surface) 94%,transparent)}
