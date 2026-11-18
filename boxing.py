@@ -201,10 +201,33 @@ def fighter(name):
     }
 
 
+def season(y):
+    """Every fight night of one year (TheSportsDB season), for the past-events browser. Cached for a day."""
+    try:
+        y = max(2000, min(datetime.date.today().year + 1, int(y)))
+    except (TypeError, ValueError):
+        return {"error": "bad year", "events": []}
+    try:
+        data = fs._get(f"{TSDB}/eventsseason.php?id={LEAGUE}&s={y}", 86400, {"Referer": "https://www.thesportsdb.com/"}, as_json=True) or {}
+    except (OSError, ValueError):
+        return {"error": "busy", "events": []}
+    evs = [e for e in (_event(x) for x in (data.get("events") or [])) if (e["date"] or "").startswith(str(y))]
+    # the free tier caps a season list; fill the gaps from the day cache when it has them
+    with _lock:
+        have = {e["id"] for e in evs}
+        for iso, (_, day) in _days.items():
+            if iso.startswith(str(y)):
+                evs += [e for e in day if e["id"] not in have]
+    evs.sort(key=lambda e: e["ts"] or e["date"])
+    return {"year": y, "events": evs}
+
+
 def handle(path, q):
     """Returns (status, payload, max_age) for an /api/box/ request."""
     if path == "cards":
         return 200, cards(), 120
+    if path == "season":
+        return 200, season(q.get("y", "")), 3600
     if path == "fighter":
         name = q.get("name", "")
         if not re.fullmatch(r"[^\x00-\x1f<>{}\[\]|#]{2,60}", name):

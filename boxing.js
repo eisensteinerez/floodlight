@@ -26,6 +26,8 @@ const bxKoPct = f => f && f.wins ? Math.round((f.ko || 0) / f.wins * 100) : null
 const bxLen = cm => { if (!cm) return ''; const inch = Math.round(cm / 2.54); return `${Math.floor(inch / 12)}′${inch % 12}″ · ${cm} cm` };
 const bxReach = cm => cm ? `${Math.round(cm / 2.54)}″ · ${cm} cm` : '';
 const bxSur = n => (n || '').trim().split(' ').slice(-1)[0];
+// a boxer with no photo gets a silhouette with initials, never a broken image or a blank
+const bxSil = n => `<span class="ufc-sil bx-sil" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="20" cy="15" r="7.5"/><path d="M5 40c0-9 7-14 15-14s15 5 15 14z"/></svg><b>${esc(String(n || '?').split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</b></span>`;
 
 async function bxLoad(force){
   if (!force && S.bx.cards && Date.now() - S.bx.at < 5 * 6e4) return;
@@ -123,19 +125,42 @@ async function renderBoxing(){
     const lead = up[0];
     el.innerHTML = head + (lead ? bxHero(lead) : '')
       + (up.length > 1 ? `<div class="group"><div class="group-h"><strong>Upcoming fight nights</strong><span>${up.length - 1}</span></div><div class="bx-grid">${up.slice(1).map(bxCard).join('')}</div></div>` : '')
-      + (done.length ? `<div class="group"><div class="group-h"><strong>Results</strong><span>${done.length}</span></div><div class="bx-grid">${done.slice(0, 12).map(bxCard).join('')}</div></div>` : '')
+      + (done.length ? `<div class="group"><div class="group-h"><strong>Latest results</strong><span>${done.length}</span></div><div class="bx-grid">${done.slice(0, 6).map(bxCard).join('')}</div></div>` : '')
+      + bxPastHTML()
       + `<p class="srcnote">Fight calendar from TheSportsDB. Records and measurements on each fight page come from Wikipedia.</p>`;
   };
   paint();
   await (S.bx.tab === 'ufc' ? bxLoadUfc() : bxLoad()); paint();
 }
+/* ---------- past fight nights, by year, searchable ---------- */
+S.bx.past = new Map(); S.bx.pyear = new Date().getFullYear(); S.bx.pq = '';
+async function bxLoadSeason(y){
+  if (S.bx.past.has(y) && !S.bx.past.get(y).err) return;
+  S.bx.past.set(y, { loading: true, events: [] });
+  try { const d = await getJSON('/api/box/season?y=' + y); S.bx.past.set(y, { events: (d.events || []).filter(e => bxState(e) === 'post'), err: !!d.error }) }
+  catch { S.bx.past.set(y, { events: [], err: true }) }
+  if (S.sport === 'boxing') renderBoxing();
+}
+function bxPastHTML(){
+  const y0 = new Date().getFullYear(), years = Array.from({ length: y0 - 2014 }, (_, i) => y0 - i), P = S.bx.past.get(S.bx.pyear), q = S.bx.pq.trim().toLowerCase();
+  if (!P) setTimeout(() => bxLoadSeason(S.bx.pyear), 0);
+  // the recent window the page already has counts too, so this year is never empty
+  const pool = [...(P?.events || []), ...(S.bx.cards || []).filter(e => bxState(e) === 'post' && bxWhen(e).getFullYear() === S.bx.pyear)];
+  const seen = new Set(), list = pool.filter(e => !seen.has(e.id) && seen.add(e.id)).filter(e => !q || `${e.name} ${e.a} ${e.b} ${e.venue} ${e.city}`.toLowerCase().includes(q)).sort((a, b) => bxWhen(b) - bxWhen(a));
+  return `<div class="group bx-past"><div class="group-h"><strong>Past fight nights</strong><span>· browse by year, or search a fighter</span></div>
+    <div class="ufc-filters"><label class="search ufc-q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="bxQ" type="search" placeholder="Search a fighter, event or city" value="${esc(S.bx.pq)}" aria-label="Search past boxing events"></label>
+      <div class="hub-chips ufc-years" role="toolbar" aria-label="Year">${years.map(k => `<button class="hub-chip${S.bx.pyear === k ? ' on' : ''}" data-bxyear="${k}" aria-pressed="${S.bx.pyear === k}" style="--t:#B3122E">${k}</button>`).join('')}</div></div>
+    <div class="bx-grid">${P?.loading && !list.length ? '<div class="skel"></div><div class="skel"></div><div class="skel"></div>' : list.length ? list.slice(0, 60).map(bxCard).join('') : `<div class="hub-empty"><b>${q ? `No fights match “${esc(S.bx.pq)}”` : P?.err ? 'Could not load that year' : 'No fight nights listed'}</b><span>${P?.err ? 'The fight calendar is busy. It tries again when you pick the year.' : 'Try another year.'}</span></div>`}</div></div>`;
+}
+document.addEventListener('click', ev => { const t = ev.target.closest('[data-bxyear]'); if (!t) return; S.bx.pyear = +t.dataset.bxyear; if (S.bx.past.get(S.bx.pyear)?.err) S.bx.past.delete(S.bx.pyear); renderBoxing() });
+document.addEventListener('input', ev => { if (ev.target.id !== 'bxQ') return; S.bx.pq = ev.target.value; clearTimeout(S.bx.pqt); S.bx.pqt = setTimeout(() => { renderBoxing(); requestAnimationFrame(() => { const i = $('bxQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length) } }) }, 180) });
 function bxRail(){
   const r = $('rail'); if (!r) return;
-  r.innerHTML = `<h4>Fight night</h4>${[['boxing', 'Boxing'], ['ufc', 'UFC']].map(([k, l]) => `<button class="lg${S.bx.tab === k ? ' on' : ''}" data-bxtab="${k}"><span class="dot">●</span><span>${l}</span></button>`).join('')}`;
+  r.innerHTML = `<h4>Fight night</h4>${[['boxing', 'Boxing'], ['ufc', 'UFC →']].map(([k, l]) => `<button class="lg${S.bx.tab === k ? ' on' : ''}" data-bxtab="${k}"><span class="dot">●</span><span>${l}</span></button>`).join('')}`;
 }
 
 /* ---------- fight pages ---------- */
-function bxOpenFight(id){ const e = (S.bx.cards || []).find(x => x.id === id); if (!e) return; pushView({ type: 'bxfight', id, e, tab: 'tape' }) }
+function bxOpenFight(id){ const e = (S.bx.cards || []).find(x => x.id === id) || [...S.bx.past.values()].flatMap(p => p.events || []).find(x => x.id === id); if (!e) return; pushView({ type: 'bxfight', id, e, tab: 'tape' }) }
 function bxOpenBout(id){ const b = (S.bx.ufc?.events || []).flatMap(e => e.bouts).find(x => x.id === id); if (!b) return; pushView({ type: 'bxbout', id, b, tab: 'tape' }) }
 function bxOpenFighter(name){ if (name) pushView({ type: 'bxfighter', id: name.toLowerCase(), name, tab: 'overview' }) }
 
@@ -151,7 +176,7 @@ function bxCorners(v){
 }
 function bxFightHero(v, back){
   const [A, B] = bxCorners(v), box = v.type === 'bxfight', st = box ? bxState(v.e) : v.b.state, d = box ? bxWhen(v.e) : v.b.date;
-  const corner = (f, r) => `<div class="bx-corner${r ? ' r' : ''}${st === 'post' && f.win === false ? ' lose' : ''}"><span class="bx-ph">${f.photo ? `<img src="${esc(f.photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">${bxGlove}</svg></span>
+  const corner = (f, r) => `<div class="bx-corner${r ? ' r' : ''}${st === 'post' && f.win === false ? ' lose' : ''}"><span class="bx-ph">${f.photo ? `<img src="${esc(f.photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${bxSil(f.name)}</span>
     <strong>${box && f.key ? `<button class="linkbtn" data-bxfighter="${esc(f.key)}">${esc(f.name)}</button>` : esc(f.name)}</strong>${f.rec ? `<b class="bx-rec num">${esc(f.rec)}</b>` : ''}${f.sub ? `<small>${esc(f.sub)}</small>` : ''}</div>`;
   return `<div class="hero bx-stage is-${st}">${topBar(back)}
     <div class="bx-stage-top">${bxBadge(st)}<span class="mx-lg">${esc(box ? (v.e.series || 'Boxing') : `${v.b.cls}${v.b.rounds ? ` · ${v.b.rounds} rounds` : ''}`)}</span></div>
@@ -169,7 +194,8 @@ function bxTape(v){
   if (!rows.length) return `<div class="note">No measurements on record for these two fighters yet.</div>`;
   return `<div class="bx-tape"><div class="bx-tape-h"><b>${esc(bxSur(A.name))}</b><span>Tale of the tape</span><b>${esc(bxSur(B.name))}</b></div>
     ${rows.map(([k, a, b, cmp], i) => { const w = cmp ? (cmp[0] > cmp[1] ? 'a' : cmp[1] > cmp[0] ? 'b' : '') : '';
-      return `<div class="bx-tape-r" style="--i:${i}"><b class="num${w === 'a' ? ' up' : ''}">${esc(a === '' ? '–' : a)}</b><span>${k}</span><b class="num${w === 'b' ? ' up' : ''}">${esc(b === '' ? '–' : b)}</b></div>` }).join('')}</div>
+      const m = cmp ? Math.max(Math.abs(cmp[0]), Math.abs(cmp[1]), 1) : 0, bar = cmp ? `<i class="bx-tbar"><em class="${w === 'a' ? 'up' : ''}" style="--w:${(Math.max(0, cmp[0]) / m * 100).toFixed(0)}%"></em><em class="${w === 'b' ? 'up' : ''}" style="--w:${(Math.max(0, cmp[1]) / m * 100).toFixed(0)}%"></em></i>` : '';
+      return `<div class="bx-tape-r" style="--i:${i}"><b class="num${w === 'a' ? ' up' : ''}">${esc(a === '' ? '–' : a)}</b><span>${k}${bar}</span><b class="num${w === 'b' ? ' up' : ''}">${esc(b === '' ? '–' : b)}</b></div>` }).join('')}</div>
     ${v.type === 'bxfight' && (!A.found || !B.found) ? `<p class="srcnote">${[A, B].filter(f => !f.found).map(f => esc(f.name)).join(' and ')} could not be matched to a Wikipedia page, so that corner is blank.</p>` : ''}
     <p class="srcnote">${v.type === 'bxfight' ? 'Records and measurements from Wikipedia. Tap a name for the full profile.' : 'Records and measurements from ESPN.'}</p>`;
 }
@@ -210,7 +236,7 @@ function bxFighterSheet(v, back){
   if (f === null) return { hero: `<div class="hero solo">${topBar(back)}<div class="skel" style="height:160px"></div></div>`, body: '' };
   if (!f.found) return { hero: `<div class="hero solo">${topBar(back)}<div class="thead"><div><h3>${esc(v.name)}</h3></div></div></div>`, body: `<div class="note">No Wikipedia profile could be matched to this name.</div>` };
   const n = (f.wins || 0) + (f.losses || 0) + (f.draws || 0), dec = Math.max(0, (f.wins || 0) - (f.ko || 0));
-  const hero = `<div class="hero bx-stage bx-prof">${topBar(back)}<div class="bx-prof-in"><span class="bx-ph big">${f.photo ? `<img src="${esc(f.photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">${bxGlove}</svg></span>
+  const hero = `<div class="hero bx-stage bx-prof">${topBar(back)}<div class="bx-prof-in"><span class="bx-ph big">${f.photo ? `<img src="${esc(f.photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${bxSil(f.name)}</span>
       <div><small class="pr-k">${esc([f.nationality, f.stance].filter(Boolean).join(' · '))}</small><h3>${esc(f.name)}</h3>${f.nickname ? `<p>“${esc(f.nickname)}”</p>` : ''}<b class="bx-rec num big">${esc(bxRec(f))}</b><small>${f.ko != null ? `${f.ko} by knockout` : ''}</small></div></div></div>`;
   const tiles = [['Fights', n || '–'], ['Wins', f.wins ?? '–'], ['By KO', f.ko ?? '–'], ['KO rate', bxKoPct(f) != null ? bxKoPct(f) + '%' : '–'], ['Losses', f.losses ?? '–'], ['Draws', f.draws ?? 0]];
   const body = `<div class="tiles">${tiles.map(([l, x]) => `<div class="tile"><b class="num">${esc(x)}</b><span>${l}</span></div>`).join('')}</div>
