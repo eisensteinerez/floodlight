@@ -1214,15 +1214,22 @@ def verify(body, sig, stamp):
         return False
 
 
+_blocked = {}
+
+
 def discord(method, path, payload=None, token=None):
     headers = {"User-Agent": UA, "Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bot {token}"
     data = json.dumps(payload).encode() if payload is not None else None
+    # While Cloudflare is blocking this server's address (error 1015), every extra call keeps the block alive: stay quiet until it lifts.
+    if time.time() < _blocked.get("until", 0):
+        raise urllib.error.HTTPError(path, 429, "Discord is rate limiting this server (waiting it out)", None, None)
     for attempt in range(5):
         try:
             with urllib.request.urlopen(urllib.request.Request(path if path.startswith("http") else API + path, data=data, method=method, headers=headers), timeout=20) as r:
                 body = r.read()
+                _blocked["n"] = 0
                 return json.loads(body) if body else None
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < 4:
@@ -1231,7 +1238,12 @@ def discord(method, path, payload=None, token=None):
                     info = json.loads(raw)
                     wait = float(info.get("retry_after", 2))
                 except Exception:
-                    info, wait = {}, 5 * (attempt + 1)     # an HTML page: Cloudflare is limiting this server's address
+                    # not JSON: Cloudflare is limiting this server's address. Retrying only extends it, so stop and back off.
+                    _blocked["n"] = _blocked.get("n", 0) + 1
+                    pause = min(1800, 240 * _blocked["n"])
+                    _blocked["until"] = time.time() + pause
+                    print(f"discord: Cloudflare is limiting this server ({raw[:40]!r}) on {method} {path.split('?')[0][:60]}; no Discord calls for {pause}s", file=sys.stderr)
+                    raise
                 print(f"discord: rate limited on {method} {path.split('?')[0][:60]} (wait {wait}s, global={info.get('global')}, "
                       f"{'json' if info else raw[:80]!r})", file=sys.stderr)
                 time.sleep(min(30, wait + 0.5))
@@ -1277,14 +1289,30 @@ def handle(body, headers):
         if not admin:
             return 200, {"type": 4, "data": {"flags": 64, "content": "Only server admins can run the pick check."}}
 
+    # A quick answer goes back in this very response, which needs no call out to Discord (and so works even while Discord
+    # is rate limiting this server). A slow one shows "Floodlight is thinking..." and is edited in when ready.
+    box, quick, late = {}, threading.Event(), threading.Event()
+
     def work():
-        msg = run(name, opts)
-        try:
-            discord("PATCH", f"/webhooks/{it['application_id']}/{it['token']}/messages/@original", msg)
-        except Exception as e:
-            print(f"discord: couldn't send the reply: {e}", file=sys.stderr)
+        box["msg"] = run(name, opts)
+        quick.set()
+        late.wait(1)
+        if not box.get("late"):
+            return
+        for wait in (0, 20, 60, 150, 300):   # the reply can be edited in for 15 minutes; keep trying through a rate limit
+            time.sleep(wait)
+            try:
+                discord("PATCH", f"/webhooks/{it['application_id']}/{it['token']}/messages/@original", box["msg"])
+                return
+            except Exception as e:
+                print(f"discord: couldn't send the reply: {e}", file=sys.stderr)
     threading.Thread(target=work, daemon=True, name=f"discord-{name}").start()
-    return 200, {"type": 5}   # "Floodlight is thinking..."; the reply is edited in when ready
+    if quick.wait(2.2):
+        late.set()
+        return 200, {"type": 4, "data": box["msg"]}
+    box["late"] = True
+    late.set()
+    return 200, {"type": 5}
 
 
 def lab_launch(it, opts):
