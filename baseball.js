@@ -574,7 +574,7 @@ function bsGamePane(v){
   if (v.tab === 'box') return bsBox(v);
   if (v.tab === 'plays') return bsPlays(v);
   if (v.tab === 'matchup') return bsMatchup(v);
-  return bsSummary(v);
+  return (e.state === 'in' && e.sit ? flFx.diamond(e.sit) : '') + bsSummary(v);
 }
 
 /* ---------- team pages ---------- */

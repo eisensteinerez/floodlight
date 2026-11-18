@@ -380,6 +380,7 @@ function bbPane(v){
   if (v.tab === 'h2h') return bbH2HPane(v);
   if (v.tab === 'box') return e.src === 'espn' ? bbEspnBox(v) : bbFsBox(v);
   if (v.tab === 'team') return bbTeamStatsPane(v);
+  if (v.tab === 'shots') { if (!v.sum) return bbLoading(); return flFx.court(flFx.court.fromEspn(v.sum, e.home.id), { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac }) || `<div class="note">Shot locations are not available for this game yet.</div>` }
   return '';
 }
 function bbStatBars(e, rows){
@@ -517,7 +518,7 @@ function bbPredPane(v){
 }
 function bbGameTabs(v){
   const e = v.e;
-  return [['box', 'Box score'], ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', e.src === 'espn' ? 'Series & H2H' : 'Head to head'], ['stand', 'Standings']];
+  return [['box', 'Box score'], ...(e.src === 'espn' && e.state !== 'pre' ? [['shots', 'Shot chart']] : []), ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', e.src === 'espn' ? 'Series & H2H' : 'Head to head'], ['stand', 'Standings']];
 }
 
 /* ---------- team pages ---------- */

@@ -432,7 +432,7 @@ function hkHero(e, back){
 function hkGameTabs(v){
   const e = v.e;
   if (e.src === 'espn') return e.state === 'pre' ? [['pred', 'Prediction'], ['odds', 'Odds'], ['team', 'Matchup'], ['h2h', 'Season series'], ['stand', 'Standings']]
-    : [['summary', 'Summary'], ['box', 'Box score'], ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', 'Season series'], ['stand', 'Standings']];
+    : [['summary', 'Summary'], ['rink', 'Shot map'], ['box', 'Box score'], ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', 'Season series'], ['stand', 'Standings']];
   return [['summary', 'Summary'], ...(v.fs?.box?.length ? [['box', 'Box score']] : []), ['team', 'Team stats'], ['odds', 'Odds'], ['pred', 'Prediction'], ['h2h', 'Head to head'], ['stand', 'Standings']];
 }
 function hkPane(v){
@@ -443,6 +443,7 @@ function hkPane(v){
   if (v.tab === 'h2h') return hkH2HPane(v);
   if (v.tab === 'box') return e.src === 'espn' ? hkEspnBox(v) : hkFsBox(v);
   if (v.tab === 'team') return hkTeamStatsPane(v);
+  if (v.tab === 'rink') { if (!v.sum) return hkLoading(); return flFx.rink(flFx.rink.fromEspn(v.sum, e.home.id), { home: e.home.abbr || e.home.name, away: e.away.abbr || e.away.name, hc: e.hc, ac: e.ac }) || `<div class="note">Shot locations are not available for this game yet.</div>` }
   if (v.tab === 'summary') return e.src === 'espn' ? hkEspnSummary(v) : hkFsSummary(v);
   return '';
 }

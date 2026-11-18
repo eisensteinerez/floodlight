@@ -321,6 +321,7 @@ function fbPane(v){
   if (!d) return `<div class="skel" style="height:260px"></div>`;
   if (d.none) return `<div class="note">Only scores and odds are available for this league.</div>`;
   if (d.error) return `<div class="note">Couldn't load this game. It retries when you reopen it.</div>`;
+  if (v.tab === 'drives') return flFx.drives(flFx.drives.fromEspn(d, e.home.id), { hc: e.hc, ac: e.ac }) || `<div class="note">Drive details are not available for this game yet.</div>`;
   if (v.tab === 'summary') {
     const sp = d.scoringPlays || [];
     const leaders = (d.leaders || []).map(t => { const side = t.team?.id === e.home.id ? e.home : e.away;
@@ -800,7 +801,7 @@ function fbRenderSheet(v){
   const back = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
   let hero, tabs, body;
   if (v.type === 'fbgame') { const e = v.e; hero = fbHero(e, back);
-    tabs = [['summary', 'Summary'], ['box', 'Box score'], ['odds', 'Odds'], ['pred', 'Prediction'], ...(e.lg === 'nfl' ? [['inj', 'Injuries']] : []), ['stand', 'Standings']];
+    tabs = [['summary', 'Summary'], ...(e.state !== 'pre' ? [['drives', 'Drives']] : []), ['box', 'Box score'], ['odds', 'Odds'], ['pred', 'Prediction'], ...(e.lg === 'nfl' ? [['inj', 'Injuries']] : []), ['stand', 'Standings']];
     if (e.src === 'tsdb') tabs = [['odds', 'Odds'], ['pred', 'Prediction']];
     if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = fbPane(v) }
   else if (v.type === 'fbteam') { hero = fbTeamHero(v, back); tabs = [['sched', 'Schedule'], ['roster', 'Roster'], ['stand', 'Standings'], ...(v.lg === 'nfl' || FBL[v.lg].college ? [['fut', 'Title odds']] : [])]; body = fbTeamPane(v) }
