@@ -90,3 +90,27 @@ def save(path, data):
                      "ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data, updated = now()", n=path.name, d=text)
         except Exception as e:
             print(f"storage: couldn't save {path.name} to the database: {e}")
+
+
+def try_lock(name):
+    """A lock shared by every copy of the server (on Vercel several can run at once). True if this copy got it.
+    Without a database there is only one copy, so the answer is always yes."""
+    if not URL:
+        return True
+    try:
+        with _lock:
+            rows = _run("SELECT pg_try_advisory_lock(hashtext(:n))", n="floodlight:" + name)
+        return bool(rows and rows[0][0])
+    except Exception as e:
+        print(f"storage: couldn't take the {name} lock: {e}")
+        return False
+
+
+def unlock(name):
+    if not URL:
+        return
+    try:
+        with _lock:
+            _run("SELECT pg_advisory_unlock(hashtext(:n))", n="floodlight:" + name)
+    except Exception:
+        pass

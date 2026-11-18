@@ -17,6 +17,7 @@ same way, so the Lab costs nothing to run and calls no paid API.
   GET /api/lab/img                 ?u=             player photos through this server (Discord's Activity sandbox blocks other hosts)
 """
 import base64
+from pathlib import Path
 import hashlib
 import hmac
 import json
@@ -28,6 +29,7 @@ import urllib.parse
 import urllib.request
 
 import discord_bot as bot
+import storage
 
 PASS_HOURS = 12
 TICKET_MIN = 15
@@ -67,6 +69,28 @@ def ticket(channel_id, opts, user=""):
             _tickets.pop(k, None)
         _tickets[str(channel_id)] = {"at": now, "player": (opts.get("player") or "").strip(), "team": (opts.get("team") or "").strip(),
                                      "sport": opts.get("sport") or "", "user": user}
+        _share_tickets()
+
+
+def _ticket_path():
+    return Path(bot.D["cache_dir"]) / "lab-tickets.json" if bot.D.get("cache_dir") else None
+
+
+def _share_tickets():
+    """On Vercel the /lab command and the Activity that opens can reach different copies of the server, so the
+    tickets are also kept in the database."""
+    if os.environ.get("VERCEL") and storage.enabled() and _ticket_path():
+        try:
+            storage.save(_ticket_path(), _tickets)
+        except Exception as e:
+            print(f"lab: couldn't share the tickets: {e}")
+
+
+def _shared_ticket(ch):
+    if not (os.environ.get("VERCEL") and storage.enabled() and _ticket_path()):
+        return None
+    got = storage.load(_ticket_path(), {}) or {}
+    return got.get(ch) if isinstance(got, dict) else None
 
 
 def session(q, signed_in=False):
@@ -86,6 +110,8 @@ def session(q, signed_in=False):
             t = _instances[inst]
         else:
             t = _tickets.get(ch)
+            if not t or now - t["at"] > TICKET_MIN * 60:
+                t = _shared_ticket(ch)
             if not t or now - t["at"] > TICKET_MIN * 60:
                 return 403, {"error": "Type /lab in the channel to open the Lab.", "need": "lab"}
             if inst:

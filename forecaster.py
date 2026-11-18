@@ -76,15 +76,37 @@ def _save(name, data):
 TRACKED, FORECASTS, CONFIG = {}, {}, {}
 
 
-def setup(**deps):
+_sync = {"at": 0.0}
+
+
+def setup(loops=True, **deps):
     D.update(deps)
+    D["serverless"] = not loops
     TRACKED.update(_load("tracked.json", {}))
     FORECASTS.update(_load("forecasts.json", {}))
     CONFIG.update(_load("config.json", {}))
+    _sync["at"] = time.time()
     if os.environ.get("ANTHROPIC_API_KEY") and not CONFIG.get("key"):
         CONFIG["key"] = os.environ["ANTHROPIC_API_KEY"].strip()
-    threading.Thread(target=_scheduler, daemon=True, name="forecast-scheduler").start()
-    threading.Thread(target=_worker, daemon=True, name="forecast-worker").start()
+    if loops:
+        threading.Thread(target=_scheduler, daemon=True, name="forecast-scheduler").start()
+        threading.Thread(target=_worker, daemon=True, name="forecast-worker").start()
+
+
+def refresh(max_age=30):
+    """On Vercel several copies of the server can run at once and the scheduled work runs in whichever one the timer
+    reaches, so each copy re-reads the saved forecasts when its own are older than max_age seconds."""
+    if not (D.get("serverless") and storage.enabled()) or time.time() - _sync["at"] < max_age:
+        return
+    with _lock:
+        for name, dct in (("tracked.json", TRACKED), ("forecasts.json", FORECASTS), ("config.json", CONFIG)):
+            got = _load(name, None)
+            if isinstance(got, dict):
+                dct.clear()
+                dct.update(got)
+        if os.environ.get("ANTHROPIC_API_KEY") and not CONFIG.get("key"):
+            CONFIG["key"] = os.environ["ANTHROPIC_API_KEY"].strip()
+        _sync["at"] = time.time()
 
 
 def _persist():
@@ -130,6 +152,7 @@ LG_RE = re.compile(r"[A-Za-z0-9_.]{1,20}")
 def track(items, research=False, source="app"):
     added = 0
     now = time.time()
+    refresh(0)
     with _lock:
         for it in (items or [])[:80]:
             try:
@@ -267,58 +290,112 @@ def discover():
 
 # ---------- scheduling ----------
 
+def _queue_due():
+    now = time.time()
+    with _lock:
+        for key, m in TRACKED.items():
+            if m.get("over") or now > m["ko"]:
+                continue
+            snaps = FORECASTS.get(key, {}).get("snaps", [])
+            done = {s["stage"] for s in snaps} | set(FORECASTS.get(key, {}).get("skipped", []))
+            due = [st for st, t in plan(m) if t <= now and st not in done]
+            if not due:
+                continue
+            # if the server was off, earlier stages are skipped and only the latest due one runs
+            stage = due[-1]
+            if len(due) > 1:
+                FORECASTS.setdefault(key, {"ko": m["ko"], "snaps": []}).setdefault("skipped", []).extend(due[:-1])
+            if (key, stage) not in _jobs and _state["running"] != (key, stage):
+                _jobs.append((key, stage))
+
+
 def _scheduler():
     time.sleep(15)
     while True:
         try:
             if time.time() - _state["last_discover"] > 3 * 3600:
                 discover()
-            now = time.time()
-            with _lock:
-                for key, m in TRACKED.items():
-                    if m.get("over") or now > m["ko"]:
-                        continue
-                    snaps = FORECASTS.get(key, {}).get("snaps", [])
-                    done = {s["stage"] for s in snaps} | set(FORECASTS.get(key, {}).get("skipped", []))
-                    due = [st for st, t in plan(m) if t <= now and st not in done]
-                    if not due:
-                        continue
-                    # if the server was off, earlier stages are skipped and only the latest due one runs
-                    stage = due[-1]
-                    if len(due) > 1:
-                        FORECASTS.setdefault(key, {"ko": m["ko"], "snaps": []}).setdefault("skipped", []).extend(due[:-1])
-                    if (key, stage) not in _jobs and _state["running"] != (key, stage):
-                        _jobs.append((key, stage))
+            _queue_due()
         except Exception as e:
             print("forecast scheduler:", e)
         time.sleep(30)
 
 
+def _run_job(job):
+    _state["running"] = job
+    try:
+        run(*job)
+    except Exception as e:
+        print("forecast failed", job, e)
+        with _lock:
+            f = FORECASTS.setdefault(job[0], {"ko": TRACKED.get(job[0], {}).get("ko", time.time()), "snaps": []})
+            f["error"] = str(e)[:200]
+    finally:
+        _state["running"] = None
+        with _lock:
+            (FORECASTS.get(job[0]) or {}).pop("pending", None)
+        _persist()
+
+
+def _next_job():
+    with _lock:
+        if not _jobs:
+            return None
+        # the match kicking off soonest goes first
+        _jobs.sort(key=lambda j: TRACKED.get(j[0], {}).get("ko", 0))
+        return _jobs.pop(0)
+
+
 def _worker():
     while True:
-        job = None
-        with _lock:
-            if _jobs:
-                # the match kicking off soonest goes first
-                _jobs.sort(key=lambda j: TRACKED.get(j[0], {}).get("ko", 0))
-                job = _jobs.pop(0)
-                _state["running"] = job
+        job = _next_job()
         if not job:
             time.sleep(2)
             continue
+        _run_job(job)
+
+
+def tick(deadline):
+    """One pass of the schedule, for Vercel (no background loops there): find matches every three hours, then run the
+    forecasts that are due until `deadline` (a time.time() value) is near. Returns how many ran."""
+    refresh(0)
+    if time.time() - CONFIG.get("lastDiscover", 0) > 3 * 3600:
+        with _lock:
+            CONFIG["lastDiscover"] = time.time()
+        _save_config()
         try:
-            run(*job)
+            discover()
         except Exception as e:
-            print("forecast failed", job, e)
-            with _lock:
-                f = FORECASTS.setdefault(job[0], {"ko": TRACKED.get(job[0], {}).get("ko", time.time()), "snaps": []})
-                f["error"] = str(e)[:200]
-        finally:
-            _state["running"] = None
-            _persist()
+            print("forecast discover:", e)
+    _queue_due()
+    ran = 0
+    while time.time() < deadline - 75:     # a forecast with Claude's research can take about a minute
+        job = _next_job()
+        if not job:
+            break
+        _run_job(job)
+        ran += 1
+    _jobs.clear()                            # whatever is left is found again on the next pass
+    return ran
+
+
+def run_now(key):
+    """Vercel: the forecast someone asked for with "Update now", run in its own request (see request_now)."""
+    refresh(0)
+    if key in TRACKED:
+        _run_job((key, "now"))
 
 
 def request_now(key):
+    if D.get("serverless"):
+        refresh(0)
+        if key not in TRACKED:
+            return False
+        with _lock:
+            FORECASTS.setdefault(key, {"ko": TRACKED[key]["ko"], "snaps": []})["pending"] = time.time()
+        _persist()
+        D["spawn"]("/api/cron/forecast", {"key": key})
+        return True
     with _lock:
         if key not in TRACKED:
             return False
@@ -1148,6 +1225,7 @@ def predict_now(sport, lg, mid, date, home, away, fresh_h=3):
     and the betting market (never Claude's research, so it costs nothing). Soccer and NFL matches are then tracked,
     so the scheduled updates (a week, 3 days, the morning, 1 hour and 30 minutes before) keep coming.
     Returns (snapshot or None, the update plan)."""
+    refresh(60)
     fam = "soccer" if sport == "soccer" else "basketball" if FB.get(lg, {}).get("fam") == "basketball" else "football"
     m = {"sport": fam, "id": str(mid), "lg": lg, "ko": parse_time(date), "home": home, "away": away, "src": "espn"}
     if fam == "basketball":
@@ -1174,6 +1252,7 @@ def predict_now(sport, lg, mid, date, home, away, fresh_h=3):
 # ---------- what the app reads ----------
 
 def view(key):
+    refresh(30)
     m = TRACKED.get(key)
     f = FORECASTS.get(key) or {}
     out = {"tracked": bool(m), "snaps": f.get("snaps", []), "error": f.get("error")}
@@ -1182,11 +1261,12 @@ def view(key):
         out["plan"] = [{"stage": st, "at": t, "done": st in done, "skipped": st in f.get("skipped", [])} for st, t in plan(m)]
         out["research"] = bool(CONFIG.get("key") and CONFIG.get("enabled") and not CONFIG.get("keyError") and (m.get("research") or CONFIG.get("scope") == "all"))
         out["running"] = _state["running"] is not None and _state["running"][0] == key
-        out["queued"] = any(j[0] == key for j in _jobs)
+        out["queued"] = any(j[0] == key for j in _jobs) or time.time() - f.get("pending", 0) < 300
     return out
 
 
 def settings_view():
+    refresh(30)
     day = datetime.date.today().isoformat()
     return {"hasKey": bool(CONFIG.get("key")), "enabled": bool(CONFIG.get("enabled")), "scope": CONFIG.get("scope") or "watched",
             "cap": int(CONFIG.get("cap") or 20), "used": (CONFIG.get("usage") or {}).get(day, 0), "keyError": CONFIG.get("keyError"),
@@ -1194,6 +1274,7 @@ def settings_view():
 
 
 def update_settings(body):
+    refresh(0)
     if body.get("clearKey"):
         CONFIG.pop("key", None)
         CONFIG.pop("keyError", None)

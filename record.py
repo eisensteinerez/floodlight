@@ -30,10 +30,35 @@ def _path():
     return Path(D["cache_dir"]) / "record.json"
 
 
-def setup(**deps):
+def setup(loops=True, **deps):
     D.update(deps)
+    D["serverless"] = not loops
     RECORD.update(storage.load(_path(), {}))
-    threading.Thread(target=_loop, daemon=True, name="record").start()
+    _state["at"] = time.time()
+    if loops:
+        threading.Thread(target=_loop, daemon=True, name="record").start()
+
+
+def refresh(max_age=60):
+    """Vercel: re-read the record saved by whichever copy of the server ran the last pass."""
+    if not (D.get("serverless") and storage.enabled()) or time.time() - _state.get("at", 0) < max_age:
+        return
+    got = storage.load(_path(), None)
+    with _lock:
+        if isinstance(got, dict):
+            RECORD.clear()
+            RECORD.update(got)
+        _state["at"] = time.time()
+
+
+def tick():
+    """One pass for Vercel's timer: log the matches that kicked off and grade the finished ones."""
+    refresh(0)
+    D["forecaster"].refresh(0)
+    log_kickoffs()
+    grade_pending()
+    if _state["dirty"]:
+        _save()
 
 
 def _save():
@@ -162,12 +187,14 @@ PUBLIC = ("key", "sport", "lg", "id", "ko", "home", "away", "pick", "top", "conf
 
 
 def entries(limit=1500):
+    refresh()
     with _lock:
         rows = sorted(RECORD.values(), key=lambda e: e["ko"], reverse=True)[:limit]
         return [{k: e.get(k) for k in PUBLIC} for e in rows]
 
 
 def summary(sport=None, since=None):
+    refresh()
     """W-L, hit rate and current streak over graded picks, newest first."""
     with _lock:
         rows = sorted((e for e in RECORD.values() if e.get("result") in ("won", "lost") and (not sport or e["sport"] == sport)

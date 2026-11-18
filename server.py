@@ -17,7 +17,7 @@ Run:  python3 server.py   then open http://localhost:8642
 import os
 import sys
 
-if (os.environ.get("PORT") or os.environ.get("RENDER")) and not os.environ.get("MALLOC_ARENA_MAX"):
+if (os.environ.get("PORT") or os.environ.get("RENDER")) and not os.environ.get("VERCEL") and not os.environ.get("MALLOC_ARENA_MAX"):
     # Each thread would otherwise get its own memory pool, which on a 512 MB host adds up fast.
     os.environ["MALLOC_ARENA_MAX"] = "2"
     os.execv(sys.executable, [sys.executable] + sys.argv)
@@ -49,13 +49,17 @@ import storage
 import discord_bot
 import lab
 import record
+import serverless
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
 import os
 PORT = int(ARGS[0]) if ARGS else int(os.environ.get("PORT", 8642))
 # Hosted mode (e.g. Render): listen on all interfaces, mark cookies Secure, lock down admin settings.
-HOSTED = bool(os.environ.get("PORT") or os.environ.get("RENDER"))
+HOSTED = bool(os.environ.get("PORT") or os.environ.get("RENDER") or os.environ.get("VERCEL"))
+# On Vercel the server only runs while it answers a request: no background loops, a read-only folder except /tmp,
+# and several copies may run at once, so shared data is re-read from the database (see serverless.py).
+SERVERLESS = bool(os.environ.get("VERCEL"))
 ADMIN = (os.environ.get("FLOODLIGHT_ADMIN") or "").strip().lower()
 ADMIN_PASSWORD = os.environ.get("FLOODLIGHT_ADMIN_PASSWORD") or ""
 # Members only: when hosted, people need an account the admin has approved before they see any data.
@@ -154,7 +158,7 @@ def fetch(url, ttl, as_json=False):
 
 # ---------- photo index (saved to disk, so a player's photo is looked up once) ----------
 
-CACHE_DIR = ROOT / ".floodlight-cache"
+CACHE_DIR = Path("/tmp/floodlight-cache") if os.environ.get("VERCEL") else ROOT / ".floodlight-cache"
 PHOTO_FILE = CACHE_DIR / "photos.json"
 _photos = {}
 _photo_lock = threading.Lock()
@@ -978,7 +982,7 @@ def fm_playerstats(pid, entry):
 
 USERS_FILE = CACHE_DIR / "users.json"
 SESSIONS_FILE = CACHE_DIR / "sessions.json"
-_acct_lock = threading.Lock()
+_acct_lock = threading.RLock()
 SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str}
 
@@ -988,9 +992,28 @@ _sessions = storage.load(SESSIONS_FILE, {})
 _failures = {}
 
 
+_acct_state = {"at": time.time()}
+
+
 def _save_accounts():
     storage.save(USERS_FILE, _users)
     storage.save(SESSIONS_FILE, _sessions)
+
+
+def _sync_accounts(max_age=0):
+    """Several copies of the server can run at once on Vercel, each holding its own copy of the accounts. Re-read
+    them from the database before a change (max_age=0) and, for reads, when this copy's version is getting old."""
+    if not (SERVERLESS and storage.enabled()) or time.time() - _acct_state["at"] < max_age:
+        return
+    with _acct_lock:
+        users, sessions = storage.load(USERS_FILE, None), storage.load(SESSIONS_FILE, None)
+        if isinstance(users, dict):
+            _users.clear()
+            _users.update(users)
+        if isinstance(sessions, dict):
+            _sessions.clear()
+            _sessions.update(sessions)
+        _acct_state["at"] = time.time()
 
 
 def role_of(u):
@@ -1023,6 +1046,9 @@ def ensure_admin():
     if not (ADMIN and ADMIN_PASSWORD) or ADMIN in _users or not re.fullmatch(r"[a-z0-9_.]{3,20}", ADMIN):
         return
     with _acct_lock:
+        _sync_accounts()
+        if ADMIN in _users:
+            return
         _users[ADMIN] = _new_user(ADMIN, ADMIN_PASSWORD, "admin")
         _save_accounts()
     print(f"Created the admin account '{ADMIN}'")
@@ -1046,11 +1072,13 @@ def admin_action(path, body):
         if len(password) < 8:
             return 400, {"error": "Use a password of at least 8 characters."}
         with _acct_lock:
+            _sync_accounts()
             if key in _users:
                 return 409, {"error": "That username is taken."}
             _users[key] = _new_user(username, password, role)
             _save_accounts()
         return 200, {"users": admin_list()}
+    _sync_accounts()
     u = _users.get(key)
     if not u:
         return 404, {"error": "No member with that username."}
@@ -1110,6 +1138,7 @@ def signup(body):
         return 400, {"error": "Use a password of at least 8 characters."}
     key = username.lower()
     with _acct_lock:
+        _sync_accounts()
         if key in _users:
             return 409, {"error": "That username is taken. Try another."}
         _users[key] = _new_user(username, password, "admin" if key == ADMIN else SIGNUP_ROLE,
@@ -1125,15 +1154,17 @@ def login(body):
     fails = _failures.get(key, [0, 0])
     if fails[0] >= 5 and time.time() - fails[1] < 60:
         return 429, {"error": "Too many attempts. Wait a minute and try again."}
+    _sync_accounts(15)
     u = _users.get(key)
     if not u or not hmac.compare_digest(_hash(password, u["salt"]), u["hash"]):
         _failures[key] = [fails[0] + 1, time.time()]
         return 401, {"error": "That username and password don't match."}
     _failures.pop(key, None)
     with _acct_lock:
+        _sync_accounts()
         token = new_session(key)
         _save_accounts()
-    return 200, {"user": public_user(u), "_token": token}
+    return 200, {"user": public_user(_users.get(key) or u), "_token": token}
 
 
 def new_session(key):
@@ -1149,7 +1180,11 @@ def session_user(cookie_header):
     m = re.search(r"(?:^|;\s*)fl_session=([A-Za-z0-9_-]+)", cookie_header or "")
     if not m:
         return None, None
+    _sync_accounts(30)
     sess = _sessions.get(m.group(1))
+    if not sess and SERVERLESS and storage.enabled() and time.time() - _acct_state["at"] > 2:
+        _sync_accounts()   # signed in on another copy of the server a moment ago
+        sess = _sessions.get(m.group(1))
     if not sess or sess["exp"] < time.time():
         return None, None
     return m.group(1), _users.get(sess["user"])
@@ -1257,6 +1292,20 @@ class Handler(SimpleHTTPRequestHandler):
             import pick_tracker
             ok = pick_tracker.accept_blob(self.rfile.read(length))
             return self.send_json({"ok": ok}, 200 if ok else 409)
+        if u.path in ("/api/discord/finish", "/api/cron/forecast"):   # Vercel: work this server handed to itself (serverless.py)
+            length = int(self.headers.get("Content-Length") or 0)
+            job = serverless.read_signed(self.rfile.read(min(length, 64_000)), self.headers.get("X-Floodlight-Sig"))
+            if not job:
+                return self.send_json({"error": "not allowed"}, 403)
+            try:
+                if u.path == "/api/discord/finish":
+                    discord_bot.finish(job)
+                else:
+                    forecaster.run_now(str(job.get("key") or ""))
+            except Exception as e:
+                print(f"{u.path} failed: {type(e).__name__}: {e}", file=sys.stderr)
+                return self.send_json({"error": str(e)[:200]}, 500)
+            return self.send_json({"ok": True})
         if u.path == "/api/discord/interactions":   # Discord slash commands (discord_bot.py); signed by Discord, not a member login
             length = int(self.headers.get("Content-Length") or 0)
             if not discord_bot.enabled() or length > 64_000:
@@ -1293,6 +1342,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(200, {"ok": True, "added": n})
         if u.path == "/api/auth/logout":
             with _acct_lock:
+                _sync_accounts()
                 _sessions.pop(token, None)
                 _save_accounts()
             return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
@@ -1300,6 +1350,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(401, {"error": "Log in first."})
         if u.path == "/api/me/prefs":
             with _acct_lock:
+                _sync_accounts()
+                user = _users.get(user["username"].lower()) or user
                 user["prefs"] = clean_prefs(body, user.get("prefs", {}))
                 _save_accounts()
             return self.send_auth(200, {"user": public_user(user)})
@@ -1318,6 +1370,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not hmac.compare_digest(_hash(body.get("password") or "", user["salt"]), user["hash"]):
                 return self.send_auth(401, {"error": "That password isn't right."})
             with _acct_lock:
+                _sync_accounts()
                 _users.pop(user["username"].lower(), None)
                 for t in [t for t, v in _sessions.items() if v["user"] == user["username"].lower()]:
                     _sessions.pop(t, None)
@@ -1343,6 +1396,10 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             return self.wfile.write(data)
+        if u.path == "/api/cron/tick":   # Vercel: the scheduled work, called every few minutes (serverless.py)
+            if not serverless.cron_allowed(self.headers, q):
+                return self.send_json({"error": "not allowed"}, 403)
+            return self.send_json(serverless.tick())
         if u.path.startswith("/api/lab/") or u.path == "/lab" or (u.path == "/" and "frame_id" in q and "instance_id" in q):
             return self.lab(u, q)   # Floodlight Lab (lab.py): Discord members get in with a pass, not a site login
         if GATED and u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users"):
@@ -1390,7 +1447,8 @@ class Handler(SimpleHTTPRequestHandler):
                     status, obj, age = 502, {"error": "source unavailable"}, 0
                 return self.send_json(obj, status, max_age=age)
             if u.path == "/api/version":   # lets an open page notice that the app was updated
-                return self.send_json({"v": int((ROOT / "index.html").stat().st_mtime)})
+                sha = os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("VERCEL_DEPLOYMENT_ID")
+                return self.send_json({"v": int(hashlib.sha1(sha.encode()).hexdigest()[:12], 16) if sha else int((ROOT / "index.html").stat().st_mtime)})
             if u.path == "/api/me":
                 _, user = session_user(self.headers.get("Cookie"))
                 return self.send_auth(200, {"user": public_user(user) if user else None, "gated": GATED})
@@ -1577,24 +1635,34 @@ def _memory_guard():
         print(f"memory guard: {used:.0f} MB in use, cleared caches, now {_rss_mb():.0f} MB")
 
 
-if __name__ == "__main__":
-    import atexit
-    atexit.register(save_photos)
+def boot(loops=True):
+    """Set up the data modules. loops=False (Vercel) starts no background threads: the scheduled work runs when
+    /api/cron/tick is called instead (serverless.py)."""
     odds.setup(fetch=fetch, similar=similar)
-    ensure_admin()
-    if MEM_LIMIT_MB:
+    try:
+        ensure_admin()
+    except Exception as e:
+        print(f"couldn't check the admin account: {e}")
+    if MEM_LIMIT_MB and loops:
         threading.Thread(target=_memory_guard, daemon=True, name="memory-guard").start()
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
-                     users=lambda: _users, cache_dir=CACHE_DIR)
-    record.setup(fetch=fetch, fm_matchstats=fm_matchstats, forecaster=forecaster, cache_dir=CACHE_DIR)
+                     users=lambda: _users, cache_dir=CACHE_DIR, loops=loops)
+    record.setup(fetch=fetch, fm_matchstats=fm_matchstats, forecaster=forecaster, cache_dir=CACHE_DIR, loops=loops)
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
-                          odds=odds, dfs=dfs, record=record, forecaster=forecaster, fm_team=fm_team, cache_dir=CACHE_DIR)
+                          odds=odds, dfs=dfs, record=record, forecaster=forecaster, fm_team=fm_team, cache_dir=CACHE_DIR, loops=loops)
         import pick_tracker
-        pick_tracker.setup(similar=similar, fetch=fetch, cache_dir=CACHE_DIR)
+        pick_tracker.setup(similar=similar, fetch=fetch, cache_dir=CACHE_DIR, loops=loops)
         print("Discord bot: listening at /api/discord/interactions")
     else:   # the Lab (lab.py) reads players through the bot's loaders even without the bot
         discord_bot.D.update(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup, odds=odds, dfs=dfs, fm_team=fm_team)
+    forecaster.D["spawn"] = discord_bot.D["spawn"] = serverless.spawn
+
+
+if __name__ == "__main__":
+    import atexit
+    atexit.register(save_photos)
+    boot(loops=True)
     print(f"Floodlight running at http://localhost:{PORT}")
     if LAN:
         import socket

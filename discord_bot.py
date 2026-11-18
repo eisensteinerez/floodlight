@@ -48,7 +48,8 @@ UA = "DiscordBot (https://github.com/eisensteinerez/floodlight, 1.0)"
 ESPN = "https://site.api.espn.com/apis/site/v2/sports"
 ESPN_WEB = "https://site.web.api.espn.com/apis/common/v3"
 SAPI = "https://statsapi.mlb.com/api/v1"
-SITE = os.environ.get("FLOODLIGHT_URL") or os.environ.get("RENDER_EXTERNAL_URL") or ""
+SITE = (os.environ.get("FLOODLIGHT_URL") or os.environ.get("RENDER_EXTERNAL_URL")
+        or ("https://" + os.environ["VERCEL_PROJECT_PRODUCTION_URL"] if os.environ.get("VERCEL_PROJECT_PRODUCTION_URL") else ""))
 GREEN, RED, BLUE, GREY = 0x22C55E, 0xEF4444, 0x3B82F6, 0x64748B
 
 D = {}   # from server.py: fetch, similar, fm_player, fm_matchstats, fm_lineup, odds, dfs
@@ -56,8 +57,11 @@ _cache, _lock = {}, threading.Lock()
 _work = threading.BoundedSemaphore(2)   # commands worked on at once; the rest queue (keeps memory steady on a free host)
 
 
-def setup(**deps):
+def setup(loops=True, **deps):
     D.update(deps)
+    D["serverless"] = not loops
+    if not loops:   # Vercel: registering and the digest run from the timer (serverless.py)
+        return
     if os.environ.get("DISCORD_APP_ID") and os.environ.get("DISCORD_BOT_TOKEN"):
         threading.Thread(target=_register_on_start, daemon=True, name="discord-register").start()
     if os.environ.get("DISCORD_WEBHOOK_URL"):
@@ -1291,6 +1295,8 @@ def handle(body, headers):
 
     # A quick answer goes back in this very response, which needs no call out to Discord (and so works even while Discord
     # is rate limiting this server). A slow one shows "Floodlight is thinking..." and is edited in when ready.
+    if D.get("serverless"):
+        return _handle_serverless(it, name, opts)
     box, quick, late = {}, threading.Event(), threading.Event()
 
     def work():
@@ -1315,6 +1321,39 @@ def handle(body, headers):
     return 200, {"type": 5}
 
 
+def _handle_serverless(it, name, opts):
+    """Vercel stops working on a request once it is answered, so a slow command can't be finished in the background
+    here. A quick answer goes straight back; a slow one shows "thinking..." and a second request to this server
+    (/api/discord/finish) works it out and edits it in."""
+    box = {}
+    threading.Thread(target=lambda: box.__setitem__("msg", run(name, opts)), daemon=True, name=f"discord-{name}").start()
+    t0 = time.time()
+    while time.time() - t0 < 1.6 and "msg" not in box:
+        time.sleep(0.05)
+    if "msg" in box:
+        return 200, {"type": 4, "data": box["msg"]}
+    D["spawn"]("/api/discord/finish", {"kind": "command", "app": it["application_id"], "token": it["token"], "name": name, "opts": opts})
+    return 200, {"type": 5}
+
+
+def finish(job):
+    """POST /api/discord/finish (Vercel): the second half of a slow command, or the Lab's browser-link follow-up."""
+    app, token = str(job.get("app") or ""), str(job.get("token") or "")
+    if job.get("kind") == "lab":
+        time.sleep(1.0)
+        discord("POST", f"/webhooks/{app}/{token}", {"flags": 64, "content": "The Lab is opening in this channel. Prefer a full browser window?",
+                "components": [{"type": 1, "components": [{"type": 2, "style": 5, "label": "Open the Lab in your browser", "url": job.get("link")}]}]})
+        return
+    msg = run(str(job.get("name") or ""), job.get("opts") or {})
+    for wait in (0, 10, 30, 60):   # keep trying through a short rate limit, inside the function's time limit
+        time.sleep(wait)
+        try:
+            discord("PATCH", f"/webhooks/{app}/{token}/messages/@original", msg)
+            return
+        except Exception as e:
+            print(f"discord: couldn't send the reply: {e}", file=sys.stderr)
+
+
 def lab_launch(it, opts):
     """Leave a ticket for this channel, open the Lab as an Activity, and follow up (only to the caller) with a browser link."""
     import lab
@@ -1326,6 +1365,11 @@ def lab_launch(it, opts):
             return 200, {"type": 4, "data": {"flags": 64, "content": "The Lab needs FLOODLIGHT_URL set on the server."}}
         return 200, {"type": 4, "data": {"flags": 64, "content": "**Floodlight Lab** is ready.", "components": [
             {"type": 1, "components": [{"type": 2, "style": 5, "label": "Open the Lab", "url": link}]}]}}
+
+    if D.get("serverless"):
+        if link:
+            D["spawn"]("/api/discord/finish", {"kind": "lab", "app": it["application_id"], "token": it["token"], "link": link})
+        return 200, {"type": 12}
 
     def follow():
         if not link:
@@ -1372,6 +1416,30 @@ def digest(sport):
         if msg["embeds"] and msg["embeds"][0].get("color") != GREY:
             out += msg["embeds"]
     return out
+
+
+def digest_once():
+    """Vercel's timer: post the digest if this hour is a digest hour and it hasn't been posted yet (in any copy)."""
+    if not os.environ.get("DISCORD_WEBHOOK_URL") or not D.get("cache_dir"):
+        return False
+    import storage
+    hours = {int(x) for x in re.findall(r"\d+", os.environ.get("DISCORD_DIGEST_HOURS", "14")) if int(x) < 24}
+    sports = [s for s in re.split(r"[,\s]+", os.environ.get("DISCORD_DIGEST_SPORTS", "nba,nfl,nhl,mlb,soccer").lower()) if s in SPORTS]
+    now = dt.datetime.now(dt.timezone.utc)
+    slot = now.strftime("%Y-%m-%d %H")
+    path = D["cache_dir"] / "discord-digest.json"
+    if now.hour not in hours or (storage.load(path, {}) or {}).get("slot") == slot:
+        return False
+    storage.save(path, {"slot": slot})
+    for sp in sports:
+        embeds = digest(sp)
+        if not embeds:
+            continue
+        try:
+            discord("POST", os.environ["DISCORD_WEBHOOK_URL"], {"username": "Floodlight", "content": f"**{SPORTS[sp]} daily digest**", "embeds": embeds[:10]})
+        except Exception as e:
+            print(f"discord: digest post failed: {e}", file=sys.stderr)
+    return True
 
 
 def _digest_loop():

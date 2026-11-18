@@ -662,12 +662,12 @@ def reload():
         STATE["v"] = VERSION
 
 
-def setup(**deps):
+def setup(loops=True, **deps):
     D.update(deps)
     if deps.get("fetch"):
         G.D["fetch"] = deps["fetch"]
     reload()
-    if os.environ.get("DISCORD_BOT_TOKEN"):
+    if os.environ.get("DISCORD_BOT_TOKEN") and loops:
         threading.Thread(target=_loop, daemon=True, name="pick-tracker").start()
 
 
