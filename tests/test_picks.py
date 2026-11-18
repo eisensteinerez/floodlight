@@ -115,6 +115,13 @@ def test_discord_markdown():
     assert [g["label"] for g in cs[0]["legs"]] == ["Luka Doncic O27.5 Points", "Josh Hart O1.5 Assists"]
 
 
+def test_emoji_numbers_and_medals():
+    t = "NBA PARLAY\n🥇 RUDY GOBERT OVER 5.5 REBOUNDS (-1150 Kalshi)\n🥈 NIKOLA JOKIĆ OVER 5.5 ASSISTS\n🥉 GIANNIS ANTETOKOUNMPO OVER 19.5 PTS\n" \
+        "4️⃣ DENI AVDIJA OVER 14.5 PTS (-733 Kalshi)\n5\u20e3 ZION WILLIAMSON OVER 14.5 PTS\n🔟 Josh Hart 5+ Reb+Ast\nNBA ADD-ONS"
+    assert len(P.cards_in({"text": t}, "props", TUE)[0]["legs"]) == 6
+    assert P.parse_leg("Justin Herbert (LAC) 175+ passing+rushing yards", "props")["stat"] == "pryd"
+
+
 # ---------- team names ----------
 def test_names():
     assert G.name_score("Ireland", "Northern Ireland") == 0
