@@ -1,10 +1,10 @@
 """Grades the picks posted in the server's pick channels and keeps each channel's record.
 
 Every night at 12:30 AM Eastern the bot reads yesterday's posts in each pick channel (codex-props, claude-props,
-instinct-props, codex-soccer, claude-soccer, instinct-soccer, cafe-picks, parlay-predictor, ez-picks), pulls out the
+instinct-props, codex-soccer, claude-soccer, instinct-soccer, cafe-picks, parlay-predictor), pulls out the
 picks, grades them from ESPN box scores and results, and posts the results and each channel's record in
-#verified-records. At 8:00 AM it checks again, grades anything that wasn't final yet (late games, stat corrections)
-and posts an update only if something changed.
+#verified-records, one post per channel plus a leaderboard. At 8:00 AM it checks again and posts only what finished
+since (late games).
 
 What it understands, from the card in each post:
   - TRACK|v1|... lines (exact; the codex cards already post these)
@@ -13,8 +13,9 @@ What it understands, from the card in each post:
   - soccer: "Germany ML", "Iceland -1.5", "Hungary-NIR UNDER 2.5", "X vs Y – X NOT to score", "X vs Y – Draw",
     "X vs Y – Correct score 0-0", team totals and both teams to score
   - NBA/NFL moneylines and spreads: "Chiefs ML", "Knicks -3.5"
-A card with two or more legs that is posted as a parlay also gets a parlay result. Picks posted only as images
-(ez-picks screenshots) can't be read without paid AI, so they're skipped and the post says so.
+Each card counts as one play, like a parlay: every pick hits = a win, one miss = a loss, and a push or a player who
+didn't play doesn't break it. The same card posted twice in a channel (or a short headline version of a bigger card)
+counts once. ez-picks is left out: its picks are screenshots.
 
 Free: it runs inside the existing server and only calls ESPN and Discord. No AI.
 
@@ -38,10 +39,10 @@ import discord_bot as B
 import storage
 
 DEFAULT_CHANNELS = ["codex-props", "claude-props", "instinct-props", "codex-soccer", "claude-soccer", "instinct-soccer",
-                    "cafe-picks", "parlay-predictor", "ez-picks"]
+                    "cafe-picks", "parlay-predictor"]
 EPOCH_MS = 1420070400000
 D = {}
-STATE = {"cards": {}, "posted": {}, "images": {}, "channels": {}, "dest": None}
+STATE = {"cards": {}, "posted": {}, "channels": {}, "icons": {}, "dest": None}
 _lock = threading.RLock()
 
 try:
@@ -80,7 +81,8 @@ def resolve_channels():
     for w in want:
         c = next((c for c in chans if c["id"] == w or bare(c["name"]) == bare(w) or bare(c["name"]).endswith(bare(w))), None)
         if c:
-            out.append({"id": c["id"], "name": bare(c["name"]) or c["name"]})
+            icon = re.match(r"^([^\w\s│|]+)", c["name"])
+            out.append({"id": c["id"], "name": bare(c["name"]) or c["name"], "icon": icon[1].strip() if icon else "🎯"})
     rec = os.environ.get("DISCORD_RECORDS_CHANNEL") or "verified-records"
     dest = next((c["id"] for c in chans if c["id"] == rec or bare(c["name"]).endswith(bare(rec))), None)
     return out, dest
@@ -276,13 +278,7 @@ def parse_message(text, soccer):
         return []
     parlay = len(legs) > 1 and bool(re.search(r"PARLAY\s*[—–-]\s*[+-]\d|\d+\s*legs|LADDER DAY|PLAY #\d|Math:|=\s*[+-]\d{3}|VALUE PARLAY", text, re.I)) \
         and not re.search(r"no qualifying", text, re.I)
-    cards = [(legs, parlay)]
-    ref = re.search(r"Parlay:\s*((?:\d+\s*\+\s*)+\d+)", text, re.I)   # "Parlay: 1 + 3 + 4"
-    if ref:
-        sub = [numbered[int(x)] for x in re.findall(r"\d+", ref[1]) if int(x) in numbered]
-        if len(sub) > 1:
-            cards.append(([dict(g) for g in sub], True))
-    return cards
+    return [(legs, parlay)]
 
 
 # ---------- grading ----------
@@ -424,6 +420,7 @@ def grade_leg(g, after, final):
 
 
 def card_result(c):
+    """A card is one play: every pick has to hit. A push or void doesn't break it; one miss loses it."""
     rs = [g.get("result") for g in c["legs"]]
     if any(r == "lost" for r in rs):
         return "lost"
@@ -443,6 +440,7 @@ def collect(hours=36):
     with _lock:
         STATE["dest"] = dest
         STATE["channels"] = {c["id"]: c["name"] for c in chans}
+        STATE.setdefault("icons", {}).update({c["id"]: c["icon"] for c in chans})
     for c in chans:
         try:
             msgs = messages(c["id"], start, end)
@@ -452,34 +450,36 @@ def collect(hours=36):
         soccer = "soccer" in c["name"]
         for m in msgs:
             text = text_of(m)
-            at = B.parse_date(m.get("timestamp")) or end
-            imgs = [a for a in m.get("attachments") or [] if (a.get("content_type") or "").startswith("image")]
             found = parse_message(text, soccer) if text.strip() else []
+            if not found:
+                continue
+            at = B.parse_date(m.get("timestamp")) or end
+            legs, parlay = found[0]
+            cid = m["id"]
+            ck = {leg_key(g) for g in legs}
             with _lock:
-                if not found and imgs:
-                    STATE["images"].setdefault(c["id"], {})[m["id"]] = at.isoformat()
-                recent = [x for x in STATE["cards"].values() if x["ch"] == c["id"] and abs((B.parse_date(x["at"]) - at).total_seconds()) < 86400]
-                for n, (legs, parlay) in enumerate(found):
-                    cid = f"{m['id']}:{n}"
-                    if cid in STATE["cards"]:
-                        continue
-                    ck = sorted(leg_key(g) for g in legs)
-                    if any(sorted(leg_key(g) for g in x["legs"]) == ck for x in recent):
-                        continue   # the same card posted twice (a headline and its final card)
-                    seen = {leg_key(g) for x in recent for g in x["legs"]}
-                    for g in legs:
-                        g["dup"] = leg_key(g) in seen   # repeated in a later card: one result in the record
-                        seen.add(leg_key(g))
-                    card = {"ch": c["id"], "msg": m["id"], "at": at.isoformat(), "parlay": parlay, "legs": legs, "result": None, "reported": False}
-                    STATE["cards"][cid] = card
-                    recent.append(card)
+                if cid in STATE["cards"]:
+                    continue
+                near = [(k, x) for k, x in STATE["cards"].items() if x["ch"] == c["id"] and not x.get("dropped")
+                        and abs((B.parse_date(x["at"]) - at).total_seconds()) < 12 * 3600]
+                # no duplicates in a channel: the same card posted twice, or a short version of a bigger card
+                # (a headline and its final card), counts once
+                if any(ck <= {leg_key(g) for g in x["legs"]} for _, x in near):
+                    continue
+                for k, x in near:
+                    if {leg_key(g) for g in x["legs"]} < ck and not x.get("reported"):
+                        x["dropped"] = True
+                STATE["cards"][cid] = {"ch": c["id"], "msg": m["id"], "at": at.isoformat(), "parlay": parlay, "legs": legs, "result": None, "reported": False}
+
+
+def cards_of(pred=lambda c: True):
+    with _lock:
+        return sorted((c for c in STATE["cards"].values() if not c.get("dropped") and pred(c)), key=lambda c: c["at"])
 
 
 def grade_all(final):
     now = dt.datetime.now(dt.timezone.utc)
-    with _lock:
-        todo = [c for c in STATE["cards"].values() if c.get("result") is None]
-    for c in todo:
+    for c in cards_of(lambda c: c.get("result") is None):
         at = B.parse_date(c["at"])
         old = (now - at).total_seconds() > LOOK_BACK
         for g in c["legs"]:
@@ -487,116 +487,140 @@ def grade_all(final):
         c["result"] = card_result(c)
 
 
-def tally(cards):
-    t = {"won": 0, "lost": 0, "push": 0, "void": 0, "pending": 0, "pw": 0, "pl": 0}
+def stats(cards):
+    """W-L counting each card as one play, plus streak and the individual picks."""
+    done = [c for c in cards if c.get("result") in ("won", "lost")]
+    w = sum(c["result"] == "won" for c in done)
+    streak, kind = 0, None
+    for c in reversed(done):
+        kind = kind or c["result"]
+        if c["result"] != kind:
+            break
+        streak += 1
+    legs = {}
     for c in cards:
         for g in c["legs"]:
-            if g.get("dup") or g.get("result") == "unknown":
-                continue
-            t[g.get("result") or "pending"] += 1
-        if c["parlay"]:
-            t["pw"] += c.get("result") == "won"
-            t["pl"] += c.get("result") == "lost"
-    return t
+            if g.get("result") in ("won", "lost"):
+                legs[leg_key(g) + c["at"][:10]] = g["result"]
+    lw = sum(r == "won" for r in legs.values())
+    return {"won": w, "lost": len(done) - w, "n": len(done), "pct": w / len(done) if done else None,
+            "streak": f"{'W' if kind == 'won' else 'L'}{streak}" if kind else "–", "lw": lw, "ll": len(legs) - lw,
+            "pending": sum(1 for c in cards if c.get("result") is None)}
 
 
-def rec_txt(t):
-    s = f"{t['won']}-{t['lost']}" + (f"-{t['push']}" if t["push"] else "")
-    n = t["won"] + t["lost"]
-    return s + (f" ({round(t['won'] / n * 100)}%)" if n else "")
+def pct(x):
+    return "–" if x is None else f"{round(x * 100)}%"
+
+
+def wl(s):
+    return f"{s['won']}-{s['lost']}"
 
 
 MARK = {"won": "✅", "lost": "❌", "push": "➖", "void": "⚪", "unknown": "❔", None: "⏳"}
 
 
 def settled(c):
-    return all(g.get("result") for g in c["legs"])
+    return c.get("result") is not None
 
 
-def leaderboard(cards_by_ch):
-    rows = [(STATE["channels"].get(ch, ch), tally(cs)) for ch, cs in cards_by_ch.items()]
-    rows = [r for r in rows if r[1]["won"] + r[1]["lost"]]
-    rows.sort(key=lambda x: (-(x[1]["won"] / max(1, x[1]["won"] + x[1]["lost"])), -x[1]["won"]))
-    return "\n".join(f"**{i}.** #{n} — **{rec_txt(t)}**" + (f" · parlays {t['pw']}-{t['pl']}" if t["pw"] + t["pl"] else "")
-                     for i, (n, t) in enumerate(rows, 1))
+def board_block(by_ch):
+    """The leaderboard as a lined-up table."""
+    rows = [(STATE["channels"].get(ch, ch), stats(cs)) for ch, cs in by_ch.items()]
+    rows = [r for r in rows if r[1]["n"]]
+    rows.sort(key=lambda x: (-(x[1]["pct"] or 0), -x[1]["won"], x[1]["lost"]))
+    if not rows:
+        return ""
+    w = max(len(n) for n, _ in rows)
+    medal = ["🥇", "🥈", "🥉"]
+    lines = [f"{'':3}{'CHANNEL'.ljust(w)}  {'W-L':>6}  {'WIN%':>4}  STRK"]
+    for i, (n, s) in enumerate(rows):
+        lines.append(f"{str(i + 1) + '.':3}{n.ljust(w)}  {wl(s):>6}  {pct(s['pct']):>4}  {s['streak']}")
+    top = " ".join(f"{medal[i]} #{n}" for i, (n, _) in enumerate(rows[:3]))
+    return top + "\n```\n" + "\n".join(lines) + "\n```"
+
+
+def channel_report(ch, new, everything, update=False):
+    """One channel's post: each finished card as one play, then today's and all-time records."""
+    name, icon = STATE["channels"].get(ch, ch), STATE.get("icons", {}).get(ch, "🎯")
+    today, alltime = stats(new), stats(everything)
+    blocks = []
+    for c in new:
+        when = B.parse_date(c["at"]).astimezone(ET)
+        res = c["result"]
+        tag = {"won": "✅ **CASHED**", "lost": "❌ **MISSED**", "void": "⚪ **VOID**", "unknown": "❔ **CAN'T CONFIRM**"}.get(res, "⏳")
+        hits = sum(g.get("result") == "won" for g in c["legs"])
+        decided = sum(g.get("result") in ("won", "lost") for g in c["legs"])
+        head = f"{tag} · {len(c['legs'])}-pick card · {hits}/{decided} hit · posted {when:%a} {when.strftime('%I:%M %p').lstrip('0')}"
+        legs = [f"{MARK[g.get('result')]} {g['label']}" + (f" — **{g['actual']}**" if g.get("actual") else "") for g in c["legs"]]
+        blocks.append(head + "\n" + "\n".join(legs))
+    desc = "\n\n".join(blocks)
+    if len(desc) > 3500:
+        desc = desc[:3500] + "\n…"
+    won = today["won"] >= today["lost"] and today["n"]
+    color = B.GREY if not today["n"] else B.GREEN if won else B.RED
+    return {"author": {"name": f"{icon}  {name.upper().replace('-', ' ')}"},
+            "title": ("Updated results" if update else "Results") + f" · {wl(today)} today",
+            "color": color, "description": desc,
+            "fields": [{"name": "All-time", "value": f"**{wl(alltime)}**", "inline": True},
+                       {"name": "Win rate", "value": f"**{pct(alltime['pct'])}**", "inline": True},
+                       {"name": "Streak", "value": f"**{alltime['streak']}**", "inline": True},
+                       {"name": "Picks hit", "value": f"{alltime['lw']}-{alltime['ll']}", "inline": True}],
+            "footer": {"text": "Every card counts as one play: all picks hit = win, one miss = loss · pushes and DNPs don't break it"}}
 
 
 def report(update=False):
-    """Results for every card that has finished since the last post, one embed per channel, plus the leaderboard."""
-    with _lock:
-        cards = sorted(STATE["cards"].values(), key=lambda c: c["at"])
-        new = [c for c in cards if not c["reported"] and settled(c)]
-        waiting = [c for c in cards if not settled(c)]
-        images = {ch: len(v) for ch, v in STATE["images"].items() if v}
-    by_ch = {}
+    """[(content, embed)] to post: one message per channel with newly finished cards, then the leaderboard."""
+    cards = cards_of()
+    new = [c for c in cards if not c["reported"] and settled(c)]
+    if not new:
+        return []
+    out = []
+    d = now_et() - dt.timedelta(hours=9)
+    by_new = {}
     for c in new:
-        by_ch.setdefault(c["ch"], []).append(c)
-    embeds = []
-    for ch, cs in by_ch.items():
-        name = STATE["channels"].get(ch, ch)
-        t = tally(cs)
-        allc = [c for c in cards if c["ch"] == ch and settled(c)]
-        at = tally(allc)
-        lines = []
-        for c in cs:
-            if len(cs) > 1 or c["parlay"]:
-                when = B.parse_date(c["at"]).astimezone(ET)
-                lines.append(f"**{'Parlay' if c['parlay'] else 'Card'}** · {when:%a} {when.strftime('%I:%M %p').lstrip('0')}" + (f" {MARK[c['result']]}" if c["parlay"] else ""))
-            for g in c["legs"]:
-                if g.get("dup") and not c["parlay"]:
-                    continue
-                lines.append(f"{MARK[g.get('result')]} {g['label']}" + (f" · **{g['actual']}**" if g.get("actual") else ""))
-        n = t["won"] + t["lost"]
-        desc = "\n".join(lines)
-        embeds.append({"title": f"#{name} · {rec_txt(t)}" + (f" · parlays {t['pw']}-{t['pl']}" if t["pw"] + t["pl"] else ""),
-                       "color": B.GREY if not n else B.GREEN if t["won"] >= t["lost"] else B.RED,
-                       "description": desc[:3900] + ("\n…" if len(desc) > 3900 else ""),
-                       "footer": {"text": f"All-time: {rec_txt(at)}" + (f" · parlays {at['pw']}-{at['pl']}" if at["pw"] + at["pl"] else "")}})
-    if not embeds:
-        return None, []
-    allby = {}
+        by_new.setdefault(c["ch"], []).append(c)
+    for ch in STATE["channels"]:
+        if ch in by_new:
+            out.append(("", channel_report(ch, by_new[ch], [c for c in cards if c["ch"] == ch and settled(c)], update)))
+    by_all = {}
     for c in cards:
         if settled(c):
-            allby.setdefault(c["ch"], []).append(c)
-    lb = leaderboard(allby)
-    notes = []
-    if waiting:
-        notes.append(f"⏳ {sum(1 for c in waiting for g in c['legs'] if not g.get('result') and not g.get('dup'))} pick(s) still waiting on a final — checked again at 8 AM and next night")
-    for ch, n in images.items():
-        notes.append(f"🖼️ #{STATE['channels'].get(ch, ch)}: {n} image post(s) can't be read automatically")
-    embeds.append({"title": "🏆 All-time leaderboard", "color": B.BLUE, "description": (lb or "–") + ("\n\n" + "\n".join(notes) if notes else ""),
-                   "footer": {"text": "Legs W-L · a pick repeated in a later card counts once · graded from ESPN box scores"}})
-    d = now_et() - dt.timedelta(hours=9)
-    return f"📊 {'Updated results' if update else 'Results'} — {d:%a %b} {d.day}", embeds
+            by_all.setdefault(c["ch"], []).append(c)
+    waiting = sum(1 for c in cards if not settled(c))
+    lb = board_block(by_all)
+    out.append(("", {"title": "🏆 LEADERBOARD · ALL-TIME", "color": B.BLUE, "description": lb or "–",
+                     "footer": {"text": "Cards W-L · graded from ESPN box scores and results" + (f" · {waiting} card(s) still waiting on a final" if waiting else "")}}))
+    head = f"📊 **{'UPDATED RESULTS' if update else 'NIGHTLY RESULTS'} — {d:%A, %B} {d.day}**"
+    out[0] = (head, out[0][1])
+    return out
 
 
-def post(dest, title, embeds):
-    if not dest or not embeds:
+def post(dest, msgs):
+    if not dest:
         return
-    for i in range(0, len(embeds), 10):
-        api("POST", f"/channels/{dest}/messages", {"content": title if i == 0 else "", "embeds": embeds[i:i + 10], "allowed_mentions": {"parse": []}})
+    for content, embed in msgs:
+        api("POST", f"/channels/{dest}/messages", {"content": content, "embeds": [embed], "allowed_mentions": {"parse": []}})
 
 
 def run(final=False, dry=False):
-    """Read new cards, grade everything pending, post what finished. Returns (title, embeds)."""
+    """Read new cards, grade everything pending, post what finished. Returns the messages."""
     RUN["id"] = str(int(time.time()) // 300)
     collect()
     grade_all(final)
-    title, embeds = report(update=final)
-    if embeds and not dry:
-        post(STATE.get("dest"), title, embeds)
+    msgs = report(update=final)
+    if msgs and not dry:
+        post(STATE.get("dest"), msgs)
         with _lock:
             for c in STATE["cards"].values():
                 if settled(c):
                     c["reported"] = True
-            STATE["images"] = {}
     with _lock:   # keep four months
         cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=120)).isoformat()
         for k in [k for k, c in STATE["cards"].items() if c["at"] < cut]:
             STATE["cards"].pop(k, None)
     if not dry:
         save()
-    return title, embeds
+    return msgs
 
 
 # ---------- schedule ----------
@@ -649,37 +673,33 @@ def setup(**deps):
         threading.Thread(target=_loop, daemon=True, name="pick-tracker").start()
 
 
-# ---------- /leaderboard ----------
+# ---------- commands ----------
 def cmd_leaderboard(o):
     days = int(o.get("days") or 0)
     cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat() if days else ""
     by = {}
-    with _lock:
-        for c in STATE["cards"].values():
-            if c["at"] >= cut and settled(c):
-                by.setdefault(c["ch"], []).append(c)
-    lb = leaderboard(by)
+    for c in cards_of(lambda c: c["at"] >= cut and settled(c)):
+        by.setdefault(c["ch"], []).append(c)
+    lb = board_block(by)
     if not lb:
-        return {"embeds": [{"title": "Pick channel leaderboard", "color": B.BLUE,
-                            "description": "Nothing graded yet. Picks are graded every night at 12:30 AM ET and checked again at 8 AM."}]}
-    return {"embeds": [{"title": "🏆 Pick channel leaderboard", "color": B.BLUE, "description": lb,
-                        "footer": {"text": (f"Last {days} days" if days else "All time") + " · legs W-L, a repeated pick counts once · graded from ESPN"}}]}
+        return {"embeds": [{"title": "🏆 Leaderboard", "color": B.BLUE,
+                            "description": "Nothing graded yet. Cards are graded every night at 12:30 AM ET and checked again at 8 AM."}]}
+    return {"embeds": [{"title": "🏆 LEADERBOARD · " + (f"LAST {days} DAYS" if days else "ALL-TIME"), "color": B.BLUE, "description": lb,
+                        "footer": {"text": "Each card is one play: all picks hit = win · graded from ESPN"}}]}
 
 
 def cmd_check(o):
     """/checkpicks: the nightly run, on demand."""
-    title, embeds = run(final=False)
-    with _lock:
-        cards = list(STATE["cards"].values())
-        chans = dict(STATE["channels"])
-    waiting = sum(1 for c in cards for g in c["legs"] if not g.get("result") and not g.get("dup"))
+    msgs = run(final=False)
+    cards = cards_of()
     per = {}
     for c in cards:
         per[c["ch"]] = per.get(c["ch"], 0) + 1
-    lines = [f"#{n}: {per.get(cid, 0)} card(s) found" for cid, n in chans.items()]
+    waiting = sum(1 for c in cards if not settled(c))
+    lines = [f"{STATE.get('icons', {}).get(cid, '🎯')} #{n}: {per.get(cid, 0)} card(s)" for cid, n in STATE["channels"].items()]
     return {"embeds": [{"title": "Pick check done", "color": B.BLUE, "description": "\n".join(lines) or "No pick channels found.",
-                        "footer": {"text": ("Posted finished results in #verified-records" if embeds else "Nothing new finished yet")
-                                   + (f" · {waiting} pick(s) still waiting on a final" if waiting else "")}}]}
+                        "footer": {"text": ("Posted finished results in #verified-records" if msgs else "Nothing new finished yet")
+                                   + (f" · {waiting} card(s) still waiting on a final" if waiting else "")}}]}
 
 
 if __name__ == "__main__":
@@ -688,13 +708,11 @@ if __name__ == "__main__":
         RUN["id"] = str(int(time.time()))
         collect(hours)
         grade_all(final=False)
-        for c in sorted(STATE["cards"].values(), key=lambda c: c["at"]):
-            print(f"\n#{STATE['channels'].get(c['ch'])} {c['at'][:16]} {'PARLAY' if c['parlay'] else 'card'} -> {c['result']}")
+        for c in cards_of():
+            print(f"\n#{STATE['channels'].get(c['ch'])} {c['at'][:16]} -> {c['result']}")
             for g in c["legs"]:
-                print(f"   {MARK[g.get('result')]} {g['label']}{' (repeat)' if g.get('dup') else ''} {g.get('actual') or ''}")
-        title, embeds = report()
-        print("\n" + (title or "nothing finished yet"))
-        for e in embeds:
-            print("\n## " + e["title"] + "\n" + (e.get("description") or "") + "\n" + (e.get("footer") or {}).get("text", ""))
+                print(f"   {MARK[g.get('result')]} {g['label']} {g.get('actual') or ''}")
+        for content, e in report():
+            print("\n" + content + "\n## " + (e.get("author") or {}).get("name", "") + " " + e["title"] + "\n" + (e.get("description") or ""))
     else:
         print(__doc__)

@@ -946,7 +946,7 @@ def cmd_help(o):
         "`/predict` win chances from the betting market. Add a team for every book's price and the value bets.",
         "`/lineup` predicted or confirmed soccer lineups, MLB batting orders and probable pitchers, injury reports.",
         "`/record` Floodlight's own prediction record: W-L, hit rate, streak and the latest results.",
-        "`/leaderboard` each pick channel's graded record. Results post in #verified-records at 12:30 AM ET, re-checked at 8 AM.",
+        "`/leaderboard` each pick channel's record, every card counted as one play. Results post in #verified-records at 12:30 AM ET, re-checked at 8 AM.",
         "", "Hit rates are past results, not guarantees. Bet responsibly."])}]}
 
 
@@ -1185,7 +1185,7 @@ def command_defs():
         {"name": "record", "description": "Floodlight's prediction record: W-L, hit rate, streak and latest results", "options": [
             {"type": 3, "name": "sport", "description": "Only this sport", "choices": [{"name": "Soccer", "value": "soccer"}, {"name": "American football", "value": "football"}]},
             {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
-        {"name": "leaderboard", "description": "Each pick channel's graded W-L record", "options": [
+        {"name": "leaderboard", "description": "Each pick channel's W-L record (every card counts as one play)", "options": [
             {"type": 4, "name": "days", "description": "Only the last N days", "min_value": 1, "max_value": 365}]},
         {"name": "checkpicks", "description": "Admins: grade the pick channels now and post finished results", "default_member_permissions": "8"},
         {"name": "help", "description": "What the Floodlight bot can do"},
