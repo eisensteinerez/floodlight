@@ -1519,11 +1519,14 @@ async function loadPickedEvent(id){
   }
   return null;
 }
+let selBusy = null;
 async function select(id){
+  if (selBusy === id) return;   // a second click while this match is still loading does nothing
   if (!S.events.get(id)) {
-    const m = await loadPickedEvent(id);
+    selBusy = id; $('sheet').classList.add('open'); $('sheet').innerHTML = `<div class="sheet-body">${flSkeleton()}</div>`;
+    const m = await loadPickedEvent(id).finally(() => { selBusy = null });
     if (m === 'fm') return;
-    if (!m) { $('announce').textContent = "Couldn't load that match."; return }
+    if (!m) { $('announce').textContent = "Couldn't load that match."; $('sheet').innerHTML = `<div class="sheet-body">${flErrorState("Couldn't load that match", 'It may have been removed, or the connection dropped.', 'closesheet')}</div>`; return }
   }
   S.sel = id; S.summary = null; S.stack = [{type:'match', id}]; S.tblSeason = null;
   document.querySelectorAll('.m.sel,.ftr.sel').forEach(x=>x.classList.remove('sel'));
@@ -1637,7 +1640,7 @@ function pane(e){
   if (S.tab === 'odds') return booksBlock(e) + `<div class="grp-name bk-kx">Kalshi live markets</div>` + oddsPane(e);
   const s = S.summary;
   if (!s) return `<div class="skel" style="height:260px"></div>`;
-  if (s.error) return `<div class="note">Couldn't load this match. Check your connection; it retries on the next refresh.</div>`;
+  if (s.error) return flErrorState("Couldn't load this match", 'Check your connection, or try again now.', 'retrysum');
   switch (S.tab) {
     case 'pitch': return e.state === 'pre' ? matchFMBlock(e) + matchNewsBlock(e) : pitchPane(e, s);
     case 'stats': return statsPane(e, s);
@@ -2139,7 +2142,17 @@ async function loadListOdds(){
       const o = S.odds.get(e.id) || {}; o.ml = ml; S.odds.set(e.id, o); changed = true } }
   if (changed) render();
 }
-async function loadMatchOdds(e){
+// One request per match at a time, and a match Kalshi has no market for is asked again only after a pause.
+// (Without this, a pane that rendered "no market yet" asked again, re-rendered, asked again... every 70ms: the game-click freeze.)
+const oddsInFlight = new Map(), oddsTried = new Map();
+function oddsDue(e, wait = 45000){ return !oddsInFlight.has(e.id) && Date.now() - (oddsTried.get(e.id) || 0) > wait }
+function loadMatchOdds(e){
+  if (oddsInFlight.has(e.id)) return oddsInFlight.get(e.id);
+  oddsTried.set(e.id, Date.now());
+  const p = loadMatchOdds_(e).finally(() => oddsInFlight.delete(e.id));
+  oddsInFlight.set(e.id, p); return p;
+}
+async function loadMatchOdds_(e){
   const pre = KX[e.slug]; if (!pre) return { none: true };
   const [g, sp, to] = await Promise.allSettled(['GAME','SPREAD','TOTAL'].map(k => kxSeries(pre, k)));
   if ([g, sp, to].every(r => r.status === 'rejected')) return { offline: true };
@@ -2164,7 +2177,8 @@ function flashKey(k, p){ const was = lastSeenOdds.get(k); lastSeenOdds.set(k, p)
 function oddsPane(e){
   const o = S.odds.get(e.id);
   if (!KX[e.slug]) return `<div class="note">Kalshi doesn't list markets for ${esc(e.league.name)}.</div>`;
-  if (!o || !o.at) { loadMatchOdds(e).then(() => { if (S.tab === 'odds' && S.sel === e.id) renderSheet() }); return `<div class="skel" style="height:240px"></div>` }
+  if (!o || !o.at) { if (!oddsDue(e)) return `<div class="note">Kalshi isn't answering right now. It tries again on the next refresh.</div>`;
+    loadMatchOdds(e).then(() => { if (S.tab === 'odds' && S.sel === e.id) renderSheet() }); return `<div class="skel" style="height:240px"></div>` }
   if (o.offline) return serverNote('odds');
   if (!o.found) return `<div class="note">${e.state === 'post' ? 'Markets for this match have closed.' : 'No Kalshi market found for this match yet.'}</div>`;
   // every price is a button: tap to drop it on the slip, which works out the chance, the fair price and what a stake returns
@@ -2709,6 +2723,8 @@ function act(a, el, ev){
   if (a === 'pmopen') return openCardFromProfile(v, el.dataset.to);
   if (/^(pf|unfav|favL$|add[TP]$|logout$|lgUp$|lgDown$)/.test(a)) return profileAct(a, el);
   if (a === 'back') return goBack();
+  if (a === 'closesheet') return closeSheet();
+  if (a === 'retrysum') { S.summary = null; renderSheet(); return loadSummary() }
   if (a === 'dprev' || a === 'dnext') { leaveMarket(); const d = new Date(S.date); d.setDate(d.getDate() + (a === 'dnext' ? 1 : -1)); return goToDate(d) }
   if (a === 'tc') return openMarket();
   if (a === 'picks') { if (S.page === 'transfers') leaveMarket(); return openPicks() }
@@ -4459,10 +4475,11 @@ function standingsFor(slug){
   }
   return null;
 }
-let rrT; function rerenderPredictions(){ clearTimeout(rrT); rrT = setTimeout(() => {
+// Safety net: however many loads finish, the open match redraws at most a few times a second.
+let rrT, rrLast = 0; function rerenderPredictions(){ clearTimeout(rrT); rrT = setTimeout(() => { rrLast = Date.now();
   if (S.page === 'picks') renderPicks();
   if (S.sel && (S.tab === 'insight' || S.tab === 'centre') && S.stack[S.stack.length-1]?.type === 'match') renderSheet();
-}, 60) }
+}, Math.max(60, 400 - (Date.now() - rrLast))) }
 const formPts = f => { const r = (f || '').slice(-5).split('').filter(c => 'WDL'.includes(c)); return r.length ? r.reduce((a, c) => a + (c === 'W' ? 3 : c === 'D' ? 1 : 0), 0) / (r.length * 3) : null };
 const pois = (k, l) => { let p = Math.exp(-l); for (let i = 1; i <= k; i++) p *= l / i; return p };
 function predict(e){
@@ -4650,10 +4667,10 @@ function insightPane(e, lite){
   }
   if (e.state === 'pre' && !e.tnLoading && e.news) {
     const due = stageDue(e), snaps = snapsOf(e);
-    if (due && !snaps.some(x => x.stage === due) && !e.cpLoading) { e.cpLoading = true; ensureTeamNews(e, true).then(() => snapshot(e, due)).finally(() => { e.cpLoading = false; rerenderPredictions() }) }
+    if (due && !snaps.some(x => x.stage === due) && !e.cpLoading && e.cpTried !== due) { e.cpLoading = true; e.cpTried = due; ensureTeamNews(e, true).then(() => snapshot(e, due)).finally(() => { e.cpLoading = false; rerenderPredictions() }) }
     else if (!due && !snaps.length) snapshot(e, 'early');
   }
-  if (KX[e.slug] && !S.odds.get(e.id)?.ml) loadMatchOdds(e).then(rerenderPredictions).catch(() => {});
+  if (KX[e.slug] && !S.odds.get(e.id)?.ml && oddsDue(e)) loadMatchOdds(e).then(rerenderPredictions).catch(() => {});
   let P = predict(e);
   if (!P.ready) return `<div class="skel" style="height:280px"></div>`;
   P = fcApplySoccer(e, P);

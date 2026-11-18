@@ -763,3 +763,15 @@ button.bx-hero:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .shell.fl-enter #list>*:nth-child(n+6),.shell.fl-enter #list .m:nth-child(n+6){animation-delay:200ms}
 /* press feedback everywhere a card or control is tapped */
 .m:active,.ftr:active,.fsn:active,.chip:active,.qf:active{transform:scale(.985)}
+
+/* ---------- loading skeleton and error state (cards.js: flSkeleton, flErrorState) ---------- */
+.fl-skel{padding:22px}
+.fl-skel i{display:block;border-radius:var(--r-card);background:linear-gradient(100deg,var(--surface-2) 30%,color-mix(in oklab,var(--surface-2) 60%,var(--fg) 8%) 50%,var(--surface-2) 70%) 0 0/300% 100%;animation:flShim 1.3s linear infinite}
+.fl-skel-hero{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:18px;align-items:center;margin-bottom:22px}
+.fl-skel-hero .sk-c{width:72px;height:72px;border-radius:50%;justify-self:center}.fl-skel-hero .sk-s{height:64px}
+.fl-skel-tabs{display:flex;gap:8px;margin-bottom:18px}.fl-skel-tabs i{height:34px;flex:1}
+.fl-skel-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fl-skel-grid i{height:150px}
+@keyframes flShim{to{background-position:-300% 0}}
+.fl-err{display:grid;justify-items:center;gap:8px;text-align:center;padding:48px 20px;color:var(--muted)}
+.fl-err svg{color:var(--live,#ff4d4d);opacity:.85}.fl-err b{font:700 22px/1.1 var(--f-display);color:var(--fg);letter-spacing:.01em}
+.fl-err p{margin:0;max-width:34ch;font-size:14px}.fl-err-btn{margin-top:10px}

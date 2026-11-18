@@ -64,3 +64,14 @@
     }
   });
 })();
+
+/* Loading and error states shared by every sport: a shimmer that has the shape of a match page while it loads,
+   and a friendly message with a button instead of a blank or frozen panel. */
+window.flSkeleton = () => `<div class="fl-skel" aria-busy="true" aria-label="Loading">
+  <div class="fl-skel-hero"><i class="sk-c"></i><i class="sk-s"></i><i class="sk-c"></i></div>
+  <div class="fl-skel-tabs">${'<i></i>'.repeat(5)}</div>
+  <div class="fl-skel-grid"><i></i><i></i><i></i><i></i></div></div>`;
+window.flErrorState = (title, text, act, label = 'Try again', attr = 'data-act') => `<div class="fl-err" role="alert">
+  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+  <b>${String(title).replace(/</g, '&lt;')}</b><p>${String(text).replace(/</g, '&lt;')}</p>
+  ${act ? `<button class="btn fl-err-btn" ${attr}="${act}">${act === 'closesheet' ? 'Close' : label}</button>` : ''}</div>`;
