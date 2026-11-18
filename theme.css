@@ -4,10 +4,10 @@
    over the styles each sport file adds.
    Type: Big Shoulders Display for headlines and scores, Geist for reading, Geist Mono for numbers and small labels. */
 :root{
-  --bg:#F3F1FB; --surface:#FFFFFF; --surface-2:#EFEBFA; --line:#DCD5F0; --fg:#0F0B1E; --muted:#635B80;
-  --accent:#5B2BFF; --accent-2:#B02BFF; --accent-ink:#FFFFFF; --live:#E0204F; --win:#0F8F5E; --draw:#857E9E; --loss:#D43F5C;
+  --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#ECEEF2; --line:#D9DDE5; --fg:#0D1117; --muted:#5A6373;
+  --accent:#C2410C; --accent-2:#EA580C; --accent-ink:#FFFFFF; --live:#E0204F; --win:#0F8F5E; --draw:#7D8594; --loss:#D43F5C;
   --pitch:#2F7A4C; --pitch-2:#2B7146; --chalk:rgba(255,255,255,.85);
-  --beam:rgba(110,60,255,.13); --beam-2:rgba(0,170,230,.10); --dots:rgba(15,11,30,.07); --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.72);
+  --beam:rgba(255,176,60,.12); --beam-2:rgba(70,130,220,.06); --dots:rgba(13,17,23,.06); --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.72);
   --shadow:0 1px 1px rgba(12,14,19,.04),0 8px 28px -8px rgba(12,14,19,.12);
   --shadow-lg:0 2px 4px rgba(12,14,19,.05),0 24px 60px -18px rgba(12,14,19,.25);
   --glow:0 0 0 1px color-mix(in oklab,var(--accent) 55%,transparent),0 8px 30px -8px color-mix(in oklab,var(--accent) 45%,transparent);
@@ -19,18 +19,18 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#06050B; --surface:#100E1A; --surface-2:#191628; --line:#2B2642; --fg:#F6F4FF; --muted:#9891B6;
-  --accent:#C6FF2E; --accent-2:#4DFFB4; --accent-ink:#0B1400; --live:#FF2E63; --win:#35E8A2; --draw:#8780A6; --loss:#FF5C7C;
+  --bg:#07090C; --surface:#0E1116; --surface-2:#161A21; --line:#252B36; --fg:#F3F4F6; --muted:#8E97A8;
+  --accent:#FFC53D; --accent-2:#FF9D2E; --accent-ink:#1A1000; --live:#FF3B52; --win:#35D996; --draw:#7F8898; --loss:#FF6B7A;
   --pitch:#0F4A33; --pitch-2:#0D422D; --chalk:rgba(255,255,255,.7);
-  --beam:rgba(150,90,255,.20); --beam-2:rgba(0,214,255,.13); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(13,11,22,.66);
+  --beam:rgba(255,214,140,.13); --beam-2:rgba(190,215,255,.09); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(9,11,15,.66);
   --shadow:0 1px 0 rgba(0,0,0,.4),0 12px 34px -12px rgba(0,0,0,.6);
   --shadow-lg:0 2px 0 rgba(0,0,0,.4),0 30px 80px -20px rgba(0,0,0,.8);
   color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#06050B; --surface:#100E1A; --surface-2:#191628; --line:#2B2642; --fg:#F6F4FF; --muted:#9891B6;
-  --accent:#C6FF2E; --accent-2:#4DFFB4; --accent-ink:#0B1400; --live:#FF2E63; --win:#35E8A2; --draw:#8780A6; --loss:#FF5C7C;
+  --bg:#07090C; --surface:#0E1116; --surface-2:#161A21; --line:#252B36; --fg:#F3F4F6; --muted:#8E97A8;
+  --accent:#FFC53D; --accent-2:#FF9D2E; --accent-ink:#1A1000; --live:#FF3B52; --win:#35D996; --draw:#7F8898; --loss:#FF6B7A;
   --pitch:#0F4A33; --pitch-2:#0D422D; --chalk:rgba(255,255,255,.7);
-  --beam:rgba(150,90,255,.20); --beam-2:rgba(0,214,255,.13); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(13,11,22,.66);
+  --beam:rgba(255,214,140,.13); --beam-2:rgba(190,215,255,.09); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(9,11,15,.66);
   --shadow:0 1px 0 rgba(0,0,0,.4),0 12px 34px -12px rgba(0,0,0,.6);
   --shadow-lg:0 2px 0 rgba(0,0,0,.4),0 30px 80px -20px rgba(0,0,0,.8);
   color-scheme:dark}
@@ -306,16 +306,16 @@ html.rs-dragging .rs-tt{display:none}
    Showpieces: the marquee match, the player card, the dials. These are always lit like a night match,
    in light mode too.
    ===================================================================================================== */
-.spot,.rs-hero{--fg:#F4F6F9;--muted:#A9B2C3;--line:rgba(255,255,255,.13);--surface:#0A0D13;--surface-2:#171D28;--win:#2BDB8C;--loss:#FF6272;--draw:#8792A6;--accent:#C6FF2E;--live:#FF3D57;color:var(--fg)}
+.spot,.rs-hero{--fg:#F4F6F9;--muted:#A9B2C3;--line:rgba(255,255,255,.13);--surface:#0A0D13;--surface-2:#171D28;--win:#2BDB8C;--loss:#FF6272;--draw:#8792A6;--accent:#FFC53D;--live:#FF3D57;color:var(--fg)}
 
 /* ---------- the marquee ---------- */
 .spot{position:relative;isolation:isolate;display:block;width:100%;overflow:hidden;text-align:left;border-radius:28px;padding:20px 26px 18px;margin:0 0 26px;
-  border:1px solid color-mix(in oklab,#fff 14%,transparent);background:#06050B;
+  border:1px solid color-mix(in oklab,#fff 14%,transparent);background:#07090C;
   box-shadow:0 40px 90px -40px color-mix(in oklab,var(--hc) 70%,transparent),0 40px 90px -50px color-mix(in oklab,var(--ac) 70%,transparent),var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.12);
   transition:transform .35s var(--ease),box-shadow .35s}
 .spot:hover{transform:translateY(-3px) scale(1.004)}
 .spot.sel{border-color:var(--accent)}
-.spot-bg{position:absolute;inset:0;z-index:-3;background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 62%,#06050B) 0%,#06050B 44%,#06050B 56%,color-mix(in oklab,var(--ac) 62%,#06050B) 100%)}
+.spot-bg{position:absolute;inset:0;z-index:-3;background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 62%,#07090C) 0%,#07090C 44%,#07090C 56%,color-mix(in oklab,var(--ac) 62%,#07090C) 100%)}
 .spot-bg img{position:absolute;top:50%;width:115px;height:115px;margin-top:-57px;object-fit:contain;transform:scale(4);filter:blur(18px) saturate(2.4);opacity:.8}
 .spot-bg img.h{left:22px}.spot-bg img.a{right:22px}
 .spot::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
@@ -373,7 +373,7 @@ html.rs-dragging .rs-tt{display:none}
 
 /* ---------- the player card ---------- */
 .rs-hero{position:relative;isolation:isolate;overflow:hidden;display:flex;flex-wrap:wrap;align-items:center;gap:18px 28px;border-radius:28px;margin:18px 0 14px;padding:24px 26px;
-  border:1px solid rgba(255,255,255,.14);background:#06050B;box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.12)}
+  border:1px solid rgba(255,255,255,.14);background:#07090C;box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.12)}
 .rs-hero-bg{position:absolute;inset:0;z-index:-3;background:radial-gradient(60% 120% at 0% 50%,color-mix(in oklab,var(--accent) 18%,transparent),transparent 70%)}
 .rs-hero-bg img{position:absolute;left:90px;top:50%;width:140px;height:140px;margin-top:-70px;object-fit:contain;transform:scale(4);filter:blur(21px) saturate(2.6);opacity:.85}
 .rs-hero::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
@@ -387,7 +387,7 @@ html.rs-dragging .rs-tt{display:none}
 .rs-face::before{content:"";position:absolute;inset:0;border-radius:inherit;background:conic-gradient(from 0deg,var(--accent),transparent 28%,rgba(255,255,255,.75) 50%,transparent 72%,var(--accent));animation:fl-spin 7s linear infinite}
 .rs-face::after{content:"";position:absolute;inset:-14px;border-radius:inherit;background:radial-gradient(circle,color-mix(in oklab,var(--accent) 38%,transparent),transparent 68%);z-index:-1}
 @keyframes fl-spin{to{transform:rotate(1turn)}}
-.rs-hero .rs-ph .face{position:relative;width:100%;height:100%;border-radius:inherit;border:3px solid #06050B;background:radial-gradient(circle at 50% 25%,#2A3344,#11161F 75%);box-shadow:none}
+.rs-hero .rs-ph .face{position:relative;width:100%;height:100%;border-radius:inherit;border:3px solid #07090C;background:radial-gradient(circle at 50% 25%,#2A3344,#11161F 75%);box-shadow:none}
 .rs-hero.team .rs-face{border-radius:26px}.rs-hero.team .rs-ph .face{object-fit:contain;padding:12px}
 .rs-hero .rs-ph h3{font:900 66px/.84 var(--f-display);letter-spacing:.012em;text-shadow:0 4px 30px rgba(0,0,0,.5);text-wrap:balance}
 .rs-hero .rs-ph p{font-size:13.5px;margin-top:10px;color:rgba(255,255,255,.76)}
@@ -531,10 +531,10 @@ body.fl-pointer #flLight{opacity:1}
 .rs-meterbox svg{width:132px;height:auto;overflow:visible}
 .rs-meterbox path{fill:none;stroke-linecap:round}
 .rs-meterbox path.t{stroke:rgba(255,255,255,.12);stroke-width:9}
-.rs-meterbox path.v{stroke-width:9;filter:drop-shadow(0 0 8px rgba(198,255,46,.45))}
+.rs-meterbox path.v{stroke-width:9;filter:drop-shadow(0 0 8px rgba(255,197,61,.45))}
 .rs-meterbox path.k{stroke:rgba(255,255,255,.4);stroke-width:1.2}
 .rs-meterbox path.n{stroke:#fff;stroke-width:2.5}
-.rs-meterbox circle.h{fill:#fff;stroke:#06050B;stroke-width:2.5}
+.rs-meterbox circle.h{fill:#fff;stroke:#07090C;stroke-width:2.5}
 .rs-meterbox b{font:900 40px/.8 var(--f-display);margin-top:-30px;position:relative;text-shadow:0 2px 12px #000;padding-bottom:2px}
 .rs-meterbox>span{font:500 9px/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.62);margin-top:8px}
 .rs-meterbox small{font:600 11px/1.2 var(--f-body);color:rgba(255,255,255,.8)}
@@ -632,8 +632,8 @@ body.fl-pointer #flLight{opacity:1}
 .flg-lead{font-size:17.5px;line-height:1.6}
 .flg-sports span{font:500 10.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;border-radius:8px;padding:8px 11px;background:color-mix(in oklab,var(--surface) 70%,transparent)}
 .flg-demo{--fg:#F4F6F9;--muted:#A9B2C3;--line:rgba(255,255,255,.13);--surface-2:rgba(255,255,255,.07);--win:#2BDB8C;--loss:#FF6272;color:var(--fg);position:relative;isolation:isolate;overflow:hidden;border-radius:24px;padding:20px 22px;max-width:560px;border:1px solid rgba(255,255,255,.14);
-  background:radial-gradient(90% 130% at 0% 0%,#5B2A91,transparent 60%),radial-gradient(70% 110% at 100% 100%,rgba(253,185,39,.28),transparent 60%),#090B10;
-  box-shadow:0 50px 100px -40px rgba(91,42,145,.7),var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.14);transform:perspective(1400px) rotateY(-5deg) rotateX(2.5deg);transform-origin:0 50%;transition:transform .6s var(--ease)}
+  background:radial-gradient(90% 130% at 0% 0%,#7A4A12,transparent 60%),radial-gradient(70% 110% at 100% 100%,rgba(253,185,39,.28),transparent 60%),#090B10;
+  box-shadow:0 50px 100px -40px rgba(0,0,0,.7),var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.14);transform:perspective(1400px) rotateY(-5deg) rotateX(2.5deg);transform-origin:0 50%;transition:transform .6s var(--ease)}
 .flg-demo:hover{transform:perspective(1400px) rotateY(0) rotateX(0)}
 .flg-demo::before{content:"";position:absolute;inset:0;z-index:-1;background:conic-gradient(from 130deg at 10% -30%,transparent 0deg,rgba(255,255,255,.16) 12deg,transparent 26deg),radial-gradient(circle at 1px 1px,rgba(255,255,255,.07) 1px,transparent 1.5px) 0 0/22px 22px}
 .flg-demo-top b{font:800 26px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
@@ -1063,7 +1063,7 @@ body.fl-pointer #flLight{opacity:1}
 /* ── match header: a broadcast scoreboard, always lit like a night game ── */
 .hero.mh{color:#fff;isolation:isolate;overflow:hidden;padding:16px 22px 20px;background:
   radial-gradient(95% 150% at 0% 10%,color-mix(in oklab,var(--hc) 82%,#000) 0%,transparent 60%),
-  radial-gradient(95% 150% at 100% 10%,color-mix(in oklab,var(--ac) 82%,#000) 0%,transparent 60%),#06050B}
+  radial-gradient(95% 150% at 100% 10%,color-mix(in oklab,var(--ac) 82%,#000) 0%,transparent 60%),#07090C}
 .hero.mh::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:
   conic-gradient(from 150deg at 12% -30%,transparent 0deg,rgba(255,255,255,.16) 12deg,transparent 26deg),
   conic-gradient(from 184deg at 88% -30%,transparent 0deg,rgba(255,255,255,.13) 12deg,transparent 26deg),
@@ -1384,7 +1384,7 @@ input[type=search],input[type=text],input[type=number]{transition:border-color .
 input[type=search]:focus,input[type=text]:focus,input[type=number]:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 20%,transparent)}
 @media (max-width:520px){.mt-h,.mt-r{grid-template-columns:24px minmax(0,1fr) 24px 34px 46px}.mt-h span:nth-child(n+5):nth-child(-n+7),.mt-r > span:nth-child(n+5):nth-child(-n+7){display:none}.mt-t em{display:none}}
 /* league header */
-.hero.solo.h-league{isolation:isolate;overflow:hidden;background:radial-gradient(110% 160% at 0 0,color-mix(in oklab,var(--accent) 55%,#000),transparent 62%),radial-gradient(90% 140% at 100% 0,color-mix(in oklab,var(--accent-2) 30%,#000),transparent 60%),#06050B;color:#fff}
+.hero.solo.h-league{isolation:isolate;overflow:hidden;background:radial-gradient(110% 160% at 0 0,color-mix(in oklab,var(--accent) 55%,#000),transparent 62%),radial-gradient(90% 140% at 100% 0,color-mix(in oklab,var(--accent-2) 30%,#000),transparent 60%),#07090C;color:#fff}
 .hero.solo.h-league::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:conic-gradient(from 150deg at 10% -30%,transparent 0deg,rgba(255,255,255,.18) 12deg,transparent 26deg),linear-gradient(180deg,transparent 50%,rgba(0,0,0,.45))}
 .hero.solo.h-league h3{color:#fff}
 
@@ -1557,7 +1557,7 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 
 /* match header: hazard stripes and a hard diagonal split */
 .hero.mh{background:
-  linear-gradient(115deg,color-mix(in oklab,var(--hc) 88%,#000) 0%,color-mix(in oklab,var(--hc) 40%,#06050B) 38%,#06050B 49.6%,#06050B 50.4%,color-mix(in oklab,var(--ac) 40%,#06050B) 62%,color-mix(in oklab,var(--ac) 88%,#000) 100%)}
+  linear-gradient(115deg,color-mix(in oklab,var(--hc) 88%,#000) 0%,color-mix(in oklab,var(--hc) 40%,#07090C) 38%,#07090C 49.6%,#07090C 50.4%,color-mix(in oklab,var(--ac) 40%,#07090C) 62%,color-mix(in oklab,var(--ac) 88%,#000) 100%)}
 .hero.mh::before{background:
   repeating-linear-gradient(115deg,transparent 0 26px,rgba(255,255,255,.035) 26px 28px),
   linear-gradient(115deg,transparent 49.7%,var(--accent) 49.7% 50.3%,transparent 50.3%),
@@ -1601,7 +1601,7 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
   border:0;border-radius:0;clip-path:var(--cut);overflow:hidden;
   background:
     linear-gradient(90deg,rgba(0,0,0,0) 40%,rgba(6,5,11,.5)),
-    linear-gradient(174deg,color-mix(in oklab,var(--hc) 46%,#100E1A) 0 calc(50% + 18px),color-mix(in oklab,var(--ac) 46%,#100E1A) calc(50% + 19px) 100%);
+    linear-gradient(174deg,color-mix(in oklab,var(--hc) 46%,#0E1116) 0 calc(50% + 18px),color-mix(in oklab,var(--ac) 46%,#0E1116) calc(50% + 19px) 100%);
   box-shadow:none;transition:transform .25s var(--ease),filter .25s}
 .m::before{display:none}
 .m:hover{transform:translateY(-5px) scale(1.015);filter:brightness(1.12) saturate(1.15);box-shadow:none}
@@ -1646,7 +1646,7 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 .spot,.spot.mini{border-radius:0;clip-path:polygon(0 0,calc(100% - 34px) 0,100% 34px,100% 100%,34px 100%,0 calc(100% - 34px))}
 .spots > .spot{min-height:min(62vh,560px);padding:26px 40px 26px;display:flex;flex-direction:column}
 .spots > .spot .spot-main{margin:auto 0}
-.spots > .spot .spot-bg{background:linear-gradient(115deg,color-mix(in oklab,var(--hc) 92%,#000) 0%,color-mix(in oklab,var(--hc) 46%,#06050B) 36%,#06050B 49.7%,#06050B 50.3%,color-mix(in oklab,var(--ac) 46%,#06050B) 64%,color-mix(in oklab,var(--ac) 92%,#000) 100%)}
+.spots > .spot .spot-bg{background:linear-gradient(115deg,color-mix(in oklab,var(--hc) 92%,#000) 0%,color-mix(in oklab,var(--hc) 46%,#07090C) 36%,#07090C 49.7%,#07090C 50.3%,color-mix(in oklab,var(--ac) 46%,#07090C) 64%,color-mix(in oklab,var(--ac) 92%,#000) 100%)}
 .spots > .spot .spot-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 49.75%,var(--accent) 49.75% 50.25%,transparent 50.25%),repeating-linear-gradient(115deg,transparent 0 30px,rgba(255,255,255,.03) 30px 32px)}
 .spots > .spot .spot-bg img{width:min(46vh,420px);height:min(46vh,420px);margin-top:calc(min(46vh,420px) / -2);transform:rotate(-8deg);filter:saturate(1.2);opacity:.22}
 .spots > .spot .spot-bg img.h{left:-70px}.spots > .spot .spot-bg img.a{right:-70px;transform:rotate(8deg)}
@@ -1656,8 +1656,8 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 .spots > .spot .spot-t img{width:clamp(84px,9vw,140px);height:clamp(84px,9vw,140px)}
 /* tennis tiles: players and set scores */
 .m.tn-m{grid-template-columns:minmax(0,1fr);grid-template-areas:"st" "tms";
-  background:linear-gradient(174deg,color-mix(in oklab,var(--accent-2) 16%,#100E1A) 0 calc(50% + 10px),color-mix(in oklab,#7A4DFF 26%,#100E1A) calc(50% + 11px) 100%)}
-.m.tn-m:has(.st.live){background:linear-gradient(174deg,color-mix(in oklab,var(--live) 30%,#100E1A) 0 calc(50% + 10px),color-mix(in oklab,#7A4DFF 30%,#100E1A) calc(50% + 11px) 100%)}
+  background:linear-gradient(174deg,color-mix(in oklab,var(--accent-2) 16%,#0E1116) 0 calc(50% + 10px),color-mix(in oklab,#3B82C4 26%,#0E1116) calc(50% + 11px) 100%)}
+.m.tn-m:has(.st.live){background:linear-gradient(174deg,color-mix(in oklab,var(--live) 30%,#0E1116) 0 calc(50% + 10px),color-mix(in oklab,#3B82C4 30%,#0E1116) calc(50% + 11px) 100%)}
 .m.tn-m .tms{padding:0 16px 10px;gap:0}
 .m.tn-m .tn-row{grid-template-columns:36px minmax(0,1fr) auto;gap:11px;height:56px}
 .m.tn-m .tn-face,.m.tn-m .tn-pair{width:36px;height:36px}.m.tn-m .tn-pair img{width:24px;height:24px}
@@ -1685,17 +1685,565 @@ h1,h2,h3,h4,.livebar h2,.vd-pick,.mc-c > header h5,.pf-head h2{letter-spacing:-.
 .pulse,.empty-state,.tile,.ml,.rs-tile,.fx-card{border-radius:3px 22px 3px 22px}
 .m .tm .rec{white-space:nowrap}
 .m.tn-m .tm > span{color:#fff}.m .tn-sets .tn-g{color:rgba(255,255,255,.7)}.m .tn-sets .tn-g.w{color:#fff}
-:root:not([data-theme="dark"]) .m:has(.st.live) .sc span,:root:not([data-theme="dark"]) .m.tn-m .tn-sets .tn-s{color:#C6FF2E}
-:root:not([data-theme="dark"]) .m .oddrow span.fav{background:#C6FF2E;color:#0B1400}
-:root:not([data-theme="dark"]) .m .st .cd{color:#C6FF2E}
+:root:not([data-theme="dark"]) .m:has(.st.live) .sc span,:root:not([data-theme="dark"]) .m.tn-m .tn-sets .tn-s{color:#FFC53D}
+:root:not([data-theme="dark"]) .m .oddrow span.fav{background:#FFC53D;color:#1A1000}
+:root:not([data-theme="dark"]) .m .st .cd{color:#FFC53D}
 /* prediction tiles: the verdict is a strip along the foot */
 .cards:has(> .pred-card){grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
 .m.pred-card{grid-template-columns:minmax(0,1fr);grid-template-areas:"st" "tms" "side"}
 .m.pred-card .tms{padding:0 16px 12px}
 .m.pred-card .st .min{font:900 19px/1 var(--f-display);margin-right:8px}
 .m.pred-card .pc-chips span{background:rgba(0,0,0,.38);color:rgba(255,255,255,.75)}.m.pred-card .pc-chips b{color:#fff}
-.m.pred-card .pc-chips .edge-c{background:#C6FF2E;color:#0B1400}.m.pred-card .pc-chips .edge-c b{color:#0B1400}
-.m.pred-card .pc-side{grid-area:side;grid-column:auto;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:6px 12px;text-align:left;padding:12px 16px 14px;margin-top:auto;background:rgba(6,5,11,.72);border-top:2px solid #C6FF2E}
-.m.pred-card .pc-side b{font:900 22px/1 var(--f-display);color:#C6FF2E;order:-1;flex:1 1 100%}
+.m.pred-card .pc-chips .edge-c{background:#FFC53D;color:#1A1000}.m.pred-card .pc-chips .edge-c b{color:#1A1000}
+.m.pred-card .pc-side{grid-area:side;grid-column:auto;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:6px 12px;text-align:left;padding:12px 16px 14px;margin-top:auto;background:rgba(6,5,11,.72);border-top:2px solid #FFC53D}
+.m.pred-card .pc-side b{font:900 22px/1 var(--f-display);color:#FFC53D;order:-1;flex:1 1 100%}
 .m.pred-card .pc-side small{color:rgba(255,255,255,.7);font-size:11px}
 .m.pred-card .pc-side .conf{margin:0}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   IDENTITY 3 · "Lamplight": graphite night, one lamp-amber accent, team colour as the only rich colour.
+   The chrome goes quiet (no colour blobs, no glows, no two-colour fills) so the scoreboard tiles and the billboard carry the page.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{--pill:var(--accent);--glow:0 0 0 1px color-mix(in oklab,var(--accent) 60%,transparent)}
+#flAurora{display:none}
+/* page: no weave or grain, only two soft lamp beams from the top corners */
+body::after{background:
+  conic-gradient(from 116deg at -3% -12%,transparent 0deg,var(--beam) 14deg,transparent 30deg),
+  conic-gradient(from 214deg at 103% -12%,transparent 0deg,var(--beam-2) 14deg,transparent 30deg)}
+.rs::before{background:
+  conic-gradient(from 116deg at -3% -12%,transparent 0deg,var(--beam) 14deg,transparent 30deg),
+  conic-gradient(from 214deg at 103% -12%,transparent 0deg,var(--beam-2) 14deg,transparent 30deg)}
+#flLight{display:none}
+/* nothing glows: depth comes from surface steps and hairlines */
+.brand svg,.flg-brand svg,.rs-tile.hi .rs-ring svg,.rs-tile.lo .rs-ring svg,.st-ring circle.p,.rs-meterbox path.v,.ob circle.v,.pg svg .pg-a{filter:none}
+.dt.on{box-shadow:none!important}
+.vc.pick{box-shadow:0 0 0 1px var(--accent)}
+.search input:focus{box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 22%,transparent)}
+.flg-hero h1 em{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--accent);filter:none}
+@media (min-width:821px){.top{box-shadow:none}}
+.hero.mh::after{height:2px}
+/* the poster title keeps its offset block, a touch tighter */
+.livebar h2{text-shadow:.032em .032em 0 var(--accent)}
+/* numbers line up everywhere */
+.sc,.sc *,.tk .s,.score .big,.score .big *,.rs-tile b,.tile b,.ml b,.date strong,.m .st,.oddrow,.pulse b{font-variant-numeric:tabular-nums}
+body::after,.rs::before{-webkit-mask-image:linear-gradient(#000 20%,transparent 70%);mask-image:linear-gradient(#000 20%,transparent 70%)}
+.dt.today::after{box-shadow:none}
+@media (max-width:640px){.dt.today::after{top:4px;right:5px;width:4px;height:4px}}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   NEAT · the whole site set straight: upright type in sentence case, a 4px grid, square-cornered nothing, no slants,
+   no cut corners. Neutral cards with a team-colour edge; colour lives in the featured match and in live numbers.
+   ═══════════════════════════════════════════════════════════════════ */
+@font-face{font-family:"FL Neat";font-style:normal;font-weight:600;font-display:swap;
+  src:url(https://fonts.gstatic.com/s/geist/v5/gyByhwUxId8gMEwcGFWNOITd.woff2) format("woff2")}
+:root{--f-display:"FL Neat","Geist","Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;--f-body:"Geist","Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-variation-settings:normal;font-synthesis:none;--card-r:14px;--r-card:14px;--r-ctl:10px;--slant:none;--cut:none;
+  --hairline:color-mix(in oklab,var(--fg) 9%,transparent);
+  --f-num:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;--f-mono:var(--f-body)}
+*,*::before,*::after{text-transform:none!important;clip-path:none!important;font-style:normal!important}
+body{font:14px/1.5 var(--f-body);letter-spacing:0}
+h1,h2,h3,h4,h5{letter-spacing:-.01em}
+
+/* ---- top bar ---- */
+.brand{font:600 19px/1 var(--f-display);letter-spacing:-.01em}
+.brand small{font:500 12px/1 var(--f-body);letter-spacing:0;color:var(--muted)}
+.tk,.tk > *,.dt > *{transform:none}
+.tk{border-radius:8px}
+.ticker *{letter-spacing:0!important}
+
+/* ---- page title row ---- */
+#list > .livebar{margin:8px 0 16px;gap:12px;align-items:baseline}
+.livebar h2{font:600 32px/1.1 var(--f-display);letter-spacing:-.02em;text-shadow:none;padding:0}
+.livebar .count{font:500 13px/1 var(--f-body);letter-spacing:0;padding:0;color:var(--muted)}
+.livebar .count::before{display:none}
+
+/* ---- day picker: seven equal tiles ---- */
+.dt,.dt:hover,.dt.on{transform:none;border-radius:10px!important}
+.dt{border:1px solid var(--hairline);background:var(--surface)}
+.dt:hover{background:var(--surface-2)}
+.dt *{letter-spacing:0!important}
+
+/* ---- chosen controls: an off-white step, amber is kept for today and for live numbers ---- */
+.tab.on,.sport-sw.dock button.on,.rail .lg.on,.qf.on,.qf[aria-pressed="true"],.chip.on,.pv-nav button.on,.seg button.on,.vc-tag,.mc-go:hover,.nx-go:hover{
+  background:var(--fg)!important;color:var(--bg)!important;border-radius:8px!important;font-weight:500;padding-inline:14px}
+.dt.on,.pf-form .btn:not(.ghost){background:var(--accent)!important;color:var(--accent-ink)!important;border-radius:10px!important}
+.tab,.qf,.chip,.sport-sw.dock button,.seg button,.pv-nav button{border-radius:8px;font-weight:500;letter-spacing:0}
+.pill.live,.hero.mh .pill.live,.conf,.vd .conf{border-radius:6px;padding-inline:8px;font-weight:600;letter-spacing:0}
+
+/* ---- league headers ---- */
+.group{margin-bottom:32px}
+.group-h{gap:10px;padding:0 0 12px}
+.group-h img{width:24px;height:24px;padding:3px;border-radius:6px}
+.group-h strong{font:600 18px/1.2 var(--f-display);letter-spacing:-.01em}
+.group-h > span:not(.pill){font:400 13px/1 var(--f-body);letter-spacing:0;color:var(--muted)}
+.group-h::after{height:1px;background:var(--hairline);opacity:1}
+
+/* ---- match cards: neutral, two rows, a team-colour edge ---- */
+.cards,.shell.no-sheet .cards{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.m{min-height:0;border:1px solid var(--hairline);border-radius:12px;overflow:hidden;
+  background:linear-gradient(180deg,var(--hc) 0 50%,var(--ac) 50% 100%) 0 0/3px 100% no-repeat,var(--surface);transition:background-color .15s,border-color .15s}
+.m:hover{transform:none;filter:none;border-color:color-mix(in oklab,var(--fg) 22%,transparent);background-color:var(--surface-2)}
+.m.sel{box-shadow:inset 0 0 0 1px var(--fg)!important}
+.m .st,.m .st.live{height:32px;padding:0 14px 0 16px;background:none;font:500 12px/1 var(--f-body);letter-spacing:0;color:var(--muted);border-bottom:1px solid var(--hairline)}
+.m .st .ko{font:600 13px/1 var(--f-num);letter-spacing:0;color:var(--fg)}
+.m .st .cd{font:500 12px/1 var(--f-num);color:var(--muted)}
+.m .st.live,.m .st.live .lv{color:var(--live);font:600 12px/1 var(--f-body);letter-spacing:0}
+.m .st.live .min{font:600 13px/1 var(--f-num);color:var(--fg)}
+.m .st.live::before{width:6px;height:6px;animation:none;box-shadow:none}
+.m .tms{padding:6px 0 8px 16px}
+.m .tm,.m.fb .tm{gap:10px;height:36px}
+.m .tm img{width:22px;height:22px;filter:none}
+.m .tm > span{font:500 15px/1.2 var(--f-body);letter-spacing:0;color:var(--fg);text-shadow:none}
+.m .tm.lose > span{opacity:1;color:var(--muted)}
+.m .tm .rec{font:400 11px/1 var(--f-num);color:var(--muted)}
+.m .sc{grid-template-rows:36px 36px;padding:6px 16px 8px 8px}
+.m .sc span,.m:has(.st.live) .sc span{font:600 18px/1 var(--f-num);color:var(--fg);text-shadow:none}
+.m .sc span.lose{opacity:1;color:var(--muted)}
+.m:has(.st.live) .sc span{color:var(--accent)}
+.m .sc .tv{color:var(--muted)!important;font:400 11px/1.2 var(--f-body)!important}
+.m .oddrow span{background:var(--surface-2);color:var(--muted);border-radius:4px}
+.m .oddrow span.fav{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--fg)}
+:root:not([data-theme="dark"]) .m:has(.st.live) .sc span,:root:not([data-theme="dark"]) .m.tn-m .tn-sets .tn-s,:root:not([data-theme="dark"]) .m .st .cd{color:var(--accent)}
+:root:not([data-theme="dark"]) .m .st .cd{color:var(--muted)}
+:root:not([data-theme="dark"]) .m .oddrow span.fav{background:color-mix(in oklab,var(--accent) 14%,transparent);color:var(--fg)}
+.m.tn-m,.m.tn-m:has(.st.live){background:var(--surface)}
+.m.tn-m .tm > span,.m .tn-sets .tn-g.w{color:var(--fg)}.m .tn-sets .tn-g{color:var(--muted)}
+.m.tn-m .tm > span.tn-nm{font-size:15px}.m.tn-m .tn-sets .tn-s{font:600 18px/1 var(--f-num)}
+.m.tn-m .tn-row{height:40px}.m.tn-m .tn-round{color:var(--muted)}
+/* prediction cards */
+.m.pred-card .st .min{font:600 13px/1 var(--f-num)}
+.m.pred-card .pc-chips span{background:var(--surface-2);color:var(--muted)}.m.pred-card .pc-chips b{color:var(--fg)}
+.m.pred-card .pc-chips .edge-c{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--fg)}.m.pred-card .pc-chips .edge-c b{color:var(--fg)}
+.m.pred-card .pc-side{background:none;border-top:1px solid var(--hairline);padding:12px 16px}
+.m.pred-card .pc-side b{font:600 16px/1.2 var(--f-display);color:var(--fg)}
+.m.pred-card .pc-side small{color:var(--muted)}
+
+/* ---- featured match: the one place team colour fills the frame ---- */
+.spot,.spot.mini,.spots > .spot{border-radius:16px}
+.spots > .spot{min-height:340px;padding:20px 32px 24px}
+.spots > .spot .spot-bg{background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 70%,#07090C) 0%,color-mix(in oklab,var(--hc) 22%,#0B0D11) 40%,color-mix(in oklab,var(--ac) 22%,#0B0D11) 60%,color-mix(in oklab,var(--ac) 70%,#07090C) 100%)}
+.spots > .spot .spot-bg::after,.spot-ghost{display:none}
+.spots > .spot .spot-bg img{opacity:.1;transform:none}
+.spots > .spot .spot-sc b{font:600 clamp(64px,8vw,112px)/1 var(--f-num);letter-spacing:-.04em;text-shadow:none}
+.spots > .spot .spot-sc.pre b{font-size:clamp(40px,5vw,64px)}
+.spots > .spot .spot-t strong{font:600 clamp(20px,2.2vw,30px)/1.15 var(--f-display);letter-spacing:-.01em}
+.spots > .spot .spot-t img{width:clamp(64px,6vw,88px);height:clamp(64px,6vw,88px)}
+.spot *{letter-spacing:0}
+.spot.mini .spot-sc b{font:600 32px/1 var(--f-num)}
+
+/* ---- panels ---- */
+.sheet{border-radius:16px}
+.pulse,.empty-state,.tile,.ml,.rs-tile,.fx-card,.rail{border-radius:14px!important}
+.mc-c::after,.pane.pgrid > .pcard::after{display:none}
+.mc-c,.pane.pgrid > .pcard{background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none;border:1px solid var(--hairline)}
+.mc-c > header h5{font:600 16px/1.2 var(--f-display)}
+.mc-c > header h5::before,.sub-h h5::before{display:none}
+.vd-pick{font:600 28px/1.1 var(--f-display)}
+.empty-state strong,.rs-empty strong{font:600 18px/1.2 var(--f-display)}
+
+/* ---- match header ---- */
+.hero.mh{background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 70%,#07090C) 0%,color-mix(in oklab,var(--hc) 22%,#0B0D11) 40%,color-mix(in oklab,var(--ac) 22%,#0B0D11) 60%,color-mix(in oklab,var(--ac) 70%,#07090C) 100%)}
+.hero.mh::before{background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.45))}
+.hero.mh::after{display:none}
+.hero.mh .score,.hero.mh .score > *{transform:none}
+.hero.mh .score{background:rgba(0,0,0,.35);border-radius:12px;backdrop-filter:none;padding:12px 24px}
+.hero.mh .score .big{font:600 64px/1 var(--f-num);letter-spacing:-.04em}
+.hero.mh .score .big em{color:rgba(255,255,255,.5)}
+.hero.mh *{letter-spacing:0}
+
+/* ---- footer: one quiet line ---- */
+.fl-foot{flex-direction:row;justify-content:center;gap:12px;padding:24px 16px calc(96px + env(safe-area-inset-bottom,0px));margin-top:48px}
+.fl-foot::before,.fl-foot::after{display:none}
+.fl-foot-mark{font:600 14px/1 var(--f-display);letter-spacing:0;color:var(--fg);-webkit-text-stroke:0;background:none;-webkit-background-clip:border-box;background-clip:border-box;-webkit-mask:none;mask:none}
+.fl-foot-line{font:400 13px/1 var(--f-body);letter-spacing:0;margin:0}
+
+/* small labels read as text, numbers stay in the mono face */
+body{font-variant-numeric:tabular-nums}
+.num,.sc,.tk .s,.dt strong,.date strong{font-family:var(--f-num)}
+.spot-ghost,.spot > svg{display:none}
+.spot.mini .spot-bg{background:linear-gradient(100deg,color-mix(in oklab,var(--hc) 60%,#07090C) 0%,color-mix(in oklab,var(--hc) 20%,#0B0D11) 42%,color-mix(in oklab,var(--ac) 20%,#0B0D11) 58%,color-mix(in oklab,var(--ac) 60%,#07090C) 100%)}
+.spot.mini .spot-bg img{opacity:.08}
+.spots > .spot .spot-clock{margin-top:32px}
+.pulse-s b{font:600 28px/1 var(--f-num);letter-spacing:-.02em}
+.pulse-s span{font:400 13px/1.2 var(--f-body);letter-spacing:0;color:var(--muted)}
+.pulse-m,.pulse-m.live{box-shadow:none!important;border-radius:6px}
+.pulse-now em{border-radius:4px}
+/* no tracked-out labels anywhere */
+*,*::before,*::after{letter-spacing:0!important}
+/* match header, sized for reading */
+.mh-fx,.hero.solo[data-ghost]::after,.rs-hero-ghost{display:none!important}
+.hero.mh .side strong,.shell.stage-match .hero.mh .side strong{font:600 clamp(20px,2vw,28px)/1.15 var(--f-display)!important;text-shadow:none}
+.hero.mh .side img,.shell.stage-match .hero.mh .side img{width:88px!important;height:88px!important;filter:none!important}
+.hero.mh .score .big,.shell.stage-match .hero.mh .score .big{font:600 clamp(56px,6vw,80px)/1 var(--f-num)!important;text-shadow:none}
+.hero.mh .score .big em{background:none;color:rgba(255,255,255,.45)!important;margin:0 4px}
+.hero.mh .score{border:0}
+/* tabs: an underline, not a block */
+.tab.on{background:none!important;color:var(--fg)!important;border-radius:0!important;box-shadow:inset 0 -2px 0 var(--fg)!important;padding-inline:12px}
+/* team and league headers */
+.thead h3,.shell.stage .hero.solo .thead h3{font:600 clamp(28px,3.2vw,40px)/1.1 var(--f-display)!important;text-shadow:none!important}
+.tile b,.hero.solo .tiles .tile b,.shell.stage .hero.solo .tile b{font:600 28px/1 var(--f-num)!important}
+.tile span,.bio span,.shell.stage .hero.solo .tile span{font:400 13px/1.2 var(--f-body)!important;color:var(--muted)}
+.pf-head h2,.sub-h h5,h5{font-family:var(--f-display)}
+@media (max-width:700px){
+  .livebar h2{font-size:26px}
+  .spots > .spot{min-height:0;padding:16px}
+  .spots > .spot .spot-sc b{font-size:44px}.spots > .spot .spot-sc.pre b{font-size:30px}
+  .spots > .spot .spot-t strong{font-size:15px}.spots > .spot .spot-t img{width:48px;height:48px}
+  .spot-g{font-size:11px}.spot-g span{white-space:nowrap}
+  .spots > .spot .spot-clock{margin-top:20px}
+  .hero.mh .side img{width:56px!important;height:56px!important}
+  .hero.mh .score .big{font-size:44px!important}.hero.mh .side strong{font-size:16px!important}
+  .group-h strong{font-size:16px}.group-h img{width:22px;height:22px}
+  .m{min-height:0}.m .tm,.m.fb .tm{height:36px}.m .sc{grid-template-rows:36px 36px}
+}
+@container groups (max-width:700px){.spots > .spot{padding:16px}.spots > .spot .spot-sc b{font-size:44px}.spots > .spot .spot-sc.pre b{font-size:30px}.spots > .spot .spot-t strong{font-size:15px}.spots > .spot .spot-t img{width:48px;height:48px}.spots > .spot .spot-main{margin:16px 0 12px}}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   MATCHDAY · a stadium at night, seen on a broadcast.
+   Wide Archivo for headlines, dot-matrix Doto for the big scoreboards, Geist for reading.
+   Every fixture is a scoreboard row lit from both ends by its teams' colours; featured matches and the
+   match header are a pitch under two floodlight cones in the team colours. Sports sit in the header as channels,
+   competitions in a labelled sidebar.
+   ═══════════════════════════════════════════════════════════════════ */
+@font-face{font-family:"FL Wide";font-style:normal;font-weight:400 900;font-stretch:100% 125%;font-display:swap;
+  src:url(https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdnoLmvDIaI.woff2) format("woff2")}
+@font-face{font-family:"FL Board";font-style:normal;font-weight:700 900;font-display:swap;
+  src:url(https://fonts.gstatic.com/s/doto/v3/t5t6IRMbNJ6TQG7Il_EKPqP9zTnvqouBWhoxrW5O.woff2) format("woff2")}
+:root{--f-wide:"FL Wide","Geist",system-ui,sans-serif;--f-board:"FL Board","Geist Mono",ui-monospace,monospace;
+  --row-h:60px;--panel-r:18px;--lamp:#FFE7A8}
+.wide{font-family:var(--f-wide);font-stretch:118%}
+
+/* ---------- header: brand, search, then the sports as channels ---------- */
+.brand{font:800 20px/1 var(--f-wide);font-stretch:120%}
+.brand small{display:none}
+.top-in{flex-wrap:wrap;row-gap:0}
+.sport-sw.dock,.top-in > .sport-sw.dock{position:static;translate:none;left:auto;bottom:auto;order:20;flex:1 1 100%;max-width:none;margin:6px 0 -10px;padding:0;gap:4px;
+  background:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;overflow-x:auto;justify-content:flex-start}
+.sport-sw.dock button,.sport-sw.dock button.on{flex:none;padding:12px 14px 13px;border-radius:0!important;background:none!important;color:var(--muted)!important;
+  font:600 14px/1 var(--f-body);box-shadow:none!important;transform:none!important;position:relative}
+.sport-sw.dock button:hover:not(.on){color:var(--fg)!important;background:none}
+.sport-sw.dock button.on{color:var(--fg)!important}
+.sport-sw.dock button.on::after{content:"";position:absolute;left:14px;right:14px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
+.sport-sw.dock button svg{width:16px;height:16px;opacity:.8}
+body:has(.sheet.open) .sport-sw.dock,body.drawer-open .sport-sw.dock{display:flex}
+@media (max-width:820px){body{padding-bottom:84px}.sport-sw.dock,.top-in > .sport-sw.dock{margin:2px 0 -10px;-webkit-mask:linear-gradient(90deg,#000 86%,transparent);mask:linear-gradient(90deg,#000 86%,transparent)}.sport-sw.dock button{padding:11px 12px 12px;font-size:13.5px}}
+.ticker{border-top:1px solid var(--hairline)}
+
+/* ---------- competitions: a labelled sidebar on wide screens ---------- */
+@media (min-width:1280px){
+  html body .shell{grid-template-columns:236px minmax(0,1fr) minmax(0,1.1fr)}
+  html body .shell.no-sheet{grid-template-columns:236px minmax(0,1fr)}
+  html body .shell.sheet-wide{grid-template-columns:236px minmax(0,1fr)!important}
+  html body .shell.mk-page{grid-template-columns:236px minmax(0,1.7fr) minmax(320px,.9fr)}
+  html body .rail,html body .rail:hover{width:236px;padding:12px 8px;border-radius:var(--panel-r)!important;background:var(--surface);border:1px solid var(--hairline);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+  html body .rail .lg > span:not(.dot),html body .rail .lg .star{display:inline!important}
+  html body .rail .lg.empty{display:none}
+  html body .rail h4,html body .rail h4:first-child{display:block!important;font:600 12px/1 var(--f-body)!important;height:auto!important;background:none!important;color:var(--muted);margin:16px 10px 6px!important}
+  html body .rail h4:first-child{margin-top:4px!important}
+  html body .rail .lg b{position:static!important;box-shadow:none!important;margin-left:auto;font:600 11px/1 var(--f-num);padding:3px 6px;border-radius:6px;min-width:0}
+  html body .rail .lg b:not(.live){display:inline-block!important;background:var(--surface-2);color:var(--muted)}
+}
+.rail .lg{gap:10px;padding:7px 10px;border-radius:10px;font:500 13.5px/1.2 var(--f-body)}
+.rail .lg img,.rail .lg .dot,.rail .lg .mini{width:22px!important;height:22px!important;font-size:12px;transform:none!important}
+.rail .lg:hover{background:var(--surface-2)}
+.rail .lg.on{background:color-mix(in oklab,var(--accent) 14%,transparent)!important;color:var(--fg)!important;box-shadow:inset 3px 0 0 var(--accent)!important;border-radius:4px 10px 10px 4px!important}
+.rail .lg b.live{background:var(--live);color:#fff}
+
+/* ---------- page title ---------- */
+#list > .livebar{margin:4px 0 18px;align-items:baseline;gap:14px}
+.livebar h2{font:800 clamp(30px,3.4vw,46px)/1 var(--f-wide);font-stretch:122%}
+.livebar .count{font:500 14px/1 var(--f-body)}
+
+/* ---------- day strip: one joined bar ---------- */
+.drail{gap:0!important;border:1px solid var(--hairline);border-radius:14px;background:var(--surface);overflow:hidden;padding:0}
+.dt,.dt:hover,.dt.on{border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;transform:none!important;position:relative;padding:10px 0 12px}
+.dt + .dt{box-shadow:inset 1px 0 0 var(--hairline)!important}
+.dt small{font:500 12px/1 var(--f-body);color:var(--muted)}
+.dt strong{font:600 22px/1.1 var(--f-num)}
+.dt em{font:400 11px/1 var(--f-body);color:var(--muted)}
+.dt:hover{background:var(--surface-2)!important}
+.dt.on{background:color-mix(in oklab,var(--accent) 12%,transparent)!important;color:var(--fg)!important}
+.dt.on strong{color:var(--accent)}
+.dt.on::before{content:"";position:absolute;left:18%;right:18%;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
+.dt.today::after{top:8px;right:10px}
+
+/* ---------- quick filters: quiet text tabs ---------- */
+.quick{gap:4px!important}
+.qf,.qf.on,.qf[aria-pressed="true"]{border:1px solid transparent;background:none!important;color:var(--muted)!important;border-radius:999px!important;padding:8px 14px;font:500 13.5px/1 var(--f-body)}
+.qf:hover{color:var(--fg)!important;background:var(--surface-2)!important}
+.qf.on,.qf[aria-pressed="true"]{color:var(--fg)!important;border-color:var(--hairline);background:var(--surface)!important}
+
+/* ---------- featured match: a pitch under two floodlights ---------- */
+.spots.trio{gap:12px}
+.spot,.spot.mini,.spots > .spot{border-radius:22px!important;border:1px solid rgba(255,255,255,.08);isolation:isolate;overflow:hidden}
+.spot .spot-bg,.spots > .spot .spot-bg,.spot.mini .spot-bg{background:
+  conic-gradient(from 132deg at 6% -14%,transparent 0deg,color-mix(in oklab,var(--hc) 62%,transparent) 12deg,color-mix(in oklab,var(--hc) 30%,transparent) 22deg,transparent 34deg),
+  conic-gradient(from 194deg at 94% -14%,transparent 0deg,color-mix(in oklab,var(--ac) 30%,transparent) 12deg,color-mix(in oklab,var(--ac) 62%,transparent) 22deg,transparent 34deg),
+  radial-gradient(120% 70% at 50% 120%,#0F3A27 0%,#0A1F17 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,#0A1410)!important}
+.spot .spot-bg::before{content:"";position:absolute;inset:0;pointer-events:none;background:
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 18px 14px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 27px 14px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 36px 14px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 45px 14px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 18px) 14px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 27px) 14px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 36px) 14px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 45px) 14px/9px 9px no-repeat,
+  radial-gradient(circle at 50% 118%,transparent 0 158px,rgba(255,255,255,.075) 159px 160px,transparent 161px),
+  linear-gradient(90deg,transparent calc(50% - .5px),rgba(255,255,255,.07) calc(50% - .5px) calc(50% + .5px),transparent calc(50% + .5px)) 0 100%/100% 38% no-repeat}
+.spot .spot-bg::after{display:none!important}
+.spot .spot-bg img,.spots > .spot .spot-bg img{opacity:.06!important;filter:grayscale(1) brightness(2)!important}
+.spot-top{font:500 13px/1 var(--f-body)}
+.spot-tag{border-radius:999px!important}
+.spots > .spot{min-height:400px;padding:22px 32px 22px}
+.spots > .spot .spot-t strong{font:800 clamp(22px,2.4vw,34px)/1.05 var(--f-wide);font-stretch:116%;text-shadow:0 2px 20px rgba(0,0,0,.6)}
+.spots > .spot .spot-t img{width:clamp(72px,7vw,108px);height:clamp(72px,7vw,108px);filter:drop-shadow(0 12px 24px rgba(0,0,0,.5))}
+.spot .spot-sc b,.spots > .spot .spot-sc b{font:900 clamp(84px,10vw,150px)/.9 var(--f-board)!important;color:#FFF6DC;letter-spacing:0;text-shadow:none}
+.spot .spot-sc b i{color:rgba(255,246,220,.35);font-family:var(--f-body);font-weight:300;margin:0 .06em}
+.spots > .spot .spot-sc.pre b{font-size:clamp(48px,6vw,84px)!important}
+.spot.mini .spot-sc b{font-size:52px!important}
+.spot.mini{min-height:170px}
+.spot.mini .spot-t strong{font:800 18px/1 var(--f-wide);font-stretch:116%}
+.spot .on{border-radius:999px!important}
+.spot-foot{font:500 13px/1 var(--f-body)}
+.spot:hover .spot-bg{filter:brightness(1.12)}
+
+/* ---------- day in numbers ---------- */
+.pulse{border-radius:var(--panel-r)!important;border:1px solid var(--hairline);background:var(--surface)}
+.pulse-s b{font:800 30px/1 var(--f-wide);font-stretch:112%}
+.pulse-s.next b{color:var(--accent)}
+
+/* ---------- competitions: one panel each, fixtures as scoreboard rows ---------- */
+.group{margin-bottom:20px;border:1px solid var(--hairline);border-radius:var(--panel-r);background:var(--surface);overflow:hidden}
+.group-h{padding:14px 18px;margin:0;border-bottom:1px solid var(--hairline);background:color-mix(in oklab,var(--fg) 2.5%,transparent)}
+.group-h::after{display:none!important}
+.group-h strong{font:800 17px/1.1 var(--f-wide);font-stretch:114%}
+.group-h img{width:26px;height:26px;padding:3px;border-radius:7px;background:#fff}
+.live-group{border-color:color-mix(in oklab,var(--live) 35%,var(--hairline))}
+.live-group .group-h{background:color-mix(in oklab,var(--live) 8%,transparent)}
+.live-group .group-h strong{color:var(--fg)}
+
+.group .cards:not(:has(> .pred-card, > .tn-m)),.shell.no-sheet .group .cards:not(:has(> .pred-card, > .tn-m)){display:flex!important;flex-direction:column;gap:0!important;padding:0}
+.group .m:not(.pred-card):not(.tn-m){
+  display:grid;grid-template-columns:92px minmax(0,1fr) 104px minmax(0,1fr) 40px;grid-template-areas:none;grid-auto-flow:row;grid-template-rows:var(--row-h);
+  align-items:center;column-gap:14px;min-height:var(--row-h);padding:0 14px 0 18px;border:0;border-radius:0;box-shadow:none;transform:none;filter:none;
+  border-top:1px solid var(--hairline);
+  background:linear-gradient(90deg,color-mix(in oklab,var(--hc) 16%,transparent) 0,transparent 34%,transparent 66%,color-mix(in oklab,var(--ac) 16%,transparent) 100%),var(--surface)}
+.group .cards > .m:first-child{border-top:0}
+.group .m:not(.pred-card):not(.tn-m):hover{background:linear-gradient(90deg,color-mix(in oklab,var(--hc) 26%,transparent) 0,transparent 38%,transparent 62%,color-mix(in oklab,var(--ac) 26%,transparent) 100%),var(--surface-2);transform:none}
+.group .m:not(.pred-card):not(.tn-m) .tms,.group .m:not(.pred-card):not(.tn-m) .sc{display:contents}
+.group .m:not(.pred-card):not(.tn-m) .st,.group .m:not(.pred-card):not(.tn-m) .st.live{grid-column:1;grid-row:1;height:auto;padding:0;border:0;background:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;font:500 12px/1 var(--f-body)}
+.group .m:not(.pred-card):not(.tn-m) .st .ko{font:600 14px/1 var(--f-num);color:var(--fg)}
+.group .m:not(.pred-card):not(.tn-m) .st .cd{margin:0;font:400 11.5px/1 var(--f-body);color:var(--muted)}
+.group .m:not(.pred-card):not(.tn-m) .st.live{flex-direction:row;align-items:center;gap:8px;color:var(--live)}
+.group .m:not(.pred-card):not(.tn-m) .st.live .min{order:0;margin:0;font:700 14px/1 var(--f-num);color:var(--live)}
+.group .m:not(.pred-card):not(.tn-m) .st.live .lv{display:none}
+.group .m:not(.pred-card):not(.tn-m) .st.live::before{width:8px;height:8px;border-radius:50%;background:var(--live);flex:none;animation:mdLive 2s ease-in-out infinite}
+@keyframes mdLive{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.group .m .st.live::before{animation:none}}
+.group .m:not(.pred-card):not(.tn-m) .tm{grid-row:1;height:auto;min-width:0;gap:12px}
+.group .m:not(.pred-card):not(.tn-m) .tm:nth-child(1){grid-column:2;flex-direction:row-reverse;justify-content:flex-start;text-align:right}
+.group .m:not(.pred-card):not(.tn-m) .tm:nth-child(2){grid-column:4}
+.group .m:not(.pred-card):not(.tn-m) .tm img{width:28px;height:28px}
+.group .m:not(.pred-card):not(.tn-m) .tm > span{font:600 15px/1.2 var(--f-body);color:var(--fg)}
+.group .m:not(.pred-card):not(.tn-m) .tm.lose > span{color:var(--muted)}
+.group .m:not(.pred-card):not(.tn-m) .tm .rec{margin:0}
+.group .m:not(.pred-card):not(.tn-m)::before{content:"";display:block;grid-column:3;grid-row:1;height:38px;border-radius:10px;background:#05070A;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+:root:not([data-theme="dark"]) .group .m:not(.pred-card):not(.tn-m)::before{background:#0D1117}
+.group .m:not(.pred-card):not(.tn-m) .sc > span{grid-column:3;grid-row:1;z-index:1;width:50%;text-align:center;font:600 19px/1 var(--f-num)!important;color:#F3F4F6!important;opacity:1!important}
+.group .m:not(.pred-card):not(.tn-m) .sc > span:nth-child(1){justify-self:start}
+.group .m:not(.pred-card):not(.tn-m) .sc > span:nth-child(2){justify-self:end}
+.group .m:not(.pred-card):not(.tn-m) .sc > span.lose{color:#8E97A8!important}
+.group .m:not(.pred-card):not(.tn-m):has(.st.live) .sc > span{color:var(--lamp)!important}
+.group .m:not(.pred-card):not(.tn-m):has(.st.live)::before{box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--live) 55%,transparent)}
+.group .m:not(.pred-card):not(.tn-m):has(.sc.pre)::before{content:"v";display:grid;place-items:center;background:none;box-shadow:none;font:500 13px/1 var(--f-body);color:var(--muted)}
+.group .m:not(.pred-card):not(.tn-m) .sc.pre > span{display:none}
+.group .m:not(.pred-card):not(.tn-m) .sc > .tv,.group .m:not(.pred-card):not(.tn-m) .tv{grid-column:5;grid-row:1;justify-self:end;width:auto;font:500 11px/1.2 var(--f-body)!important;color:var(--muted)!important}
+.group .m:not(.pred-card):not(.tn-m)::after{content:"";grid-column:5;grid-row:1;justify-self:end;width:8px;height:8px;border:solid var(--muted);border-width:1.5px 1.5px 0 0;transform:rotate(45deg);opacity:.6;margin-right:4px}
+.group .m:not(.pred-card):not(.tn-m):has(.tv)::after{display:none}
+.group .m:not(.pred-card):not(.tn-m) .oddrow{grid-column:2/5;grid-row:2;justify-self:center;margin:0 0 10px}
+.group .m:not(.pred-card):not(.tn-m):has(.oddrow){grid-template-rows:var(--row-h) auto}
+.group .m.sel{box-shadow:inset 3px 0 0 var(--accent)!important}
+@media (max-width:640px){
+  :root{--row-h:56px}
+  .group .m:not(.pred-card):not(.tn-m){grid-template-columns:44px minmax(0,1fr) 72px minmax(0,1fr);column-gap:8px;padding:0 10px 0 12px}
+  .group .m:not(.pred-card):not(.tn-m)::after{display:none}
+  .group .m:not(.pred-card):not(.tn-m) .tv{display:none}
+  .group .m:not(.pred-card):not(.tn-m) .tm{gap:7px}
+  .group .m:not(.pred-card):not(.tn-m) .tm img{width:20px;height:20px}
+  .group .m:not(.pred-card):not(.tn-m) .tm > span{font-size:13.5px}
+  .group .m:not(.pred-card):not(.tn-m) .tm .rec{display:none}
+  .group .m:not(.pred-card):not(.tn-m) .st .ko{font-size:12px}
+  .group .m:not(.pred-card):not(.tn-m) .st .cd{display:none}
+  .group .m:not(.pred-card):not(.tn-m) .st.live .min{font-size:12px}
+  .group .m:not(.pred-card):not(.tn-m) .sc > span{font-size:16px!important}
+  .group .m:not(.pred-card):not(.tn-m)::before{height:32px}
+  .group-h{padding:12px 14px}
+  .spots > .spot{min-height:0;padding:16px 16px 18px}
+  .spot .spot-sc b,.spots > .spot .spot-sc b{font-size:58px!important}
+  .spots > .spot .spot-t strong{font-size:16px}
+  .spot.mini .spot-sc b{font-size:38px!important}
+}
+
+/* ---------- match header and team header: same floodlit pitch ---------- */
+.hero.mh{background:
+  conic-gradient(from 132deg at 6% -14%,transparent 0deg,color-mix(in oklab,var(--hc) 62%,transparent) 12deg,color-mix(in oklab,var(--hc) 30%,transparent) 22deg,transparent 34deg),
+  conic-gradient(from 194deg at 94% -14%,transparent 0deg,color-mix(in oklab,var(--ac) 30%,transparent) 12deg,color-mix(in oklab,var(--ac) 62%,transparent) 22deg,transparent 34deg),
+  radial-gradient(120% 70% at 50% 120%,#0F3A27 0%,#0A1F17 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,#0A1410)!important}
+.hero.mh::before{background:
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 18px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 27px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 36px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 45px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 18px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 27px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 36px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 45px) 16px/9px 9px no-repeat,
+  radial-gradient(circle at 50% 120%,transparent 0 178px,rgba(255,255,255,.07) 179px 180px,transparent 181px)!important}
+.hero.mh .side strong,.shell.stage-match .hero.mh .side strong{font:800 clamp(20px,2.2vw,30px)/1.05 var(--f-wide)!important;font-stretch:116%!important}
+.hero.mh .score .big,.shell.stage-match .hero.mh .score .big{font:900 clamp(72px,8vw,120px)/.9 var(--f-board)!important;color:#FFF6DC}
+.hero.mh .score .big em{font-family:var(--f-body);font-weight:300;color:rgba(255,246,220,.35)!important}
+.hero.mh .score{background:rgba(0,0,0,.45);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);border-radius:16px;padding:16px 28px 14px}
+.hero.solo.h-team,.hero.solo{background:
+  conic-gradient(from 140deg at 4% -16%,transparent 0deg,color-mix(in oklab,var(--tc,var(--accent)) 58%,transparent) 14deg,transparent 34deg),
+  radial-gradient(90% 80% at 85% 120%,color-mix(in oklab,var(--tc,var(--accent)) 22%,transparent),transparent 70%),
+  linear-gradient(180deg,#05070A,#0B0E13)!important}
+.thead h3,.shell.stage .hero.solo .thead h3{font:800 clamp(30px,3.6vw,50px)/1 var(--f-wide)!important;font-stretch:120%!important}
+.tile b,.hero.solo .tiles .tile b,.shell.stage .hero.solo .tile b{font:800 30px/1 var(--f-wide)!important;font-stretch:112%!important}
+
+/* ---------- section headings inside panels ---------- */
+.mc-c > header h5,.sub-h h5{font:800 16px/1.15 var(--f-wide)!important;font-stretch:114%!important}
+.vd-pick{font:800 30px/1.05 var(--f-wide)!important;font-stretch:116%!important}
+.mc-c,.pane.pgrid > .pcard{border-radius:var(--panel-r)!important}
+.tab.on{box-shadow:inset 0 -3px 0 var(--accent)!important}
+
+/* ---------- prediction and tennis cards keep the card form, with the same lit edges ---------- */
+.m.pred-card,.m.tn-m{border-radius:var(--panel-r)!important;background:linear-gradient(160deg,color-mix(in oklab,var(--hc,var(--accent)) 14%,transparent),transparent 45%),var(--surface)!important}
+.m.pred-card .pc-side b{font:800 17px/1.15 var(--f-wide)!important;font-stretch:112%}
+
+/* ---------- footer ---------- */
+.fl-foot-mark{font:800 15px/1 var(--f-wide)!important;font-stretch:120%}
+
+/* fixture rows: the score box and the chevron are grid cells, not overlays */
+.group .m:not(.pred-card):not(.tn-m)::before{position:static!important;inset:auto!important;width:auto!important;top:auto;bottom:auto;left:auto;opacity:1!important}
+.group .m:not(.pred-card):not(.tn-m)::after{position:static!important;inset:auto!important;border-radius:0!important;transition:none;opacity:.6!important;align-self:center}
+.spot .spot-bg img,.spots > .spot .spot-bg img{display:none!important}
+
+/* Matchday · phone fixes */
+@media (max-width:640px){
+  .group .m:not(.pred-card):not(.tn-m){grid-template-columns:40px minmax(0,1fr) 68px minmax(0,1fr)}
+  .group .m:not(.pred-card):not(.tn-m) .st .ko{font-size:11px!important;white-space:normal!important;line-height:1.15;display:block;width:34px}
+  .hero.mh .side strong,.shell.stage-match .hero.mh .side strong{font-size:15px!important;font-stretch:100%!important;overflow-wrap:normal!important;word-break:normal!important;hyphens:none;text-align:center}
+  .hero.mh .score .big,.shell.stage-match .hero.mh .score .big{font-size:46px!important}
+  .hero.mh .score{padding:10px 12px 8px}
+  .hero.mh .side{min-width:0}
+}
+
+/* ==========================================================================
+   MATCHDAY · every sport gets the floodlit match header.
+   Same light cones, lamp banks and scoreboard score as soccer, with that
+   sport's own playing surface under the lights.
+   ========================================================================== */
+.hero.mh{--lamps:
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 18px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 27px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 36px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) 45px 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 18px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 27px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 36px) 16px/9px 9px no-repeat,
+  radial-gradient(circle,var(--lamp) 0 2px,transparent 2.6px) calc(100% - 45px) 16px/9px 9px no-repeat;
+  --cones:
+  conic-gradient(from 132deg at 6% -14%,transparent 0deg,color-mix(in oklab,var(--hc) 62%,transparent) 12deg,color-mix(in oklab,var(--hc) 30%,transparent) 22deg,transparent 34deg),
+  conic-gradient(from 194deg at 94% -14%,transparent 0deg,color-mix(in oklab,var(--ac) 30%,transparent) 12deg,color-mix(in oklab,var(--ac) 62%,transparent) 22deg,transparent 34deg)}
+
+/* basketball: hardwood with the centre circle and the lane lines */
+.hero.mh.sp-bb{background:var(--cones),
+  radial-gradient(120% 70% at 50% 120%,rgba(196,120,52,.55) 0%,rgba(110,62,26,.4) 45%,transparent 75%),
+  repeating-linear-gradient(90deg,rgba(255,214,160,.05) 0 1px,transparent 1px 34px),
+  linear-gradient(180deg,#05070A,#0A0907 60%,#1A1009)!important}
+.hero.mh.sp-bb::before{background:var(--lamps),
+  radial-gradient(circle at 50% 118%,transparent 0 92px,rgba(255,230,190,.16) 93px 95px,transparent 96px),
+  linear-gradient(90deg,transparent calc(50% - 1px),rgba(255,230,190,.12) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) 0 100%/100% 40% no-repeat!important}
+
+/* American football: turf with yard lines */
+.hero.mh.sp-fb{background:var(--cones),
+  radial-gradient(120% 70% at 50% 120%,#13502C 0%,#0B2A18 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,#0A1810)!important}
+.hero.mh.sp-fb::before{background:var(--lamps),
+  repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),rgba(255,255,255,.09) calc(10% - 1px) 10%) 0 100%/100% 42% no-repeat,
+  linear-gradient(90deg,transparent calc(50% - 2px),rgba(255,231,168,.18) calc(50% - 2px) calc(50% + 2px),transparent calc(50% + 2px)) 0 100%/100% 42% no-repeat!important}
+
+/* hockey: white ice with the red centre line and the blue lines */
+.hero.mh.sp-hk{background:var(--cones),
+  radial-gradient(120% 70% at 50% 125%,rgba(200,226,255,.30) 0%,rgba(120,160,210,.14) 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B10 60%,#0D1520)!important}
+.hero.mh.sp-hk::before{background:var(--lamps),
+  linear-gradient(90deg,transparent calc(50% - 2px),rgba(230,57,70,.5) calc(50% - 2px) calc(50% + 2px),transparent calc(50% + 2px)) 0 100%/100% 40% no-repeat,
+  linear-gradient(90deg,transparent calc(30% - 3px),rgba(80,140,255,.45) calc(30% - 3px) calc(30% + 3px),transparent calc(30% + 3px) calc(70% - 3px),rgba(80,140,255,.45) calc(70% - 3px) calc(70% + 3px),transparent calc(70% + 3px)) 0 100%/100% 40% no-repeat,
+  radial-gradient(circle at 50% 118%,transparent 0 70px,rgba(80,140,255,.3) 71px 73px,transparent 74px)!important}
+
+/* baseball: grass, an infield of dirt and the diamond */
+.hero.mh.sp-bs{background:var(--cones),
+  radial-gradient(46% 38% at 50% 112%,rgba(150,92,52,.55) 0 60%,transparent 62%),
+  radial-gradient(120% 70% at 50% 120%,#145230 0%,#0B2A18 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,#0A1810)!important}
+.hero.mh.sp-bs::before{background:var(--lamps),
+  linear-gradient(45deg,transparent calc(50% - 1px),rgba(255,255,255,.16) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) calc(50% - 70px) 100%/140px 140px no-repeat,
+  linear-gradient(-45deg,transparent calc(50% - 1px),rgba(255,255,255,.16) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) calc(50% + 70px) 100%/140px 140px no-repeat!important}
+
+/* tennis: the court colour follows the surface */
+.hero.mh.sp-tn{--court:#1C3F73;background:var(--cones),
+  radial-gradient(120% 70% at 50% 120%,color-mix(in oklab,var(--court) 85%,transparent) 0%,color-mix(in oklab,var(--court) 40%,transparent) 45%,transparent 75%),
+  linear-gradient(180deg,#05070A,#080B0F 60%,color-mix(in oklab,var(--court) 30%,#05070A))!important}
+.hero.mh.sp-tn.tn-s-clay{--court:#A2461F}
+.hero.mh.sp-tn.tn-s-grass{--court:#2D6B32}
+.hero.mh.sp-tn::before{background:var(--lamps),
+  linear-gradient(90deg,transparent calc(50% - 1px),rgba(255,255,255,.22) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)) 0 100%/100% 34% no-repeat,
+  linear-gradient(90deg,transparent 20%,rgba(255,255,255,.14) 20% calc(20% + 2px),transparent calc(20% + 2px) calc(80% - 2px),rgba(255,255,255,.14) calc(80% - 2px) 80%,transparent 80%) 0 100%/100% 34% no-repeat!important}
+
+/* the scoreboard score works for any sport; long scores (basketball, football) get a narrower dot size */
+.hero.mh:is(.sp-bb,.sp-fb) .score .big,.shell.stage-match .hero.mh:is(.sp-bb,.sp-fb) .score .big{font-size:clamp(56px,6vw,96px)!important}
+.hero.mh .board .side img{filter:drop-shadow(0 10px 24px rgba(0,0,0,.55))}
+.hero.mh .side .rec{color:rgba(255,246,220,.6)}
+.hero.mh .qtr{background:rgba(0,0,0,.42);border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.hero.mh .qtr td.pts,.hero.mh .qtr th:last-child{font-family:var(--f-board);color:#FFF6DC}
+.hero.mh .kick{font:900 clamp(40px,4.4vw,64px)/1 var(--f-board)!important;color:#FFF6DC}
+@media (max-width:640px){
+  .hero.mh:is(.sp-bb,.sp-fb) .score .big,.shell.stage-match .hero.mh:is(.sp-bb,.sp-fb) .score .big{font-size:36px!important}
+  .hero.mh .kick{font-size:30px!important}
+}
+.vcs.two{grid-template-columns:1fr 1fr}
+.vcs.two .vc-crest u{font:800 22px/1 var(--f-wide);text-decoration:none}
+
+/* game centre (every sport): prediction beside the main live panel */
+@media (min-width:1101px){
+  .shell.stage .mc.gc{grid-template-columns:repeat(12,minmax(0,1fr));align-items:start}
+  .shell.stage .mc.gc > .mc-pred,.shell.stage .mc.gc > .mc-main{grid-column:1/-1}
+  .shell.stage .mc.gc > .mc-pred .mc-b:has(> .vd){display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;align-items:center}
+  .shell.stage .mc.gc > .mc-pred .pgs{grid-template-columns:repeat(2,minmax(0,1fr));margin:0}
+  .shell.stage .mc.gc > .mc-pred .edge{grid-column:1/-1;margin:0}
+  .shell.stage .mc.gc > .mc-wide{grid-column:1/-1}
+  .shell.stage .mc.gc > .mc-main:only-of-type,.shell.stage .mc.gc:not(:has(> .mc-pred)) > .mc-main{grid-column:1/-1}
+}
+.mc.gc .mc-main .tbl-wrap,.mc.gc .mc-wide .tbl-wrap{overflow-x:auto}
+.hero.mh .tbl-wrap{background:none!important;border:0!important;box-shadow:none!important;display:flex;justify-content:center}
+.hero.mh .tbl-wrap .qtr{width:auto;min-width:min(420px,100%)}
+
+/* ==========================================================================
+   SMOOTH SCROLLING · keep the graphics card out of trouble.
+   The background lights stay but no longer move (three viewport-sized layers
+   re-painted every frame under every glass panel), and the panels that sit
+   over scrolling content use a solid tint instead of a live blur.
+   ========================================================================== */
+#flAurora i{animation:none!important;will-change:auto!important}
+#flLight{will-change:auto}
+.tabs,.shell.stage .tabs{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:color-mix(in oklab,var(--surface) 97%,transparent)!important}
+.mc-c,.pane.pgrid > .pcard,.hero.mh .score,.hero.mh .hero-top .icon-btn,.shell.stage .hero.solo .tiles,.rs-strip,.rs-meterbox,.slip,.flg-rates div{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.drawer-scrim{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.sheet{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:color-mix(in oklab,var(--surface) 94%,transparent)}

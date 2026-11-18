@@ -55,8 +55,43 @@ document.addEventListener('pointerdown', ev => {
   document.body.appendChild(r); r.addEventListener('animationend', () => r.remove());
 }, { passive: true });
 
-/* the sport switcher lives in a floating dock at the foot of the screen */
-{ const sw = document.querySelector('.top .sport-sw'); if (sw) { sw.classList.add('dock'); document.body.appendChild(sw) } }
+/* the sport switcher sits in the header as a row of channels (styled by .dock in theme.css) */
+{ const sw = document.querySelector('.top .sport-sw'); if (sw) sw.classList.add('dock') }
 
 /* three slow lights behind the page */
 { const a = document.createElement('div'); a.id = 'flAurora'; a.setAttribute('aria-hidden', 'true'); a.innerHTML = '<i></i><i></i><i></i>'; document.body.prepend(a) }
+
+/* Photos at the size they are shown. ESPN logos and headshots arrive at 500px or more and were shown at
+   18-90px: a match page decoded ~110 MB of pictures, the browser ran out of graphics memory and the page
+   smeared into ghost copies while scrolling. ESPN's own resizer serves them small; every picture also
+   decodes off the main thread, and pictures below the fold wait until they are needed. */
+(() => {
+  const ESPN = /^https?:\/\/a\.espncdn\.com(\/i\/[^?#]+\.(?:png|jpe?g))(?:[?#].*)?$/i;
+  const widthFor = p => /\/headshots\//.test(p) ? 260 : 160;
+  const fix = img => {
+    if (img.decoding !== 'async') img.decoding = 'async';
+    if (!img.hasAttribute('loading') && !img.closest('.hero,.top')) img.loading = 'lazy';
+    const src = img.getAttribute('src') || '', m = ESPN.exec(src);
+    if (!m) return;
+    img.dataset.full = src;
+    img.setAttribute('src', `https://a.espncdn.com/combiner/i?img=${m[1]}&w=${widthFor(m[1])}`);
+  };
+  // if the resizer ever fails, fall back to the original picture before the page's own error handler runs
+  document.addEventListener('error', e => {
+    const img = e.target;
+    if (img?.tagName !== 'IMG' || !img.dataset.full || !/\/combiner\/i\?/.test(img.src)) return;
+    e.stopImmediatePropagation();
+    const full = img.dataset.full; delete img.dataset.full; img.dataset.noshrink = '1'; img.setAttribute('src', full);
+  }, true);
+  const scan = root => {
+    if (root.tagName === 'IMG') { if (!root.dataset.noshrink) fix(root); return }
+    root.querySelectorAll?.('img:not([data-noshrink])').forEach(fix);
+  };
+  scan(document.body);
+  new MutationObserver(list => {
+    for (const r of list) {
+      if (r.type === 'attributes') { if (!r.target.dataset.noshrink) fix(r.target) }
+      else r.addedNodes.forEach(n => n.nodeType === 1 && scan(n));
+    }
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+})();

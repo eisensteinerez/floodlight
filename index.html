@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Floodlight">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#06050B">
+<meta name="theme-color" content="#07090C">
 <link rel="preconnect" href="https://site.api.espn.com" crossorigin>
 <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin>
 <link rel="preconnect" href="https://a.espncdn.com">
@@ -618,7 +618,7 @@ body.drawer-open{overflow:hidden}
 
 
 /* ---------- wide match panel (expand) ---------- */
-.shell.sheet-wide > #list, .shell.sheet-wide > #market, .shell.sheet-wide > .chips{display:none!important}
+.shell.sheet-wide > #list, .shell.sheet-wide > #market, .shell.sheet-wide > .chips, .shell.sheet-wide > #fb, .shell.sheet-wide > #bb, .shell.sheet-wide > #hk, .shell.sheet-wide > #tn, .shell.sheet-wide > #bsb{display:none!important}
 @media (min-width:1181px){ .shell.sheet-wide{grid-template-columns:240px minmax(0,1fr)!important} }
 @media (min-width:821px) and (max-width:1180px){ .shell.sheet-wide{grid-template-columns:minmax(0,1fr)!important} }
 /* wide keeps everything at its normal size: only the panel gets wider, and the pitch stays at its usual size */
@@ -1631,7 +1631,7 @@ const TAB_ICO = { pitch: '<rect x="3" y="5" width="18" height="14" rx="2"/><path
   xi: '<path d="M12 3l7 3v6c0 4.500-3 7.500-7 9-4-1.500-7-4.500-7-9V6z"/>', transfers: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>', fixtures: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', news: '<path d="M5 5h11v14H5zM16 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5"/>',
   scorers: '<circle cx="12" cy="12" r="9"/><path d="M12 7.500l4 3-1.500 4.500h-5L8 10.500z"/>', assists: '<path d="M4 18c5 0 5-12 10-12h6M17 3l3 3-3 3"/>', winner: '<path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4c0 3 1.500 4.500 3.500 5M17 6h3c0 3-1.500 4.500-3.500 5M12 14v4M8 20h8"/>',
   zones: '<path d="M12 21c4-4.500 6-7.800 6-11a6 6 0 0 0-12 0c0 3.200 2 6.500 6 11z"/><circle cx="12" cy="10" r="2"/>', matches: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>', career: '<path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/>', value: '<path d="M4 17l5-5 4 3 7-8M15 7h5v5"/>' };
-for (const [k, t] of Object.entries({ roster: 'squad', sched: 'calendar', schedule: 'calendar', stand: 'table', standings: 'table', log: 'matches', splits: 'value', box: 'stats', plays: 'feed', pbp: 'feed', top: 'winner', leaders: 'scorers', summary: 'overview', game: 'pitch', props: 'insight', pred: 'insight', lines: 'odds', draw: 'table', h2h: 'transfers', bio: 'profile' })) TAB_ICO[k] ??= TAB_ICO[t];
+for (const [k, t] of Object.entries({ centre: 'overview', roster: 'squad', sched: 'calendar', schedule: 'calendar', stand: 'table', standings: 'table', log: 'matches', splits: 'value', box: 'stats', plays: 'feed', pbp: 'feed', top: 'winner', leaders: 'scorers', summary: 'overview', game: 'pitch', props: 'insight', pred: 'insight', lines: 'odds', draw: 'table', h2h: 'transfers', bio: 'profile' })) TAB_ICO[k] ??= TAB_ICO[t];
 const tabIco = k => TAB_ICO[k] ? `<svg class="tab-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICO[k]}</svg>` : '';
 const TABS = [['centre','Match centre'],['pitch','Pitch'],['stats','Stats'],['odds','Odds'],['insight','Prediction'],['flow','Momentum'],['lineups','Lineups'],['table','Table'],['feed','Commentary']];
 function renderSheet(){
@@ -3640,11 +3640,11 @@ function openLeague(slug, show){
   if (show) $('sheet').classList.add('open');
   $('sheet').querySelector('.sheet-body')?.scrollTo(0, 0);
 }
-const STAGE = new Set(['team', 'fmteam', 'player', 'tc', 'match']);
+const GAMES = new Set(['match', 'bbgame', 'fbgame', 'hkgame', 'bsbgame', 'tngame']), STAGE = new Set(['team', 'fmteam', 'player', 'tc', ...GAMES]);
 // Team, player and transfer-centre pages take the whole stage; matches and a league beside its fixtures stay as a side panel.
 function syncStage(){
   const v = S.stack[S.stack.length - 1], sh = document.querySelector('.shell'), auto = !!v && STAGE.has(v.type) && matchMedia('(min-width:821px)').matches;
-  sh.classList.toggle('sheet-wide', !!S.big || auto); sh.classList.toggle('stage', (!!S.big || auto) && !!v); sh.classList.toggle('stage-match', auto && v.type === 'match'); sh.classList.toggle('stage-auto', auto);
+  sh.classList.toggle('sheet-wide', !!S.big || auto); sh.classList.toggle('stage', (!!S.big || auto) && !!v); sh.classList.toggle('stage-match', auto && GAMES.has(v.type)); sh.classList.toggle('stage-auto', auto);
 }
 function setBig(on){
   S.big = on; syncStage();
@@ -4004,7 +4004,7 @@ const FM_SOURCE = { 'isr.1': 127 };
 const FM_IMGS = 'https://images.fotmob.com/image_resources';
 if (LG['isr.1']) LG['isr.1'].logo = `${FM_IMGS}/logo/leaguelogo/127.png`;
 const FM_TABS = [['lineups','Lineups'],['stats','Stats'],['events','Timeline'],['odds','Odds'],['insight','Prediction'],['table','Table']];
-const FM_PALETTE = ['#C8102E','#1D4ED8','#15803D','#D97706','#7C3AED','#0E7490','#BE185D','#4D7C0F','#B45309','#1E3A8A','#9F1239','#047857'];
+const FM_PALETTE = ['#C8102E','#1D4ED8','#15803D','#D97706','#0F766E','#0E7490','#BE185D','#4D7C0F','#B45309','#1E3A8A','#9F1239','#047857'];
 const fmColor = name => { let h = 0; for (const c of name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0; return FM_PALETTE[h % FM_PALETTE.length].slice(1) };
 const abbrOf = n => { const w = (n || '').replace(/\b(FC|SC|F\.C\.)\b/g, '').split(/[\s-]+/).filter(Boolean); const a = w.map(x => x[0]).join('').toUpperCase(); return (a.length >= 3 ? a : (a + (w[w.length - 1] || '').slice(1).toUpperCase())).slice(0, 3) };
 function normFM(f, slug){
@@ -4507,6 +4507,45 @@ function predDepthData(P){
     h2: sum((i, j) => i >= 2), a2: sum((i, j) => j >= 2) };
 }
 const fairUS = p => p <= 0 || p >= 1 ? '—' : p >= .5 ? '−' + Math.round(100 * p / (1 - p)) : '+' + Math.round(100 * (1 - p) / p);
+/* the soccer-style verdict for every sport: two big chance cards, the pick, a headline, scoreboard tiles and the model-vs-market edge */
+function sportVerdict(o){
+  const top = Math.max(o.L.p, o.R.p), fav = o.L.p >= o.R.p ? o.L : o.R, dog = fav === o.L ? o.R : o.L;
+  const line = top >= .7 ? `${fav.name} are clear favourites. An upset would be a surprise.` : top >= .58 ? `${fav.name} are favourites, but ${dog.name} have a real chance.` : `Close to a coin flip. ${fav.name} have a slight edge.`;
+  const fL = fav === o.L, fp = p => p == null ? null : fL ? p : 1 - p;
+  if (!o.rings) o.rings = [[fp(o.model), 'Stats model', `Chance for ${fav.name} from team stats alone`], [fp(o.market), 'Market', `The betting market's chance for ${fav.name}, margin removed`]];
+  const card = (t, side) => { const isPick = fav === t, hit = o.winner === side;
+    return `<div class="vc${isPick ? ' pick' : ''}${hit ? ' hit' : ''}" style="--c:${t.col}">${isPick ? `<i class="vc-tag">Our pick</i>` : ''}${hit ? `<i class="vc-tag res">Result</i>` : ''}
+      <span class="vc-crest">${t.logo ? `<img src="${esc(t.logo)}" alt="" onerror="this.style.visibility='hidden'">` : `<u>${esc((t.name || '?')[0])}</u>`}</span><span class="vc-n">${esc(t.name)}</span>
+      <b class="num">${pct(t.p)}<i>%</i></b><span class="vc-o num">fair ${fairUS(t.p)}</span><span class="vc-fill" style="height:${Math.max(6, t.p * 100).toFixed(1)}%"></span></div>` };
+  const C = 2 * Math.PI * 26, ring = (p, label, tip) => `<div class="pg" data-tip="${esc(tip || label)}" tabindex="0"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle class="pg-a" cx="32" cy="32" r="26" stroke-dasharray="${(p * C).toFixed(1)} ${C.toFixed(1)}" style="--len:${(p * C).toFixed(1)}" transform="rotate(-90 32 32)"/></svg><b class="num">${pct(p)}<i>%</i></b><span>${esc(label)}</span></div>`;
+  const tile = ([v, label, tip]) => `<div class="pg sc" data-tip="${esc(tip || label)}" tabindex="0"><b class="num">${esc(v)}</b><span>${esc(label)}</span></div>`;
+  const pgs = [...(o.tiles || []).slice(0, 1).map(tile), ...(o.rings || []).filter(r => r[0] != null && isFinite(r[0])).slice(0, 2).map(r => ring(...r)), ...(o.tiles || []).slice(1, 2).map(tile)].join('');
+  let edge = '';
+  if (o.model != null && o.market != null && !o.post) {   // o.model / o.market: chance for the L side
+    const gL = o.model - o.market, side = gL >= 0 ? o.L : o.R, pm = gL >= 0 ? o.model : 1 - o.model, pk = gL >= 0 ? o.market : 1 - o.market, g = Math.abs(gL);
+    edge = g >= .04 ? `<div class="edge up"><b>Model edge</b><p>The stats model rates ${esc(side.name)} at <strong class="num">${pct(pm)}%</strong>, the market prices them at <strong class="num">${pct(pk)}%</strong>. That is a <strong class="num">${pct(g)}</strong> point gap, with a fair price of <strong class="num">${fairUS(pm)}</strong> against the market's <strong class="num">${fairUS(pk)}</strong>.</p></div>`
+      : `<div class="edge"><b>No edge</b><p>The stats model and the market are within ${Math.max(1, pct(g))} points, so the price looks fair.</p></div>`;
+  }
+  return `<div class="vd"><div class="vd-h"><small>${o.post ? 'Pre-game prediction' : 'Floodlight prediction'}${o.tag || ''}</small>
+      <span class="conf ${o.conf === 'Strong' ? 'high' : o.conf === 'Lean' ? 'medium' : 'low'}">${o.conf === 'Toss-up' ? 'Toss-up' : esc(o.conf) + ' confidence'}</span></div>
+    <h4 class="vd-pick">${esc(fav.name)} ${o.verb || 'win'}</h4><p class="vd-line">${esc(line)}</p>
+    ${o.post && o.winner ? `<p class="pred-out ${(o.winner === 'L') === (fav === o.L) ? 'ok' : 'miss'}">${(o.winner === 'L') === (fav === o.L) ? 'Called it' : 'Missed'}: ${esc(o.final || '')}</p>` : ''}
+    <div class="vcs two" role="group" aria-label="Chances">${card(o.L, 'L')}${card(o.R, 'R')}</div></div>
+    ${pgs ? `<div class="pgs">${pgs}</div>` : ''}${edge}`;
+}
+/* game centre for every sport: prediction beside the live picture, like the soccer match centre */
+function gameCentre(v, tabs, paneFn, predHTML){
+  const go = (tab, label) => `<button class="mc-go" data-tab="${tab}">${esc(label)} <span aria-hidden="true">→</span></button>`;
+  const card = (cls, title, tab, label, body) => body && body.trim() ? `<section class="mc-c mc-${cls}"><header><h5>${esc(title)}</h5>${tab ? go(tab, label) : ''}</header><div class="mc-b">${body}</div></section>` : '';
+  const cut = h => { const i = h.indexOf('<div class="tiles pred-tiles">'); return i > 0 ? h.slice(0, i) : h };
+  const has = k => tabs.some(t => t[0] === k), lab = k => tabs.find(t => t[0] === k)?.[1] || k;
+  const run = k => { const was = v.tab; v.tab = k; try { return paneFn(v) } catch (err) { return '' } finally { v.tab = was } };
+  const pre = v.e.state === 'pre';
+  const picks = (pre ? ['matchup', 'team', 'form', 'h2h', 'odds'] : ['summary', 'box', 'stats', 'team', 'plays', 'pbp']).filter(has).slice(0, 2);
+  return `<div class="mc gc${pre ? ' pre' : ''}">${card('pred', 'Prediction', has('pred') ? 'pred' : '', 'Why and every number', cut(predHTML || ''))}${picks.map((k, i) => card(i ? 'wide' : 'main', lab(k), k, 'Open ' + lab(k).toLowerCase(), run(k))).join('')}</div>`;
+}
+const withCentre = tabs => tabs.some(t => t[0] === 'pred') ? [['centre', 'Game centre'], ...tabs] : tabs;
+const whyList = rs => `<ol class="why2">${rs.map((r, i) => `<li style="--i:${i}"><b class="num">${String(i + 1).padStart(2, '0')}</b><p>${esc(r)}</p></li>`).join('')}</ol>`;
 function predDepth(e, P, part){
   const D = predDepthData(P), hn = e.home.abbr || e.home.name, an = e.away.abbr || e.away.name, H = esc(e.home.name), A = esc(e.away.name);
   const top = Math.max(...D.g.slice(0, 6).flatMap(r => r.slice(0, 6)));

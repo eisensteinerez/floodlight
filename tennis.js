@@ -283,7 +283,7 @@ async function renderTnRank(){
 /* ---------- match page ---------- */
 function openTnGame(id, tab){
   const e = S.tn.matches.get(String(id)); if (!e) return;
-  S.sel = null; S.stack = [{ type: 'tngame', id: e.id, e, tab: tab || (e.state === 'pre' ? 'pred' : 'summary') }];
+  S.sel = null; S.stack = [{ type: 'tngame', id: e.id, e, tab: tab || 'centre' }];
   renderSheet(); $('sheet').classList.add('open'); $('sheet').querySelector('.sheet-body')?.scrollTo(0, 0);
   tnLoadGame(S.stack[0]);
 }
@@ -303,7 +303,7 @@ function tnHero(v, back){
   const n = Math.max(e.home.games.length, e.away.games.length);
   const row = side => { const p = e[side], o = e[side === 'home' ? 'away' : 'home'];
     return `<tr><td class="t">${e.state === 'in' && p.serving ? '<i class="tn-serve"></i>' : ''}${esc(p.name)}</td>${Array.from({ length: n }, (_, i) => `<td class="${p.games[i] != null && o.games[i] != null && p.games[i] > o.games[i] ? 'tn-w' : ''}">${p.games[i] ?? ''}${p.tb[i] != null && o.tb[i] != null ? `<sup>${p.tb[i]}</sup>` : ''}</td>`).join('')}${e.state === 'in' ? `<td class="tn-pt">${esc(p.point || '')}</td>` : ''}<td class="pts">${p.sets ?? ''}</td></tr>` };
-  return `<div class="hero tn-hero" style="--hc:var(--accent);--ac:var(--line)">
+  return `<div class="hero tn-hero mh sp-tn tn-s-${esc((t.surface || 'hard').toLowerCase())}${e.state === 'in' ? ' is-live' : ''}" style="--hc:#FFE7A8;--ac:#9FC2FF">
     ${topBar(back).replace('<div class="hero-top">', `<div class="hero-top"><div class="lgname"><span class="tn-lvl tn-l-${esc(t.level)}">${esc(TNL[t.level]?.short || '')}</span><span>${esc(t.name || '')}${e.round ? ' · ' + esc(e.round) : ''}</span></div>`)}
     <div class="board">${who('home')}
       <div class="score">${s ? `<div class="big num">${esc(e.home.sets ?? 0)}<em>–</em>${esc(e.away.sets ?? 0)}</div><div class="status">${e.state === 'in' ? `<span class="pill live">${esc(e.detail)}</span>` : `<span class="pill" style="background:var(--surface-2);color:var(--muted)">${esc(e.detail)}</span>`}</div>`
@@ -399,11 +399,11 @@ function tnPredPane(v){
   if (!P) return `<div class="note">Not enough information to predict this match: neither player has a known ranking and no bookmaker prices it.</div>`;
   const post = e.state === 'post', pH = post ? P.pPre : P.pH, fav = pH >= .5 ? 'home' : 'away';
   const top = P.scores.slice(0, 6).map(x => `<div class="tile"><b class="num">${x.a}–${x.b}</b><span>${esc(e[x.w].name)} · ${pct(x.p)}%</span></div>`).join('');
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-match prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(e[fav].name)} to win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${PFX.confOf(Math.max(pH, 1 - pH))} · ${pct(Math.max(pH, 1 - pH))}%</span>${post && e.winner ? `<span class="pred-out ${e.winner === fav ? 'ok' : 'miss'}">${e.winner === fav ? 'Called it' : 'Missed'} — ${e.home.sets}–${e.away.sets} in sets</span>` : ''}</div>
-      <div class="pred-score"><small>Most likely result</small><b class="num">${P.scores[0].a}–${P.scores[0].b}</b><small>sets, ${esc(e.home.name.split(' ')[0])} – ${esc(e.away.name.split(' ')[0])}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.home.name} ${pct(pH)} percent, ${e.away.name} ${pct(1 - pH)} percent`)}"><i style="flex-grow:${pH};background:var(--accent)"><span>${pct(pH)}%</span></i><i style="flex-grow:${1 - pH};background:color-mix(in oklab,var(--muted) 55%,var(--surface-2))"><span>${pct(1 - pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:var(--accent)"></i>${esc(e.home.name)}</span><span><i style="background:color-mix(in oklab,var(--muted) 55%,var(--surface-2))"></i>${esc(e.away.name)}</span></div>
+  return `${sportVerdict({ post, conf: PFX.confOf(Math.max(pH, 1 - pH)), verb: 'to win', L: { name: e.home.name, logo: e.home.photo, p: pH, col: 'var(--accent)' }, R: { name: e.away.name, logo: e.away.photo, p: 1 - pH, col: '#9FC2FF' },
+      winner: post && e.winner ? (e.winner === 'home' ? 'L' : 'R') : null, final: `${e.home.sets}–${e.away.sets} in sets`,
+      model: P.pModel, market: P.market,
+      rings: [[P.pDecider, 'Deciding set', 'Chance the match goes the distance'], [P.straight[fav], 'Straight sets', `Chance ${e[fav].name} wins without dropping a set`]],
+      tiles: [[`${P.scores[0].a}–${P.scores[0].b}`, 'Likeliest sets'], [`${P.rH || '–'} · ${P.rA || '–'}`, 'Rankings']] })}
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${pct(P.s)}%</b><span>${esc(e.home.name)} wins a set</span></div>
       <div class="tile"><b class="num">${pct(P.pDecider)}%</b><span>Goes to a deciding set</span></div>
       <div class="tile"><b class="num">${pct(P.straight[fav])}%</b><span>${esc(e[fav].name)} in straight sets</span></div>
@@ -411,7 +411,7 @@ function tnPredPane(v){
       <div class="tile"><b class="num">${P.pModel != null ? pct(P.pModel) + '%' : '–'}</b><span>${esc(e.home.name)} on ranking alone</span></div>
       <div class="tile"><b class="num">${P.rH || '–'} · ${P.rA || '–'}</b><span>World rankings</span></div></div>
     <div class="sub-h"><h5>Set scores</h5><small>Best of ${P.bo}</small></div><div class="tiles">${top}</div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${tnReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>${RG}`;
+    <div class="sub-h"><h5>Why</h5></div>${whyList(tnReasons(e, P))}${RG}`;
 }
 
 /* ---------- player page ---------- */
@@ -529,7 +529,7 @@ function tnLogRow(m, pid){
 function tnOpenLogMatch(v, id){
   const m = [...(v.p?.matches || []), ...(v.p?.upcoming || [])].find(x => x.id === id); if (!m) return;
   if (!S.tn.matches.has(m.id)) { S.tn.matches.set(m.id, { ...m, date: new Date(m.ts * 1000) }); if (!S.tn.tours[m.tn]) S.tn.tours[m.tn] = { id: m.tn, name: m.tnName, level: m.level, disc: m.disc, surface: m.surface, indoor: m.indoor, tour: m.levelName, path: m.tnPath, qual: m.qual } }
-  const e = S.tn.matches.get(m.id); pushView({ type: 'tngame', id: e.id, e, tab: e.state === 'pre' ? 'pred' : 'summary' }); tnLoadGame(S.stack[S.stack.length - 1]);
+  const e = S.tn.matches.get(m.id); pushView({ type: 'tngame', id: e.id, e, tab: 'centre' }); tnLoadGame(S.stack[S.stack.length - 1]);
 }
 
 /* ---------- tournament sheet ---------- */
@@ -558,7 +558,7 @@ function tnRenderSheet(v){
   if (v.type === 'tntour') return tnTourSheet(v);
   const sheet = $('sheet'), back = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
   let hero, tabs, body;
-  if (v.type === 'tngame') { hero = tnHero(v, back); tabs = tnGameTabs(v); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = tnPane(v) }
+  if (v.type === 'tngame') { hero = tnHero(v, back); tabs = withCentre(tnGameTabs(v)); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = v.tab === 'centre' ? gameCentre(v, tabs, tnPane, tnPredPane(v)) : tnPane(v) }
   else { hero = tnPlayerHero(v, back); tabs = [['overview', 'Overview'], ['stats', 'Stats'], ['splits', 'Splits'], ['log', 'Matches'], ['titles', 'Titles']]; body = tnPlayerPane(v) }
   S.curTabs = tabs;
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
@@ -597,7 +597,7 @@ async function tnSearch(q){
     renderTennis(); tnTicker();
   };
   const _sheet = renderSheet;
-  renderSheet = function(){ const v = S.stack[S.stack.length - 1]; if (v?.type?.startsWith('tn')) return tnRenderSheet(v); return _sheet.apply(this, arguments) };
+  renderSheet = function(){ const v = S.stack[S.stack.length - 1]; if (v?.type?.startsWith('tn')) { syncStage(); return tnRenderSheet(v) } return _sheet.apply(this, arguments) };
   const _search = searchAll;
   searchAll = function(q){ if (S.sport === 'tennis') return tnSearch(q); return _search.apply(this, arguments) };
   const _openLeague = openLeague;

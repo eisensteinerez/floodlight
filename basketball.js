@@ -321,7 +321,7 @@ function bbReasons(e, P){
 /* ---------- game page ---------- */
 function openBbGame(id){
   const e = S.bb.games.get(String(id)); if (!e) return;
-  S.sel = null; S.stack = [{ type: 'bbgame', id: e.id, e, tab: e.state === 'pre' ? 'pred' : 'box' }];
+  S.sel = null; S.stack = [{ type: 'bbgame', id: e.id, e, tab: 'centre' }];
   renderSheet(); $('sheet').classList.add('open'); $('sheet').querySelector('.sheet-body')?.scrollTo(0, 0);
   bbLoadGame(S.stack[0]);
 }
@@ -366,7 +366,7 @@ function bbHero(e, back){
   const [L, R, lt, rt] = us ? [e.away, e.home, 'Away', e.neutral ? 'Neutral' : 'Home'] : [e.home, e.away, e.neutral ? 'Neutral' : 'Home', 'Away'];
   const side = (t, ha) => `<div class="side"><img src="${esc(t.logo)}" alt="" onerror="this.style.visibility='hidden'"><strong><button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(e.lg)}" data-bbslug="${esc(t.slug || '')}">${esc(t.full || t.name)}</button></strong><small class="rec">${esc(t.record || '')}${t.record ? ' · ' : ''}${ha}</small></div>`;
   const lines = e.home.lines?.length ? e.home.lines : null;
-  return `<div class="hero" style="--hc:${us ? e.ac : e.hc};--ac:${us ? e.hc : e.ac}">
+  return `<div class="hero mh sp-bb${e.state === 'in' ? ' is-live' : ''}" style="--hc:${us ? e.ac : e.hc};--ac:${us ? e.hc : e.ac}">
     ${topBar(back).replace('<div class="hero-top">', `<div class="hero-top"><div class="lgname">${bbLogo(e.lg) ? `<img src="${esc(bbLogo(e.lg))}" width="16" height="16" alt="">` : ''}<span>${esc(BBL[e.lg].name)}${e.note ? ' · ' + esc(e.note) : ''}</span></div>`)}
     <div class="board">${side(L, lt)}
       <div class="score">${s ? `<div class="big num">${esc(L.score)}<em>–</em>${esc(R.score)}</div><div class="status">${e.state === 'in' ? `<span class="pill live">${esc(e.detail)}</span>` : `<span class="pill" style="background:var(--surface-2);color:var(--muted)">${esc(e.detail)}</span>`}</div>`
@@ -510,16 +510,15 @@ function bbPredPane(v){
   const post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null, pickTeam = e[P.pick];
   const us = e.src === 'espn' && e.lg !== 'nbl', [L, R, lc, rc, pL] = us ? [e.away, e.home, e.ac, e.hc, 1 - P.pH] : [e.home, e.away, e.hc, e.ac, P.pH];
   const [sL, sR] = us ? [P.score[1], P.score[0]] : P.score;
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}</h5><strong class="pred-pick">${esc(pickTeam.name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(L.score)}–${esc(R.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${sL}–${sR}</b><small>${esc(L.abbr || L.name)} – ${esc(R.abbr || R.name)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${L.name} ${pct(pL)} percent, ${R.name} ${pct(1 - pL)} percent`)}"><i style="flex-grow:${pL};background:${lc}"><span>${pct(pL)}%</span></i><i style="flex-grow:${1 - pL};background:${rc}"><span>${pct(1 - pL)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${lc}"></i>${esc(L.name)}</span><span><i style="background:${rc}"></i>${esc(R.name)}</span></div>
+  return `${sportVerdict({ post, conf: P.conf, L: { name: L.name, logo: L.logo, p: pL, col: lc }, R: { name: R.name, logo: R.logo, p: 1 - pL, col: rc },
+      winner: post ? ((win === 'home') === (L === e.home) ? 'L' : 'R') : null, final: `final ${L.score}–${R.score}`,
+      model: L === e.home ? P.pModel : 1 - P.pModel, market: P.market == null ? null : L === e.home ? P.market : 1 - P.market,
+      tiles: [[`${sL}–${sR}`, 'Projected score', `${L.abbr || L.name} – ${R.abbr || R.name}`], [P.total.toFixed(1), 'Projected total']] })}
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${esc((P.margin >= 0 ? e.home : e.away).abbr || (P.margin >= 0 ? e.home : e.away).name)} −${Math.abs(P.margin).toFixed(1)}</b><span>Projected spread</span></div>
       <div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total${P.M.total != null ? ` · books ${bbFix(P.M.total)}` : ''}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.abbr || e.home.name)} in the market</span></div>
       <div class="tile"><b class="num">${pct(P.pModel)}%</b><span>${esc(e.home.abbr || e.home.name)} on form alone</span></div></div>
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${bbReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+    <div class="sub-h"><h5>Why</h5></div>${whyList(bbReasons(e, P))}
     ${bbSeasonCompare(v)}
     <p class="srcnote">Model: each team's average winning margin this season (shrunk toward zero early on) plus home court, turned into a win chance. When sportsbooks list the game, their no-vig consensus carries 70% of the chance, spread and total${BBL[e.lg].kx ? ' (Kalshi included)' : ''}; ESPN's matchup predictor adds 20% where it exists.</p>${RG}`;
 }
@@ -860,7 +859,7 @@ function bbRenderSheet(v){
   const sheet = $('sheet');
   const back = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
   let hero, tabs, body;
-  if (v.type === 'bbgame') { hero = bbHero(v.e, back); tabs = bbGameTabs(v); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = bbPane(v) }
+  if (v.type === 'bbgame') { hero = bbHero(v.e, back); tabs = withCentre(bbGameTabs(v)); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = v.tab === 'centre' ? gameCentre(v, tabs, bbPane, bbPredPane(v)) : bbPane(v) }
   else if (v.type === 'bbteam') { hero = bbTeamHero(v, back); tabs = [['roster', 'Roster'], ['sched', 'Schedule'], ['stats', 'Team stats'], ['stand', 'Standings']]; body = bbTeamPane(v) }
   else if (v.type === 'bbplayer') { hero = bbPlayerHero(v, back); tabs = [['stats', 'Stats & ranks'], ['log', 'Game log'], ['splits', 'Splits']]; body = bbPlayerPane(v) }
   else { hero = bbFsPlayerHero(v, back); tabs = [['stats', 'Stats & ranks'], ['log', 'Recent games']]; body = bbFsPlayerPane(v) }

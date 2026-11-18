@@ -263,7 +263,7 @@ function openFbGame(id, lgKey){
   const all = Object.values(S.fb.data).flatMap(d => d.events || []);
   const e = all.find(x => x.id === String(id));
   if (!e) return;
-  S.sel = null; S.stack = [{ type: 'fbgame', id: e.id, e, tab: e.state === 'pre' ? 'pred' : 'summary' }];
+  S.sel = null; S.stack = [{ type: 'fbgame', id: e.id, e, tab: 'centre' }];
   renderSheet(); $('sheet').classList.add('open'); $('sheet').querySelector('.sheet-body')?.scrollTo(0, 0);
   fbLoadGame(S.stack[0]);
 }
@@ -293,7 +293,7 @@ async function fbGameOdds(e){
 function fbHero(e, back){
   const s = e.state !== 'pre', lines = e.home.lines.length ? e.home.lines : null;
   const side = (t, ha) => `<div class="side"><img src="${esc(t.logo)}" alt=""><strong><button class="linkbtn" data-fbteam="${esc(t.id)}" data-fbl="${esc(e.lg)}">${t.rank ? `#${t.rank} ` : ''}${esc(t.full || t.name)}</button></strong><small class="rec">${esc(t.record || '')}${ha ? ` · ${ha}` : ''}</small></div>`;
-  return `<div class="hero" style="--hc:${e.ac};--ac:${e.hc}">
+  return `<div class="hero mh sp-fb${e.state === 'in' ? ' is-live' : ''}" style="--hc:${e.ac};--ac:${e.hc}">
     ${topBar(back).replace('<div class="hero-top">', `<div class="hero-top"><div class="lgname">${FBL[e.lg].logo ? `<img src="${esc(FBL[e.lg].logo)}" width="16" height="16" alt="">` : ''}<span>${esc(FBL[e.lg].name)}${e.week ? ' · Week ' + e.week : ''}${e.note ? ' · ' + esc(e.note) : ''}</span></div>`)}
     <div class="board">${side(e.away, 'Away')}
       <div class="score">${s ? `<div class="big num">${esc(e.away.score)}<em>–</em>${esc(e.home.score)}</div><div class="status">${e.state === 'in' ? `<span class="pill live">${esc(e.detail)}</span>` : `<span class="pill" style="background:var(--surface-2);color:var(--muted)">${esc(e.detail)}</span>`}</div>`
@@ -373,16 +373,15 @@ function fbPredPane(e){
   const P = fcApplyFootball(e, fbPredict(e)), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
   const o = S.odds.get(e.id), mainTotal = o?.total?.length ? o.total.reduce((a, b) => Math.abs(b.p - .5) < Math.abs(a.p - .5) ? b : a) : null;
   const pickTeam = e[P.pick];
-  return `<div class="pred-head"><div><h5>${post ? 'Pre-game prediction' : 'Floodlight prediction'}${fcTag(P)}</h5><strong class="pred-pick">${esc(pickTeam.name)} win</strong>
-      <span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf} · ${pct(P.top)}%</span>${post ? `<span class="pred-out ${win === P.pick ? 'ok' : 'miss'}">${win === P.pick ? 'Called it' : 'Missed'} — final ${esc(e.away.score)}–${esc(e.home.score)}</span>` : ''}</div>
-      <div class="pred-score"><small>Projected score</small><b class="num">${P.score[1]}–${P.score[0]}</b><small>${esc(e.away.abbr)} – ${esc(e.home.abbr)}</small></div></div>
-    <div class="pbar" role="img" aria-label="${esc(`${e.away.name} ${pct(1 - P.pH)} percent, ${e.home.name} ${pct(P.pH)} percent`)}"><i style="flex-grow:${1 - P.pH};background:${e.ac}"><span>${pct(1 - P.pH)}%</span></i><i style="flex-grow:${P.pH};background:${e.hc}"><span>${pct(P.pH)}%</span></i></div>
-    <div class="pred-legend"><span><i style="background:${e.ac}"></i>${esc(e.away.name)}</span><span><i style="background:${e.hc}"></i>${esc(e.home.name)}</span></div>
+  return `${sportVerdict({ post, conf: P.conf, tag: fcTag(P), L: { name: e.away.name, logo: e.away.logo, p: 1 - P.pH, col: e.ac }, R: { name: e.home.name, logo: e.home.logo, p: P.pH, col: e.hc },
+      winner: post ? (win === 'away' ? 'L' : 'R') : null, final: `final ${e.away.score}–${e.home.score}`,
+      model: P.model == null ? null : 1 - P.model, market: (P.market ?? P.book) == null ? null : 1 - (P.market ?? P.book),
+      tiles: [[`${P.score[1]}–${P.score[0]}`, 'Projected score', `${e.away.abbr} – ${e.home.abbr}`], [P.total.toFixed(1), 'Projected total']] })}
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.effMargin >= 0 ? esc(e.home.abbr) : esc(e.away.abbr)} −${Math.abs(P.effMargin).toFixed(1)}</b><span>Projected spread</span></div>
       <div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total${mainTotal ? ` · Kalshi ${mainTotal.line}` : ''}</span></div>
       <div class="tile"><b class="num">${P.market != null ? pct(P.market) + '%' : '–'}</b><span>${esc(e.home.abbr)} on Kalshi</span></div></div>
     ${propsBlock(e)}${fcBlock(e)}
-    <div class="sub-h"><h5>Why</h5></div><ul class="why">${fbReasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+    <div class="sub-h"><h5>Why</h5></div>${whyList(fbReasons(e, P))}
     <p class="srcnote">Model: each team's points scored and allowed per game (shrunk toward average early in the season), home field, AP rank for college games and the injury report. The shown chance weighs the betting market (Kalshi, or the sportsbook line) at 55%, ESPN's matchup predictor at 25% and the model at 20%, using whichever are available. Once the scheduled forecasts start, the latest one replaces these numbers.</p>${RG}`;
 }
 
@@ -808,7 +807,7 @@ function fbRenderSheet(v){
   if (v.type === 'fbgame') { const e = v.e; hero = fbHero(e, back);
     tabs = [['summary', 'Summary'], ['box', 'Box score'], ['odds', 'Odds'], ['pred', 'Prediction'], ...(e.lg === 'nfl' ? [['inj', 'Injuries']] : []), ['stand', 'Standings']];
     if (e.src === 'tsdb') tabs = [['odds', 'Odds'], ['pred', 'Prediction']];
-    if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = fbPane(v) }
+    tabs = withCentre(tabs); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = v.tab === 'centre' ? gameCentre(v, tabs, fbPane, fbPredPane(e)) : fbPane(v) }
   else if (v.type === 'fbteam') { hero = fbTeamHero(v, back); tabs = [['sched', 'Schedule'], ['roster', 'Roster'], ['stand', 'Standings'], ...(v.lg === 'nfl' || FBL[v.lg].college ? [['fut', 'Title odds']] : [])]; body = fbTeamPane(v) }
   else { hero = fbPlayerHero(v, back); tabs = [['stats', 'Stats'], ['log', 'Game log'], ['career', 'Career'], ['news', 'News']]; body = fbPlayerPane(v) }
   S.curTabs = tabs;

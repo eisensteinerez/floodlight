@@ -141,6 +141,8 @@ FONTS = "https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400..700&displ
 # the display and reading faces, declared the same way theme.css declares them
 FONT_FACES = """@font-face{font-family:"FL Slant";font-style:normal;font-weight:100 900;font-stretch:62% 70%;font-display:swap;src:url(https://fonts.gstatic.com/s/archivo/v25/k3kSo8UDI-1M0wlSfdzYLGHE.woff2) format("woff2")}
 @font-face{font-family:"Manrope";font-style:normal;font-weight:400 800;font-display:swap;src:url(https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2) format("woff2")}
+@font-face{font-family:"FL Neat";font-style:normal;font-weight:600;font-display:swap;src:url(https://fonts.gstatic.com/s/geist/v5/gyByhwUxId8gMEwcGFWNOITd.woff2) format("woff2")}
+@font-face{font-family:"Geist";font-style:normal;font-weight:400 800;font-display:swap;src:url(https://fonts.gstatic.com/s/geist/v5/gyByhwUxId8gMEwcGFWNOITd.woff2) format("woff2")}
 """
 _fonts = {}
 
