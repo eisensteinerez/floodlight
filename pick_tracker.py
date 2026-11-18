@@ -292,6 +292,12 @@ def sport_records(cards):
     return {k: stats(by[k]) for k in sorted(by, key=lambda k: order.index(k) if k in order else 9) if stats(by[k])["n"]}
 
 
+def outcome_of(snap, c):
+    """What a correction is about: a props card's result, or a soccer post's picks. A late leg that doesn't change
+    the card (a pending pick on a card that already lost) isn't a correction."""
+    return tuple(snap["legs"]) if c["single"] else snap["result"]
+
+
 def recap_day():
     """The slate a run recaps: at 12:30 AM and 8 AM that is the day before."""
     return (now_et() - dt.timedelta(hours=9)).date().isoformat()
@@ -362,7 +368,7 @@ def report(update=False):
     fixed = []
     for c in mine:
         r = c.get("reported")
-        if r and settled(c) and snapshot(c) != r:
+        if r and settled(c) and outcome_of(snapshot(c), c) != outcome_of(r, c):
             was = r["result"] if not c["single"] else "-".join(str(r["legs"].count(x)) for x in ("won", "lost"))
             fixed.append((c, TAG.get(was, was).replace("*", "") if not c["single"] else was))
     if not new and not fixed:
