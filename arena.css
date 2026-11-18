@@ -712,3 +712,43 @@ button.bx-hero:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pf-dots i{flex:1;height:6px;border-radius:99px;background:var(--surface-2)}
 .pf-dots i.won{background:var(--accent)}.pf-dots i.lost{background:var(--live)}
 @media (prefers-reduced-motion:reduce){.pf-ring circle.a{animation:none}}
+
+/* ---------- research ---------- */
+/* the research screen sits beside the sidebar instead of covering it, so the rest of the app stays one click away */
+@media (min-width:821px){.rs{left:var(--sbw);transition:left .3s var(--ease)}}
+.rs{background:var(--bg);animation:fl-rise .28s var(--ease)}
+.rs-in{max-width:1180px;padding-top:18px}
+.rs-top{gap:10px;padding:2px 0 14px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.rs-top h2{font:700 30px/1 var(--f-display);letter-spacing:.02em;text-transform:uppercase}
+.rs-x{height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 12.5px/1 var(--f-body);transition:color .15s,border-color .15s}
+.rs-x:hover{color:var(--fg);border-color:var(--line-2)}
+.rs .seg{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.rs .seg button{border-radius:999px;font:600 12.5px/1 var(--f-body);color:var(--muted);clip-path:none;font-style:normal;transition:color .15s,background .15s}
+.rs .seg button:hover{color:var(--fg)}
+.rs .seg button.on,.rs .seg button[aria-pressed="true"],.rs .seg button[aria-selected="true"]{background:var(--fg);color:var(--bg);box-shadow:none}
+.rs-tabs{gap:2px;margin-bottom:18px}
+.rs-tabs button{padding:11px 14px;font:600 13px/1 var(--f-body);transition:color .15s}
+.rs-tabs button:hover{color:var(--fg)}
+.rs-search{max-width:640px}
+.rs-search .search input,.rs-bbar .search input,.rs-bf input{height:46px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font:500 15px/1 var(--f-body);transition:border-color .15s,box-shadow .15s}
+.rs-search .search input:focus,.rs-bbar .search input:focus{border-color:color-mix(in oklab,var(--accent) 60%,var(--line));box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 12%,transparent);outline:0}
+.rs-search .search::after{content:attr(data-kbd);position:absolute;right:12px;top:50%;translate:0 -50%;font:600 11px/1 var(--f-body);color:var(--faint);border:1px solid var(--line);border-radius:6px;padding:4px 6px;pointer-events:none}
+.rs-search .search:not([data-kbd])::after,.rs-search .search:focus-within::after{display:none}
+.rs-hits{top:52px;border-radius:16px;box-shadow:var(--shadow-lg);padding:6px}
+.rs-hit{border-radius:11px;transition:background .12s}
+.rs-recent>span,.rs-lc>span{font:600 10.5px/1 var(--f-body);letter-spacing:.12em;color:var(--faint)}
+.rs .qf{border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 12.5px/1 var(--f-body);clip-path:none;font-style:normal;transition:color .15s,border-color .15s,background .15s,transform .15s}
+.rs .qf:hover{color:var(--fg);border-color:var(--line-2)}.rs .qf:active{transform:scale(.97)}
+.rs .qf.on,.rs .qf[aria-pressed="true"]{background:color-mix(in oklab,var(--accent) 14%,var(--surface));border-color:color-mix(in oklab,var(--accent) 55%,transparent);color:var(--fg)}
+.rs-empty{border-radius:var(--r-card);padding:26px;background:var(--surface);border:1px solid var(--line)}
+.rs-empty strong{font:700 22px/1.15 var(--f-display)}
+.rs-ph{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:16px;margin:18px 0 14px}
+.rs-ph h3{font:700 30px/1 var(--f-display)}
+.rs-lc input{border-radius:var(--r-ctl);font:700 20px/1 var(--f-display)}
+.rs-lchip{transition:border-color .15s}
+.rs table{border-collapse:separate;border-spacing:0}
+.rs th{font:600 10.5px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.rs tbody tr{transition:background .12s}.rs tbody tr:hover{background:color-mix(in oklab,var(--fg) 4%,transparent)}
+/* the keyboard hint on the sidebar's Research item */
+.fsn kbd{margin-left:auto;font:600 10.5px/1 var(--f-body);color:var(--faint);border:1px solid var(--line);border-radius:6px;padding:3px 5px}
+:root.side-mini .fsn kbd{display:none}

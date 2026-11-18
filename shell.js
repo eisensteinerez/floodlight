@@ -39,7 +39,7 @@
       <h4>Sports</h4>
       ${SPORTS.map(([k, l]) => item(k, l, `data-sport="${k}"`)).join('')}
       <h4>You</h4>
-      ${item('research', 'Research', 'data-rs="open"')}
+      ${item('research', 'Research', 'data-rs="open"', `<kbd>${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl '}K</kbd>`)}
       ${item('pred', 'Predictions', 'data-shell="pred"')}
       ${item('fav', 'Favorites', 'data-shell="fav"')}
       ${item('profile', 'Profile', 'data-shell="profile"')}
@@ -57,6 +57,26 @@
   const railLabel = b => (b.querySelector('span:not(.dot)')?.textContent || b.textContent).trim();
   const railBtn = re => [...(rail?.querySelectorAll('.lg') || [])].find(b => re.test(railLabel(b)));
   const tidyRail = () => rail?.querySelectorAll('.lg').forEach(b => b.classList.toggle('dup', /^(Predictions|Live now|All matches)$/.test(railLabel(b))));
+
+  /* ---------- Cmd/Ctrl+K: research from anywhere, cursor in its search box ---------- */
+  const KBD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
+  function focusResearch(tries = 0) {
+    const rs = document.getElementById('rs'), q = rs && !rs.hidden && rs.querySelector('#rsQ, #rsBq');
+    if (q) { q.closest('.search')?.setAttribute('data-kbd', KBD); q.focus(); q.select(); return }
+    const fr = rs && rs.querySelector('iframe');
+    if (fr) { try { const i = fr.contentDocument?.getElementById('q'); if (i) { fr.contentWindow.focus(); i.focus(); return } } catch (e) {} }
+    if (tries < 12) setTimeout(() => focusResearch(tries + 1), 120);
+  }
+  document.addEventListener('keydown', ev => {
+    if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') {
+      ev.preventDefault();
+      const rs = document.getElementById('rs');
+      if (!rs || rs.hidden) { closeSheetUI(); document.querySelector('[data-rs="open"]')?.click() }
+      focusResearch();
+    }
+  });
+  new MutationObserver(() => document.querySelectorAll('#rs .rs-search .search:not([data-kbd])').forEach(l => l.setAttribute('data-kbd', KBD)))
+    .observe(document.documentElement, { childList: true, subtree: true });
 
   /* ---------- actions the page has no single attribute for ---------- */
   document.addEventListener('click', ev => {
