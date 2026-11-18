@@ -15,6 +15,10 @@ on:
         description: "Grade and post right away"
         type: boolean
         default: false
+      reset:
+        description: "Start the record over (the next scheduled run posts everything again)"
+        type: boolean
+        default: false
       preview:
         description: "Only show what it reads and how each pick grades (posts nothing)"
         type: boolean
@@ -34,6 +38,7 @@ jobs:
         run: |
           mkdir -p data
           if git fetch --depth=1 origin pick-data 2>/dev/null; then git show FETCH_HEAD:pick-tracker.enc > data/pick-tracker.enc 2>/dev/null || rm -f data/pick-tracker.enc; fi
+          if [ "${{ inputs.reset }}" = "true" ]; then rm -f data/pick-tracker.enc; echo "record reset"; fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
