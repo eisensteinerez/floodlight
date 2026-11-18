@@ -1,5 +1,6 @@
 /* Floodlight · the finishing layer: the design sheet gets the last word, and cards light up under the pointer. */
 document.head.appendChild(document.getElementById('flTheme'));
+{ const ar = document.getElementById('flArena'); if (ar) document.head.appendChild(ar) }   // arena.css is the current look and goes last
 { // at most once a frame, and only on devices with a mouse
   let pend = null, raf = 0;
   if (matchMedia('(hover:hover) and (pointer:fine)').matches) document.addEventListener('pointermove', ev => {
@@ -7,14 +8,6 @@ document.head.appendChild(document.getElementById('flTheme'));
     raf = requestAnimationFrame(() => { raf = 0; const e = pend, c = e.target.closest?.('.m,.spot,.rs-tile,.tile,.ml,.rs-game,.fx-card,.flg-grid article'); if (!c) return;
       const b = c.getBoundingClientRect(); c.style.setProperty('--mx', e.clientX - b.left + 'px'); c.style.setProperty('--my', e.clientY - b.top + 'px') });
   }, { passive: true });
-}
-/* a soft pool of light follows the mouse across the page (desktop only) */
-if (matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches) {
-  const light = document.createElement('div'); light.id = 'flLight'; light.setAttribute('aria-hidden', 'true'); document.body.prepend(light);
-  let lx = 0, ly = 0, raf = 0;
-  document.addEventListener('pointermove', ev => { lx = ev.clientX; ly = ev.clientY; document.body.classList.add('fl-pointer');
-    if (!raf) raf = requestAnimationFrame(() => { raf = 0; light.style.transform = `translate3d(${lx}px,${ly}px,0)` }) }, { passive: true });
-  document.addEventListener('pointerleave', () => document.body.classList.remove('fl-pointer'));
 }
 /* a small drawing for each sport in the switcher */
 (() => {
@@ -58,5 +51,3 @@ document.addEventListener('pointerdown', ev => {
 /* the sport switcher lives in a floating dock at the foot of the screen */
 { const sw = document.querySelector('.top .sport-sw'); if (sw) { sw.classList.add('dock'); document.body.appendChild(sw) } }
 
-/* three slow lights behind the page */
-{ const a = document.createElement('div'); a.id = 'flAurora'; a.setAttribute('aria-hidden', 'true'); a.innerHTML = '<i></i><i></i><i></i>'; document.body.prepend(a) }
