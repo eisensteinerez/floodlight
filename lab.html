@@ -141,6 +141,20 @@ button,input,select{font:inherit;color:inherit}
 .cell-h{color:var(--hit);font-weight:800}.cell-m{color:var(--miss)}
 .sub{color:var(--muted);font-size:12px}
 
+/* team */
+.ph.logo{background:radial-gradient(circle at 50% 40%,#1E2840,#0E1320)}
+.ph.logo img{object-fit:contain;padding:18px}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.sgrid>div{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.sgrid .l{font-size:11px;color:var(--muted)}.sgrid .v{font-size:17px;font-weight:800}.sgrid .rk{font-size:11px;color:var(--gold);font-weight:700}
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;max-height:420px;overflow:auto}
+.rp{display:flex;gap:10px;align-items:center;text-align:left;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:7px 9px;cursor:pointer}
+.rp:hover{border-color:var(--gold)}
+.rp .av{width:36px;height:36px;border-radius:50%;background:#1C2436;overflow:hidden;flex:none}
+.rp .av img{width:100%;height:100%;object-fit:cover;object-position:50% 15%}
+.rp .rn{display:flex;flex-direction:column;min-width:0}.rp b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rp small{color:var(--muted);font-size:11px}
+.rp i{color:var(--miss);font-style:normal}
+
 /* board */
 .brow{display:grid;grid-template-columns:34px 1.6fr 1fr 70px 70px 70px 64px;gap:10px;align-items:center;padding:10px 6px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;border-radius:10px}
 .brow:hover{background:rgba(255,255,255,.03)}
@@ -167,7 +181,7 @@ button,input,select{font:inherit;color:inherit}
 <div class="wrap">
   <div class="top">
     <div class="brand"><i>◉</i><span>FLOODLIGHT <b>LAB</b></span></div>
-    <div class="tabs" id="tabs"><button data-t="player" class="on">Player</button><button data-t="board">Hot props</button></div>
+    <div class="tabs" id="tabs"><button data-t="player" class="on">Player</button><button data-t="team">Team</button><button data-t="board">Hot props</button></div>
     <form class="search" id="sf">
       <select id="sport" aria-label="Sport"></select>
       <label class="box"><span style="color:var(--muted)">⌕</span><input id="q" placeholder="Search a player, e.g. Jayson Tatum" autocomplete="off"></label>
@@ -188,7 +202,9 @@ const IN_DISCORD = QS.has('frame_id');
 const SPORTS = [['nba','NBA'],['wnba','WNBA'],['nfl','NFL'],['nhl','NHL'],['mlb','MLB'],['soccer','Soccer']];
 const HERO = { nba:['pts','reb','ast','3pm','pra'], wnba:['pts','reb','ast','3pm','pra'], nfl:['pyd','ryd','reyd','rec','td'], nhl:['goals','ast','pts','sog','toi'],
   mlb:['h','tb','hr','rbi','pk'], soccer:['goals','assists','shots','sot','rating'] };
-const S = { tab:'player', sport:'nba', pass:'', p:null, k:null, line:null, side:'over', range:'l10', sort:{ col:'l10', dir:-1 }, board:{}, loading:false };
+const HERO_T = ['pf','pa','tot','mar','win'];
+const RATE_K = new Set(['win','btts','cs','dd','g1']);
+const S = { tab:'player', kind:'player', sport:'nba', pass:'', p:null, k:null, line:null, side:'over', range:'l10', sort:{ col:'l10', dir:-1 }, board:{}, loading:false };
 const store = { get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } },
   set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
 const $ = s => document.querySelector(s);
@@ -215,16 +231,17 @@ async function api(path) {
 }
 async function start() {
   $('#sport').innerHTML = SPORTS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
-  let want = { player: QS.get('player') || '', sport: QS.get('sport') || '' };
+  let want = { player: QS.get('player') || '', team: QS.get('team') || '', sport: QS.get('sport') || '' };
   try {
     const q = IN_DISCORD ? `channel_id=${encodeURIComponent(QS.get('channel_id') || '')}&instance_id=${encodeURIComponent(QS.get('instance_id') || '')}`
-      : (QS.get('t') ? 't=' + encodeURIComponent(QS.get('t')) : '') + (want.player ? '&player=' + encodeURIComponent(want.player) : '') + (want.sport ? '&sport=' + want.sport : '');
-    const s = await api('session?' + q); S.pass = s.token; want = { player: s.player || want.player, sport: s.sport || want.sport };
+      : (QS.get('t') ? 't=' + encodeURIComponent(QS.get('t')) : '') + (want.player ? '&player=' + encodeURIComponent(want.player) : '') + (want.team ? '&team=' + encodeURIComponent(want.team) : '') + (want.sport ? '&sport=' + want.sport : '');
+    const s = await api('session?' + q); S.pass = s.token; want = { player: s.player || want.player, team: s.team || want.team, sport: s.sport || want.sport };
   } catch (e) { return gate(e.message) }
   S.sport = want.sport || store.get('lab.sport', 'nba');
   $('#sport').value = S.sport;
   drawRecent();
-  if (want.player) load(want.player);
+  if (want.team) load(want.team, 'team');
+  else if (want.player) load(want.player);
   else home();
 }
 function gate(m) {
@@ -232,28 +249,32 @@ function gate(m) {
   $('#sf').classList.add('hidden'); $('#tabs').classList.add('hidden');
 }
 function home() {
-  $('#view').innerHTML = `<div class="empty"><div class="beam"></div><h2>Who are we researching?</h2>
-    <p>Search any ${esc(sportName())} player for every stat, hit rates at any line, trends, splits and the full game log.</p>
+  const team = S.tab === 'team';
+  $('#q').placeholder = team ? 'Search a team, e.g. Celtics or Arsenal' : 'Search a player, e.g. Jayson Tatum';
+  $('#view').innerHTML = `<div class="empty"><div class="beam"></div><h2>${team ? 'Which team are we researching?' : 'Who are we researching?'}</h2>
+    <p>${team ? `Search any ${esc(sportName())} team for scores, totals, spreads covered, win rates, splits, season stats, roster and the next game's lines.`
+      : `Search any ${esc(sportName())} player for every stat, hit rates at any line, trends, splits and the full game log.`}</p>
     <p class="sub">Or open <b style="color:var(--gold)">Hot props</b> for today's lines ranked by how often they've hit.</p></div>`;
 }
 const sportName = () => (SPORTS.find(s => s[0] === S.sport) || [, ''])[1];
 
-async function load(name) {
-  S.tab = 'player'; tabs();
+async function load(name, kind) {
+  kind = kind || (S.tab === 'team' ? 'team' : 'player');
+  S.tab = kind; tabs();
   $('#q').value = name; $('#msg').innerHTML = '';
   $('#view').innerHTML = `<div class="grid"><div class="skel" style="height:170px"></div><div class="skel" style="height:44px"></div>
     <div class="grid g2"><div class="skel" style="height:380px"></div><div class="skel" style="height:380px"></div></div></div>`;
   try {
-    const p = await api(`player?sport=${S.sport}&name=${encodeURIComponent(name)}`);
-    S.p = p; S.k = null; S.line = null;
+    const p = await api(`${kind}?sport=${S.sport}&name=${encodeURIComponent(name)}`);
+    p.kind = kind; S.p = p; S.k = null; S.line = null;
     const rec = store.get('lab.recent', []).filter(r => !(r.n === p.name && r.s === p.sport));
-    rec.unshift({ n: p.name, s: p.sport }); store.set('lab.recent', rec.slice(0, 8)); drawRecent();
+    rec.unshift({ n: p.name, s: p.sport, t: kind }); store.set('lab.recent', rec.slice(0, 8)); drawRecent();
     pickStat(defaultStat());
   } catch (e) { $('#view').innerHTML = ''; $('#msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; if (!S.p) home() }
 }
 function drawRecent() {
   const rec = store.get('lab.recent', []);
-  $('#recent').innerHTML = rec.map(r => `<button data-n="${esc(r.n)}" data-s="${r.s}">${esc(r.n)}</button>`).join('');
+  $('#recent').innerHTML = rec.map(r => `<button data-n="${esc(r.n)}" data-s="${r.s}" data-t="${r.t || 'player'}">${r.t === 'team' ? '🛡 ' : ''}${esc(r.n)}</button>`).join('');
 }
 
 /* ---------- the maths ---------- */
@@ -282,11 +303,13 @@ function mainLine(k) {
 }
 function defaultStat() {
   const have = new Set(S.p.stats.filter(s => s.n >= 3).map(s => s.k));
-  const hero = (HERO[S.p.sport] || []).filter(k => have.has(k));
+  const hero = (S.p.kind === 'team' ? HERO_T : HERO[S.p.sport] || []).filter(k => have.has(k));
+  if (S.p.kind === 'team') return ['mar', 'tot', 'win'].find(k => postedFor(k).length) || 'pf';
   return hero.find(k => postedFor(k).length) || S.p.lines.map(x => x.k).find(k => have.has(k)) || hero[0] || S.p.stats[0]?.k;
 }
 const label = k => (S.p.stats.find(s => s.k === k) || { l: k }).l;
 const short = g => (g.oppAbbr || g.opp.replace(/^(FC|AC|AS|SC|CF|RC|SS|1\. ?)\s+/i, '').slice(0, 3)).toUpperCase();
+const when = iso => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const day = iso => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 function pickStat(k) {
@@ -297,7 +320,7 @@ function pickStat(k) {
 /* ---------- drawing ---------- */
 function render() {
   if (S.tab === 'board') return renderBoard();
-  const p = S.p; if (!p) return home();
+  const p = S.p; if (!p || p.kind !== S.tab) return home();
   $('#view').innerHTML = hero() + chips() + `
     <div class="grid g2" style="margin-top:12px">
       <div class="card">${controls()}${rings()}<div id="chart">${chart()}</div></div>
@@ -305,6 +328,7 @@ function render() {
     </div>
     <div class="grid g3" style="margin-top:14px">${splits()}</div>
     <div class="card" style="margin-top:14px">${propTable()}</div>
+    ${p.kind === 'team' ? teamExtras() : ''}
     <div class="card" style="margin-top:14px">${gameLog()}</div>`;
   const on = document.querySelector('.chip.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
@@ -312,21 +336,23 @@ function hero() {
   const p = S.p, gs = p.games, ini = p.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('');
   const last = gs[0];
   const form = gs.slice(0, 10).reverse().map(g => g.res ? `<span class="${esc(g.res[0])}" title="${esc(day(g.date) + ' ' + (g.home === false ? '@ ' : 'vs ') + g.opp + ' ' + g.score)}">${esc(g.res[0])}</span>` : '').join('');
-  const keys = (HERO[p.sport] || []).filter(k => p.stats.some(s => s.k === k)).slice(0, 5);
+  const keys = (p.kind === 'team' ? HERO_T : HERO[p.sport] || []).filter(k => p.stats.some(s => s.k === k)).slice(0, 5);
   const szn = gs.filter(g => g.date >= p.seasonStart);
   const tiles = keys.map(k => {
     const all = rate(szn.length >= 3 ? szn : gs, k, 0, 'over'), l5 = rate(gs.slice(0, 5), k, 0, 'over');
     const d = all.avg && l5.avg != null ? (l5.avg - all.avg) / Math.max(Math.abs(all.avg), .5) : 0;
     const cls = d > .08 ? 'up' : d < -.08 ? 'dn' : 'flat', arrow = d > .08 ? '▲' : d < -.08 ? '▼' : '•';
-    return `<div class="tile" data-k="${k}"><div class="l">${esc(label(k))}</div><div class="v num">${fmt(all.avg == null ? null : Math.round(all.avg * 10) / 10)}</div>
-      <div class="t ${cls} num">${arrow} L5 ${fmt(l5.avg == null ? null : Math.round(l5.avg * 10) / 10)}</div></div>`;
+    const show = x => x == null ? '–' : RATE_K.has(k) ? pc(x) : fmt(Math.round(x * 10) / 10);
+    return `<div class="tile" data-k="${k}"><div class="l">${esc(label(k))}</div><div class="v num">${show(all.avg)}</div>
+      <div class="t ${cls} num">${arrow} L5 ${show(l5.avg)}</div></div>`;
   }).join('');
   return `<div class="card hero">
-    <div class="ph"><span>${esc(ini)}</span>${p.photo ? `<img src="${esc(p.photo)}" alt="" style="position:absolute;inset:0" onerror="this.remove()">` : ''}</div>
+    <div class="ph${p.kind === 'team' ? ' logo' : ''}"><span>${esc(ini)}</span>${p.photo ? `<img src="${esc(p.photo)}" alt="" style="position:absolute;inset:0" onerror="this.remove()">` : ''}</div>
     <div class="who"><h1>${esc(p.name)}</h1>
-      <div class="meta"><span class="pill gold">${esc(p.sportLabel)}</span>${p.team ? `<span class="pill">${esc(p.team)}</span>` : ''}
+      <div class="meta"><span class="pill gold">${esc(p.sportLabel)}</span>${p.record ? `<span class="pill gold num">${esc(p.record)}</span>` : ''}${p.team ? `<span class="pill">${esc(p.team)}</span>` : ''}
+        ${p.next ? `<span class="pill gold">Next: ${p.next.home ? 'vs' : '@'} ${esc(p.next.opp)} · ${esc(when(p.next.date))}${p.next.details ? ' · ' + esc(p.next.details) : ''}</span>` : ''}
         <span class="pill num">${gs.length} games loaded</span>${last ? `<span class="pill">Last: ${esc(day(last.date))} ${last.home === false ? '@' : 'vs'} ${esc(last.opp)} ${esc(last.res)} ${esc(last.score)}</span>` : ''}
-        ${p.lines.length ? `<span class="pill gold">${p.lines.length} lines posted today</span>` : ''}</div>
+        ${p.lines.length && p.kind !== 'team' ? `<span class="pill gold">${p.lines.length} lines posted today</span>` : ''}</div>
       ${form ? `<div class="form"><span class="sub" style="width:auto;margin-right:4px">Form</span>${form}</div>` : ''}</div>
     <div class="tiles">${tiles}</div></div>`;
 }
@@ -341,7 +367,7 @@ function controls() {
   <div class="ctrl">
     <div class="stepper"><button data-step="-1" aria-label="Lower">−</button><input id="line" class="num" type="number" step="0.5" value="${S.line}"><button data-step="1" aria-label="Higher">+</button></div>
     <div class="seg" id="side"><button class="o${S.side === 'over' ? ' on' : ''}" data-side="over">OVER</button><button class="u${S.side === 'under' ? ' on' : ''}" data-side="under">UNDER</button></div>
-    <div class="books">${L.map(x => `<span class="book" data-line="${x.line}">${esc(names[x.book] || x.book)} <b class="num">${fmt(x.line)}</b>${x.kind !== 'standard' ? ' · ' + esc(x.kind) : ''}${x.pOver != null ? ' · ' + pc(x.pOver) + ' o' : ''}</span>`).join('')}</div>
+    <div class="books">${L.map(x => `<span class="book" data-line="${x.line}">${esc(names[x.book] || x.book)} <b class="num">${fmt(x.line)}</b>${x.kind !== 'standard' ? ' · ' + esc(x.kind) : ''}${x.pOver != null ? ' · ' + pc(x.pOver) + (x.k === 'win' ? ' to win' : ' o') : ''}</span>`).join('')}</div>
   </div>`;
 }
 function rings() {
@@ -359,17 +385,17 @@ function chart() {
   const gs = inRange(gamesFor(S.k), S.range).slice(0, 60).reverse();
   if (!gs.length) return '<p class="sub">No games in this range.</p>';
   const W = 760, H = 270, padL = 30, padB = 34, padT = 22, n = gs.length;
-  const vals = gs.map(g => g.v[S.k]), max = Math.max(S.line * 1.25, ...vals, 1);
-  const bw = (W - padL - 8) / n, y = v => H - padB - (v / max) * (H - padB - padT);
+  const vals = gs.map(g => g.v[S.k]), max = Math.max(S.line * 1.25, ...vals, 1), min = Math.min(0, S.line * 1.25, ...vals);
+  const bw = (W - padL - 8) / n, y = v => H - padB - ((v - min) / (max - min)) * (H - padB - padT), y0 = y(0);
   const ly = y(S.line);
-  const ticks = [0, max / 2, max].map(t => `<text x="${padL - 6}" y="${y(t) + 4}" text-anchor="end" font-size="10" fill="#7D89A3">${fmt(Math.round(t))}</text>
+  const ticks = [...new Set([min, 0, max / 2, max].map(t => Math.round(t)))].map(t => `<text x="${padL - 6}" y="${y(t) + 4}" text-anchor="end" font-size="10" fill="#7D89A3">${fmt(Math.round(t))}</text>
     <line x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="#1C2436"/>`).join('');
   const bars = gs.map((g, i) => {
     const v = g.v[S.k], hit = v === S.line ? 0 : (S.side === 'over' ? v > S.line : v < S.line) ? 1 : -1;
-    const x = padL + i * bw + bw * .14, w = Math.max(2, bw * .72), top = y(v), h = Math.max(2, H - padB - top);
+    const x = padL + i * bw + bw * .14, w = Math.max(2, bw * .72), top = Math.min(y(v), y0 - 2), h = Math.max(2, Math.abs(y0 - y(v)));
     const col = hit > 0 ? 'url(#gh)' : hit < 0 ? 'url(#gm)' : '#64748B';
     const lbl = n <= 24 ? `<text x="${x + w / 2}" y="${H - padB + 14}" text-anchor="middle" font-size="${n > 14 ? 9 : 10}" fill="#7D89A3">${esc(short(g))}</text>` : '';
-    const vt = n <= 30 ? `<text x="${x + w / 2}" y="${top - 5}" text-anchor="middle" font-size="${n > 14 ? 9 : 11}" font-weight="700" fill="${hit > 0 ? '#6EE7B7' : hit < 0 ? '#FCA5A5' : '#CBD5E1'}">${fmt(v)}</text>` : '';
+    const vt = n <= 30 ? `<text x="${x + w / 2}" y="${v < 0 ? top + h + 12 : top - 5}" text-anchor="middle" font-size="${n > 14 ? 9 : 11}" font-weight="700" fill="${hit > 0 ? '#6EE7B7' : hit < 0 ? '#FCA5A5' : '#CBD5E1'}">${fmt(v)}</text>` : '';
     return `<g class="b" data-i="${i}"><rect class="bar" x="${x}" y="${top}" width="${w}" height="${h}" rx="${Math.min(5, w / 3)}" fill="${col}"/>${vt}${lbl}
       <rect x="${padL + i * bw}" y="${padT}" width="${bw}" height="${H - padT - padB}" fill="transparent"/></g>`;
   }).join('');
@@ -458,18 +484,32 @@ function propTable() {
   return `<div class="h">Every prop, over the line<span class="sp"></span><span class="sub" style="text-transform:none;letter-spacing:0;font-weight:500">Tap a row to dig in · green = over hits, red = under</span></div>
   <div class="scroll"><table class="tbl num"><thead><tr>${th('l', 'Stat')}${th('line', 'Line')}${th('l5', 'L5')}${th('l10', 'L10')}${th('l20', 'L20')}${th('szn', 'Season')}${th('avg', 'L10 avg')}${th('trend', 'Trend')}</tr></thead>
   <tbody>${rows.map(r => `<tr data-k="${r.k}" class="${r.k === S.k ? 'sel' : ''}" style="cursor:pointer"><td><b>${esc(r.l)}</b></td>
-    <td>${fmt(r.line)} <span class="sub">${r.from === 'avg' ? 'avg' : r.from === 'prizepicks' ? 'PP' : 'SL'}</span></td>${cell(r.l5)}${cell(r.l10)}${cell(r.l20)}${cell(r.szn)}
+    <td>${fmt(r.line)} <span class="sub">${r.from === 'avg' ? 'avg' : r.from === 'prizepicks' ? 'PP' : r.from === 'sleeper' ? 'SL' : r.from === 'DraftKings' ? 'DK' : esc(String(r.from).slice(0, 3))}</span></td>${cell(r.l5)}${cell(r.l10)}${cell(r.l20)}${cell(r.szn)}
     <td>${fmt(r.avg == null ? null : Math.round(r.avg * 10) / 10)}</td><td class="${r.trend > .08 ? 'up' : r.trend < -.08 ? 'dn' : 'flat'}">${r.trend > .08 ? '▲' : r.trend < -.08 ? '▼' : '•'} ${Math.round(r.trend * 100)}%</td></tr>`).join('')}</tbody></table></div>`;
 }
 function gameLog() {
-  const keys = [...new Set([S.k, ...(HERO[S.p.sport] || []), ...S.p.stats.map(s => s.k)])].filter(k => S.p.stats.some(s => s.k === k && s.n));
+  const team = S.p.kind === 'team';
+  const keys = [...new Set([S.k, ...(team ? HERO_T : HERO[S.p.sport] || []), ...S.p.stats.map(s => s.k)])].filter(k => S.p.stats.some(s => s.k === k && s.n));
   const gs = S.p.games.slice(0, 40);
   const ab = k => label(k).replace(/Pts \+ Reb \+ Ast/, 'PRA').replace(/3-pointers made/, '3PM').replace(/3-pointers attempted/, '3PA').replace(/ attempted/, ' att').replace(/ made/, '');
   return `<div class="h">Game log<span class="sp"></span><span class="pill">${gs.length} most recent</span></div>
-  <div class="scroll"><table class="tbl num"><thead><tr><th>Date</th><th style="text-align:left">Opponent</th><th>Result</th><th>Min</th>${keys.map(k => `<th class="${k === S.k ? 'fc' : ''}" title="${esc(label(k))}">${esc(ab(k))}</th>`).join('')}</tr></thead>
+  <div class="scroll"><table class="tbl num"><thead><tr><th>Date</th><th style="text-align:left">Opponent</th><th>Result</th>${team ? '' : '<th>Min</th>'}${keys.map(k => `<th class="${k === S.k ? 'fc' : ''}" title="${esc(label(k))}">${esc(ab(k))}</th>`).join('')}</tr></thead>
   <tbody>${gs.map(g => `<tr><td>${esc(day(g.date))}</td><td style="text-align:left">${g.home === false ? '@ ' : 'vs '}${esc(g.opp)}<div class="sub">${esc(g.comp)}</div></td>
-    <td><span class="${g.res === 'W' ? 'up' : g.res === 'L' ? 'dn' : 'flat'}">${esc(g.res)}</span> ${esc(g.score)}</td><td>${fmt(g.min == null ? null : Math.round(g.min))}</td>
-    ${keys.map(k => { const v = g.v[k]; if (k !== S.k || v == null) return `<td>${fmt(v)}</td>`; const h = v === S.line ? '' : (S.side === 'over' ? v > S.line : v < S.line) ? 'cell-h' : 'cell-m'; return `<td class="fc ${h}">${fmt(v)}</td>` }).join('')}</tr>`).join('')}</tbody></table></div>`;
+    <td><span class="${g.res === 'W' ? 'up' : g.res === 'L' ? 'dn' : 'flat'}">${esc(g.res)}</span> ${esc(g.score)}</td>${team ? '' : `<td>${fmt(g.min == null ? null : Math.round(g.min))}</td>`}
+    ${keys.map(k => { const v = g.v[k]; if (k !== S.k || v == null) return `<td>${RATE_K.has(k) && v != null ? (v ? '✓' : '·') : fmt(v)}</td>`; const h = v === S.line ? '' : (S.side === 'over' ? v > S.line : v < S.line) ? 'cell-h' : 'cell-m'; return `<td class="fc ${h}">${fmt(v)}</td>` }).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+function teamExtras() {
+  const p = S.p, cats = {};
+  for (const x of p.seasonStats || []) (cats[x.cat] = cats[x.cat] || []).push(x);
+  const statCard = Object.keys(cats).length ? `<div class="card"><div class="h">Season stats<span class="sp"></span><span class="sub" style="text-transform:none;letter-spacing:0;font-weight:500">league rank where known</span></div>
+    <div class="scroll" style="max-height:420px">${Object.entries(cats).map(([c, xs]) => `<div class="sub" style="margin:10px 0 6px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">${esc(c)}</div>
+    <div class="sgrid">${xs.slice(0, 18).map(x => `<div><div class="l">${esc(x.l)}</div><div class="v num">${esc(x.pg || x.v)}</div>${x.rank ? `<div class="rk">${esc(x.rank)}</div>` : ''}</div>`).join('')}</div>`).join('')}</div></div>` : '';
+  const ros = (p.roster || []).length ? `<div class="card"><div class="h">Roster<span class="sp"></span><span class="sub" style="text-transform:none;letter-spacing:0;font-weight:500">tap a player to research them</span></div>
+    <div class="roster">${p.roster.map(r => `<button class="rp" data-player="${esc(r.name)}"><span class="av">${r.photo ? `<img src="${esc(r.photo)}" alt="" onerror="this.remove()">` : ''}</span>
+      <span class="rn"><b>${esc(r.name)}</b><small>${esc([r.num && '#' + r.num, r.pos].filter(Boolean).join(' · '))}${r.out ? ` · <i>${esc(r.out)}</i>` : ''}</small></span></button>`).join('')}</div></div>` : '';
+  if (!statCard && !ros) return '';
+  return `<div class="grid ${statCard && ros ? 'g2' : ''}" style="margin-top:14px">${ros}${statCard}</div>`;
 }
 
 /* ---------- hot props ---------- */
@@ -497,8 +537,8 @@ function tabs() { document.querySelectorAll('#tabs button').forEach(b => b.class
 /* ---------- events ---------- */
 $('#sf').addEventListener('submit', e => { e.preventDefault(); const n = $('#q').value.trim(); if (n) load(n) });
 $('#sport').addEventListener('change', e => { S.sport = e.target.value; store.set('lab.sport', S.sport); if (S.tab === 'board') renderBoard(); else if (!S.p) home() });
-$('#tabs').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; S.tab = t.dataset.t; tabs(); S.tab === 'board' ? renderBoard() : render() });
-$('#recent').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.sport = b.dataset.s; $('#sport').value = S.sport; load(b.dataset.n) });
+$('#tabs').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; S.tab = t.dataset.t; tabs(); $('#msg').innerHTML = ''; S.tab === 'board' ? renderBoard() : render() });
+$('#recent').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.sport = b.dataset.s; $('#sport').value = S.sport; load(b.dataset.n, b.dataset.t) });
 document.addEventListener('click', e => {
   const t = e.target;
   const chip = t.closest('.chip,.tile,tr[data-k]'); if (chip && chip.dataset.k) return pickStat(chip.dataset.k);
@@ -507,7 +547,8 @@ document.addEventListener('click', e => {
   const rg = t.closest('[data-r]'); if (rg) { S.range = rg.dataset.r; return render() }
   const bk = t.closest('[data-line]'); if (bk) { S.line = +bk.dataset.line; return render() }
   const so = t.closest('[data-sort]'); if (so) { const c = so.dataset.sort; S.sort = { col: c, dir: S.sort.col === c ? -S.sort.dir : (c === 'l' ? 1 : -1) }; return render() }
-  const br = t.closest('.brow'); if (br) return load(br.dataset.n);
+  const br = t.closest('.brow'); if (br) return load(br.dataset.n, 'player');
+  const rp = t.closest('[data-player]'); if (rp) { scrollTo({ top: 0, behavior: 'smooth' }); return load(rp.dataset.player, 'player') }
 });
 document.addEventListener('change', e => { if (e.target.id === 'line') { const v = parseFloat(e.target.value); if (!isNaN(v)) { S.line = v; S.lineFrom = 'custom'; render() } } });
 const tip = $('#tip');

@@ -12,6 +12,7 @@ same way, so the Lab costs nothing to run and calls no paid API.
   GET /lab                         the page (also served at / when Discord opens the Activity)
   GET /api/lab/session             ?channel_id=&instance_id= (Activity) or ?t= (browser link) -> {token, player, sport}
   GET /api/lab/player              ?sport=&name=   a player's games with every stat, their posted lines and summary numbers
+  GET /api/lab/team                ?sport=&name=   a team's results (scores, totals, margins), next game and its lines, season stats, roster
   GET /api/lab/board               ?sport=         today's posted lines ranked by recent hit rate
   GET /api/lab/img                 ?u=             player photos through this server (Discord's Activity sandbox blocks other hosts)
 """
@@ -30,7 +31,7 @@ import discord_bot as bot
 
 PASS_HOURS = 12
 TICKET_MIN = 15
-IMG_HOSTS = ("a.espncdn.com", "img.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com")
+IMG_HOSTS = ("a.espncdn.com", "img.mlbstatic.com", "www.mlbstatic.com", "images.fotmob.com", "img.a.transfermarkt.technology", "secure.espncdn.com")
 
 _tickets, _instances, _imgs = {}, {}, {}
 _lock = threading.Lock()
@@ -64,19 +65,20 @@ def ticket(channel_id, opts, user=""):
         now = time.time()
         for k in [k for k, v in _tickets.items() if now - v["at"] > TICKET_MIN * 60]:
             _tickets.pop(k, None)
-        _tickets[str(channel_id)] = {"at": now, "player": (opts.get("player") or "").strip(), "sport": opts.get("sport") or "", "user": user}
+        _tickets[str(channel_id)] = {"at": now, "player": (opts.get("player") or "").strip(), "team": (opts.get("team") or "").strip(),
+                                     "sport": opts.get("sport") or "", "user": user}
 
 
 def session(q, signed_in=False):
     """-> (status, obj)"""
     if not q.get("t") and not q.get("channel_id"):   # opened straight in a browser: a site login is enough
         if signed_in:
-            return 200, {"token": make_pass("site"), "player": q.get("player") or "", "sport": q.get("sport") or ""}
+            return 200, {"token": make_pass("site"), "player": q.get("player") or "", "team": q.get("team") or "", "sport": q.get("sport") or ""}
         return 403, {"error": "Type /lab in the Floodlight Discord to open the Lab, or log in to Floodlight first.", "need": "lab"}
     if q.get("t"):
         if not check_pass(q["t"]):
             return 403, {"error": "This Lab link has expired. Use /lab in Discord for a new one."}
-        return 200, {"token": q["t"], "player": q.get("player") or "", "sport": q.get("sport") or ""}
+        return 200, {"token": q["t"], "player": q.get("player") or "", "team": q.get("team") or "", "sport": q.get("sport") or ""}
     ch, inst = str(q.get("channel_id") or ""), str(q.get("instance_id") or "")
     with _lock:
         now = time.time()
@@ -91,7 +93,7 @@ def session(q, signed_in=False):
                 if len(_instances) > 500:
                     for k in sorted(_instances, key=lambda k: _instances[k]["at"])[:250]:
                         _instances.pop(k, None)
-    return 200, {"token": make_pass(t.get("user") or ""), "player": t.get("player") or "", "sport": t.get("sport") or ""}
+    return 200, {"token": make_pass(t.get("user") or ""), "player": t.get("player") or "", "team": t.get("team") or "", "sport": t.get("sport") or ""}
 
 
 def browser_link(opts, user=""):
@@ -99,8 +101,9 @@ def browser_link(opts, user=""):
     if not site:
         return ""
     q = {"t": make_pass(user)}
-    if opts.get("player"):
-        q["player"] = opts["player"]
+    for k in ("player", "team"):
+        if opts.get(k):
+            q[k] = opts[k]
     if opts.get("sport"):
         q["sport"] = opts["sport"]
     return f"{site}/lab?{urllib.parse.urlencode(q)}"
@@ -189,6 +192,229 @@ def board(sport, count=24):
     return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"]}
 
 
+# ---------- teams ----------
+UNIT = {"nba": "points", "wnba": "points", "nfl": "points", "nhl": "goals", "mlb": "runs", "soccer": "goals"}
+
+
+def _team_stats(unit):
+    U = unit.title()
+    return [{"k": "pf", "l": f"Team {unit}"}, {"k": "pa", "l": f"{U} allowed"}, {"k": "tot", "l": f"Game total ({unit})"},
+            {"k": "mar", "l": "Margin (vs spread)"}, {"k": "win", "l": "Win"}, {"k": "btts", "l": "Both teams score"}, {"k": "cs", "l": "Clean sheet / shutout"}]
+
+
+def _game(gid, date, opp, opp_abbr, home, us, them, comp=""):
+    us, them = bot.num(us), bot.num(them)
+    if us is None or them is None or not date:
+        return None
+    v = {"pf": us, "pa": them, "tot": us + them, "mar": us - them, "win": 1 if us > them else 0, "btts": int(us > 0 and them > 0), "cs": int(them == 0)}
+    return {"id": str(gid), "date": date.isoformat(), "opp": opp or "", "oppAbbr": opp_abbr or "", "home": home, "comp": comp,
+            "res": "W" if us > them else "L" if us < them else "D", "score": f"{bot.fmt(us)}-{bot.fmt(them)}", "min": None, "v": v}
+
+
+def _pick(cands, name):
+    """cands: [(id, [names...], extra)] -> best match by name"""
+    n = bot.norm(name)
+    best, sc = None, 0
+    for c in cands:
+        for alias in c[1]:
+            a = bot.norm(alias)
+            if not a:
+                continue
+            s = 3 if a == n else 2 if (n in a.split() or a in n.split()) else 1.5 if (n in a or a in n) else 0
+            if s > sc:
+                best, sc = c, s
+    return best
+
+
+def _espn_team(sport, name):
+    path = bot.ESPN_PATH[sport]
+    d = bot.get_json(f"{bot.ESPN}/{path}/teams", 86400)
+    teams = [x.get("team") or {} for lg in (d.get("sports") or [{}])[0].get("leagues") or [] for x in lg.get("teams") or []]
+    c = _pick([(t.get("id"), [t.get("displayName"), t.get("shortDisplayName"), t.get("nickname"), t.get("name"), t.get("abbreviation"), t.get("location")], t) for t in teams], name)
+    if not c:
+        raise LookupError(f"Couldn't find a {bot.SPORTS[sport]} team called {name}.")
+    t, tid = c[2], c[0]
+    logo = ((t.get("logos") or [{}])[0]).get("href") or ""
+    info = {}
+    try:
+        info = bot.get_json(f"{bot.ESPN}/{path}/teams/{tid}", 3600).get("team") or {}
+    except Exception:
+        pass
+    y = bot.cur_season(sport)
+    games, upcoming = [], []
+    for yr in (y, y - 1):
+        try:
+            sch = bot.get_json(f"{bot.ESPN}/{path}/teams/{tid}/schedule?season={yr}", 1800)
+        except Exception:
+            continue
+        for ev in sch.get("events") or []:
+            c0 = (ev.get("competitions") or [{}])[0]
+            cs = c0.get("competitors") or []
+            us = next((x for x in cs if str(x.get("id")) == str(tid)), None)
+            them = next((x for x in cs if x is not us), None)
+            if not us or not them:
+                continue
+            st = ((c0.get("status") or {}).get("type") or {})
+            sc = lambda x: (x.get("score") or {}).get("value") if isinstance(x.get("score"), dict) else x.get("score")
+            ot = them.get("team") or {}
+            if st.get("completed"):
+                g = _game(ev.get("id"), bot.parse_date(ev.get("date")), ot.get("displayName"), ot.get("abbreviation"), us.get("homeAway") == "home",
+                          sc(us), sc(them), (ev.get("seasonType") or {}).get("name") or "")
+                if g:
+                    games.append(g)
+            elif st.get("state") == "pre":
+                upcoming.append({"date": ev.get("date"), "opp": ot.get("displayName") or "", "home": us.get("homeAway") == "home"})
+    roster = []
+    try:
+        r = bot.get_json(f"{bot.ESPN}/{path}/teams/{tid}/roster", 6 * 3600)
+        ath = r.get("athletes") or []
+        flat = [a for grp in ath for a in (grp.get("items") or [])] if ath and "items" in ath[0] else ath
+        for a in flat:
+            roster.append({"name": a.get("displayName") or a.get("fullName") or "", "pos": (a.get("position") or {}).get("abbreviation") or "",
+                           "num": a.get("jersey") or "", "photo": img_url((a.get("headshot") or {}).get("href") or ""),
+                           "out": ((a.get("injuries") or [{}])[0] or {}).get("status") or ""})
+    except Exception:
+        pass
+    stats = []
+    try:
+        sd = bot.get_json(f"{bot.ESPN}/{path}/teams/{tid}/statistics", 6 * 3600)
+        cats = ((sd.get("results") or {}).get("stats") or {}).get("categories") or []
+        for cat in cats:
+            for x in cat.get("stats") or []:
+                if x.get("displayValue") in (None, "", "0", "0.0"):
+                    continue
+                stats.append({"cat": cat.get("displayName") or cat.get("name") or "", "l": x.get("displayName") or x.get("name"), "v": x.get("displayValue"),
+                              "pg": x.get("perGameDisplayValue") or "", "rank": x.get("rankDisplayValue") or ""})
+    except Exception:
+        pass
+    rec = ((info.get("record") or {}).get("items") or [{}])[0].get("summary") or ""
+    return {"id": str(tid), "name": t.get("displayName") or name, "abbr": t.get("abbreviation") or "", "logo": img_url(logo), "record": rec,
+            "standing": info.get("standingSummary") or "", "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": stats[:80]}
+
+
+def _mlb_team(name):
+    d = bot.get_json(f"{bot.SAPI}/teams?sportId=1", 86400)
+    c = _pick([(t.get("id"), [t.get("name"), t.get("teamName"), t.get("abbreviation"), t.get("locationName"), t.get("clubName")], t) for t in d.get("teams") or []], name)
+    if not c:
+        raise LookupError(f"Couldn't find an MLB team called {name}.")
+    t, tid = c[2], c[0]
+    y = dt_now().year
+    games, upcoming, w, l = [], [], 0, 0
+    for yr in (y, y - 1):
+        try:
+            sch = bot.get_json(f"{bot.SAPI}/schedule?sportId=1&teamId={tid}&season={yr}&gameType=R,F,D,L,W", 1800)
+        except Exception:
+            continue
+        for day in sch.get("dates") or []:
+            for g in day.get("games") or []:
+                home = str(g["teams"]["home"]["team"]["id"]) == str(tid)
+                us, them = (g["teams"]["home"], g["teams"]["away"]) if home else (g["teams"]["away"], g["teams"]["home"])
+                if (g.get("status") or {}).get("abstractGameState") == "Final":
+                    x = _game(g.get("gamePk"), bot.parse_date(g.get("gameDate")), them["team"].get("name"), "", home, us.get("score"), them.get("score"),
+                              "Postseason" if g.get("gameType") in ("F", "D", "L", "W") else "Regular season")
+                    if x:
+                        games.append(x)
+                elif (g.get("status") or {}).get("abstractGameState") == "Preview":
+                    upcoming.append({"date": g.get("gameDate"), "opp": them["team"].get("name") or "", "home": home})
+    roster = []
+    try:
+        for r in bot.get_json(f"{bot.SAPI}/teams/{tid}/roster?rosterType=active", 6 * 3600).get("roster") or []:
+            pid = (r.get("person") or {}).get("id")
+            roster.append({"name": (r.get("person") or {}).get("fullName") or "", "pos": (r.get("position") or {}).get("abbreviation") or "", "num": r.get("jerseyNumber") or "",
+                           "photo": img_url(f"https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best/v1/people/{pid}/headshot/67/current") if pid else "", "out": ""})
+    except Exception:
+        pass
+    stats = []
+    try:
+        sd = bot.get_json(f"{bot.SAPI}/teams/{tid}/stats?stats=season&group=hitting,pitching&season={y}", 6 * 3600)
+        for grp in sd.get("stats") or []:
+            cat = ((grp.get("group") or {}).get("displayName") or "").title()
+            st = ((grp.get("splits") or [{}])[0] or {}).get("stat") or {}
+            for k in ("avg", "obp", "slg", "ops", "runs", "homeRuns", "hits", "strikeOuts", "baseOnBalls", "stolenBases", "era", "whip", "saves", "strikeoutsPer9Inn", "walksPer9Inn"):
+                if st.get(k) not in (None, ""):
+                    stats.append({"cat": cat, "l": re_label(k), "v": str(st[k]), "pg": "", "rank": ""})
+    except Exception:
+        pass
+    return {"id": str(tid), "name": t.get("name") or name, "abbr": t.get("abbreviation") or "", "logo": img_url(f"https://www.mlbstatic.com/team-logos/{tid}.svg"),
+            "record": "", "standing": "", "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": stats}
+
+
+def re_label(k):
+    import re as _re
+    return {"avg": "Batting average", "obp": "On-base %", "slg": "Slugging %", "ops": "OPS", "era": "ERA", "whip": "WHIP"}.get(k) or _re.sub(r"([A-Z0-9]+)", r" \1", k).capitalize()
+
+
+def dt_now():
+    import datetime as _dt
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
+def _soccer_team(name):
+    if not bot.D.get("fm_team"):
+        raise LookupError("Soccer teams aren't available right now.")
+    d = bot.D["fm_team"](name)
+    if not d or d.get("error"):
+        raise LookupError(f"Couldn't find {name} on FotMob.")
+    tid, games, upcoming = str(d.get("id")), [], []
+    for f in d.get("fixtures") or []:
+        home = str((f.get("home") or {}).get("id")) == tid
+        opp = (f.get("away") if home else f.get("home")) or {}
+        if f.get("finished") and f.get("score"):
+            g = _game(f.get("id"), bot.parse_date(f.get("utc")), opp.get("name"), (opp.get("short") or "")[:3], home,
+                      f["score"][0 if home else 1], f["score"][1 if home else 0], f.get("tournament") or "")
+            if g:
+                games.append(g)
+        elif not f.get("started") and not f.get("cancelled"):
+            upcoming.append({"date": f.get("utc"), "opp": opp.get("name") or "", "home": home, "comp": f.get("tournament") or ""})
+    roster = [{"name": m.get("name") or "", "pos": m.get("position") or m.get("group") or "", "num": m.get("number") or "", "photo": img_url(m.get("photo")),
+               "out": (m.get("injury") or {}).get("text") or "", "g": m.get("goals"), "a": m.get("assists")} for m in d.get("squad") or []]
+    return {"id": tid, "name": d.get("name") or name, "abbr": "", "logo": img_url(d.get("crest")), "record": "", "standing": d.get("coach") and f"Coach: {d['coach']}" or "",
+            "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": []}
+
+
+def team(sport, name):
+    if sport not in bot.SPORTS:
+        raise LookupError("Pick a sport.")
+    if not (name or "").strip():
+        raise LookupError("Type a team's name.")
+    name = name.strip()
+
+    def go():
+        return _soccer_team(name) if sport == "soccer" else _mlb_team(name) if sport == "mlb" else _espn_team(sport, name)
+    t = bot.memo(("labteam", sport, bot.norm(name)), 1800, go)
+    games = sorted(t["games"], key=lambda g: g["date"], reverse=True)[:82]
+    if not games:
+        raise LookupError(f"No finished games found for {t['name']}.")
+    unit = UNIT[sport]
+    keys = ["pf", "pa", "tot", "mar", "win"] + (["btts", "cs"] if sport in ("soccer", "nhl") else ["cs"] if sport == "mlb" else [])
+    stats = [dict(s, n=len(games)) for s in _team_stats(unit) if s["k"] in keys]
+    up = sorted([u for u in t["upcoming"] if u.get("date")], key=lambda u: u["date"])
+    nxt = up[0] if up else None
+    lines = []
+    if nxt:
+        try:
+            e = bot.find_game(sport, t["name"])
+            if e:
+                home = bot.norm(e["home"]["name"]) == bot.norm(t["name"]) or e["home"]["id"] == t["id"]
+                od, book = e.get("odds") or {}, ((e.get("odds") or {}).get("provider") or {}).get("name") or "DraftKings"
+                sp = bot.num(od.get("spread"))
+                if sp is not None:   # ESPN's spread is the home side's; covering means margin > -our spread
+                    ours = sp if home else -sp
+                    lines.append({"k": "mar", "line": -ours, "book": book, "kind": f"spread {'+' if ours > 0 else ''}{bot.fmt(ours)}", "pOver": None, "opp": nxt["opp"]})
+                if bot.num(od.get("overUnder")) is not None:
+                    lines.append({"k": "tot", "line": bot.num(od["overUnder"]), "book": book, "kind": "total", "pOver": None, "opp": nxt["opp"]})
+                m = bot.market(e)
+                if m:
+                    lines.append({"k": "win", "line": 0.5, "book": book, "kind": "moneyline", "pOver": m["home" if home else "away"], "opp": nxt["opp"]})
+                nxt["details"] = od.get("details") or ""
+        except Exception:
+            pass
+    start = bot.season_start(sport)
+    return {"kind": "team", "sport": sport, "sportLabel": bot.SPORTS[sport], "name": t["name"], "team": t.get("standing") or "", "photo": t["logo"], "abbr": t["abbr"],
+            "record": t["record"], "unit": unit, "seasonStart": start.isoformat(), "stats": stats, "games": games, "lines": lines, "next": nxt,
+            "roster": t["roster"][:60], "seasonStats": t["seasonStats"], "at": int(time.time())}
+
+
 def handle(path, q, signed_in=False):
     """GET /api/lab/<path> -> (status, obj or (content_type, bytes))"""
     if path == "img":
@@ -201,6 +427,8 @@ def handle(path, q, signed_in=False):
     try:
         if path == "player":
             return 200, player(q.get("sport") or "nba", q.get("name") or "")
+        if path == "team":
+            return 200, team(q.get("sport") or "nba", q.get("name") or "")
         if path == "board":
             return 200, board(q.get("sport") or "nba")
     except LookupError as e:
