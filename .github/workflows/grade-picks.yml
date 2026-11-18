@@ -20,6 +20,10 @@ on:
         description: "Start the record over (the next scheduled run posts everything again)"
         type: boolean
         default: false
+      delete:
+        description: "Message ids of the bot's posts in the results channel to delete first (space separated)"
+        type: string
+        default: ""
       preview:
         description: "Only show what it reads and how each pick grades (posts nothing)"
         type: boolean
@@ -44,6 +48,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "cryptography>=42"
+      - name: Delete posts
+        if: inputs.delete != ''
+        run: python3 pick_tracker.py delete ${{ inputs.delete }}
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          PICKS_DATA_DIR: data
       - run: python3 pick_tracker.py ${{ inputs.preview && 'try' || inputs.now && 'now' || 'scheduled' }}
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
