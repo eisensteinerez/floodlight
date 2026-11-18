@@ -12,9 +12,14 @@
 <meta name="apple-mobile-web-app-title" content="Floodlight">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0B111C">
+<link rel="preconnect" href="https://site.api.espn.com" crossorigin>
+<link rel="preconnect" href="https://site.web.api.espn.com" crossorigin>
+<link rel="preconnect" href="https://a.espncdn.com">
+<link rel="preconnect" href="https://images.fotmob.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..900&family=Geist:wght@400..800&family=Geist+Mono:wght@400..700&display=swap">
+<link rel="stylesheet" href="theme.css" id="flTheme">
 <style>
 /* Layout: three-pane match centre. Competitions rail | fixtures list | match sheet (pitch, stats, flow). Collapses to chips + sheet on phones. */
 :root{
@@ -1153,6 +1158,7 @@ document.addEventListener('error', ev => {
     </div>
   </aside>
 </main>
+<footer class="fl-foot" aria-hidden="true"><span class="fl-foot-mark">Floodlight</span><span class="fl-foot-line">Every match, every line, under the lights.</span></footer>
 <div class="toasts" id="toasts"></div>
 <div class="drawer-scrim" id="profileScrim" hidden></div>
 <aside class="drawer" id="profile" role="dialog" aria-modal="true" aria-labelledby="profileTitle" tabindex="-1" hidden></aside>
@@ -1216,7 +1222,12 @@ function teamColors(h, a){
 }
 
 /* ---------- data ---------- */
-async function getJSON(url){ const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json() }
+const inFlight = new Map();   // callers asking for the same address at the same moment share one request
+function getJSON(url){
+  if (inFlight.has(url)) return inFlight.get(url);
+  const p = fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.json() }).finally(() => inFlight.delete(url));
+  inFlight.set(url, p); return p;
+}
 
 function norm(ev, slug){
   const c = ev.competitions?.[0]; if (!c) return null;
@@ -1233,7 +1244,8 @@ function norm(ev, slug){
   if (slug === 'all') league = { ...OTHER, name: prettySeason(ev.season?.slug) };
   return { id: ev.id, slug, league, date: new Date(ev.date), state: st.state, completed: st.completed, detail: st.shortDetail || st.detail || '', desc: st.description,
     clock: c.status?.displayClock, home, away, hc, ac, venue: c.venue?.fullName, city: c.venue?.address?.city, note: c.notes?.[0]?.headline || '',
-    broadcast: c.broadcasts?.flatMap(b=>b.names||[]).join(', ') || '' };
+    broadcast: c.broadcasts?.flatMap(b=>b.names||[]).join(', ') || '',
+    goals: (c.details || []).filter(d => d.scoringPlay).map(d => ({ t: String(d.team?.id || ''), min: d.clock?.displayValue || '', who: d.athletesInvolved?.[0]?.shortName || d.athletesInvolved?.[0]?.displayName || '', og: !!d.ownGoal, pen: !!d.penaltyKick })) };
 }
 function prettySeason(s){
   if (!s) return 'Other competitions';
@@ -1356,7 +1368,7 @@ function render(){
   const liveHTML = liveNow.length > 0 && groups.size > 1 ? `<div class="group live-group"><div class="group-h"><span class="pill live">Live</span><strong>Live now</strong><span>· across all competitions</span></div><div class="cards">${liveNow.map(card).join('')}</div></div>` : '';
   const favNow = S.filter === 'all' && !S.q && !S.scope && S.fav.length ? evs.filter(e => isFav(e.home.id) || isFav(e.away.id)) : [];
   const favHTML = favNow.length ? `<div class="group"><div class="group-h"><strong>★ My teams</strong><span>· ${favNow.length} match${favNow.length>1?'es':''}</span></div><div class="cards">${favNow.map(card).join('')}</div></div>` : '';
-  $('groups').innerHTML = favHTML + liveHTML + [...groups.values()].map(list => {
+  $('groups').innerHTML = spotlightHTML(evs) + dayPulseHTML(evs) + favHTML + liveHTML + [...groups.values()].map(list => {
     if (S.sort === 'time') return `<div class="group"><div class="group-h"><strong>By kick-off time</strong></div><div class="cards">${list.map(card).join('')}</div></div>`;
     const lg = list[0].league;
     return `<div class="group"><div class="group-h">${lg.logo ? `<img src="${esc(lg.logo)}" alt="">` : ''}<strong>${esc(lg.name)}</strong><span>· ${esc(lg.area)}</span></div>
@@ -1367,15 +1379,64 @@ function card(e){
   const hs = +e.home.score, as = +e.away.score, post = e.state === 'post', showScore = e.state !== 'pre';
   const hl = post && hs < as, al = post && as < hs;
   let st;
-  if (e.state === 'in') st = `<div class="st live"><span class="min">${esc(/half/i.test(e.detail) ? 'HT' : e.clock)}</span>LIVE</div>`;
-  else if (e.state === 'pre') st = /postpon|cancel|delay/i.test(e.detail) ? `<div class="st">${esc(e.detail)}</div>` : `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>`;
+  if (e.state === 'in') { const mm = matchMinute(e); st = `<div class="st live"><svg class="st-ring" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="19"/><circle class="p" cx="22" cy="22" r="19" stroke-dasharray="${(Math.min(1, (mm ?? 45) / 90) * 119.4).toFixed(1)} 119.4" transform="rotate(-90 22 22)"/></svg><span class="min">${esc(/half/i.test(e.detail) ? 'HT' : e.clock)}</span><span class="lv">LIVE</span></div>` }
+  else if (e.state === 'pre') st = /postpon|cancel|delay/i.test(e.detail) ? `<div class="st">${esc(e.detail)}</div>` : `<div class="st"><span class="ko">${e.date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>${sameDay(e.date, new Date()) && kickIn(e.date) ? `<small class="cd">${kickIn(e.date)}</small>` : ''}</div>`;
   else st = `<div class="st">${esc(e.detail.replace('Full Time','FT'))}</div>`;
   const logo = t => t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy">` : `<img alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Ccircle cx='5' cy='5' r='4' fill='%23888'/%3E%3C/svg%3E">`;
   return `<button class="m${S.sel===e.id?' sel':''}" data-ev="${esc(e.id)}" style="--hc:${e.hc};--ac:${e.ac}" aria-label="${esc(spoken(e))}">
     ${st}
     <div class="tms"><div class="tm${hl?' lose':''}">${logo(e.home)}<span>${esc(e.home.name)}</span></div><div class="tm${al?' lose':''}">${logo(e.away)}<span>${esc(e.away.name)}</span></div>${oddRow(e)}</div>
-    <div class="sc num">${showScore ? `<span class="${hl?'lose':''}">${esc(e.home.score)}</span><span class="${al?'lose':''}">${esc(e.away.score)}</span>` : '<span>&nbsp;</span><span>&nbsp;</span>'}</div>
+    <div class="sc num${showScore ? '' : ' pre'}">${showScore ? `<span class="${hl?'lose':''}">${esc(e.home.score)}</span><span class="${al?'lose':''}">${esc(e.away.score)}</span>` : '<span>&nbsp;</span><span>&nbsp;</span>'}</div>
   </button>`;
+}
+// The marquee: the day's headline matches, big, lit in both teams' colours. A match of one of your teams first,
+// then whatever is live, then the next to kick off. The first is the main stage; two more stand beside it.
+const matchMinute = e => { const m = String(e.clock || '').match(/(\d+)(?:'?\s*\+\s*(\d+))?/); return /half/i.test(e.detail || '') ? 45 : m ? +m[1] + (+m[2] || 0) : null };
+const kickIn = d => { const m = Math.round((d - Date.now()) / 60000); return m <= 0 || m > 20 * 60 ? '' : m < 60 ? `in ${m}m` : `in ${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` };
+function spotHTML(e, mini){
+  const live = e.state === 'in', pre = e.state === 'pre', ml = !e.completed && S.odds.get(e.id)?.ml, min = live ? matchMinute(e) : null;
+  const goals = k => { const g = (e.goals || []).filter(x => x.t === String(e[k === 'h' ? 'home' : 'away'].id)); return g.length && !mini ? `<span class="spot-g">${g.slice(0, 4).map(x => `<span>${esc(x.who)} <b>${esc(x.min)}</b>${x.pen ? ' (pen)' : x.og ? ' (og)' : ''}</span>`).join('')}</span>` : '' };
+  const side = (t, k) => `<span class="spot-t ${k}">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<strong>${esc(mini ? (t.abbr || t.name) : t.name)}</strong>${t.form && !mini ? `<span class="form" aria-hidden="true">${[...t.form].slice(-5).map(c => `<i class="${esc(c)}">${esc(c)}</i>`).join('')}</span>` : ''}${goals(k)}</span>`;
+  const time = e.date.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}).replace(/\s?([AP]M)$/i, '<small>$1</small>');
+  const mid = pre ? `<span class="spot-sc pre"><b class="num">${time}</b><span>${esc(kickIn(e.date) || 'Kick-off')}</span></span>`
+    : `<span class="spot-sc"><b class="num">${esc(e.home.score)}<i>–</i>${esc(e.away.score)}</b><span class="${live ? 'on' : ''}">${live ? esc(/half/i.test(e.detail) ? 'Half time' : e.clock) : esc(e.detail.replace('Full Time', 'Full time'))}</span></span>`;
+  const prob = ml && ml.home && ml.away && !mini ? `<span class="spot-prob" aria-label="Win chances"><i style="flex:${ml.home.p};background:var(--hc)"><b>${pct(ml.home.p)}%</b></i>${ml.draw ? `<i class="d" style="flex:${ml.draw.p}"><b>Draw ${pct(ml.draw.p)}%</b></i>` : ''}<i style="flex:${ml.away.p};background:var(--ac)"><b>${pct(ml.away.p)}%</b></i></span>` : '';
+  const clock = min != null && !mini ? `<span class="spot-clock" aria-hidden="true"><i style="width:${Math.min(100, min / 90 * 100)}%"></i>${[15, 30, 45, 60, 75].map(t => `<u style="left:${t / 90 * 100}%"></u>`).join('')}${(e.goals || []).map(g => { const gm = parseInt(g.min) || 0; return `<s class="${g.t === String(e.home.id) ? 'h' : 'a'}" style="left:${Math.min(100, gm / 90 * 100)}%"></s>` }).join('')}<em>0'</em><em>HT</em><em>90'</em></span>` : '';
+  return `<button class="spot${mini ? ' mini' : ''}${live ? ' live' : ''}${S.sel===e.id?' sel':''}" data-ev="${esc(e.id)}" style="--hc:${e.hc};--ac:${e.ac}" aria-label="${esc('Featured match. ' + spoken(e))}">
+    <span class="spot-bg" aria-hidden="true">${e.home.logo ? `<img class="h" src="${esc(e.home.logo)}" alt="">` : ''}${e.away.logo ? `<img class="a" src="${esc(e.away.logo)}" alt="">` : ''}</span>
+    ${mini ? '' : `<span class="spot-ghost h" aria-hidden="true">${esc(e.home.abbr || '')}</span><span class="spot-ghost a" aria-hidden="true">${esc(e.away.abbr || '')}</span><svg class="spot-pitch" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="#fff" stroke-width="1"><path d="M200 0v200"/><circle cx="200" cy="100" r="46"/><rect x="-1" y="40" width="62" height="120"/><rect x="339" y="40" width="62" height="120"/><rect x="-1" y="72" width="22" height="56"/><rect x="379" y="72" width="22" height="56"/></g><circle cx="200" cy="100" r="2.5" fill="#fff"/></svg>`}
+    <span class="spot-top"><span class="spot-tag">${live ? '<i></i>Live' : pre ? 'Next up' : 'Full time'}</span><span>${e.league.logo ? `<img src="${esc(e.league.logo)}" alt="">` : ''}${esc(e.league.name)}</span>${e.venue && !mini ? `<span class="v">${esc(e.venue)}</span>` : ''}${e.broadcast && !mini ? `<span class="tv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg>${esc(e.broadcast.split(',')[0])}</span>` : ''}</span>
+    <span class="spot-main">${side(e.home, 'h')}${mid}${side(e.away, 'a')}</span>
+    ${clock}${prob}
+    ${mini ? '' : `<span class="spot-foot">Pitch view, live stats, momentum and lineups<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>`}
+  </button>`;
+}
+function spotlightHTML(evs){
+  if (S.filter !== 'all' || S.q || evs.length < 2) return '';
+  const fav = e => isFav(e.home.id) || isFav(e.away.id), rank = e => (e.state === 'in' ? 0 : e.state === 'pre' ? 2 : 4) + (fav(e) ? 0 : 1);
+  const top = [...evs].sort((a, b) => rank(a) - rank(b) || (a.state === 'post' ? b.date - a.date : a.date - b.date)).slice(0, evs.length >= 5 ? 3 : 1);
+  return `<div class="spots${top.length > 1 ? ' trio' : ''}">${spotHTML(top[0])}${top.length > 1 ? `<div class="spot-side">${top.slice(1).map(e => spotHTML(e, true)).join('')}</div>` : ''}</div>`;
+}
+// The day at a glance: a few counts, then every match laid along the clock as a bar from kick-off to the final
+// whistle, with a line for right now. Tap a bar to open that match.
+function dayPulseHTML(evs){
+  if (S.filter !== 'all' || S.q || evs.length < 2) return '';
+  const now = Date.now(), live = evs.filter(e => e.state === 'in'), done = evs.filter(e => e.state === 'post'), next = evs.filter(e => e.state === 'pre' && e.date > now).sort((a, b) => a.date - b.date)[0];
+  const goals = evs.reduce((n, e) => n + (e.state === 'pre' ? 0 : (+e.home.score || 0) + (+e.away.score || 0)), 0);
+  const LEN = 115 * 60000, t0 = Math.min(...evs.map(e => +e.date)), t1 = Math.max(...evs.map(e => +e.date)) + LEN;
+  const start = Math.floor((t0 - 20 * 60000) / 3600000) * 3600000, end = Math.ceil((t1 + 10 * 60000) / 3600000) * 3600000, span = end - start, X = t => (t - start) / span * 100;
+  const lanes = [], rows = [...evs].sort((a, b) => a.date - b.date).map(e => { let i = lanes.findIndex(t => t <= +e.date); if (i < 0) { i = lanes.length; lanes.push(0) } lanes[i] = +e.date + LEN + 6 * 60000; return { e, i } });
+  const MAXL = 5, shown = rows.filter(r => r.i < MAXL), hidden = rows.length - shown.length, nl = Math.min(MAXL, lanes.length);
+  const hours = []; const stepH = Math.max(1, Math.ceil(span / 3600000 / 9)); for (let t = start; t <= end; t += stepH * 3600000) hours.push(t);
+  const stat = (v, l, cls = '') => `<div class="pulse-s ${cls}"><b class="num">${v}</b><span>${l}</span></div>`;
+  return `<div class="pulse">
+    <div class="pulse-stats">${stat(evs.length, 'matches')}${stat(live.length, 'live now', live.length ? 'live' : '')}${stat(goals, 'goals so far')}${stat(done.length, 'finished')}${next ? stat(esc(kickIn(next.date).replace('in ', '') || next.date.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})), `to ${esc(next.home.abbr || next.home.name)} v ${esc(next.away.abbr || next.away.name)}`, 'next') : ''}</div>
+    <div class="pulse-tl" style="--lanes:${nl}" role="group" aria-label="Today's matches by kick-off time">
+      ${hours.map(t => `<span class="pulse-h" style="left:${X(t)}%"><em>${new Date(t).toLocaleTimeString([], {hour:'numeric'}).replace(/\s/g, '').toLowerCase()}</em></span>`).join('')}
+      ${now > start && now < end ? `<span class="pulse-now" style="left:${X(now)}%"><em>Now</em></span>` : ''}
+      ${shown.map(({ e, i }) => { const w = LEN / span * 100, st = e.state, prog = st === 'in' ? Math.min(100, (matchMinute(e) ?? 45) / 95 * 100) : st === 'post' ? 100 : 0;
+        return `<button class="pulse-m ${st}${S.sel===e.id?' sel':''}" data-ev="${esc(e.id)}" style="left:${X(+e.date)}%;width:${w}%;top:calc(22px + ${i} * 30px);--hc:${e.hc};--ac:${e.ac}" title="${esc(spoken(e))}"><i style="width:${prog}%"></i>${e.home.logo ? `<img src="${esc(e.home.logo)}" alt="">` : ''}<span>${esc(e.home.abbr || '')}${st === 'pre' ? ' v ' : ` <b class="num">${esc(e.home.score)}–${esc(e.away.score)}</b> `}${esc(e.away.abbr || '')}</span>${e.away.logo ? `<img src="${esc(e.away.logo)}" alt="">` : ''}</button>` }).join('')}
+      ${hidden > 0 ? `<span class="pulse-more">+${hidden} more below</span>` : ''}</div></div>`;
 }
 function oddRow(e){
   const ml = e.state !== 'post' && S.odds.get(e.id)?.ml; if (!ml) return '';
@@ -2163,6 +2224,21 @@ const WEB = 'https://site.web.api.espn.com/apis/common/v3/sports/soccer';
 const CORE = 'https://sports.core.api.espn.com/v2/sports/soccer';
 const memo = new Map();
 function cj(url){ if (!memo.has(url)) memo.set(url, getJSON(url).catch(err => { memo.delete(url); throw err })); return memo.get(url) }
+// A small cache on the device itself (IndexedDB) for things that no longer change: finished games, past seasons, box
+// scores. The second look at a player then needs one small request instead of dozens.
+const disk = (() => {
+  let dbp;
+  const open = () => dbp ||= new Promise((res, rej) => { const r = indexedDB.open('floodlight', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) });
+  const tx = (mode, fn) => open().then(db => new Promise((res, rej) => { const t = db.transaction('kv', mode), q = fn(t.objectStore('kv')); t.oncomplete = () => res(q?.result); t.onerror = t.onabort = () => rej(t.error) }));
+  const get = k => tx('readonly', st => st.get(k)).catch(() => null);
+  const set = (k, v, ttl) => tx('readwrite', st => st.put({ v, x: Date.now() + ttl * 1000 }, k)).catch(() => {});
+  // remember(key, seconds, make, keep): the saved value while it is fresh, otherwise make() and save what it returns (unless keep(value) says no)
+  const remember = (k, ttl, make, keep) => get(k).then(hit => hit && hit.x > Date.now() ? hit.v : make().then(v => { if (v != null && ttl > 0 && (!keep || keep(v))) set(k, v, ttl); return v }));
+  // once per visit: drop what has expired, and the oldest entries past a few thousand
+  setTimeout(() => tx('readwrite', st => { const now = Date.now(); let n = 0; st.openCursor(null, 'prev').onsuccess = e => { const c = e.target.result; if (!c) return; if (c.value.x < now || ++n > 6000) c.delete(); c.continue() } }).catch(() => {}), 20000);
+  return { get, set, remember };
+})();
+const DAY_S = 86400;   // a day in seconds, for disk.remember
 const val = r => r.status === 'fulfilled' ? r.value : null;
 const BACK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 5l-7 7 7 7"/></svg>`;
 const fmtDate = (d, o = {day:'numeric', month:'short'}) => new Date(d).toLocaleDateString([], o);
@@ -4237,6 +4313,65 @@ function probBar(e, f){
   return `<div class="pbar" role="img" aria-label="${esc(`${e.home.name} ${pct(f.home)} percent, draw ${pct(f.draw)} percent, ${e.away.name} ${pct(f.away)} percent`)}">
     <i style="flex-grow:${f.home};background:${e.hc}"><span>${pct(f.home)}%</span></i><i style="flex-grow:${f.draw};background:var(--draw)"><span>${pct(f.draw)}%</span></i><i style="flex-grow:${f.away};background:${e.ac}"><span>${pct(f.away)}%</span></i></div>`;
 }
+/* the full picture behind a soccer prediction: every scoreline, and every market that falls out of it */
+const DC_RHO = -0.08;       // low scores are a little more linked than plain Poisson says (Dixon-Coles)
+function scoreGrid(P){
+  const N = 9, g = []; let wh = 0, wd = 0, wa = 0;
+  for (let i = 0; i <= N; i++) { g.push([]); for (let j = 0; j <= N; j++) {
+    const tau = !i && !j ? 1 - P.lh * P.la * DC_RHO : !i && j === 1 ? 1 + P.lh * DC_RHO : i === 1 && !j ? 1 + P.la * DC_RHO : i === 1 && j === 1 ? 1 - DC_RHO : 1;
+    const p = pois(i, P.lh) * pois(j, P.la) * Math.max(.2, tau); g[i].push(p); if (i > j) wh += p; else if (i === j) wd += p; else wa += p } }
+  // tilt the grid so its home/draw/away totals equal the headline numbers, which also carry the market and the lineups
+  const kh = P.final.home / wh, kd = P.final.draw / wd, ka = P.final.away / wa;
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) g[i][j] *= i > j ? kh : i === j ? kd : ka;
+  return g;
+}
+function predDepthData(P){
+  const g = scoreGrid(P), sum = f => { let s = 0; for (let i = 0; i < g.length; i++) for (let j = 0; j < g.length; j++) if (f(i, j)) s += g[i][j]; return s };
+  const f = P.final, tot = [0, 1, 2, 3, 4].map(n => sum((i, j) => i + j === n)); tot.push(Math.max(0, 1 - tot.reduce((a, b) => a + b, 0)));
+  const margin = [-3, -2, -1, 0, 1, 2, 3].map(m => [m, sum((i, j) => m === -3 ? i - j <= -3 : m === 3 ? i - j >= 3 : i - j === m)]);
+  return { g, tot, margin, o15: sum((i, j) => i + j > 1), o25: P.o25 ?? sum((i, j) => i + j > 2), o35: sum((i, j) => i + j > 3), btts: P.btts ?? sum((i, j) => i && j),
+    csH: sum((i, j) => !j), csA: sum((i, j) => !i), nilH: sum((i, j) => i > j && !j), nilA: sum((i, j) => j > i && !i),
+    dnbH: f.home / (f.home + f.away), dnbA: f.away / (f.home + f.away), hx: f.home + f.draw, xa: f.away + f.draw, ha: f.home + f.away,
+    h2: sum((i, j) => i >= 2), a2: sum((i, j) => j >= 2) };
+}
+const fairUS = p => p <= 0 || p >= 1 ? '—' : p >= .5 ? '−' + Math.round(100 * p / (1 - p)) : '+' + Math.round(100 * (1 - p) / p);
+function predDepth(e, P){
+  const D = predDepthData(P), hn = e.home.abbr || e.home.name, an = e.away.abbr || e.away.name, H = esc(e.home.name), A = esc(e.away.name);
+  const top = Math.max(...D.g.slice(0, 6).flatMap(r => r.slice(0, 6)));
+  const cell = (i, j) => { const p = D.g[i][j], on = i === P.score[0] && j === P.score[1];
+    return `<i class="${i > j ? 'h' : i < j ? 'a' : 'd'}${on ? ' on' : ''}" style="--v:${(p / top).toFixed(3)}" tabindex="0" data-tip="${H} ${i}–${j} ${A} · ${(p * 100).toFixed(1)}% · fair ${fairUS(p)}"><b class="num">${p >= .005 ? Math.round(p * 100) : ''}</b></i>` };
+  const grid = `<div class="sg" role="img" aria-label="Chance of every scoreline up to five goals each" style="--hc:${e.hc};--ac:${e.ac}">
+      <span class="sg-x">${esc(an)} goals</span><span class="sg-y">${esc(hn)} goals</span>
+      <div class="sg-g"><u></u>${[0, 1, 2, 3, 4, 5].map(j => `<u class="num">${j}</u>`).join('')}
+        ${[0, 1, 2, 3, 4, 5].map(i => `<u class="num">${i}</u>` + [0, 1, 2, 3, 4, 5].map(j => cell(i, j)).join('')).join('')}</div>
+      <p class="sg-k"><span><i style="background:${e.hc}"></i>${H} win</span><span><i style="background:var(--draw)"></i>Draw</span><span><i style="background:${e.ac}"></i>${A} win</span><span class="sg-n">Numbers are % chance. Hover a square for the fair price.</span></p></div>`;
+  const tmax = Math.max(...D.tot), totals = `<div class="gd" role="img" aria-label="Chance of each total number of goals">${D.tot.map((p, n) =>
+      `<div class="gd-c${p === tmax ? ' on' : ''}" data-tip="${n === 5 ? '5 or more' : n} goal${n === 1 ? '' : 's'} · ${(p * 100).toFixed(1)}%"><b class="num">${pct(p)}%</b><i style="height:${Math.max(4, p / tmax * 100).toFixed(1)}%"></i><span class="num">${n === 5 ? '5+' : n}</span></div>`).join('')}</div>`;
+  const mmax = Math.max(...D.margin.map(x => x[1])), margins = `<div class="gd mg" role="img" aria-label="Chance of each winning margin" style="--hc:${e.hc};--ac:${e.ac}">${D.margin.map(([m, p]) =>
+      `<div class="gd-c ${m > 0 ? 'h' : m < 0 ? 'a' : 'd'}" data-tip="${m === 0 ? 'Draw' : `${m > 0 ? H : A} by ${Math.abs(m)}${Math.abs(m) === 3 ? ' or more' : ''}`} · ${(p * 100).toFixed(1)}%"><b class="num">${pct(p)}%</b><i style="height:${Math.max(4, p / mmax * 100).toFixed(1)}%"></i><span class="num">${m === 0 ? 'X' : (Math.abs(m) === 3 ? '3+' : Math.abs(m))}</span></div>`).join('')}
+      <small class="mg-l">${esc(an)} by</small><small class="mg-r">${esc(hn)} by</small></div>`;
+  const row = (label, p) => `<div class="mk-r"><span>${label}</span><i><s style="width:${(p * 100).toFixed(1)}%"></s></i><b class="num">${pct(p)}%</b><em class="num">${fairUS(p)}</em></div>`;
+  const group = (t, rows) => `<div class="mk-g"><h6>${t}</h6>${rows.map(r => row(...r)).join('')}</div>`;
+  const markets = `<div class="mk">${group('Result', [[`${H}`, P.final.home], ['Draw', P.final.draw], [`${A}`, P.final.away]])}
+      ${group('Double chance', [[`${esc(hn)} or draw`, D.hx], [`${esc(an)} or draw`, D.xa], ['No draw', D.ha]])}
+      ${group('Draw no bet', [[H, D.dnbH], [A, D.dnbA]])}
+      ${group('Total goals', [['Over 1.5', D.o15], ['Over 2.5', D.o25], ['Over 3.5', D.o35], ['Under 2.5', 1 - D.o25]])}
+      ${group('Goals by team', [['Both teams score', D.btts], [`${esc(hn)} score 2+`, D.h2], [`${esc(an)} score 2+`, D.a2]])}
+      ${group('Clean sheets', [[`${esc(hn)} clean sheet`, D.csH], [`${esc(an)} clean sheet`, D.csA], [`${esc(hn)} win to nil`, D.nilH], [`${esc(an)} win to nil`, D.nilA]])}</div>`;
+  return `<div class="sub-h"><h5>Every scoreline</h5><small>${P.lh.toFixed(2)} v ${P.la.toFixed(2)} expected goals</small></div>${grid}
+    <div class="pd-2"><div><div class="sub-h"><h5>Total goals</h5></div>${totals}</div><div><div class="sub-h"><h5>Winning margin</h5></div>${margins}</div></div>
+    <div class="sub-h"><h5>Markets</h5><small>Chance · fair price</small></div>${markets}`;
+}
+function predEdge(e, P){
+  let edge = '';
+  if (P.market) {
+    const ks = ['home', 'draw', 'away'].map(k => ({ k, g: P.model[k] - P.market[k] })).sort((a, b) => b.g - a.g), b = ks[0];
+    const name = b.k === 'draw' ? 'the draw' : esc(e[b.k].name);
+    edge = b.g >= .04 ? `<div class="edge up"><b>Model edge</b><p>The stats model rates ${name} at <strong class="num">${pct(P.model[b.k])}%</strong>, the market prices it at <strong class="num">${pct(P.market[b.k])}%</strong>. That is a <strong class="num">${pct(b.g)}</strong> point gap, with a fair price of <strong class="num">${fairUS(P.model[b.k])}</strong> against the market's <strong class="num">${fairUS(P.market[b.k])}</strong>.</p></div>`
+      : `<div class="edge"><b>No edge</b><p>The stats model and the market are within ${Math.max(1, pct(Math.abs(b.g)))} points on every outcome, so the price looks fair.</p></div>`;
+  }
+  return edge;
+}
 function insightPane(e){
   if (e.state === 'pre' && S.serverOK !== false && !e.tnLoading && (!e.news || (!e.fm && e.src !== 'fm'))) {
     e.tnLoading = true; ensureTeamNews(e, false).finally(() => { e.tnLoading = false; rerenderPredictions() });
@@ -4265,9 +4400,9 @@ function insightPane(e){
     ${P.market ? `<div class="sub-h"><h5>Model vs market</h5><small>Kalshi</small></div>
       <div class="vs-table">${['home','draw','away'].map(k => { const g = P.model[k] - P.market[k];
         return `<div><span>${esc(k === 'draw' ? 'Draw' : e[k].name)}</span><b class="num">${pct(P.model[k])}%</b><b class="num">${pct(P.market[k])}%</b><em class="num ${g > .03 ? 'up' : g < -.03 ? 'down' : ''}">${g > 0 ? '+' : ''}${pct(g)}</em></div>` }).join('')}
-        <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div>` : ''}
+        <div class="vs-h"><span></span><small>Model</small><small>Market</small><small>Gap</small></div></div></div>${predEdge(e, P)}` : ''}
     <div class="sub-h"><h5>Why</h5></div><ul class="why">${reasons(e, P).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
-    <div class="sub-h"><h5>Likely scores</h5></div><div class="likely">${P.likely.map(([i, j, p]) => `<span><b class="num">${i}–${j}</b>${pct(p)}%</span>`).join('')}</div>`;
+    ${predDepth(e, P)}`;
   html = html.replace('<div class="sub-h"><h5>Why</h5></div>', teamNewsBlock(e, P) + propsBlock(e) + (S.serverOK !== false ? fcBlock(e) : timelineBlock(e)) + '<div class="sub-h"><h5>Why</h5></div>');
   html += deepResearchBlock(e, P);
   return html + RG;
@@ -4354,7 +4489,8 @@ function renderPicks(){
     <div class="cards">${shown.map(({ e, P }) => `<button class="m pred-card" data-ev="${esc(e.id)}" data-tab-to="insight" style="--hc:${e.hc};--ac:${e.ac}" aria-label="${esc(`${e.home.full} versus ${e.away.full}: prediction ${pickLabel(e, P.pick)}, ${pct(P.top)} percent, ${P.conf}. Most likely score ${P.score.join(' to ')}`)}">
         <div class="st">${e.state === 'in' ? `<span class="min" style="color:var(--live)">${esc(e.clock)}</span>LIVE` : `<span class="ko">${e.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`}</div>
         <div class="tms"><div class="tm"><img src="${esc(e.home.logo)}" alt="" loading="lazy"><span>${esc(e.home.name)}</span></div><div class="tm"><img src="${esc(e.away.logo)}" alt="" loading="lazy"><span>${esc(e.away.name)}</span></div>
-          ${probBar(e, P.final)}</div>
+          ${probBar(e, P.final)}
+          <div class="pc-chips"><span><b class="num">${P.lh.toFixed(1)}–${P.la.toFixed(1)}</b>xG</span><span><b class="num">${pct(P.o25)}%</b>O2.5</span><span><b class="num">${pct(P.btts)}%</b>BTTS</span>${(() => { if (!P.market) return ''; const b = ['home', 'draw', 'away'].map(k => [k, P.model[k] - P.market[k]]).sort((x, y) => y[1] - x[1])[0]; return b[1] >= .04 ? `<span class="edge-c"><b class="num">+${pct(b[1])}</b>${esc(b[0] === 'draw' ? 'Draw' : e[b[0]].abbr || e[b[0]].name)} edge</span>` : '' })()}</div></div>
         <div class="pc-side"><span class="conf ${P.conf === 'Strong' ? 'high' : P.conf === 'Lean' ? 'medium' : 'low'}">${P.conf}</span><b>${esc(pickLabel(e, P.pick))}</b><small class="num">${P.score.join('–')} · ${pct(P.top)}%${S.picks.find(p => p.id === e.id) ? ' · ★ picked' : ''}</small><small class="pfx-lg">${esc(LG[e.slug] && e.slug !== 'all' ? LG[e.slug].name : e.league?.name || '')}</small>${(() => { const sn = snapsOf(e).slice(-1)[0]; return sn && sn.stage !== 'early' ? `<small class="cp-tag ${sn.stage}">${sn.stage === 'final' ? 'Lineups in' : 'Day-before update'}</small>` : '' })()}</div></button>`).join('')
       || (typeof PFX !== 'undefined' && PFX.empty('soccer', items.length)) || (pending ? '<div class="skel"></div><div class="skel"></div>' : `<div class="empty-state"><strong>No upcoming matches</strong>Pick another day with the date bar on the match list, or choose a different league.</div>`)}</div>
     <p class="srcnote">The model uses each team's goals scored and conceded per game, points per game, recent form, home advantage and reported absences; where Kalshi trades a match, the prediction is 60% market, 40% model. Tap a match for the full explanation.</p>${RG}`;
@@ -4516,10 +4652,12 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="books.js"></script>
 <script src="research.js"></script>
 <script src="record.js"></script>
+<script src="fx.js"></script>
 <script type="module">
 // Predicted lineups: Claude researches recent team news with web search, using the viewer's own API key.
-import Anthropic from 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.131.0/+esm';
+// The SDK is only downloaded the first time someone asks for a predicted lineup.
 window.claudePredict = async ({ apiKey, prompt }) => {
+  const { default: Anthropic } = await import('https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.131.0/+esm');
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   const messages = [{ role: 'user', content: prompt }];
   const sources = [];

@@ -261,17 +261,23 @@ async function rsLoadSoccer(o){
 // FotMob per-match player stats (shots, passes, tackles...); one request serves every player in that match
 const rsMatch = new Map();
 function rsMatchStats(mid){
-  if (!rsMatch.has(mid)) rsMatch.set(mid, getJSON(`/api/fm/matchstats?id=${mid}`).then(d => {
+  if (!rsMatch.has(mid)) rsMatch.set(mid, disk.remember(`ms:${mid}`, 30 * DAY_S, () => getJSON(`/api/fm/matchstats?id=${mid}`).then(d => { if (d && d.error) throw new Error(d.error); return { players: d.players, done: d.finished ?? d.status?.finished ?? null } }), d => d.done !== false && (d.players || []).length > 0).then(d => {
     const out = {};
     for (const p of d.players || []) { const f = {}; for (const grp of Object.values(p.stats || {})) for (const [k, v] of Object.entries(grp)) { if (Array.isArray(v)) { f[k] = rsNum(v[0]); f[k + '_total'] = rsNum(v[1]) } else f[k] = rsNum(v) } f._team = String(p.teamId ?? ''); out[String(p.id)] = f }
     return out }).catch(err => { rsMatch.delete(mid); throw err }));
   return rsMatch.get(mid);
 }
+// One ESPN game page, boiled down by pick() to the few numbers research needs. The page itself is half a megabyte, so
+// only the boiled-down part is kept on the device, and only once the game is over.
+function rsSummary(kind, path, eid, pick){
+  let over = false;
+  return disk.remember(`sum:${kind}:${path}:${eid}`, 30 * DAY_S, () => getJSON(`https://site.api.espn.com/apis/site/v2/sports/${path}/summary?event=${eid}`).then(d => { over = !!d.header?.competitions?.[0]?.status?.type?.completed; return pick(d) }), () => over);
+}
 // ESPN NBA box score + play-by-play: offensive / defensive rebounds and made dunks for everyone in the game
 const rsBox = new Map();
 function rsNbaBox(eid, lg){
   const k = lg + eid;
-  if (!rsBox.has(k)) rsBox.set(k, cj(`https://site.api.espn.com/apis/site/v2/sports/basketball/${lg}/summary?event=${eid}`).then(d => {
+  if (!rsBox.has(k)) rsBox.set(k, rsSummary('box', `basketball/${lg}`, eid, d => {
     const out = {};
     for (const t of d.boxscore?.players || []) for (const st of t.statistics || []) {
       const keys = st.keys || st.names || [], labels = st.labels || [];
@@ -290,7 +296,7 @@ function rsNbaBox(eid, lg){
 const rsNfl = new Map();
 function rsNflPlays(eid, lg){
   const k = lg + eid;
-  if (!rsNfl.has(k)) rsNfl.set(k, cj(`https://site.api.espn.com/apis/site/v2/sports/football/${lg}/summary?event=${eid}`).then(d => {
+  if (!rsNfl.has(k)) rsNfl.set(k, rsSummary('nfl', `football/${lg}`, eid, d => {
     const cur = {}, best = {};
     for (const pl of (d.drives?.previous || []).flatMap(dr => dr.plays || [])) {
       const t = pl.type?.text || '', id = (pl.participants || []).find(x => x.type === 'passer')?.athlete?.id; if (!id) continue;
@@ -309,7 +315,7 @@ function rsTeamBox(p, g){
       const f = { home: {}, away: {} };
       for (const grp of d.stats || []) for (const row of grp.rows || []) for (const sd of ['home', 'away']) if (row.key && f[sd][row.key] === undefined) f[sd][row.key] = rsNum(row[sd]);
       return Object.fromEntries(Object.entries(side).map(([id, sd]) => [id, f[sd]])) })
-    : cj(`https://site.api.espn.com/apis/site/v2/sports/${p.path}/summary?event=${g.id}`).then(d => {
+    : rsSummary('tb', p.path, g.id, d => {
       const out = {};
       for (const t of d.boxscore?.teams || []) { const f = {};
         for (const x of t.statistics || []) { const v = String(x.displayValue ?? ''), names = String(x.name || '').split('-');
@@ -325,7 +331,7 @@ const RS_NHL_LAB = { BS: 'blockedShots', HT: 'hits', TK: 'takeaways', GV: 'givea
 const rsNhl = new Map();
 function rsNhlBox(eid, lg){
   const k = lg + eid;
-  if (!rsNhl.has(k)) rsNhl.set(k, cj(`https://site.api.espn.com/apis/site/v2/sports/hockey/${lg}/summary?event=${eid}`).then(d => {
+  if (!rsNhl.has(k)) rsNhl.set(k, rsSummary('nhl', `hockey/${lg}`, eid, d => {
     const out = {};
     for (const t of d.boxscore?.players || []) for (const st of t.statistics || []) {
       const keys = st.keys || st.names || [], labels = st.labels || [];
@@ -343,11 +349,19 @@ async function rsLoadDeep(p, limit, onStep){
     : p.sport === 'nfl' ? g => rsNflPlays(g.id, p.lg || 'nfl').then(m => m[p.id] || null) : p.sport === 'nhl' ? g => rsNhlBox(g.id, p.lg || 'nhl').then(m => m[p.id] || null)
     : g => rsNbaBox(g.id, p.lg || 'nba').then(m => m[p.id] || null);
   const worker = async () => { while (i < todo.length) { const g = todo[i++]; try { g.deep = await one(g) } catch { g.deep = null } onStep?.() } };
-  await Promise.all([worker(), worker(), worker()]);
+  await Promise.all(Array.from({ length: p.sport === 'soccer' || p.sport === 'tennis' || p.fs ? 3 : 6 }, worker));
 }
 
 // one ESPN game-log season (NBA, WNBA, NFL)
-async function rsEspnSeason(path, id, y){
+// Has that season finished? Finished seasons never change, so they are kept on the device for a month; the current one for ten minutes.
+function rsSeasonOver(path, y){
+  const now = new Date(), s = String(path);
+  const end = /^football/.test(s) ? new Date(y + 1, 2, 15) : /wnba/.test(s) ? new Date(y, 11, 1) : /^(basketball|hockey)/.test(s) ? new Date(y, 7, 1) : new Date(y, 11, 1);
+  return now >= end;
+}
+const rsSeasonTTL = (path, y) => rsSeasonOver(path, y) ? 30 * DAY_S : 600;
+const rsEspnSeason = (path, id, y) => disk.remember(`gl:${path}:${id}:${y}`, rsSeasonTTL(path, y), () => rsEspnSeasonNet(path, id, y), gs => gs.length > 0);
+async function rsEspnSeasonNet(path, id, y){
   const g = await cj(`https://site.web.api.espn.com/apis/common/v3/sports/${path}/athletes/${id}/gamelog?season=${y}`).catch(() => null);
   if (!g?.seasonTypes) return [];
   const labels = g.labels || [], cats = g.categories || [], out = [];
@@ -388,7 +402,8 @@ async function rsLoadEspn(o){
 }
 // MLB StatsAPI game logs, hitting and pitching
 const SAPI = 'https://statsapi.mlb.com/api/v1';
-async function rsMlbSeason(id, yr, sid = 1){
+const rsMlbSeason = (id, yr, sid = 1) => disk.remember(`mlbgl:${id}:${yr}:${sid}`, rsSeasonTTL('baseball', yr), () => rsMlbSeasonNet(id, yr, sid), gs => gs.length > 0);
+async function rsMlbSeasonNet(id, yr, sid = 1){
   const d = await cj(`${SAPI}/people/${id}/stats?stats=gameLog&group=hitting,pitching&season=${yr}&sportId=${sid}`).catch(() => null), games = new Map();
   for (const st of d?.stats || []) {
     const pit = /pitch/i.test(st.group?.displayName || '');
@@ -419,7 +434,8 @@ async function rsLoadMlb(o){
   return p;
 }
 // teams: ESPN schedules (NBA, WNBA, college, NFL), StatsAPI schedules with line scores (MLB), FotMob fixtures (soccer)
-async function rsEspnTeamSeason(path, id, y){
+const rsEspnTeamSeason = (path, id, y) => disk.remember(`tsn:${path}:${id}:${y}`, rsSeasonTTL(path, y), () => rsEspnTeamSeasonNet(path, id, y), gs => gs.length > 0);
+async function rsEspnTeamSeasonNet(path, id, y){
   const d = await cj(`https://site.api.espn.com/apis/site/v2/sports/${path}/teams/${id}/schedule?season=${y}`).catch(() => null);
   return (d?.events || []).filter(ev => ev.competitions?.[0]?.status?.type?.completed).map(ev => {
     const c = ev.competitions[0], cs = c.competitors || [], us = cs.find(x => String(x.id) === String(id)), them = cs.find(x => x !== us); if (!us || !them) return null;
@@ -428,7 +444,8 @@ async function rsEspnTeamSeason(path, id, y){
       oppLogo: ot.logos?.[0]?.href || ot.logo || '', home: us.homeAway === 'home', comp: /post/i.test(ev.seasonType?.name || '') ? 'Playoffs' : 'Regular season', res: rsResult(pf, pa),
       score: `${pf}–${pa}`, min: null, week: ev.week?.number, raw: { pf, pa } } }).filter(Boolean);
 }
-async function rsMlbTeamSeason(id, y, sid = 1){
+const rsMlbTeamSeason = (id, y, sid = 1) => disk.remember(`mlbtsn:${id}:${y}:${sid}`, rsSeasonTTL('baseball', y), () => rsMlbTeamSeasonNet(id, y, sid), gs => gs.length > 0);
+async function rsMlbTeamSeasonNet(id, y, sid = 1){
   const d = await cj(`${SAPI}/schedule?sportId=${sid}&teamId=${id}&season=${y}&gameType=R,F,D,L,W&hydrate=linescore,team`).catch(() => null);
   return (d?.dates || []).flatMap(x => x.games || []).filter(g => g.status?.abstractGameState === 'Final').map(g => {
     const home = String(g.teams.home.team.id) === String(id), me = home ? 'home' : 'away', op = home ? 'away' : 'home', us = g.teams[me], them = g.teams[op], ls = g.linescore || {}, inn = ls.innings || [];
@@ -578,11 +595,12 @@ async function rsLoadCareer(p, onStep){
   if (p.sport === 'soccer' || p.fs || p.careerDone || p.careerLoading) return;
   p.careerLoading = true; let empty = 0;
   const stop = p.kind === 'team' ? p.from - 8 : p.sport === 'mlb' ? (p.debut || p.from - 25) : p.years ? p.from - p.years : p.from - 25;
-  for (let y = p.from - 1; y >= stop && empty < 2; y--) {
-    const gs = p.kind === 'team' ? await (p.sport === 'mlb' ? rsMlbTeamSeason(p.id, y) : rsEspnTeamSeason(p.path, p.id, y))
-      : p.sport === 'mlb' ? await rsMlbSeason(p.id, y, p.sportId) : await rsEspnSeason(p.path, p.id, y);
-    if (gs.length) { empty = 0; rsAddGames(p, gs) } else empty++;
-    p.careerAt = y; onStep?.();
+  const season = y => (p.kind === 'team' ? (p.sport === 'mlb' ? rsMlbTeamSeason(p.id, y) : rsEspnTeamSeason(p.path, p.id, y))
+    : p.sport === 'mlb' ? rsMlbSeason(p.id, y, p.sportId) : rsEspnSeason(p.path, p.id, y)).catch(() => []);
+  for (let y = p.from - 1; y >= stop && empty < 2; y -= 4) {   // four seasons at a time, newest first
+    const ys = [y, y - 1, y - 2, y - 3].filter(v => v >= stop), got = await Promise.all(ys.map(season));
+    for (const [i, gs] of got.entries()) { if (empty >= 2) break; if (gs.length) { empty = 0; rsAddGames(p, gs) } else empty++; p.careerAt = ys[i] }
+    onStep?.();
   }
   p.careerLoading = false; p.careerDone = true; onStep?.();
 }
@@ -964,9 +982,13 @@ function rsPlayerHTML(){
   let h = rsSearchHTML();
   if (!p || p.sport !== r.sport) return h + `<div class="rs-empty"><strong>Research any player prop</strong>Search a player, pick a stat and a line, and see how often they have gone over it: the last 5, 10 and 20 games, this season, their whole career, at home or away and against the next opponent. PrizePicks, Sleeper and sportsbook lines show up next to the line box when they're posted. Search a team to research its points, totals, spreads and yards the same way, or use Combo to add two players together (say two running backs' rushing yards). Or open <button class="linkbtn" data-rs="tab" data-to="board">Today's player props</button> to rank every line by hit rate.</div>`;
   if (r.err) return h + `<div class="note">${esc(r.err)}</div>`;
-  const head = `<div class="rs-ph${p.kind === 'team' ? ' team' : ''}"><img class="face" src="${esc(p.photo || SIL)}" alt="" onerror="rsNoImg(this)"><div><h3>${esc(p.name)}</h3><p>${p.crest ? `<img src="${esc(p.crest)}" alt="" onerror="this.remove()">` : ''}${esc([p.team, p.pos].filter(Boolean).join(' · '))}</p>
-    ${p.next ? `<p class="rs-next">Next: ${p.next.home ? 'vs' : '@'} <b>${esc(p.next.name)}</b> · ${esc(fmtDate(p.next.date, { weekday: 'short', day: 'numeric', month: 'short' }))}</p>` : ''}</div></div>`;
-  if (r.loading) return h + head + `<div class="skel" style="height:320px;margin-top:14px"></div>`;
+  // the player card: the crest, blurred right out, lights the card in the team's colours
+  const glow = p.crest || (p.kind === 'team' ? p.photo : ''), last = String(p.name || '').trim().split(/\s+/).slice(p.kind === 'team' ? 0 : -1).join(' ');
+  const hero = (strip = '') => `<div class="rs-hero${p.kind === 'team' ? ' team' : ''}">${glow ? `<span class="rs-hero-bg" aria-hidden="true"><img src="${esc(glow)}" alt="" onerror="this.remove()"></span>` : ''}<span class="rs-hero-ghost" aria-hidden="true">${esc(last)}</span>
+    <div class="rs-ph${p.kind === 'team' ? ' team' : ''}"><span class="rs-face"><img class="face" src="${esc(p.photo || SIL)}" alt="" onerror="rsNoImg(this)"></span><div><h3>${esc(p.name)}</h3><p>${p.crest ? `<img src="${esc(p.crest)}" alt="" onerror="this.remove()">` : ''}${esc([p.team, p.pos].filter(Boolean).join(' · '))}</p>
+    ${p.next ? `<p class="rs-next">Next: ${p.next.home ? 'vs' : '@'} <b>${esc(p.next.name)}</b> · ${esc(fmtDate(p.next.date, { weekday: 'short', day: 'numeric', month: 'short' }))}</p>` : ''}</div></div>${strip}</div>`;
+  const head = hero();
+  if (r.loading) return h + head + `<div class="rs-skel"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div><div class="skel" style="height:320px;margin-top:12px;border-radius:20px"></div>`;
   if (!p.games.length) return h + head + `<div class="note">No games logged for this ${p.kind === 'team' ? 'team' : 'player'}.</div>`;
   const stats = rsStatsFor(p), def0 = rsDef(p, r.stat) || stats[0], P0 = p;
   let def = def0;
@@ -984,8 +1006,8 @@ function rsPlayerHTML(){
   const yesNo = (o, n) => def.yes ? (r.side === 'over' ? 'Yes' : 'No') : (r.side === 'over' ? o : n);
   const tiles = [['l5', 'L5'], ['l10', 'L10'], ['l20', 'L20'], ['season', p.games.some(g => g.date >= rsSeasonStart(p.sport)) ? 'Season' : 'Last season'],
     ['h2h', oppName ? 'vs ' + (p.games.find(g => rsSameOpp(g, r.opp))?.oppAbbr || oppName) : 'H2H'], ['all', p.sport === 'soccer' ? 'All' : 'Career']].map(([k, l]) => {
-    const R = rsRate(rsRangeGames(p, pool, k), def, r.line, r.side);
-    return `<button class="rs-tile ${rsPctCls(R.pct)}" data-rs="range" data-to="${k}" aria-pressed="${r.range === k}"><span>${esc(l)}</span><b class="num">${rsPctTxt(R.pct)}</b><small>${R.n ? `${R.hit}/${R.n - R.push}${R.push ? ` · ${R.push} push` : ''}` : k === 'h2h' && !r.opp ? (p.sport === 'tennis' ? 'pick an opponent' : 'pick a team') : 'no games'}</small></button>` }).join('');
+    const gsK = rsRangeGames(p, pool, k), R = rsRate(gsK, def, r.line, r.side);
+    return `<button class="rs-tile ${rsPctCls(R.pct)}" data-rs="range" data-to="${k}" aria-pressed="${r.range === k}"><span>${esc(l)}</span><span class="rs-ring">${rsRing(gsK, def, r.line, r.side, R, /^l\d/.test(k))}<b class="num">${rsPctTxt(R.pct)}</b></span><small>${R.n ? `${R.hit}/${R.n - R.push}${R.push ? ` · ${R.push} push` : ''}` : k === 'h2h' && !r.opp ? (p.sport === 'tennis' ? 'pick an opponent' : 'pick a team') : 'no games'}</small></button>` }).join('');
   const shown = rsRangeGames(p, pool, r.range).filter(g => def.get(g) != null);
   const R = rsRate(shown, def, r.line, r.side);
   const dfs = r.dfs[p.sport];
@@ -993,7 +1015,27 @@ function rsPlayerHTML(){
     : p.fs ? (p.careerLoading ? `Adding the rest of this season from box scores… ${p.games.length} games so far` : `${p.games.length} games with box scores, from Flashscore`)
     : p.sport === 'soccer' ? (p.careerLoading ? `Loading the whole career, most important first… ${p.games.length} matches so far${p.careerAt ? ` · now ${p.careerAt}` : ''}` : `${p.games.length} matches since ${p.games[p.games.length - 1]?.date.getFullYear() || ''} across ${new Set(p.games.map(g => g.comp)).size} competitions; pick one under Competition. Career totals by season are further down.`)
     : p.careerLoading ? `Loading the rest of the career… back to ${p.careerAt || p.from}` : `${p.games.length} games since ${p.games[p.games.length - 1]?.date.getFullYear() || ''} (whole career)`;
-  h += head + `<div class="rs-stats" role="group" aria-label="Stat">${stats.map(s => `<button class="qf" data-rs="stat" data-to="${s.k}" aria-pressed="${s.k === def0.k}">${esc(s.l)}</button>`).join('')}</div>
+  const sv = pool.map(def.get).filter(v => v != null), seas = rsRate(rsRangeGames(p, pool, 'season'), def, r.line, r.side), l5a = rsAvg(sv.slice(0, 5)), base = seas.avg ?? rsAvg(sv);
+  let run = 0; const runCls = sv.length ? rsHitCls(sv[0], r.line, r.side) : ''; for (const v of sv) { if (rsHitCls(v, r.line, r.side) !== runCls) break; run++ }
+  const trend = l5a != null && base ? (l5a - base) / Math.abs(base) : 0, f1 = v => v == null ? '–' : rsFmt(v, { dec: def.dec || 1 });
+  // the form meter blends the four spans into one reading: recent games count most
+  const parts = [['l5', .35], ['l10', .3], ['l20', .2], ['season', .15]].map(([k, w]) => [rsRate(rsRangeGames(p, pool, k), def, r.line, r.side).pct, w]).filter(x => x[0] != null);
+  const meter = parts.length ? parts.reduce((a, [v, w]) => a + v * w, 0) / parts.reduce((a, x) => a + x[1], 0) : null;
+  const mWord = meter == null ? '' : meter >= .7 ? 'Running hot' : meter >= .57 ? 'Warm' : meter > .43 ? 'Coin flip' : meter > .3 ? 'Cool' : 'Ice cold';
+  const arcLen = Math.PI * 52, spark = sv.slice(0, 12).reverse(), sMax = Math.max(...spark, r.line * 1.1, 1);
+  const gauge = meter == null ? '' : `<div class="rs-meterbox" title="A blend of the last 5 (35%), last 10 (30%), last 20 (20%) and season (15%) hit rates for ${esc(yesNo('over', 'under'))} ${rsLineTxt(r.line)}">
+      <svg viewBox="0 0 128 76" aria-hidden="true"><defs><linearGradient id="rsMg" x1="0" x2="1"><stop offset="0" stop-color="var(--loss)"/><stop offset=".5" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--win)"/></linearGradient></defs>
+        <path class="t" d="M12 68a52 52 0 0 1 104 0"/><path class="v" d="M12 68a52 52 0 0 1 104 0" stroke="url(#rsMg)" stroke-dasharray="${(meter * arcLen).toFixed(1)} ${arcLen.toFixed(1)}"/>
+        ${[0, .25, .5, .75, 1].map(t => { const a = Math.PI * (1 - t), x = 64 + Math.cos(a) * 62, y = 68 - Math.sin(a) * 62, x2 = 64 + Math.cos(a) * 58, y2 = 68 - Math.sin(a) * 58; return `<path class="k" d="M${x.toFixed(1)} ${y.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}"/>` }).join('')}
+        <g transform="rotate(${(meter * 180 - 90).toFixed(1)} 64 68)"><path class="n" d="M64 68V26"/><circle class="h" cx="64" cy="68" r="5"/></g></svg>
+      <b class="num">${Math.round(meter * 100)}</b><span>Form meter</span><small class="${meter >= .57 ? 'up' : meter <= .43 ? 'down' : ''}">${mWord}</small></div>`;
+  const strip = def.yes || !sv.length ? '' : `<div class="rs-side">${gauge}<div class="rs-strip">
+    <div><span>${p.games.some(g => g.date >= rsSeasonStart(p.sport)) ? 'Season' : 'Last season'} avg</span><b class="num">${f1(base)}</b><small>${esc(def.l.toLowerCase())}</small></div>
+    <div><span>Last 5 avg</span><b class="num">${f1(l5a)}</b><small class="${trend > .03 ? 'up' : trend < -.03 ? 'down' : ''}">${trend > .03 ? '▲' : trend < -.03 ? '▼' : '●'} ${Math.abs(Math.round(trend * 100))}% vs season</small></div>
+    <div><span>Best of last 20</span><b class="num">${f1(Math.max(...sv.slice(0, 20)))}</b><small>low ${f1(Math.min(...sv.slice(0, 20)))}</small></div>
+    <div><span>Current run</span><b class="num">${run}</b><small class="${runCls === 'hit' ? 'up' : runCls === 'miss' ? 'down' : ''}">${runCls === 'hit' ? 'straight hits' : runCls === 'miss' ? 'straight misses' : 'pushes'}</small></div>
+    <div class="rs-spark"><span>Last ${spark.length}</span><span class="rs-sp-b" aria-hidden="true">${spark.map(v => `<i class="${rsHitCls(v, r.line, r.side)}" style="height:${Math.max(8, v / sMax * 100)}%"></i>`).join('')}<u style="bottom:${r.line / sMax * 100}%"></u></span></div></div></div>`;
+  h += hero(strip) + `<div class="rs-stats" role="group" aria-label="Stat">${stats.map(s => `<button class="qf" data-rs="stat" data-to="${s.k}" aria-pressed="${s.k === def0.k}">${esc(s.l)}</button>`).join('')}</div>
     ${rsComboHTML(P0, def0)}
     <div class="rs-line">${def.yes ? '' : `<div class="rs-lc"><span>Line</span><button class="icon-btn" data-rs="line" data-to="${-step}" aria-label="Lower the line">−</button><input id="rsLine" type="number" inputmode="decimal" step="${step}" value="${rsLineTxt(r.line)}" aria-label="Line"><button class="icon-btn" data-rs="line" data-to="${step}" aria-label="Raise the line">+</button></div>`}
       <div class="seg rs-ou" role="group" aria-label="Over or under"><button data-rs="side" data-to="over" aria-pressed="${r.side === 'over'}" class="${r.side === 'over' ? 'on' : ''}">${def.yes ? 'Yes' : 'Over'}</button><button data-rs="side" data-to="under" aria-pressed="${r.side === 'under'}" class="${r.side === 'under' ? 'on' : ''}">${def.yes ? 'No' : 'Under'}</button></div>
@@ -1002,6 +1044,9 @@ function rsPlayerHTML(){
     <div class="rs-tiles">${tiles}</div>
     ${deepWait ? `<p class="rs-wait">Loading per-game detail… ${p.games.slice(0, 20).filter(g => g.deep !== undefined).length}/${Math.min(20, p.games.length)} games</p>` : ''}
     ${rsChart(shown, def, r.line, r.side)}
+    ${rsRead(p, pool, def, r.line, r.side, bookPct, meter)}
+    ${rsInsights(shown, def, r.line, r.side, posted, step)}
+    ${rsSeasonMap(p, pool, def, r.line, r.side)}${rsDuels(p, pool, def, r.line, r.side)}
     <p class="rs-wait">${esc(careerNote)}${def.deep ? ' · this stat needs per-game detail, so it covers the last 20 games' : ''}</p>
     <div class="rs-filters">
       ${p.sport === 'tennis' ? '' : `<label><span>Venue</span><select data-rsf="venue"><option value="all">Home and away</option><option value="home" ${r.venue === 'home' ? 'selected' : ''}>Home only</option><option value="away" ${r.venue === 'away' ? 'selected' : ''}>Away only</option></select></label>`}
@@ -1014,17 +1059,144 @@ function rsPlayerHTML(){
     ${rsSplits(p, def)}${p.sport === 'soccer' && p.kind !== 'team' ? rsSoccerCareer(p) : ''}${rsLog(shown, def)}`;
   return h;
 }
+// The main chart: one bar per game against the line. Hover a bar for the game, drag the line to move it, and the
+// thin curve is the running average of the five games up to that point.
+let rsChartKey = '', rsDrag = null;
+const rsNice = x => { const p = 10 ** Math.floor(Math.log10(x || 1)), f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p };
+const rsHitCls = (v, line, side) => v === line ? 'push' : (side === 'over' ? v > line : v < line) ? 'hit' : 'miss';
+// A tile's dial. For the last 5 / 10 / 20 every game is its own segment, oldest first, clockwise from the top; longer
+// spans are one arc as long as the hit rate.
+function rsRing(games, def, line, side, R, each){
+  const r = 34, C = 2 * Math.PI * r, vals = games.map(def.get).filter(v => v != null).reverse(), n = vals.length;
+  if (each && n && n <= 20) { const gap = n > 1 ? (n > 10 ? 2.5 : 4) : 0, len = C / n - gap;
+    return `<svg viewBox="0 0 80 80" aria-hidden="true">${vals.map((v, i) => `<circle class="${rsHitCls(v, line, side)}" cx="40" cy="40" r="${r}" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" transform="rotate(${(i * 360 / n - 90 + gap / C * 180).toFixed(2)} 40 40)"/>`).join('')}</svg>` }
+  return `<svg viewBox="0 0 80 80" aria-hidden="true"><circle class="trk" cx="40" cy="40" r="${r}"/>${R.pct != null ? `<circle class="arc" cx="40" cy="40" r="${r}" stroke-dasharray="${(R.pct * C).toFixed(2)} ${C.toFixed(2)}" transform="rotate(-90 40 40)"/>` : ''}</svg>`;
+}
 function rsChart(games, def, line, side){
   if (!games.length) return `<div class="note">No games match these filters.</div>`;
-  const gs = games.slice(0, 40).reverse();   // oldest on the left
-  const vals = gs.map(def.get), max = Math.max(line * 1.25, ...vals, 1) || 1;
+  const gs = games.slice(0, 40).reverse(), n = gs.length;   // oldest on the left
+  const vals = gs.map(def.get), top = Math.max(...vals, 1) || 1;
+  const max = rsDrag?.max || Math.max(line * 1.25, top * 1.04, 1), tick = rsNice(max / 4), ticks = [];
+  for (let t = tick; t < max * .98; t += tick) ticks.push(Math.round(t * 100) / 100);
   const pct = v => Math.max(0, Math.min(100, v / max * 100));
-  return `<div class="rs-chart" role="img" aria-label="${esc(`${def.l} in each of the last ${gs.length} games against a line of ${rsLineTxt(line)}`)}">
-    ${games.length > 40 ? '<p class="rs-wait" style="margin:-14px 0 8px">The chart shows the newest 40; the table below has them all.</p>' : ''}
-    <div class="rs-bars" style="--n:${gs.length}">${gs.map((g, i) => { const v = vals[i], cls = v === line ? 'push' : (side === 'over' ? v > line : v < line) ? 'hit' : 'miss';
-      return `<div class="rs-b ${cls}" title="${esc(`${fmtDate(g.date, { day: 'numeric', month: 'short', year: 'numeric' })} ${g.home === false ? '@' : 'vs'} ${g.opp}: ${rsFmt(v, def)}`)}"><em class="num">${rsFmt(v, def)}</em><i style="height:${Math.max(v ? 3 : 1.5, pct(v))}%"></i>
-        <span class="rs-bl">${g.oppLogo ? `<img src="${esc(g.oppLogo)}" alt="" onerror="this.remove()">` : ''}${esc((g.oppAbbr || g.opp || '').slice(0, 3))}<small>${esc(fmtDate(g.date, { day: 'numeric', month: 'numeric' }))}</small></span></div>` }).join('')}
-      <div class="rs-ln" style="bottom:${pct(line)}%"><span>${def.yes ? 'Yes' : rsLineTxt(line)}</span></div></div></div>`;
+  const key = [S.rs.p?.key, def.k, S.rs.range, S.rs.venue, S.rs.comp, S.rs.season, S.rs.res, S.rs.opp, S.rs.minMin, n].join('|'), fresh = key !== rsChartKey && !rsDrag; rsChartKey = key;
+  const roll = vals.map((_, i) => rsAvg(vals.slice(Math.max(0, i - 4), i + 1)));
+  const over = def.yes ? 'Yes' : 'Over', under = def.yes ? 'No' : 'Under', dense = n > 22;
+  return `<div class="rs-chart${fresh ? ' fresh' : ''}${dense ? ' dense' : ''}" role="img" aria-label="${esc(`${def.l} in each of the last ${n} games against a line of ${rsLineTxt(line)}`)}">
+    <div class="rs-ch-h"><b>${esc(def.l)}</b><span>last ${n} game${n === 1 ? '' : 's'}, oldest to newest</span>
+      <span class="rs-key"><i class="hit"></i>${side === 'over' ? over : under}<i class="miss"></i>${side === 'over' ? under : over}${n > 2 ? '<i class="avg"></i>5-game average' : ''}</span></div>
+    ${games.length > 40 ? '<p class="rs-wait" style="margin:0 0 8px">The chart shows the newest 40; the table below has them all.</p>' : ''}
+    <div class="rs-bars" style="--n:${n}" data-max="${max}" data-side="${side}">
+      <div class="rs-zn ${side === 'over' ? 'hit' : 'miss'}" style="bottom:${pct(line)}%"></div><div class="rs-zn lo ${side === 'over' ? 'miss' : 'hit'}" style="height:${pct(line)}%"></div>
+      ${ticks.map(t => `<div class="rs-gl" style="bottom:${pct(t)}%"><span class="num">${rsFmt(t, { dec: tick < 1 ? 1 : 0 })}</span></div>`).join('')}
+      ${gs.map((g, i) => { const v = vals[i], cls = rsHitCls(v, line, side), d = Math.round((v - line) * 100) / 100, edge = i < n * .22 ? ' tl' : i > n * .78 - 1 ? ' tr' : '';
+      return `<div class="rs-b ${cls}${edge}" style="--i:${i}" data-v="${v}" tabindex="0"><em class="num">${rsFmt(v, def)}</em><i style="height:${Math.max(v ? 3 : 1.5, pct(v))}%"></i>
+        <span class="rs-bl">${g.oppLogo ? `<img src="${esc(g.oppLogo)}" alt="" onerror="this.remove()">` : ''}${g.home === false ? '@' : ''}${esc((g.oppAbbr || g.opp || '').slice(0, 3))}<small>${esc(fmtDate(g.date, { day: 'numeric', month: 'numeric' }))}</small>${g.res ? `<b class="rs-wl ${esc(g.res)}">${esc(g.res)}</b>` : ''}</span>
+        <span class="rs-tt"><small>${esc(fmtDate(g.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</small><strong>${g.home === false ? '@ ' : g.home ? 'vs ' : ''}${esc(g.opp || '')}</strong>
+          <span class="rs-tv"><b class="num">${rsFmt(v, def)}</b> ${esc(def.l.toLowerCase())}</span>
+          <span class="rs-td ${cls}">${def.yes ? (v > line ? 'Yes' : 'No') : cls === 'push' ? 'Push, right on the line' : `${d > 0 ? '+' : '−'}${rsFmt(Math.abs(d), { dec: def.dec || 1 })} ${d > 0 ? 'over' : 'under'} the line`}</span>
+          ${g.res || g.score ? `<small>${esc([g.res === 'W' ? 'Won' : g.res === 'L' ? 'Lost' : g.res === 'D' ? 'Drew' : '', g.score, g.min != null && def.k !== 'min' ? `${Math.round(g.min)} min` : ''].filter(Boolean).join(' · '))}</small>` : ''}</span></div>` }).join('')}
+      ${n > 2 ? `<svg class="rs-roll" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${roll.map((v, i) => `${i + .5},${(100 - pct(v)).toFixed(2)}`).join(' ')}"/></svg>` : ''}
+      <div class="rs-ln${def.yes ? '' : ' drag'}" style="bottom:${pct(line)}%"${def.yes ? '' : ' data-rsdrag title="Drag to move the line"'}><span class="num">${def.yes ? 'Yes' : rsLineTxt(line)}${def.yes ? '' : '<svg viewBox="0 0 10 14" aria-hidden="true"><path d="M5 1 1.5 5h7zM5 13 1.5 9h7z" fill="currentColor"/></svg>'}</span></div></div></div>`;
+}
+// The read: what the numbers above add up to, in plain words. Nothing here is a guess about the future; every line is a
+// count or an average of games already played, and the lean is only called when recent form and the averages agree.
+const rsAmerican = p => p == null || p <= 0 || p >= 1 ? '–' : p >= .5 ? '−' + Math.round(100 * p / (1 - p)) : '+' + Math.round(100 * (1 - p) / p);
+const rsQuant = (xs, q) => { if (!xs.length) return null; const a = [...xs].sort((x, y) => x - y), i = (a.length - 1) * q, lo = Math.floor(i); return a[lo] + (a[Math.min(a.length - 1, lo + 1)] - a[lo]) * (i - lo) };
+function rsRead(p, pool, def, line, side, bookPct, meter){
+  const gs = pool.filter(g => def.get(g) != null), vals = gs.map(def.get); if (def.yes || vals.length < 5 || meter == null) return '';
+  const over = side === 'over', sideTxt = over ? 'over' : 'under', f1 = v => rsFmt(v, { dec: def.dec || 1 }), who = p.kind === 'team' ? p.name : p.name.split(' ').slice(-1)[0];
+  const avgN = n => rsAvg(vals.slice(0, n)), seasG = rsRangeGames(p, pool, 'season').filter(g => def.get(g) != null), seasAvg = seasG.length ? rsAvg(seasG.map(def.get)) : null;
+  const ws = [[avgN(5), .35], [avgN(10), .3], [avgN(20), .2], [seasAvg, .15]].filter(x => x[0] != null), proj = ws.reduce((a, [v, w]) => a + v * w, 0) / ws.reduce((a, x) => a + x[1], 0);
+  const l20 = vals.slice(0, 20), mean = rsAvg(l20), sd = Math.sqrt(rsAvg(l20.map(v => (v - mean) ** 2))), cv = mean ? sd / Math.abs(mean) : 0;
+  const cushion = (proj - line) * (over ? 1 : -1), agree = cushion > 0 === meter > .5;
+  const strength = !agree || Math.abs(meter - .5) < .07 ? 0 : Math.abs(meter - .5) >= .18 && Math.abs(cushion) >= sd * .25 ? 2 : 1;
+  const lean = strength === 0 ? 'No clear lean' : `${strength === 2 ? 'Strong' : 'Slight'} lean ${meter > .5 ? sideTxt : over ? 'under' : 'over'}`;
+  const notes = [], add = (k, t) => notes.push(`<li class="${k}"><i></i><span>${t}</span></li>`), pc = v => rsPctTxt(v);
+  const R = n => rsRate(gs.slice(0, n), def, line, side), r10 = R(10), r5 = R(5);
+  add(r10.pct >= .6 ? 'up' : r10.pct <= .4 ? 'down' : 'flat', `Went ${sideTxt} ${rsLineTxt(line)} in <b>${r10.hit} of the last ${r10.n - r10.push}</b>${r5.n >= 5 ? ` and ${r5.hit} of the last ${r5.n - r5.push}` : ''}.`);
+  add(cushion > 0 ? 'up' : 'down', `Recent form points to about <b>${f1(proj)}</b> ${esc(def.l.toLowerCase())}, ${f1(Math.abs(proj - line))} ${proj > line ? 'above' : 'below'} the line.`);
+  if (seasAvg != null && avgN(5) != null && Math.abs(avgN(5) - seasAvg) > Math.max(sd * .3, .01)) { const up = avgN(5) > seasAvg; add(up === over ? 'up' : 'down', `Trending ${up ? 'up' : 'down'}: <b>${f1(avgN(5))}</b> over the last five against ${f1(seasAvg)} on the season.`) }
+  add(cv < .22 ? 'up' : cv > .4 ? 'down' : 'flat', `${cv < .22 ? 'Steady' : cv > .4 ? 'Swingy' : 'Fairly even'} output: most games land between <b>${f1(rsQuant(l20, .1))} and ${f1(rsQuant(l20, .9))}</b>${cv > .4 ? ', so one game can land far from the average' : ''}.`);
+  const H = rsRate(gs.filter(g => g.home === true), def, line, side), A = rsRate(gs.filter(g => g.home === false), def, line, side);
+  if (H.n >= 5 && A.n >= 5 && Math.abs(H.pct - A.pct) >= .1) { const nh = p.next ? p.next.home : null, bet = H.pct > A.pct;
+    add(nh == null ? 'flat' : (nh ? bet : !bet) ? 'up' : 'down', `Better ${bet ? 'at home' : 'on the road'}: <b>${pc(H.pct)} home</b>, ${pc(A.pct)} away${nh != null ? `. The next game is ${nh ? 'at home' : 'away'}` : ''}.`) }
+  const r = S.rs, h2h = r.opp ? rsRate(gs.filter(g => rsSameOpp(g, r.opp)), def, line, side) : null;
+  if (h2h && h2h.n - h2h.push >= 2) add(h2h.pct >= .6 ? 'up' : h2h.pct <= .4 ? 'down' : 'flat', `Against ${esc(p.next?.name || gs.find(g => rsSameOpp(g, r.opp))?.opp || 'this opponent')}: <b>${h2h.hit} of ${h2h.n - h2h.push}</b>, averaging ${f1(h2h.avg)}.`);
+  const mins = gs.filter(g => g.min != null).map(g => g.min);
+  if (def.k !== 'min' && mins.length >= 10) { const m5 = rsAvg(mins.slice(0, 5)), mAll = rsAvg(mins.slice(0, 30)); if (mAll && Math.abs(m5 - mAll) / mAll >= .1) add(m5 > mAll === over ? 'up' : 'down', `Playing ${m5 > mAll ? 'more' : 'less'} lately: <b>${Math.round(m5)} minutes</b> a game over the last five, ${Math.round(mAll)} before that.`) }
+  const mine = over ? meter : meter;   // the meter is already for the chosen side
+  if (bookPct != null) { const imp = over ? bookPct : 1 - bookPct, edge = mine - imp; add(edge > .04 ? 'up' : edge < -.04 ? 'down' : 'flat', `The books price the ${sideTxt} at <b>${pc(imp)}</b>; the games played say ${pc(mine)}, a gap of ${edge >= 0 ? '+' : '−'}${Math.abs(Math.round(edge * 100))} points.`) }
+  if (vals.length < 12) add('flat', `Only ${vals.length} games to go on, so treat every number here as rough.`);
+  return `<div class="rs-card rs-read ${strength ? (meter > .5 ? 'pos' : 'neg') : ''}">
+    <div class="rs-read-v"><span>The read</span><strong>${lean}</strong>
+      <div class="rs-read-n"><div><b class="num">${pc(mine)}</b><small>blended hit rate</small></div><div><b class="num">${rsAmerican(mine)}</b><small>fair price at that rate</small></div><div><b class="num">${f1(proj)}</b><small>form projection</small></div></div>
+      <p>${esc(who)} ${sideTxt} ${rsLineTxt(line)} ${esc(def.l.toLowerCase())}. A price better than the fair price is where the value would be; this is history, not a forecast.</p></div>
+    <ul class="rs-read-l">${notes.join('')}</ul></div>`;
+}
+// Every game of the season as one tile, oldest first: green cleared the line, red missed, and the deeper the colour the
+// bigger the margin.
+function rsSeasonMap(p, pool, def, line, side){
+  if (def.yes) return '';
+  let gs = rsRangeGames(p, pool, 'season').filter(g => def.get(g) != null), lab = 'This season';
+  if (gs.length < 8) { gs = pool.filter(g => def.get(g) != null).slice(0, 60); lab = `Last ${gs.length} games` }
+  if (gs.length < 8) return '';
+  gs = gs.slice(0, 120).reverse();
+  const ds = gs.map(g => def.get(g) - line), big = Math.max(...ds.map(Math.abs), 1), R = rsRate(gs, def, line, side);
+  return `<div class="rs-card rs-map"><div class="rs-ch-h"><b>Season map</b><span>${esc(lab)} · ${gs.length} games · ${R.hit} cleared ${side === 'over' ? 'over' : 'under'} ${rsLineTxt(line)}</span>
+      <span class="rs-key rs-scale"><em>missed by more</em><i style="--a:1" class="miss"></i><i style="--a:.6" class="miss"></i><i style="--a:.3" class="miss"></i><i style="--a:.3" class="hit"></i><i style="--a:.6" class="hit"></i><i style="--a:1" class="hit"></i><em>cleared by more</em></span></div>
+    <div class="rs-mapg${gs.length <= 41 ? ' few' : ''}">${gs.map((g, i) => { const v = def.get(g), d = ds[i], cls = rsHitCls(v, line, side), edge = i % 30 < 5 ? ' tl' : i % 30 > 24 ? ' tr' : '';
+      return `<span class="rs-mc ${cls}${edge}" style="--a:${(.28 + .72 * Math.abs(d) / big).toFixed(2)}" tabindex="0"><em class="num">${rsFmt(v, def)}</em><span class="rs-tt"><small>${esc(fmtDate(g.date, { weekday: 'short', day: 'numeric', month: 'short' }))}</small><strong>${g.home === false ? '@ ' : g.home ? 'vs ' : ''}${esc(g.opp || '')}</strong><span class="rs-tv"><b class="num">${rsFmt(v, def)}</b> ${esc(def.l.toLowerCase())}</span><span class="rs-td ${cls}">${cls === 'push' ? 'Push' : `${d > 0 ? '+' : '−'}${rsFmt(Math.abs(Math.round(d * 100) / 100), { dec: def.dec || 1 })} ${d > 0 ? 'over' : 'under'} the line`}</span></span></span>` }).join('')}</div></div>`;
+}
+// Head to head: the same line at home against away, and in wins against losses.
+function rsDuels(p, pool, def, line, side){
+  const gs = pool.filter(g => def.get(g) != null), pairs = [[p.sport === 'tennis' ? null : ['Home', g => g.home === true], ['Away', g => g.home === false]], [['In wins', g => g.res === 'W'], ['In losses', g => g.res === 'L']]];
+  const cards = pairs.map(([a, b]) => { if (!a || !b) return ''; const A = rsRate(gs.filter(a[1]), def, line, side), B = rsRate(gs.filter(b[1]), def, line, side); if (A.n < 2 || B.n < 2) return '';
+    const one = (l, R, k) => `<div class="rs-du ${k} ${rsPctCls(R.pct)}"><span>${l}</span><b class="num">${rsPctTxt(R.pct)}</b><small class="num">${R.hit}/${R.n - R.push} · avg ${rsFmt(R.avg, { dec: def.dec || 1 })}</small></div>`;
+    const tot = (A.pct || 0) + (B.pct || 0) || 1;
+    return `<div class="rs-card rs-duel">${one(a[0], A, 'l')}<div class="rs-dvs"><i>vs</i><span class="rs-dbar"><u class="${rsPctCls(A.pct)}" style="flex:${((A.pct || 0) / tot * 100).toFixed(1)}"></u><u class="${rsPctCls(B.pct)}" style="flex:${((B.pct || 0) / tot * 100).toFixed(1)}"></u></span><em>${Math.abs(Math.round(((A.pct || 0) - (B.pct || 0)) * 100))} pt${Math.abs(Math.round(((A.pct || 0) - (B.pct || 0)) * 100)) === 1 ? '' : 's'} apart</em></div>${one(b[0], B, 'r')}</div>` }).join('');
+  return cards ? `<div class="rs-ins rs-duels">${cards}</div>` : '';
+}
+// Two more looks at the same games: how the hit rate changes as the line moves (click to set it), and where the results pile up.
+function rsInsights(games, def, line, side, posted, step){
+  if (def.yes || games.length < 4) return '';
+  const r = S.rs, vals = games.map(def.get).filter(v => v != null), lo = Math.min(...vals), hi = Math.max(...vals); if (hi <= lo) return '';
+  let gap = step < .5 ? step : 1; const off = step === .5 ? .5 : 0;
+  while ((hi - lo) / gap > 60) gap *= 2;
+  const pts = [];
+  for (let L = Math.floor(lo) - gap + off; L <= hi + gap; L = Math.round((L + gap) * 100) / 100) { const R = rsRate(games, def, L, side); if (R.pct != null) pts.push([L, R.pct, R.hit, R.n - R.push]) }
+  if (pts.length < 3) return '';
+  const x0 = pts[0][0], x1 = pts[pts.length - 1][0], X = L => (L - x0) / (x1 - x0) * 100, W = 600, H = 150;
+  const path = pts.map(([L, p], i) => `${i ? 'L' : 'M'}${(X(L) * W / 100).toFixed(1)},${((1 - p) * H).toFixed(1)}`).join('');
+  const cur = rsRate(games, def, line, side), cx = Math.max(0, Math.min(100, X(line)));
+  const marks = [...new Map((posted || []).map(o => [o.line, o])).values()].filter(o => o.line >= x0 && o.line <= x1 && o.line !== line).slice(0, 6);
+  const xt = [x0, pts[Math.round((pts.length - 1) / 2)][0], x1];
+  // distribution
+  const span = hi - lo, bw = span <= 30 ? (def.step && def.step < .5 ? rsNice(span / 14) : 1) : rsNice(span / 22), b0 = Math.floor(lo / bw) * bw, nb = Math.floor((hi - b0) / bw) + 1, bins = Array.from({ length: nb }, () => []);
+  for (const g of games) { const v = def.get(g); if (v != null) bins[Math.min(nb - 1, Math.floor((v - b0) / bw + 1e-9))].push(g) }
+  const most = Math.max(...bins.map(b => b.length)), units = most <= 7 && games.length <= 40;
+  const lx = Math.max(0, Math.min(100, (line - b0 + (bw === 1 && Number.isInteger(lo) ? .5 : 0)) / (nb * bw) * 100));
+  const sideTxt = side === 'over' ? 'Over' : 'Under';
+  return `<div class="rs-ins">
+    <div class="rs-card rs-lad" data-ladder='${JSON.stringify(pts)}' data-side="${sideTxt}">
+      <div class="rs-ch-h"><b>Hit rate at every line</b><span class="rs-ladr"><b class="num">${rsPctTxt(cur.pct)}</b> ${sideTxt.toLowerCase()} ${rsLineTxt(line)} · ${cur.hit} of ${cur.n - cur.push}</span></div>
+      <div class="rs-ladp"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="rsLadG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".34"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+        <path d="${path}L${W},${H}L0,${H}Z" fill="url(#rsLadG)"/><path d="${path}" class="rs-ladl"/></svg>
+        <div class="rs-lad50"><span>50%</span></div>
+        ${marks.map(o => `<button class="rs-ladm" style="left:${X(o.line)}%" data-rs="setline" data-to="${o.line}" title="${esc(`${RS_BOOK[o.book] || o.book} line: ${o.line}`)}"><span>${esc(RS_BK[o.book] || o.book)}</span></button>`).join('')}
+        <div class="rs-ladc" style="left:${cx}%"><i style="top:${(1 - (cur.pct ?? 0)) * 100}%"></i></div>
+        <div class="rs-ladh" hidden><i></i></div></div>
+      <div class="rs-ladx num">${xt.map(v => `<span>${rsLineTxt(v)}</span>`).join('')}</div>
+      <p class="rs-hint">Move across the curve to try other lines. Click to set one.</p></div>
+    <div class="rs-card rs-dist">
+      <div class="rs-ch-h"><b>Where the results land</b><span>${games.length} games · line at ${rsLineTxt(line)}</span></div>
+      <div class="rs-distp${units ? ' units' : ''}" style="--n:${nb}">${bins.map((b, i) => { const v0 = Math.round((b0 + i * bw) * 100) / 100, lab = bw === 1 ? rsFmt(v0, { dec: 0 }) : `${rsFmt(v0, { dec: bw < 1 ? 1 : 0 })}–${rsFmt(Math.round((v0 + bw) * 100) / 100, { dec: bw < 1 ? 1 : 0 })}`;
+        const mid = bw === 1 ? v0 : v0 + bw / 2, cls = rsHitCls(mid, line, side), edge = i < nb * .25 ? ' tl' : i > nb * .75 - 1 ? ' tr' : '';
+        return `<div class="rs-db ${cls}${edge}" tabindex="0">${units ? b.map(g => `<i class="${rsHitCls(def.get(g), line, side)}"></i>`).join('') : `<i style="height:${b.length ? Math.max(3, b.length / most * 100) : 0}%"></i>`}
+          <span class="rs-tt"><strong>${esc(lab)} ${esc(def.l.toLowerCase())}</strong><span class="rs-tv"><b class="num">${b.length}</b> game${b.length === 1 ? '' : 's'} · ${Math.round(b.length / games.length * 100)}%</span></span></div>` }).join('')}
+        <div class="rs-distl" style="left:${lx}%"><span class="num">${rsLineTxt(line)}</span></div></div>
+      <div class="rs-ladx num"><span>${rsFmt(b0, { dec: bw < 1 ? 1 : 0 })}</span><span>${rsFmt(Math.round((b0 + nb * bw / 2) * 10) / 10, { dec: bw < 1 ? 1 : 0 })}</span><span>${rsFmt(Math.round((b0 + nb * bw) * 100) / 100, { dec: bw < 1 ? 1 : 0 })}</span></div>
+      <p class="rs-hint">Each ${units ? 'square is one game' : 'bar counts the games'} that finished on that number.</p></div></div>`;
 }
 function rsSplits(p, def){
   const r = S.rs, base = p.games.filter(g => (r.comp === 'all' || g.comp === r.comp) && (!r.minMin || (g.min ?? 0) >= r.minMin) && (!def.deep || g.deep !== undefined) && def.get(g) != null);
@@ -1033,7 +1205,7 @@ function rsSplits(p, def){
   if (p.sport === 'tennis') for (const l of [...new Set(p.games.map(g => g.level).filter(Boolean))]) rows.push([l, g => g.level === l]);
   if (!def.deep) for (const s of [...new Set(p.games.map(g => g.season))]) rows.push([`Season ${s}`, g => g.season === s]);
   const body = rows.map(([l, f]) => { const R = rsRate(base.filter(f), def, r.line, r.side); if (!R.n) return '';
-    return `<tr><td class="rs-tl">${esc(l)}</td><td>${R.n}</td><td>${rsFmt(R.avg, { dec: def.dec || 1 })}</td><td>${rsFmt(R.med, def)}</td><td><span class="rs-pc ${rsPctCls(R.pct)}">${rsPctTxt(R.pct)}</span> <small>${R.hit}/${R.n - R.push}</small></td></tr>` }).join('');
+    return `<tr><td class="rs-tl">${esc(l)}</td><td>${R.n}</td><td>${rsFmt(R.avg, { dec: def.dec || 1 })}</td><td>${rsFmt(R.med, def)}</td><td><span class="rs-meter ${rsPctCls(R.pct)}" aria-hidden="true"><i style="width:${Math.round((R.pct || 0) * 100)}%"></i></span><span class="rs-pc ${rsPctCls(R.pct)}">${rsPctTxt(R.pct)}</span> <small>${R.hit}/${R.n - R.push}</small></td></tr>` }).join('');
   return `<div class="sub-h"><h5>Splits</h5><small>${def.deep ? 'Last 20 games with per-game detail' : p.sport === 'soccer' ? 'Last ' + p.games.length + ' matches' : 'Whole career loaded so far'}</small></div><div class="tbl-wrap"><table class="ctable rs-t"><thead><tr><th style="text-align:left">Split</th><th>GP</th><th>Avg</th><th>Med</th><th>${def.yes ? (r.side === 'over' ? 'Yes' : 'No') : `${r.side === 'over' ? 'Over' : 'Under'} ${rsLineTxt(r.line)}`}</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 // FotMob only lists ~70 matches one by one, so the soccer career is season totals
@@ -1107,7 +1279,7 @@ async function rsBoardAnalyse(b){
       Object.assign(row, { l5: R(5), l10: R(10), l20: R(20), avg: rsAvg(gs.slice(0, 10).map(def.get)), st: 'ok' });
     } catch { row.st = 'err' }
     if (S.rs.open && S.rs.tab === 'board') rsSoon() } };
-  await Promise.all([worker(), worker(), worker()]);
+  await Promise.all(Array.from({ length: b.sport === 'soccer' || b.sport === 'tennis' ? 3 : 5 }, worker));
   b.running = false; if (S.rs.open && S.rs.tab === 'board') rsRender();
 }
 function rsDfsNote(sport){
@@ -1235,6 +1407,52 @@ document.addEventListener('click', ev => {
     if (x.p) { rsCache.set(`${r.sport}:${x.p.id}`, Promise.resolve(x.p)); return go({ id: x.p.id, fmId: r.sport === 'soccer' ? x.p.id : undefined, lg: x.p.lg, name: x.p.name }) }
     return rsFindPlayer(r.sport, x.player, x.team).then(o => go(o || { name: x.player })) }
 });
+// Get a head start: begin loading a player the moment the pointer (or a finger) lands on them, before the click.
+function rsWarm(t){
+  const r = S.rs, a = t.dataset.rs, i = +t.dataset.i;
+  const x = a === 'pick' ? r.hits[i] : a === 'recent' ? r.recent[i] : a === 'bteam' ? r.browse?.list[i] : null;
+  if (x && !x.head && !x.none) rsLoad({ ...x, sport: x.sport || r.sport, fmId: x.fmId ?? (x.sport === 'soccer' && x.kind !== 'team' ? x.id : undefined) }).catch(() => {});
+}
+document.addEventListener('pointerover', ev => { const t = S.rs.open && ev.target.closest?.('[data-rs="pick"],[data-rs="recent"],[data-rs="bteam"]'); if (t && !t.dataset.warm) { t.dataset.warm = 1; rsWarm(t) } }, { passive: true });
+document.addEventListener('pointerdown', ev => { const t = S.rs.open && ev.target.closest?.('[data-rs="pick"],[data-rs="recent"],[data-rs="bteam"]'); if (t && !t.dataset.warm) { t.dataset.warm = 1; rsWarm(t) } }, { passive: true });
+function rsDragPaint(){
+  const bars = document.querySelector('.rs-bars'), ln = bars?.querySelector('.rs-ln'); if (!bars || !ln || !rsDrag) return;
+  const line = S.rs.line, side = bars.dataset.side, h = Math.max(0, Math.min(100, line / rsDrag.max * 100)) + '%';
+  ln.style.bottom = h; const lab = ln.querySelector('span'); if (lab?.firstChild) lab.firstChild.nodeValue = rsLineTxt(line);
+  const z = bars.querySelectorAll('.rs-zn'); if (z[0]) z[0].style.bottom = h; if (z[1]) z[1].style.height = h;
+  for (const b of bars.querySelectorAll('.rs-b')) { const c = rsHitCls(+b.dataset.v, line, side); if (!b.classList.contains(c)) { b.classList.remove('hit', 'miss', 'push'); b.classList.add(c) } }
+  const inp = $('rsLine'); if (inp && document.activeElement !== inp) inp.value = line;
+}
+// drag the line on the chart: the bars, tiles and tables follow as it moves
+document.addEventListener('pointerdown', ev => {
+  const h = ev.target.closest?.('[data-rsdrag]'); if (!h || !S.rs.open) return;
+  const bars = h.closest('.rs-bars'), box = bars.getBoundingClientRect(), inp = $('rsLine'), step = +(inp?.step) || .5;
+  rsDrag = { max: +bars.dataset.max, top: box.top, h: box.height, step, off: step === .5 ? .5 : 0, team: S.rs.p?.kind === 'team' };
+  document.documentElement.classList.add('rs-dragging'); ev.preventDefault();
+});
+document.addEventListener('pointermove', ev => {
+  if (rsDrag) {
+    const d = rsDrag, raw = (d.top + d.h - ev.clientY) / d.h * d.max;
+    let v = d.step === .5 ? Math.round(raw - .5) + .5 : Math.round(raw / d.step) * d.step; if (v > d.max) v -= Math.ceil((v - d.max) / d.step) * d.step; v = Math.round(Math.max(d.team ? -d.max : d.off, v) * 100) / 100;
+    if (v !== S.rs.line) { S.rs.line = v;
+      // move the line and recolour the bars straight away; the heavier tiles and tables catch up when the pointer rests
+      if (!d.raf) d.raf = requestAnimationFrame(() => { d.raf = 0; rsDragPaint() });
+      clearTimeout(d.t); d.t = setTimeout(() => { if (rsDrag === d) rsRender() }, 110) }
+    return;
+  }
+  const lad = ev.target.closest?.('.rs-ladp'); if (!lad) return;
+  const pts = JSON.parse(lad.parentNode.dataset.ladder), box = lad.getBoundingClientRect(), f = Math.max(0, Math.min(1, (ev.clientX - box.left) / box.width));
+  const L = pts[0][0] + f * (pts[pts.length - 1][0] - pts[0][0]), pt = pts.reduce((a, b) => Math.abs(b[0] - L) < Math.abs(a[0] - L) ? b : a);
+  const hov = lad.querySelector('.rs-ladh'); hov.hidden = false; hov.style.left = (pt[0] - pts[0][0]) / (pts[pts.length - 1][0] - pts[0][0]) * 100 + '%'; hov.firstChild.style.top = (1 - pt[1]) * 100 + '%';
+  lad.dataset.at = pt[0];
+  const lr = lad.parentNode.querySelector('.rs-ladr'); if (lad._was == null) lad._was = lr.innerHTML;
+  lr.innerHTML = `<b class="num">${rsPctTxt(pt[1])}</b> ${lad.parentNode.dataset.side.toLowerCase()} ${rsLineTxt(pt[0])} · ${pt[2]} of ${pt[3]}`;
+}, { passive: true });
+document.addEventListener('pointerup', () => { if (!rsDrag) return; cancelAnimationFrame(rsDrag.raf); clearTimeout(rsDrag.t); rsDrag = null; document.documentElement.classList.remove('rs-dragging'); rsRender() });
+document.addEventListener('pointercancel', () => { if (rsDrag) { clearTimeout(rsDrag.t); rsDrag = null; document.documentElement.classList.remove('rs-dragging'); rsRender() } });
+document.addEventListener('pointerout', ev => { const lad = ev.target.closest?.('.rs-ladp'); if (!lad || lad.contains(ev.relatedTarget) || !S.rs.open) return;
+  lad.querySelector('.rs-ladh').hidden = true; delete lad.dataset.at; if (lad._was != null) { lad.parentNode.querySelector('.rs-ladr').innerHTML = lad._was; lad._was = null } });
+document.addEventListener('click', ev => { const lad = ev.target.closest?.('.rs-ladp'); if (!lad || ev.target.closest('[data-rs]') || lad.dataset.at == null) return; S.rs.line = +lad.dataset.at; rsRender() });
 document.addEventListener('keydown', ev => {
   if (!S.rs.open) return;
   if (ev.key === 'Escape') { if (S.rs.hits.length || S.rs.chits?.length) { S.rs.hits = []; S.rs.chits = []; return rsPaintHits() } if (S.rs.comboAdd) { S.rs.comboAdd = false; return rsRender() } return closeResearch() }
