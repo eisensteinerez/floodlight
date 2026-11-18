@@ -451,8 +451,15 @@ def collect(hours=36):
         STATE["channels"] = {c["id"]: c["name"] for c in chans}
         STATE.setdefault("icons", {}).update({c["id"]: c["icon"] for c in chans})
     for c in chans:
+        time.sleep(0.8)   # Discord allows a few reads a second
         try:
-            msgs = messages(c["id"], start, end)
+            try:
+                msgs = messages(c["id"], start, end)
+            except Exception as e:
+                if "429" not in str(e):
+                    raise
+                time.sleep(5)
+                msgs = messages(c["id"], start, end)
         except Exception as e:
             print(f"pick tracker: can't read #{c['name']}: {e}", file=sys.stderr)
             continue
@@ -605,10 +612,21 @@ def report(update=False):
 
 
 def post(dest, msgs):
+    """Post the results; False (and nothing marked as reported) if Discord refused."""
     if not dest:
-        return
-    for content, embed in msgs:
-        api("POST", f"/channels/{dest}/messages", {"content": content, "embeds": [embed], "allowed_mentions": {"parse": []}})
+        STATE["postError"] = "There's no #verified-records channel."
+        return False
+    try:
+        for content, embed in msgs:
+            api("POST", f"/channels/{dest}/messages", {"content": content, "embeds": [embed], "allowed_mentions": {"parse": []}})
+            time.sleep(0.6)
+    except Exception as e:
+        STATE["postError"] = ("The bot isn't allowed to post in #verified-records. Give the Floodlight role Send Messages and Embed Links there."
+                              if "403" in str(e) else f"Posting the results failed: {e}")
+        print(f"pick tracker: {STATE['postError']}", file=sys.stderr)
+        return False
+    STATE.pop("postError", None)
+    return True
 
 
 def run(final=False, dry=False):
@@ -617,8 +635,7 @@ def run(final=False, dry=False):
     collect()
     grade_all(final)
     msgs = report(update=final)
-    if msgs and not dry:
-        post(STATE.get("dest"), msgs)
+    if msgs and not dry and post(STATE.get("dest"), msgs):
         with _lock:
             for c in STATE["cards"].values():
                 if settled(c):
@@ -707,7 +724,7 @@ def cmd_check(o):
     waiting = sum(1 for c in cards if not settled(c))
     lines = [f"{STATE.get('icons', {}).get(cid, '🎯')} #{n}: {per.get(cid, 0)} card(s)" for cid, n in STATE["channels"].items()]
     return {"embeds": [{"title": "Pick check done", "color": B.BLUE, "description": "\n".join(lines) or "No pick channels found.",
-                        "footer": {"text": ("Posted finished results in #verified-records" if msgs else "Nothing new finished yet")
+                        "footer": {"text": (STATE.get("postError") or ("Posted finished results in #verified-records" if msgs else "Nothing new finished yet"))
                                    + (f" · {waiting} card(s) still waiting on a final" if waiting else "")}}]}
 
 
