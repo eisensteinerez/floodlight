@@ -96,7 +96,7 @@
     closeSheetUI();
     if (a === 'profile') return typeof openProfile === 'function' && openProfile();
     if (a === 'pred') { const b = railBtn(/^Predictions/); if (b) b.click(); return }
-    if (a === 'home') { if (soccer) { clickAttr('data-f', 'all'); if (typeof goToDate === 'function' && typeof sameDay === 'function' && !sameDay(S.date, new Date())) goToDate(new Date()) } else firstRail(); return scrollTo({ top: 0 }) }
+    if (a === 'home') { if (window.flHub) return window.flHub.show(); if (soccer) { clickAttr('data-f', 'all'); if (typeof goToDate === 'function' && typeof sameDay === 'function' && !sameDay(S.date, new Date())) goToDate(new Date()) } else firstRail(); return scrollTo({ top: 0 }) }
     if (a === 'live') { if (soccer) clickAttr('data-f', 'live'); else firstRail(); return scrollTo({ top: 0 }) }
     if (a === 'fav') { if (soccer) clickAttr('data-f', 'fav'); else typeof openProfile === 'function' && openProfile(); return }
     if (a === 'sports') return openSheetUI();

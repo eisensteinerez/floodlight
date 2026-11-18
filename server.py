@@ -1656,4 +1656,8 @@ if __name__ == "__main__":
         host = socket.gethostname().split(".")[0]
         print(f"On your phone (same Wi-Fi): http://{ip}:{PORT}   or   http://{host}.local:{PORT}")
         print("Anyone on this Wi-Fi can open it while it runs. Use it on your home network only.")
+    # The page asks for ~25 scripts and a dozen data feeds at once; the default listen backlog of 5 dropped some of
+    # them (a script that never arrives leaves half the page undefined). Give the queue room.
+    ThreadingHTTPServer.request_queue_size = 256
+    ThreadingHTTPServer.daemon_threads = True
     ThreadingHTTPServer(("0.0.0.0" if (LAN or HOSTED) else "127.0.0.1", PORT), Handler).serve_forever()

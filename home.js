@@ -175,8 +175,9 @@
 
   /* ---------- showing and leaving the hub ---------- */
   let poll = 0;
+  let shownAt = 0;
   function show() {
-    root.classList.add('hub-on'); sec.hidden = false;
+    shownAt = Date.now(); root.classList.add('hub-on'); sec.hidden = false;
     window.S && S.stack?.length && typeof closeSheet === 'function' && closeSheet();
     paint(); load(); scrollTo({ top: 0 });
     clearInterval(poll); poll = setInterval(() => { if (!document.hidden && root.classList.contains('hub-on')) load(true) }, 30000);
@@ -192,8 +193,8 @@
   }, true);
   // anything that navigates to a sport, a section or a profile leaves it
   document.addEventListener('click', ev => {
-    if (ev.target.closest?.('#hub')) return;
-    if (ev.target.closest?.('[data-sport],[data-shell]:not([data-shell="home"]):not([data-shell="sports"]),[data-rs],.rail button,#profileBtn,.ticker [data-ev],.ticker button')) hide();
+    if (ev.target.closest?.('#hub') || !ev.isTrusted && Date.now() - shownAt < 400) return;   // ignore the old Home behaviour's synthetic clicks
+    if (ev.target.closest?.('button[data-sport],[data-shell]:not([data-shell="home"]):not([data-shell="sports"]),[data-rs],.rail button,#profileBtn,.ticker [data-ev],.ticker button')) hide();
   }, true);
 
   // inside the hub: filters, games, fight nights

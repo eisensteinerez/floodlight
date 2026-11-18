@@ -207,7 +207,7 @@ async function renderTennis(){
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ['fav', '★ My players']].map(([k, l]) => `<button class="qf" data-tnfilter="${k}" aria-pressed="${S.tn.filter === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}
       <span class="tn-sep"></span>${[['S', 'Singles'], ['D', 'Doubles'], ['all', 'Both']].map(([k, l]) => `<button class="qf" data-tndisc="${k}" aria-pressed="${S.tn.disc === k}">${l}</button>`).join('')}</div>`;
     const title = S.tn.lg === 'all' ? (off === 0 ? 'Today' : day.toLocaleDateString([], { weekday: 'long' })) : TNL[S.tn.lg].name;
-    const html = tnDateBar(off) + chips + (S.tn.lg === 'all' && S.tn.filter === 'all' && list.length ? tnHero(list) : '') + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} match${list.length === 1 ? '' : 'es'} · ${groups.size} tournament${groups.size === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span></div>`
+    const html = tnDateBar(off) + chips + (S.tn.lg === 'all' && S.tn.filter === 'all' && list.length ? tnTourBanner(list) : '') + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} match${list.length === 1 ? '' : 'es'} · ${groups.size} tournament${groups.size === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span></div>`
       + (list.length ? [...groups].sort((a, b) => { const ta = S.tn.tours[a[0]] || {}, tb = S.tn.tours[b[0]] || {}; return order.indexOf(ta.level) - order.indexOf(tb.level) || (ta.disc > tb.disc ? 1 : ta.disc < tb.disc ? -1 : 0) || (b[1].some(e => e.state === 'in') - a[1].some(e => e.state === 'in')) || String(ta.name).localeCompare(tb.name) })
           .map(([k, l]) => { const t = S.tn.tours[k] || {}, open = S.tn.open?.[k] || l.length <= TN_SHOW, sorted = [...l].sort((a, b) => (b.state === 'in') - (a.state === 'in') || (a.state === 'post') - (b.state === 'post') || a.date - b.date);
             return `<div class="group">${tnTourHead(t, l.length)}<div class="cards">${(open ? sorted : sorted.slice(0, TN_SHOW)).map(tnCard).join('')}</div>${open ? '' : `<button class="linkbtn bb-more" data-tnact="more" data-to="${esc(k)}">Show all ${l.length} matches ›</button>`}</div>` }).join('')
@@ -747,7 +747,7 @@ function tnDraw(v){
 }
 
 /* ---------- the tournament hero at the top of the tennis page ---------- */
-function tnHero(list){
+function tnTourBanner(list){
   const by = new Map(); for (const e of list) { if (!by.has(e.tn)) by.set(e.tn, []); by.get(e.tn).push(e) }
   const rank = k => { const t = S.tn.tours[k] || {}, i = TN_LEVELS.findIndex(l => l.key === t.level); return (i < 0 ? 9 : i) * 10 - (by.get(k).some(e => e.state === 'in') ? 5 : 0) - (t.disc === 'S' ? 1 : 0) };
   const k = [...by.keys()].sort((a, b) => rank(a) - rank(b))[0]; if (!k) return '';
