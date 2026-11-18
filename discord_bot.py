@@ -1036,17 +1036,22 @@ def discord(method, path, payload=None, token=None):
     if token:
         headers["Authorization"] = f"Bot {token}"
     data = json.dumps(payload).encode() if payload is not None else None
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             with urllib.request.urlopen(urllib.request.Request(path if path.startswith("http") else API + path, data=data, method=method, headers=headers), timeout=20) as r:
                 body = r.read()
                 return json.loads(body) if body else None
         except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt < 2:
+            if e.code == 429 and attempt < 4:
+                raw = e.read()
                 try:
-                    time.sleep(min(10, float(json.loads(e.read()).get("retry_after", 2))))
+                    info = json.loads(raw)
+                    wait = float(info.get("retry_after", 2))
                 except Exception:
-                    time.sleep(2)
+                    info, wait = {}, 5 * (attempt + 1)     # an HTML page: Cloudflare is limiting this server's address
+                print(f"discord: rate limited on {method} {path.split('?')[0][:60]} (wait {wait}s, global={info.get('global')}, "
+                      f"{'json' if info else raw[:80]!r})", file=sys.stderr)
+                time.sleep(min(30, wait + 0.5))
                 continue
             raise
 
