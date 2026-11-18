@@ -1164,6 +1164,7 @@ document.addEventListener('error', ev => {
 <script src="dates.js"></script>
 <script src="cards.js"></script>
 <script src="predict.js"></script>
+<script src="whatif.js"></script>
 <script src="sportfx.js"></script>
 <script src="statfx.js"></script>
 <script>
@@ -4629,6 +4630,15 @@ function wiCalc(lh, la){
     if (i > j) h += p; else if (i === j) d += p; else a += p; if (i + j > 2) o25 += p; if (i && j) btts += p; if (p > best[2]) best = [i, j, p] }
   const t = h + d + a; return { home: h / t, draw: d / t, away: a / t, o25: o25 / t, btts: btts / t, score: best };
 }
+// players out, soccer: each player's share of the best eleven's Transfermarkt value stands in for his share of the attack
+function soccerOutHTML(e, P){
+  if (typeof flPredDeep === 'undefined' || !P?.lh) return '';
+  const side = k => { const sq = (e.news?.[k]?.players || []).filter(p => p.value).sort((a, b) => b.value - a.value), xi = sq.slice(0, 11).reduce((a, p) => a + p.value, 0) || 1;
+    return sq.slice(0, 14).map(p => ({ name: p.name, share: Math.min(.3, p.value / xi), note: [p.position, p.valueText || ''].filter(Boolean).join(' · ') })) };
+  return `<div class="wx-soccer"><div class="wi-h"><h5>Players out</h5><small>Mark who misses the match</small></div>` + flPredDeep.whatIfOnly({ key: 'soc:' + e.id, home: { name: e.home.name, short: e.home.abbr || e.home.name }, away: { name: e.away.name, short: e.away.abbr || e.away.name },
+    model: { kind: 'poisson', mean: [P.lh, P.la], unit: 'goals', draw: true, replace: .6 }, roster: async () => ({ home: side('home'), away: side('away') }),
+    method: "How it's estimated: each player's share of his team's best eleven by Transfermarkt value stands in for his share of its goal threat. When he is out the team keeps 60% of that, and the goal expectations, win, draw and loss chances are recomputed." }) + '</div>';
+}
 function whatIfHTML(e, P){
   const w = S.wi?.id === e.id ? S.wi : { h: 0, a: 0 };
   const sl = (k, name, col) => `<label class="wi-s" style="--c:${col}"><span>${esc(name)} attack</span><input type="range" min="-50" max="50" step="5" value="${w[k]}" data-wi="${k}" aria-label="${esc(name)} attack, percent change"><b class="num" data-wiv="${k}">${w[k] > 0 ? '+' : ''}${w[k]}%</b></label>`;
@@ -4699,7 +4709,7 @@ function insightPane(e, lite){
   } else if (pv === 'why') {
     body = `<div class="sub-h"><h5>Why ${esc(pickLabel(e, P.pick).toLowerCase())}</h5><small>What the model looked at</small></div>
       <ol class="why2">${reasons(e, P).map((r, i) => `<li style="--i:${i}"><b class="num">${String(i + 1).padStart(2, '0')}</b><p>${esc(r)}</p></li>`).join('')}</ol>${deepResearchBlock(e, P)}`;
-  } else if (pv === 'wi') body = whatIfHTML(e, P);
+  } else if (pv === 'wi') body = whatIfHTML(e, P) + soccerOutHTML(e, P);
   else body = predDepth(e, P, pv);
   return nav + `<div class="pv" data-pv="${pv}">${body}</div>` + RG;
 }

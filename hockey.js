@@ -566,7 +566,10 @@ function hkPredPane(v){
   const us = hkUS(e), [L, R, lc, rc, pL] = us ? [e.away, e.home, e.ac, e.hc, 1 - P.pH] : [e.home, e.away, e.hc, e.ac, P.pH];
   const [sL, sR] = us ? [P.score[1], P.score[0]] : P.score, fav = P.pick, dog = fav === 'home' ? 'away' : 'home';
   const likely = P.likely.map(([i, j, p]) => { const [a, b] = us ? [j, i] : [i, j]; return `<div class="tile"><b class="num">${a}–${b}</b><span>${pct(p)}%${i === j ? ' · then OT' : ''}</span></div>` }).join('');
-  return flPred({ key: 'hk:' + e.id, flip: us, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[fav].name + ' win', conf: P.conf,
+  return flPredDeep({ key: 'hk:' + e.id, flip: us, model: { kind: 'poisson', mean: [P.lh, P.la], unit: 'goals', draw: false, replace: .7 },
+      roster: HKL[e.lg].src === 'espn' ? () => flRoster.hockey(`hockey/${HKL[e.lg].path}`, { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.M.pH ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }, { label: 'Total goals', model: P.total, market: P.M.total ?? null, edge: .5 }],
+      methodWhy: 'Expected goals for each side from scoring and conceding rates and home ice; ties in regulation are split into overtime by strength.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[fav].name + ' win', conf: P.conf,
       line: bbLine(e, P), score: P.score, scoreNote: 'The likeliest winning score.', factors: flPred.fromReasons(hkReasons(e, P), { home: e.home.name, away: e.away.name }),
       final: post ? { actual: win, text: `final ${L.score}–${R.score}${e.ot ? ' (OT)' : ''}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected goals${P.M.total != null ? ` · line ${bbFix(P.M.total)}` : ''}</span></div>

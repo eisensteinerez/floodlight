@@ -559,7 +559,11 @@ function bsPredPane(v){
   const e = v.e;
   if (!S.bsb.stand[e.lg]) { bsStandings(e.lg).then(() => renderSheet()); return `<div class="skel" style="height:260px"></div>` }
   const P = bsPredict(e, v), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
-  return flPred({ key: 'bsb:' + e.id, flip: true, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[P.pick].name + ' win', conf: P.conf,
+  return flPredDeep({ key: 'bsb:' + e.id, flip: true, model: { kind: 'normal', mean: [+P.score[0], +P.score[1]], sd: 4.4, totSd: 4.5, unit: e.src === 'bb' ? 'points' : 'runs', step: 1, replace: .75 },
+      roster: e.lg === 'mlb' ? () => flRoster.baseball('baseball/mlb', { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.market ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }],
+      method: 'How it\'s estimated: each hitter\'s share of the team\'s runs and RBIs this season; the team keeps 75% of that when he sits. Pitchers are not counted here: the starting pitcher is already in the main prediction.',
+      methodWhy: 'Run scoring and prevention from the table, the starting pitchers and home field, blended with the market where it prices the game.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: e[P.pick].name + ' win', conf: P.conf,
       line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(bsReasons(e, P, v), { home: e.home.name, away: e.away.name }),
       final: post ? { actual: win, text: `final ${e.away.score}–${e.home.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.total.toFixed(1)}</b><span>Projected total ${e.src === 'bb' ? 'points' : 'runs'}</span></div>

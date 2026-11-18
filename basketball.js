@@ -506,7 +506,10 @@ function bbPredPane(v){
   const post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null, pickTeam = e[P.pick];
   const us = e.src === 'espn' && e.lg !== 'nbl', [L, R, lc, rc, pL] = us ? [e.away, e.home, e.ac, e.hc, 1 - P.pH] : [e.home, e.away, e.hc, e.ac, P.pH];
   const [sL, sR] = us ? [P.score[1], P.score[0]] : P.score;
-  return flPred({ key: 'bb:' + e.id, flip: us, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf,
+  return flPredDeep({ key: 'bb:' + e.id, flip: us, model: { kind: 'normal', mean: [+P.score[0], +P.score[1]], sd: BBL[e.lg].sd || 12, unit: 'points', step: 5, replace: .72 },
+      roster: e.src === 'espn' ? () => flRoster.basketball(`basketball/${BBL[e.lg].path}`, { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.M.pH ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }, { label: `Spread (${e.home.abbr || e.home.name})`, model: -P.margin, market: P.M.spread ?? null, edge: 2 }, { label: 'Total points', model: P.total, market: P.M.total ?? null, edge: 3 }],
+      methodWhy: 'The model blends each team\'s points scored and allowed with home court, then leans on the bookmakers where they post prices.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf,
       line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(bbReasons(e, P), { home: e.home.name, away: e.away.name }),
       final: post ? { actual: win, text: `final ${L.score}–${R.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${esc((P.margin >= 0 ? e.home : e.away).abbr || (P.margin >= 0 ? e.home : e.away).name)} −${Math.abs(P.margin).toFixed(1)}</b><span>Projected spread</span></div>

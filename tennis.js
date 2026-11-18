@@ -411,7 +411,10 @@ function tnPredPane(v){
   const post = e.state === 'post', pH = post ? P.pPre : P.pH, fav = pH >= .5 ? 'home' : 'away';
   const top = P.scores.slice(0, 6).map(x => `<div class="tile"><b class="num">${x.a}–${x.b}</b><span>${esc(e[x.w].name)} · ${pct(x.p)}%</span></div>`).join('');
   const tp = t => ({ name: e[t].name, short: e[t].name.split(' ').pop(), logo: e[t].flag || e[t].logo || '', col: t === 'home' ? 'var(--tint)' : 'var(--muted)' }), tc = Math.max(pH, 1 - pH);
-  return flPred({ key: 'tn:' + e.id, home: tp('home'), away: tp('away'), probs: { home: pH, away: 1 - pH }, pick: fav, pickLabel: e[fav].name + ' to win', conf: tc >= .72 ? 'Strong' : tc >= .6 ? 'Lean' : 'Toss-up',
+  return flPredDeep({ key: 'tn:' + e.id, model: { kind: 'fit' }, scorelines: P.scores.slice(0, 6).map(x => ({ label: `${e[x.w].name} ${x.w === 'home' ? x.a + '–' + x.b : x.b + '–' + x.a}`, p: x.p })),
+      markets: [{ label: `${e.home.name} win chance`, model: P.pModel ?? null, market: P.market ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%', note: 'Model from world rankings' }],
+      methodWhy: 'A rating from the world ranking, stretched for best of five where it applies, blended with the bookmakers (65%) where they price the match.',
+      home: tp('home'), away: tp('away'), probs: { home: pH, away: 1 - pH }, pick: fav, pickLabel: e[fav].name + ' to win', conf: tc >= .72 ? 'Strong' : tc >= .6 ? 'Lean' : 'Toss-up',
       line: bbLine(e, { pick: fav, top: tc }, true), score: [P.scores[0].a, P.scores[0].b], scoreNote: 'The likeliest result in sets.', factors: flPred.fromReasons(tnReasons(e, P), { home: e.home.name, away: e.away.name }),
       final: post && e.winner ? { actual: e.winner, text: `${e.home.sets}–${e.away.sets} in sets` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${pct(P.s)}%</b><span>${esc(e.home.name)} wins a set</span></div>

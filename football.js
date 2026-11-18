@@ -376,7 +376,10 @@ function fbPredPane(e){
   const P = fcApplyFootball(e, fbPredict(e)), post = e.state === 'post', win = post ? (+e.home.score > +e.away.score ? 'home' : 'away') : null;
   const o = S.odds.get(e.id), mainTotal = o?.total?.length ? o.total.reduce((a, b) => Math.abs(b.p - .5) < Math.abs(a.p - .5) ? b : a) : null;
   const pickTeam = e[P.pick];
-  return flPred({ key: 'fb:' + e.id, flip: true, home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf, tag: fcTag(P),
+  return flPredDeep({ key: 'fb:' + e.id, flip: true, model: { kind: 'normal', mean: [+P.score[0], +P.score[1]], sd: FBL[e.lg].sd || 13.5, unit: 'points', step: 7, replace: .62 },
+      roster: !FBL[e.lg].tsdb ? () => flRoster.football(`football/${FBL[e.lg].path}`, { home: e.home.id, away: e.away.id }) : null,
+      markets: [{ label: `${e.home.name} win chance`, model: P.pH, market: P.market ?? null, fmt: x => x == null ? '–' : Math.round(x * 100) + '%' }, { label: 'Total points', model: P.total, market: mainTotal?.line ?? null, edge: 3 }],
+      methodWhy: 'Team strength from points scored and allowed, adjusted for home field, blended with the market and ESPN\'s forecast where available.', home: { name: e.home.name, short: e.home.abbr || e.home.name, logo: e.home.logo, col: e.hc }, away: { name: e.away.name, short: e.away.abbr || e.away.name, logo: e.away.logo, col: e.ac }, probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: pickTeam.name + ' win', conf: P.conf, tag: fcTag(P),
       line: bbLine(e, P), score: P.score, scoreNote: 'Projected final score.', factors: flPred.fromReasons(fbReasons(e, P), { home: e.home.name, away: e.away.name }),
       final: post ? { actual: win, text: `final ${e.away.score}–${e.home.score}` } : null }) + `
     <div class="tiles pred-tiles"><div class="tile"><b class="num">${P.effMargin >= 0 ? esc(e.home.abbr) : esc(e.away.abbr)} −${Math.abs(P.effMargin).toFixed(1)}</b><span>Projected spread</span></div>

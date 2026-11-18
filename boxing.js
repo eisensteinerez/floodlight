@@ -220,7 +220,7 @@ function bxPredPane(v){
   if (n(A) !== n(B)) F.push({ ico: 'rest', side: n(A) > n(B) ? 'home' : 'away', title: 'Experience', text: `${n(A)} professional fights against ${n(B)}.` });
   if (A.age && B.age && Math.abs(A.age - B.age) >= 3) F.push({ ico: 'info', title: 'Age', text: `${A.name} is ${A.age}, ${B.name} is ${B.age}.` });
   const mk = (f, col) => ({ name: f.name, short: bxSur(f.name), logo: f.flag || '', col });
-  return flPred({ key: 'box:' + v.id, home: mk(A, 'var(--tint)'), away: mk(B, 'var(--fg)'), probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: fav.name + ' to win', conf: P.conf,
+  return flPredDeep({ key: 'box:' + v.id, model: { kind: 'fit' }, methodWhy: 'Reads the two records only: win rate, stoppages, experience and reach.', home: mk(A, 'var(--tint)'), away: mk(B, 'var(--fg)'), probs: { home: P.pH, away: 1 - P.pH }, pick: P.pick, pickLabel: fav.name + ' to win', conf: P.conf,
     line: P.top >= .7 ? `${fav.name} is the clear favourite on paper.` : P.top >= .58 ? `${fav.name} has the better record, but ${dog.name} is live.` : 'Very little between them on paper.', factors: F,
     final: actual ? { actual, text: v.b.how } : null }) + `<p class="srcnote">This call reads only the two records: win rate, stoppages, experience and reach. It does not know about form, style, injuries or the betting market, so treat it as a starting point.</p>${RG}`;
 }

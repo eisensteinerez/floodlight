@@ -25,7 +25,8 @@
   }
   setInterval(() => { if (document.hidden) return; document.querySelectorAll('[data-cd]').forEach(el => { const t = untilText(+el.dataset.cd); if (t && el.textContent !== t) el.textContent = t }) }, 1000);
 
-  const logo = (t, cls) => `<img class="${cls}" src="${esc(t.logo || BLANK)}" alt="" loading="lazy" decoding="async" ${t.onerr || `onerror="this.onerror=null;this.src='${BLANK}'"`}>`;
+  // the fallback lives in a data attribute: BLANK holds quotes, which broke the inline handler ("Unexpected identifier 'http'")
+  const logo = (t, cls) => `<img class="${cls}" src="${esc(t.logo || BLANK)}" alt="" loading="lazy" decoding="async" data-fb="${esc(BLANK)}" ${t.onerr || `onerror="this.onerror=null;this.src=this.dataset.fb"`}>`;
   const badge = (o) => o.state === 'in' ? '<span class="mx-badge live"><i></i>Live</span>' : o.state === 'post' ? '<span class="mx-badge">Final</span>' : `<span class="mx-badge">${esc(o.note || 'Upcoming')}</span>`;
   const time = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?([AP]M)$/i, '<small>$1</small>');
   function middle(o, big) {
