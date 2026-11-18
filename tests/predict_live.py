@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ASKS, sys.argv[1:] = sys.argv[1:], []      # server.py reads its own arguments on import
 import server  # noqa: E402
 import discord_bot as B  # noqa: E402
 import forecaster  # noqa: E402
@@ -16,7 +17,7 @@ forecaster.D.update(odds=server.odds, fetch=server.fetch, similar=server.similar
                     fm_league=server.fm_league, users=lambda: {}, cache_dir=tmp)
 B.D.update(fetch=server.fetch, similar=server.similar, odds=server.odds, forecaster=forecaster, cache_dir=tmp)
 
-for arg in sys.argv[1:] or ["nba:Knicks"]:
+for arg in ASKS or ["nba:Knicks"]:
     sport, _, team = arg.partition(":")
     out = B.cmd_predict({"sport": sport, "team": team or None})
     for e in out.get("embeds") or [out]:
