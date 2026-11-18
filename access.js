@@ -139,13 +139,13 @@ html.fl-noresearch .rs-open{display:none!important}
     if (forgot) return `<div class="flg-card" id="flgCard"><h2 class="flg-h">Forgot your password?</h2>
         <p>Floodlight doesn't keep email addresses, so a reset goes through the admin. Message the admin (or post in The Prop Room on Discord) with your username, and you'll get a temporary password to log in with.</p>
         <button class="btn" data-g="back">Back to log in</button></div>`;
-    return `<div class="flg-card" id="flgCard"><h2 class="flg-h">${mode === 'login' ? 'Member login' : 'Request access'}</h2>
-        <p>${mode === 'login' ? 'Welcome back. Log in to your account.' : 'Pick a username and password. The admin approves new members, usually within a day.'}</p>
-        <div class="flg-tabs" role="tablist"><button type="button" role="tab" aria-selected="${mode === 'login'}" data-g="login" class="${mode === 'login' ? 'on' : ''}">Log in</button><button type="button" role="tab" aria-selected="${mode === 'signup'}" data-g="signup" class="${mode === 'signup' ? 'on' : ''}">Request access</button></div>
+    return `<div class="flg-card" id="flgCard"><h2 class="flg-h">${mode === 'login' ? 'Member login' : 'Create account'}</h2>
+        <p>${mode === 'login' ? 'Welcome back. Log in to your account.' : 'Pick a username and password and you are in. No email needed.'}</p>
+        <div class="flg-tabs" role="tablist"><button type="button" role="tab" aria-selected="${mode === 'login'}" data-g="login" class="${mode === 'login' ? 'on' : ''}">Log in</button><button type="button" role="tab" aria-selected="${mode === 'signup'}" data-g="signup" class="${mode === 'signup' ? 'on' : ''}">Create account</button></div>
         <form id="flgForm">
           <label for="flgUser">Username</label><input id="flgUser" autocomplete="username" autocapitalize="none" spellcheck="false" required>
           <label for="flgPass">Password</label><input id="flgPass" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required minlength="${mode === 'login' ? 1 : 8}">
-          <button class="btn" type="submit">${mode === 'login' ? 'Log in' : 'Request access'}</button>
+          <button class="btn" type="submit">${mode === 'login' ? 'Log in' : 'Create account'}</button>
         </form>
         ${mode === 'login' ? '<button type="button" class="flg-forgot" data-g="forgot">Forgot password?</button>' : ''}
         <div class="flg-err" role="alert">${esc(err || '')}</div></div>`;
@@ -170,8 +170,8 @@ html.fl-noresearch .rs-open{display:none!important}
         <section class="flg-feat">
           <h2>What members get</h2>
           <div class="flg-grid">${FEATURES.map(([k, t, d]) => `<article>${ico(k)}<h3>${t}</h3><p>${d}</p></article>`).join('')}</div>
-          <div class="flg-steps"><div><b>Request access</b><span>Pick a username and password. It takes ten seconds.</span></div>
-            <div><b>Get approved</b><span>The admin lets new members in, usually within a day.</span></div>
+          <div class="flg-steps"><div><b>Create your account</b><span>Pick a username and password. It takes ten seconds and needs no email.</span></div>
+            <div><b>Get straight in</b><span>Live scores, lineups and predictions open up right away.</span></div>
             <div><b>Do your research</b><span>On the site, on your phone (add it to your home screen) or in Discord.</span></div></div>
         </section>
         <footer class="flg-foot"><span>Floodlight · sports research</span><span>Hit rates show past results, not guarantees. 21+. Bet responsibly.</span></footer>
