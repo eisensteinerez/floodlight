@@ -19,6 +19,11 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pc = p => Math.round((p || 0) * 100);
   const REPLACE = .45;
+  // how much more the other team scores when a defensive player is out, by sport (rough, from typical on/off numbers)
+  const opt = rows => rows.map(([v, l], i) => `<option value="${v}"${i === 1 ? ' selected' : ''}>${l}</option>`).join('');
+  const DEF = { goals: opt([['.12', 'Goalkeeper or goalie (+12%)'], ['.08', 'Best defender (+8%)'], ['.04', 'Starting defender (+4%)']]),
+    points: opt([['.05', 'Best defender (+5%)'], ['.03', 'Starting defender (+3%)'], ['.015', 'Rotation defender (+1.5%)']]),
+    runs: opt([['.14', 'Starting pitcher (+14%)'], ['.05', 'Gold Glove fielder (+5%)'], ['.03', 'Key reliever (+3%)']]) };
   const CFG = new Map();      // key -> latest options (functions cannot live in markup)
   const ST = new Map();       // key -> { out:Set, added:[{side,name,share}], fit:{home,away}, roster, loading, view }
   const store = { get(k) { try { return JSON.parse(localStorage.getItem('fl.wi.' + k) || 'null') } catch { return null } }, set(k, v) { try { localStorage.setItem('fl.wi.' + k, JSON.stringify(v)) } catch {} } };
@@ -42,12 +47,14 @@
   }
   function adjusted(k) {
     const o = CFG.get(k), s = st(k), m = o.model; if (!m || m.kind === 'fit') return null;
-    const R = s.roster || { home: [], away: [] }, lost = { home: 0, away: 0 }, names = [];
+    const R = s.roster || { home: [], away: [] }, lost = { home: 0, away: 0 }, leak = { home: 0, away: 0 }, names = [];
     for (const side of ['home', 'away']) {
       for (const p of R[side] || []) if (s.out.has(side + '|' + p.name)) { lost[side] += p.share; names.push(p.name) }
-      for (const p of s.added) if (p.side === side) { lost[side] += p.share; names.push(p.name) }
+      for (const p of s.added) if (p.side === side) { if (p.def) leak[side] += p.share; else lost[side] += p.share; names.push(p.name) }
     }
-    const keep = m.replace ?? REPLACE, mean = [m.mean[0] * (1 - Math.min(.8, lost.home) * (1 - keep)), m.mean[1] * (1 - Math.min(.8, lost.away) * (1 - keep))];
+    // a defender out does not cost his own team points: it lets the other team score more
+    const up = side => 1 + Math.min(.3, leak[side]);
+    const keep = m.replace ?? REPLACE, mean = [m.mean[0] * (1 - Math.min(.8, lost.home) * (1 - keep)) * up('away'), m.mean[1] * (1 - Math.min(.8, lost.away) * (1 - keep)) * up('home')];
     return { base: outcome(m, m.mean), now: outcome(m, mean), mean, names };
   }
   // individual sports: fitness moves the win chance on the log-odds scale (each 10% below full fitness ~ -0.45)
@@ -70,7 +77,7 @@
     const d = (x, y) => { const v = x - y; return Math.abs(v) < .05 ? '' : ` <em class="${v > 0 ? 'up' : 'dn'}">${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(unit === 'goals' || unit === 'runs' ? 2 : 1)}</em>` };
     const pd = (x, y) => { const v = Math.round((x - y) * 100); return v ? ` <em class="${v > 0 ? 'up' : 'dn'}">${v > 0 ? '+' : '−'}${Math.abs(v)}</em>` : '' };
     const n = A.now, b = A.base;
-    return `<div class="wx-res" aria-live="polite">${A.names.length ? `<p class="wx-badge">Adjusted for: ${esc(A.names.join(', '))} out <button class="linkbtn" data-wireset="${esc(k)}">Reset</button></p>` : '<p class="wx-badge off">Mark players out to see the prediction move.</p>'}
+    return `<div class="wx-res" aria-live="polite">${A.names.length ? `<p class="wx-badge">Adjusted for: ${esc(A.names.join(', '))} out <button class="linkbtn" data-wireset="${esc(k)}">Reset</button></p>` : '<p class="wx-badge off">Mark players out, scorers or defenders, to see the prediction move.</p>'}
       <div class="wx-grid">
         <div><small>${esc(H)} win</small><b class="num">${pc(n.pH)}%</b>${pd(n.pH, b.pH)}</div>
         ${n.pD != null ? `<div><small>Draw</small><b class="num">${pc(n.pD)}%</b>${pd(n.pD, b.pD)}</div>` : ''}
@@ -95,11 +102,14 @@
       return `<section class="wx-team"><h6>${esc(o[side].name)}</h6>
         ${!R ? '<div class="skel" style="height:180px"></div>' : list.length ? `<ul>${list.map(p => { const id = side + '|' + p.name, on = s.out.has(id);
           return `<li><button class="wx-p${on ? ' out' : ''}" aria-pressed="${on}" data-wiout="${esc(id)}" data-wik="${esc(k)}"><span><b>${esc(p.name)}</b><small>${esc(p.note || '')}</small></span><em class="num">${pc(p.share)}%</em><i>${on ? 'Out' : 'Playing'}</i></button></li>` }).join('')}</ul>` : `<p class="wx-note">${s.err ? 'Player numbers did not load. Add players by hand below.' : 'No player numbers for this team yet. Add players by hand below.'}</p>`}
-        ${extra.map((p, i) => `<p class="wx-added"><b>${esc(p.name)}</b> out · ${pc(p.share)}% of scoring <button class="linkbtn" data-widel="${esc(side + '|' + p.name)}" data-wik="${esc(k)}">Remove</button></p>`).join('')}
+        ${extra.map((p, i) => `<p class="wx-added${p.def ? ' def' : ''}"><b>${esc(p.name)}</b> out · ${p.def ? `opponent scores about ${pc(p.share)}% more` : `${pc(p.share)}% of scoring`} <button class="linkbtn" data-widel="${esc(side + '|' + p.name)}" data-wik="${esc(k)}">Remove</button></p>`).join('')}
         <form class="wx-add" data-wiadd="${side}" data-wik="${esc(k)}"><input name="n" placeholder="Player out…" autocomplete="off" aria-label="Name of a ${esc(o[side].name)} player who is out" required>
-          <select name="s" aria-label="How big a part of the team's scoring"><option value=".25">Star (25%)</option><option value=".15" selected>Starter (15%)</option><option value=".07">Rotation (7%)</option><option value=".03">Bench (3%)</option></select><button class="btn ghost">Add</button></form></section>` };
+          <select name="s" aria-label="How big a part of the team's scoring"><option value=".25">Star (25%)</option><option value=".15" selected>Starter (15%)</option><option value=".07">Rotation (7%)</option><option value=".03">Bench (3%)</option></select><button class="btn ghost">Add</button></form>
+        <form class="wx-add def" data-wiadd="${side}" data-widef="1" data-wik="${esc(k)}"><input name="n" placeholder="Defender out…" autocomplete="off" aria-label="Name of a ${esc(o[side].name)} defensive player who is out" required>
+          <select name="s" aria-label="How important he is to the defence">${DEF[m.unit] || DEF.points}</select><button class="btn ghost">Add</button></form>
+        <p class="wx-hint">A defender out lets the other team score more.</p></section>` };
     return `<div class="wx"><p class="wx-lead">Mark anyone who is out. The prediction recalculates straight away.</p>${wiResult(k)}<div class="wx-teams">${col(o.flip ? 'away' : 'home')}${col(o.flip ? 'home' : 'away')}</div>
-      <p class="wx-note">${esc(o.method || `How it's estimated: each player's share of the team's ${m.unit || 'points'} this season. When someone is out, the team keeps ${Math.round((m.replace ?? REPLACE) * 100)}% of that (someone else plays the minutes), and the win chance, score, spread and total are recomputed from there.`)}</p></div>`;
+      <p class="wx-note">${esc(o.method || `How it's estimated: each player's share of the team's ${m.unit || 'points'} this season. When someone is out, the team keeps ${Math.round((m.replace ?? REPLACE) * 100)}% of that (someone else plays the minutes), and the win chance, score, spread and total are recomputed from there.`)} A defensive player out works the other way: the opponent's expected ${esc(m.unit || 'points')} go up by the amount shown.</p></div>`;
   }
   function scView(k) {
     const o = CFG.get(k), m = o.model;
@@ -156,7 +166,7 @@
   document.addEventListener('submit', ev => {
     const f = ev.target.closest?.('form[data-wiadd]'); if (!f) return; ev.preventDefault();
     const k = f.dataset.wik, s = st(k), name = f.n.value.trim().slice(0, 40); if (!name) return;
-    s.added.push({ side: f.dataset.wiadd, name, share: +f.s.value }); save(k); repaint(k);
+    s.added.push({ side: f.dataset.wiadd, name, share: +f.s.value, ...(f.dataset.widef ? { def: true } : {}) }); save(k); repaint(k);
   });
   document.addEventListener('input', ev => {
     const r = ev.target.closest?.('[data-wifit]'); if (!r) return; const k = r.dataset.wik, s = st(k); s.fit[r.dataset.wifit] = +r.value; save(k);
