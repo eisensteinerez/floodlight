@@ -410,21 +410,21 @@ body,input,select,button{font-variation-settings:normal}
 html.dragging .tip{display:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
-/* ---------- Midnight Arena: the Lab wears the same look as the rest of Floodlight (colours and shapes only, no behaviour) ---------- */
+/* ---------- Matchday: the Lab wears the same look as the rest of Floodlight (colours and shapes only, no behaviour) ---------- */
 :root{
-  --bg:#0B0B0F; --surface:#15151C; --surface-2:#1D1D26; --line:rgba(255,255,255,.09); --fg:#F4F4F6; --muted:#8E8E9C;
-  --accent:#C6FF3D; --accent-2:#C6FF3D; --accent-ink:#0B0B0F; --win:#3DDC84; --draw:#8E8E9C; --loss:#FF5C7C;
+  --bg:#07090C; --surface:#0E1116; --surface-2:#161A21; --line:rgba(255,255,255,.09); --fg:#F3F4F6; --muted:#8E97A8;
+  --accent:#FFC53D; --accent-2:#FF9D2E; --accent-ink:#1A1000; --win:#35D996; --draw:#7F8898; --loss:#FF6B7A;
   --beam:transparent; --beam-2:transparent; --dots:transparent; --hair:rgba(255,255,255,.05); --glass:rgba(17,17,23,.72);
   --pill:var(--accent); --slant:none; --r:16px; --rc:11px;
   --shadow-lg:0 1px 0 rgba(255,255,255,.04) inset,0 34px 80px -24px rgba(0,0,0,.95);
   --glow:0 0 0 1px color-mix(in oklab,var(--accent) 55%,transparent);
-  --f-display:"Barlow Condensed","FL Slant","Archivo Narrow","Arial Narrow",Impact,sans-serif;
-  --f-body:"Inter","Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-display:"FL Wide","Geist",system-ui,sans-serif;
+  --f-body:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;
   font-variation-settings:normal;
 }
 :root[data-theme="light"]{
   --bg:#F3F3F6; --surface:#FFFFFF; --surface-2:#ECECF1; --line:rgba(11,11,15,.10); --fg:#0B0B0F; --muted:#5E5E6C;
-  --accent:#4C7A00; --accent-2:#4C7A00; --accent-ink:#FFFFFF; --win:#12855A; --draw:#8A8A97; --loss:#D43F5C;
+  --accent:#B45309; --accent-2:#B45309; --accent-ink:#FFFFFF; --win:#12855A; --draw:#8A8A97; --loss:#D43F5C;
   --beam:transparent; --beam-2:transparent; --dots:transparent; --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.74);
 }
 body{letter-spacing:0}
@@ -479,6 +479,17 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;op
 
 .filters input[type=number]{width:84px;min-height:40px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);font-variant-numeric:tabular-nums}
 .backt{width:70px;min-height:36px;padding:0 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);font:700 16px/1 var(--f-display);text-align:center}
+
+/* Matchday type: wide display face, sentence case, no tracking */
+:root{font-stretch:116%;font-synthesis:none}
+*{text-transform:none!important;letter-spacing:0!important}
+.ph h1,.lh-hero h1,.empty h2,.read-v strong{font-weight:800;letter-spacing:-.01em!important;line-height:1.02}
+.ph h1{font-size:clamp(34px,4.4vw,54px)}.lh-hero h1{font-size:clamp(28px,3.6vw,44px)}
+.empty h2,.read-v strong{font-size:32px}
+.brand{font-size:19px;font-weight:800}.go{font-size:14px}
+.sec b,.chh>b,.mini .who{font-size:17px;font-weight:700}
+.ghost{font-size:150px;font-weight:800}
+.lc input{font:700 19px/1 var(--f-mono)}
 </style>
 </head>
 <body>
