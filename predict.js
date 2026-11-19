@@ -62,30 +62,28 @@
     if (o.flip) sides.reverse();           // American sports list the away team first
     const L = o.flip ? o.away : o.home, R = o.flip ? o.home : o.away, sc = o.score ? (o.flip ? [o.score[1], o.score[0]] : o.score) : null;
     if (!o.pickAttr && o.my === undefined) o.my = mine.get(o.key) || null;
-    const top = o.probs[o.pick] || 0, C = 2 * Math.PI * 34, post = !!o.final;
+    const post = !!o.final;
     const lvl = o.conf === 'Strong' ? 'hi' : o.conf === 'Lean' ? 'mid' : 'lo';
     const crest = t => t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy">` : '';
-    const bar = `<div class="pr-prob"><div class="pr-prob-l">${sides.map(([k, nm]) => `<span class="${k}${o.pick === k ? ' on' : ''}${k === sides[sides.length - 1][0] ? ' end' : ''}">${k === 'draw' ? '' : crest(o[k])}<small>${esc(nm)}</small><b class="num"><i data-n="${pc(o.probs[k])}">${pc(o.probs[k])}</i>%</b></span>`).join('')}</div>
-      <div class="pr-prob-bar" role="img" aria-label="${esc(sides.map(([k, nm]) => `${nm} ${pc(o.probs[k])} percent`).join(', '))}"><span class="pr-prob-in">${sides.map(([k, , col]) => `<i class="${k}" style="flex:${Math.max(.02, o.probs[k])};background:${col}"></i>`).join('')}</span></div></div>`;
     const board = sc ? `<div class="pr-card pr-score"><small class="pr-k">${post ? 'We predicted' : 'Predicted score'}</small>
         <div class="pr-sb"><span>${crest(L)}<em>${esc(L.short || L.name)}</em></span><b class="num"><i data-n="${+sc[0]}">${esc(sc[0])}</i><u>:</u><i data-n="${+sc[1]}">${esc(sc[1])}</i></b><span>${crest(R)}<em>${esc(R.short || R.name)}</em></span></div>
         ${o.scoreNote ? `<p class="pr-note">${esc(o.scoreNote)}</p>` : ''}${o.extra?.length ? `<div class="pr-x">${o.extra.map(x => `<span><b class="num">${esc(x.v)}</b>${esc(x.l)}</span>`).join('')}</div>` : ''}</div>` : '';
-    const picks = `<div class="pr-card pr-you"><small class="pr-k">${post ? 'Your pick' : 'Make your pick'}</small>
-        <div class="pr-picks${three ? ' three' : ''}">${sides.map(([k, nm, col]) => { const mine = o.my === k, hit = post && o.final.actual === k;
-          const inner = `${k === 'draw' ? '<u>=</u>' : crest(o[k])}<span>${esc(nm)}</span>${mine ? CHECK : ''}`;
-          return post ? `<div class="pr-pick${mine ? ' mine' : ''}${hit ? ' hit' : ''}" data-side="${k}" style="--c:${col}">${inner}</div>`
-            : `<button class="pr-pick${mine ? ' mine' : ''}" style="--c:${col}" ${o.pickAttr ? o.pickAttr(k) : 'data-own="1"'} data-vote="${esc(o.key || '')}" data-side="${k}" aria-pressed="${mine}" aria-label="${esc(`Pick ${k === 'draw' ? 'a draw' : nm}`)}">${inner}</button>` }).join('')}</div>
-        <p class="pr-note">${esc(post ? (o.my ? (o.my === o.final.actual ? 'You called it.' : 'Not this time.') : 'You did not pick this one.') : o.my ? 'Saved. Tap it again to remove.' : o.hint || 'Tap a side to save your pick and track it in your profile.')}</p>
-        <div class="pr-split">${splitHTML(o.key, sides)}</div></div>`;
+    const fair = p => p > 0 && p < 1 ? (p >= .5 ? '−' + Math.round(p / (1 - p) * 100) : '+' + Math.round((1 - p) / p * 100)) : '';
+    // the verdict is three (or two) tall cards: the chance of each result fills the card from the bottom, and a tap saves it as your pick
+    const picks = `<div class="pr-picks${three ? ' three' : ''}">${sides.map(([k, nm, col]) => { const mine = o.my === k, hit = post && o.final.actual === k, ours = o.pick === k, pr = o.probs[k] || 0;
+          const inner = `${ours ? '<em class="pr-tag">Our pick</em>' : ''}${k === 'draw' ? '<u>=</u>' : crest(o[k])}<span>${esc(k === 'draw' ? nm : o[k].name || nm)}</span><b class="num"><i data-n="${pc(pr)}">${pc(pr)}</i><s>%</s></b>${fair(pr) ? `<small class="pr-odds num">fair ${fair(pr)}</small>` : ''}<i class="pr-fill" style="height:${Math.max(4, Math.round(pr * 100))}%"></i>${mine ? CHECK : ''}`;
+          return post ? `<div class="pr-pick${ours ? ' ours' : ''}${mine ? ' mine' : ''}${hit ? ' hit' : ''}" data-side="${k}" style="--c:${col}">${inner}</div>`
+            : `<button class="pr-pick${ours ? ' ours' : ''}${mine ? ' mine' : ''}" style="--c:${col}" ${o.pickAttr ? o.pickAttr(k) : 'data-own="1"'} data-vote="${esc(o.key || '')}" data-side="${k}" aria-pressed="${mine}" aria-label="${esc(`Pick ${k === 'draw' ? 'a draw' : nm}, ${pc(pr)} percent`)}">${inner}</button>` }).join('')}</div>
+        <p class="pr-note pr-hint">${esc(post ? (o.my ? (o.my === o.final.actual ? 'You called it' : 'Not this time') : 'You did not pick this one') : o.my ? 'Saved. Tap it again to remove' : o.hint || 'Tap a card to save your own pick and track it in your profile')}</p>`;
+    const crowd = `<div class="pr-card pr-you"><small class="pr-k">How people picked</small><div class="pr-split">${splitHTML(o.key, sides)}</div>
+        <p class="pr-note">${esc(o.conf === 'Strong' ? 'Our pick stands well clear of the other results.' : o.conf === 'Lean' ? 'Our pick has a modest edge.' : 'This one could go any way.')}</p></div>`;
     const factors = o.factors?.length ? `<div class="pr-fh"><h5>Key factors</h5><small>What moved the prediction</small></div>
       <div class="pr-factors">${o.factors.map((f, i) => `<div class="pr-f${f.side ? ' ' + f.side : ''}" style="--i:${i};--c:${f.side === 'home' ? o.home.col : f.side === 'away' ? o.away.col : 'var(--line-2)'}"><span class="pr-fi">${ico(f.ico)}</span><div><b>${esc(f.title)}</b><p>${esc(f.text)}</p></div></div>`).join('')}</div>` : '';
     return `<fl-pred class="pr" data-k="${esc(o.key || '')}" style="--hc:${L.col || 'var(--muted)'};--ac:${R.col || 'var(--muted)'}">
-      <div class="pr-card pr-verdict"><div class="pr-v"><small class="pr-k">${esc(post ? 'Pre-game prediction' : 'Floodlight prediction')}${o.tag || ''}</small>
+      <div class="pr-card pr-verdict"><div class="pr-vh"><div class="pr-v"><small class="pr-k">${esc(post ? 'Pre-game prediction' : 'Floodlight prediction')}${o.tag || ''}</small>
           <h4>${esc(o.pickLabel)}</h4>${o.line ? `<p>${esc(o.line)}</p>` : ''}${post ? `<span class="pr-out ${o.final.actual === o.pick ? 'ok' : 'miss'}">${o.final.actual === o.pick ? 'Called it' : 'Missed'}${o.final.text ? ' · ' + esc(o.final.text) : ''}</span>` : ''}</div>
-        <div class="pr-ring ${lvl}" title="How likely the predicted result is. ${esc(o.conf)} means ${o.conf === 'Strong' ? 'it stands well clear' : o.conf === 'Lean' ? 'a modest edge' : 'it could go any way'}.">
-          <svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34"/><circle class="pr-arc" cx="40" cy="40" r="34" stroke-dasharray="${(top * C).toFixed(1)} ${C.toFixed(1)}" style="--len:${(top * C).toFixed(1)}" transform="rotate(-90 40 40)"/></svg>
-          <b class="num"><i data-n="${pc(top)}">${pc(top)}</i><u>%</u></b><span>${esc(o.conf === 'Toss-up' ? 'Toss-up' : o.conf + ' confidence')}</span></div>${bar}</div>
-      <div class="pr-row">${board}${picks}</div>${factors}</fl-pred>`;
+        <span class="pr-conf ${lvl}" title="How far our pick stands clear of the other results">${esc(o.conf === 'Toss-up' ? 'Toss-up' : o.conf + ' pick')}</span></div>${picks}</div>
+      <div class="pr-row">${board}${crowd}</div>${factors}</fl-pred>`;
   };
   window.flPred.ico = ico; window.flPred.fromReasons = fromReasons; window.flPred.mine = k => mine.get(k);
 
