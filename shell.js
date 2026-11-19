@@ -32,8 +32,8 @@
 
   /* ---------- sidebar ---------- */
   const side = document.createElement('aside'); side.id = 'flSide'; side.className = 'flside'; side.setAttribute('aria-label', 'Main menu');
-  const item = (k, label, attrs, extra = '') => `<button class="fsn" data-k="${k}" ${attrs} title="${label}">${ic(k)}<span class="fsn-l">${label}</span>${extra}</button>`;
-  side.innerHTML = `<div class="fls-brand"><span class="fls-mark">${ic('bolt', 18)}</span><b>Floodlight</b></div>
+  const item = (k, label, attrs, extra = '') => `<button class="fsn" data-k="${k}" ${attrs} title="${label}" aria-label="${label}">${ic(k)}<span class="fsn-l">${label}</span>${extra}</button>`;
+  side.innerHTML = `<div class="fls-brand"><span class="fls-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="14.5" y="12" width="3" height="18" rx="1" fill="currentColor"/><rect x="5" y="3" width="22" height="10" rx="2" fill="currentColor"/><g fill="var(--accent)"><circle cx="9.5" cy="8" r="2.2"/><circle cx="16" cy="8" r="2.2"/><circle cx="22.5" cy="8" r="2.2"/></g></svg></span><b>Floodlight</b></div>
     <button class="fls-jump" type="button" onclick="window.flPalette && flPalette.open()" title="Jump anywhere">${ic('research', 16)}<span class="fsn-l">Jump to…</span><kbd>${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl '}K</kbd></button>
     <nav class="fls-nav" id="sideNav" aria-label="Sections"><div class="fls-ind" id="sideInd" hidden></div>
       ${item('home', 'Home', 'data-shell="home"')}
@@ -52,7 +52,7 @@
   const rail = el('rail'); if (rail) side.querySelector('#sideComp').appendChild(rail);   // the sport's competitions list lives in the sidebar now
 
   const setMini = on => { root.classList.toggle('side-mini', on); el('sideCollapse').setAttribute('aria-pressed', on); el('sideCollapse').title = on ? 'Expand menu' : 'Collapse menu' };
-  setMini(!!store.get('fl.sideMini', false));
+  setMini(!!store.get('fl.sideMini', false) && !matchMedia('(min-width:1100px)').matches);   // the wide layout has no side menu to collapse
   el('sideCollapse').addEventListener('click', () => { const on = !root.classList.contains('side-mini'); setMini(on); store.set('fl.sideMini', on); setTimeout(sync, 320) });
 
   /* the sport's own list repeats a few of the entries above; hide those copies */
