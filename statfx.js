@@ -141,11 +141,11 @@
   /* ---------- Share: any card with data-share, or the chart around the button, becomes a PNG ---------- */
   async function toPng(card) {
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#fff';
-    const bg = '#0B0B0F', fg = '#F4F4F6', muted = '#8E8E9C', acc = col('--accent') || '#C6FF3D';
+    const bg = '#07090C', fg = '#F3F4F6', muted = '#8E97A8', acc = col('--accent') || '#FFC53D';
     const W = 1080, Hh = 1080, c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
     await document.fonts?.ready;
     const grad = g.createRadialGradient(W / 2, -200, 50, W / 2, -200, 1200); grad.addColorStop(0, '#24242e'); grad.addColorStop(1, bg); g.fillStyle = grad; g.fillRect(0, 0, W, Hh);
-    g.fillStyle = acc; g.font = '700 30px "Barlow Condensed", "Arial Narrow", sans-serif'; g.fillText('FLOODLIGHT', 70, 100);
+    g.fillStyle = acc; g.font = '700 30px "FL Wide", Geist, sans-serif'; g.fillText('FLOODLIGHT', 70, 100);
     let data = null; try { data = JSON.parse(card.dataset.share || 'null') } catch {}
     if (data?.kind === 'story') {
       g.fillStyle = fg; g.font = '700 300px "Barlow Condensed", Impact, sans-serif'; g.fillText(data.value, 70, 520);

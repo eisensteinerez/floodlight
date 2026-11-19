@@ -138,10 +138,10 @@ def img(u):
     return 200, ct, data
 
 
-FONTS = "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400..700&family=Geist+Mono:wght@400..700&display=swap"
+FONTS = "https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Geist+Mono:wght@400..700&display=swap"
 # the display and reading faces, declared the same way theme.css declares them
-FONT_FACES = """@font-face{font-family:"FL Slant";font-style:normal;font-weight:100 900;font-stretch:62% 70%;font-display:swap;src:url(https://fonts.gstatic.com/s/archivo/v25/k3kSo8UDI-1M0wlSfdzYLGHE.woff2) format("woff2")}
-@font-face{font-family:"Manrope";font-style:normal;font-weight:400 800;font-display:swap;src:url(https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2) format("woff2")}
+FONT_FACES = """@font-face{font-family:"FL Wide";font-style:normal;font-weight:100 900;font-stretch:100% 125%;font-display:swap;size-adjust:70%;src:url(https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdnoLmvDIaI.woff2) format("woff2")}
+@font-face{font-family:"FL Board";font-style:normal;font-weight:100 900;font-display:swap;src:url(https://fonts.gstatic.com/s/doto/v3/t5t6IRMbNJ6TQG7Il_EKPqP9zTnvqouBWhoxrW5O.woff2) format("woff2")}
 """
 _fonts = {}
 
