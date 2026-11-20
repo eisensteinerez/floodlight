@@ -198,7 +198,7 @@
 
 /* tables */
 :root[data-theme] .tbl{font-size:14px}
-:root[data-theme] .tbl th{background:var(--surface-solid,var(--surface));font:600 12.5px/1.2 var(--font-body);color:var(--muted);border-bottom:1px solid var(--border-2);padding:12px 10px}
+:root[data-theme] .tbl th{background:var(--pop);font:600 12.5px/1.2 var(--font-body);color:var(--muted);border-bottom:1px solid var(--border-2);padding:12px 10px}
 :root[data-theme] .tbl td{padding:11px 10px;border-bottom:1px solid var(--border)}
 :root[data-theme] .tbl tbody tr:hover td{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 :root[data-theme] .tbl tr.sel td,:root[data-theme] .tbl th.fc,:root[data-theme] .tbl td.fc{background:color-mix(in srgb,var(--accent) 10%,transparent)}
@@ -237,7 +237,7 @@
 :root[data-theme] .tip .hit,:root[data-theme] .tip .miss,:root[data-theme] .tip .push{color:inherit;font-weight:700}
 
 /* the bar that follows you down the page (not inside the site, where the Lab page has its own header) */
-:root[data-theme] .mini{background:var(--surface-solid,var(--bg));border-bottom:1px solid var(--border)}
+:root[data-theme] .mini{background:var(--pop);border-bottom:1px solid var(--border)}
 :root[data-theme] .mini-in{max-width:1320px;padding:8px 32px}
 :root[data-theme] .mini .who{font:var(--display-weight) 19px/1 var(--font-display)}
 :root[data-theme] .mini .who span{background:var(--surface-2);color:var(--accent)}
@@ -255,14 +255,14 @@
 
 /* ---------- theme signatures ---------- */
 /* Team Colors: the player card is solid accent blue, white type */
-[data-theme="team-colors"]{--feature-bg:linear-gradient(160deg,#2B59FF,#1432B8);--feature-fg:#FFFFFF;--feature-muted:rgba(255,255,255,.86)}
+
 :root[data-theme="team-colors"] .hero{border-color:transparent}
-:root[data-theme="team-colors"] .hero .face>span{border-color:#FFFFFF;background:#FFFFFF;color:#1432B8}
-:root[data-theme="team-colors"] .hero .strip>div{background:rgba(0,0,0,.22);border-color:transparent;color:#FFFFFF}
-:root[data-theme="team-colors"] .hero .strip span,:root[data-theme="team-colors"] .hero .strip small{color:rgba(255,255,255,.86)}
-:root[data-theme="team-colors"] .hero .form i{background:rgba(0,0,0,.3);border-color:transparent;color:#FFFFFF}
-:root[data-theme="team-colors"] .hero .form .W{background:#FFFFFF;color:#0E1116}:root[data-theme="team-colors"] .hero .form .L{background:rgba(0,0,0,.55)}
-:root[data-theme="team-colors"] .hero .spark .sb i{background:rgba(255,255,255,.35)}:root[data-theme="team-colors"] .hero .spark .sb i.hit{background:#FFFFFF}:root[data-theme="team-colors"] .hero .spark .sb u{border-color:#FFFFFF}
+:root[data-theme="team-colors"] .hero .face>span{border-color:var(--on-team);background:var(--on-team);color:var(--feature-ink)}
+:root[data-theme="team-colors"] .hero .strip>div{background:var(--team-shade);border-color:transparent;color:var(--on-team)}
+:root[data-theme="team-colors"] .hero .strip span,:root[data-theme="team-colors"] .hero .strip small{color:var(--feature-muted)}
+:root[data-theme="team-colors"] .hero .form i{background:var(--team-shade);border-color:transparent;color:var(--on-team)}
+:root[data-theme="team-colors"] .hero .form .W{background:var(--on-team);color:var(--team-ink)}:root[data-theme="team-colors"] .hero .form .L{background:var(--team-shade-2)}
+:root[data-theme="team-colors"] .hero .spark .sb i{background:var(--team-shade)}:root[data-theme="team-colors"] .hero .spark .sb i.hit{background:var(--on-team)}:root[data-theme="team-colors"] .hero .spark .sb u{border-color:var(--on-team)}
 /* Members' Club: hairlines and an inner gold frame, serif figures */
 :root[data-theme="members-club"] .hero,:root[data-theme="members-club"] .lh-hero{box-shadow:var(--shadow-card),inset 0 0 0 10px var(--surface),inset 0 0 0 11px var(--border)}
 :root[data-theme="members-club"] .hero{padding:34px}
@@ -271,10 +271,8 @@
 :root[data-theme="members-club"] .b i{max-width:22px;border-radius:3px 3px 0 0}
 :root[data-theme="members-club"] .ln span::before{content:"the line, ";font-style:italic;font-weight:500}
 /* Aurora Glass: frosted cards, with a solid panel where the browser cannot blur */
-:root[data-theme="aurora-glass"]{--surface-solid:#111827}
-:root[data-theme="aurora-glass"] .card,:root[data-theme="aurora-glass"] .hero,:root[data-theme="aurora-glass"] .lh-hero,:root[data-theme="aurora-glass"] .lh-card,:root[data-theme="aurora-glass"] .lh-steps li,:root[data-theme="aurora-glass"] .tile{background:#111827}
 @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
-  :root[data-theme="aurora-glass"] .card,:root[data-theme="aurora-glass"] .hero,:root[data-theme="aurora-glass"] .lh-hero,:root[data-theme="aurora-glass"] .lh-card,:root[data-theme="aurora-glass"] .lh-steps li,:root[data-theme="aurora-glass"] .tile{background:var(--surface);-webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%)}
+  :root[data-theme="aurora-glass"] .card,:root[data-theme="aurora-glass"] .hero,:root[data-theme="aurora-glass"] .lh-hero,:root[data-theme="aurora-glass"] .lh-card,:root[data-theme="aurora-glass"] .lh-steps li,:root[data-theme="aurora-glass"] .tile{-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
 }
 :root[data-theme="aurora-glass"]{--blob-o:.5}
 /* Chrono: hairline rules, thin numerals, slim bars */

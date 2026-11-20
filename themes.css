@@ -396,3 +396,155 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 :root[data-theme] .toast{border-radius:var(--radius-tile);background:var(--surface);color:var(--text);border:1px solid var(--border-2);box-shadow:var(--shadow-pop)}
 :root[data-theme] .toast-x{color:var(--text)}
 @media (max-width:820px){:root[data-theme] .sheet{top:0;max-height:none;border-radius:0;border:0}:root[data-theme] .pane{padding:18px 16px 28px}}
+
+/* ══════════ THEME SIGNATURES ══════════
+   What makes each theme itself, on top of the shared skin. Values are tokens; team colours come from the data (--hc home, --ac away,
+   and --hcs / --acs, the same two made safe for white type by cards.js). */
+:root[data-theme] .pg-title,:root[data-theme] .livebar h2{font-size:var(--title-size)!important}
+.pg-title em{font-style:normal}
+:root[data-theme] .ftr{position:relative;overflow:hidden}
+:root[data-theme] .ftr .mx-t{min-width:0}
+:root[data-theme] .ftr .mx-mid{position:relative}
+:root[data-theme] .ftr .mx-sc{color:var(--score-ink);text-shadow:var(--score-glow)}
+.mx-dial{display:none}
+.mx-dial circle{fill:none}
+:root[data-theme] .flmenu,:root[data-theme] .sresults,:root[data-theme] .drawer,:root[data-theme] .flsheet-in,:root[data-theme] .flbar,:root[data-theme] .toast{background:var(--pop)}
+@media (max-width:820px){:root[data-theme] .sheet{background:var(--bg)}}
+
+/* ---------- Night Match: a stadium at night ---------- */
+:root[data-theme="night-match"] .ftr{background:radial-gradient(ellipse 46% 62% at 0% 0%,color-mix(in srgb,var(--hc) 30%,transparent),transparent 72%),radial-gradient(ellipse 46% 62% at 100% 0%,color-mix(in srgb,var(--ac) 30%,transparent),transparent 72%),
+  repeating-linear-gradient(90deg,var(--stripe) 0 9%,transparent 9% 18%),var(--panel)}
+:root[data-theme="night-match"] .ftr-body::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border);opacity:.5;pointer-events:none}
+:root[data-theme="night-match"] .ftr .mx-mid::before{content:"";position:absolute;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;border:1px solid var(--border);opacity:.6;pointer-events:none;z-index:-1}
+:root[data-theme="night-match"] .ftr.is-live::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent) no-repeat;background-size:40% 100%;animation:nmSweep 5s linear infinite;pointer-events:none}
+@keyframes nmSweep{from{background-position:-70% 0}to{background-position:170% 0}}
+:root[data-theme="night-match"] .m.mx{background:radial-gradient(ellipse 60% 80% at 0% 0%,color-mix(in srgb,var(--hc) 24%,transparent),transparent 72%),radial-gradient(ellipse 60% 80% at 100% 0%,color-mix(in srgb,var(--ac) 24%,transparent),transparent 72%),var(--panel)}
+
+/* ---------- Team Colors: bright, bold, cards in each team's colours ---------- */
+@media (min-width:821px){
+  :root[data-theme="team-colors"] .top-in{width:calc(100% - 2*var(--pad));max-width:var(--wrap);margin-top:16px;padding:10px 12px 10px 24px;border-radius:var(--radius-pill);background:var(--surface);box-shadow:var(--header-shadow)}
+  :root[data-theme="team-colors"] .flmenu{right:0}
+}
+:root[data-theme="team-colors"] .tb-members{background:var(--accent-fill);color:var(--on-accent);border-color:transparent;font-weight:700}
+:root[data-theme="team-colors"] .ftr,:root[data-theme="team-colors"] .m.mx{border:0;color:var(--on-team);background:radial-gradient(var(--team-dots) 1.5px,transparent 1.6px) 0 0/16px 16px,linear-gradient(105deg,var(--hcs) 0 50%,var(--acs) 50% 100%)}
+:root[data-theme="team-colors"] .m.mx :is(.mx-n,.mx-lg,.mx-tv,.mx-t small,.mx-mid small,.mx-time),:root[data-theme="team-colors"] .ftr :is(.mx-n,.mx-lg,.mx-tv,.mx-t small,.mx-mid small,.mx-time,.ftr-g,.ftr-clock em,.ftr-prob b){color:var(--on-team)}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-badge{background:var(--team-shade);color:var(--on-team)}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-badge.live{background:var(--on-team);color:var(--live)}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-badge.live i,:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-badge.live i::after{background:var(--live)}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) :is(.mx-lg,.mx-tv){padding:6px 12px;border-radius:var(--radius-pill);background:var(--team-shade)}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-sc{padding:8px 16px;border-radius:22px;background:var(--team-ink);color:var(--on-team)}
+:root[data-theme="team-colors"] .ftr .mx-sc{padding:16px 34px;border-radius:48px}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-sc :is(b.lose,i){color:var(--on-team);opacity:.7}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-logo{padding:14%;border-radius:26%;background:var(--on-team);transform:rotate(-4deg);object-fit:contain}
+:root[data-theme="team-colors"] :is(.ftr,.m.mx) .mx-t:last-child .mx-logo{transform:rotate(4deg)}
+:root[data-theme="team-colors"] .ftr .form i{background:var(--team-shade);color:var(--on-team);border-radius:8px}
+:root[data-theme="team-colors"] .ftr .form i.W{background:var(--on-team);color:var(--team-ink)}
+:root[data-theme="team-colors"] .ftr .form i.L{background:var(--team-shade-2);color:var(--on-team)}
+:root[data-theme="team-colors"] .ftr-clock{background:var(--team-shade)}:root[data-theme="team-colors"] .ftr-clock>i{background:var(--on-team)}
+:root[data-theme="team-colors"] .ftr-prob{padding:8px;border-radius:var(--radius-pill);background:var(--team-shade);height:auto}
+:root[data-theme="team-colors"] .ftr-prob i{background:var(--team-shade)!important;min-height:10px}
+:root[data-theme="team-colors"] .ftr-prob i:first-child{background:var(--on-team)!important}
+:root[data-theme="team-colors"] .ftr-foot{background:var(--on-team);color:var(--team-ink)}
+:root[data-theme="team-colors"] .ftr:hover .ftr-foot{color:var(--team-ink)}
+:root[data-theme="team-colors"] .ftr-panel{border:0;background:var(--team-shade)}
+:root[data-theme="team-colors"] .pulse-s{flex-direction:row;align-items:baseline;gap:12px;padding:20px 30px;border:0;border-radius:var(--radius-pill);background:var(--surface);box-shadow:var(--shadow-card)}
+:root[data-theme="team-colors"] .pulse-s.live{background:var(--live);color:var(--on-live)}
+:root[data-theme="team-colors"] .pulse-s.live :is(b,span){color:var(--on-live)}
+:root[data-theme="team-colors"] .pulse-s:nth-child(3){background:var(--team-ink)}
+:root[data-theme="team-colors"] .pulse-s:nth-child(3) :is(b,span){color:var(--on-team)}
+:root[data-theme="team-colors"] .fld-d{border-radius:26px;border:0;background:var(--surface)}
+
+/* ---------- Members' Club: deep green, champagne hairlines, serif figures ---------- */
+:root[data-theme="members-club"] .top{padding-bottom:16px;border-bottom:1px solid var(--border)}
+:root[data-theme="members-club"] .tbn.on{background:none;color:var(--text);border-radius:0;box-shadow:inset 0 -1px 0 var(--accent)}
+:root[data-theme="members-club"] .tb-members{background:var(--cta-bg);color:var(--cta-fg);border-color:transparent;font-weight:700}
+:root[data-theme="members-club"] .tb-dot{display:none}
+:root[data-theme="members-club"] .tb-brand b{font-size:28px}
+:root[data-theme="members-club"] .pg-title em{font-style:italic;color:var(--accent)}
+:root[data-theme="members-club"] :is(.ftr,.card.feature)::before{content:"";position:absolute;inset:10px;border:1px solid var(--border);border-radius:calc(var(--radius-card) - 8px);pointer-events:none}
+:root[data-theme="members-club"] .ftr{padding:40px 44px 34px}
+:root[data-theme="members-club"] .mx-badge.live,:root[data-theme="members-club"] .pl.live{background:none;border:1px solid var(--accent);color:var(--accent)}
+:root[data-theme="members-club"] .mx-badge.live i,:root[data-theme="members-club"] .mx-badge.live i::after{background:var(--accent)}
+:root[data-theme="members-club"] .ftr-foot,:root[data-theme="members-club"] .bt.ghost{background:none;border:1px solid var(--accent);color:var(--accent)}
+:root[data-theme="members-club"] .ftr:hover .ftr-foot{color:var(--accent)}
+:root[data-theme="members-club"] .ftr .mx-n{font-size:clamp(30px,3.6vw,54px);font-weight:400}
+:root[data-theme="members-club"] .mx-sc b{font-weight:400}
+@media (min-width:700px){
+  :root[data-theme="members-club"] .ftr .mx-main{display:grid;grid-template-columns:minmax(0,1fr) auto clamp(170px,17vw,220px);gap:0 32px;align-items:center}
+  :root[data-theme="members-club"] .ftr .mx-t{grid-column:1;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 18px;align-items:center;justify-items:start;text-align:left;padding:18px 0}
+  :root[data-theme="members-club"] .ftr .mx-t:first-child{grid-row:1;border-bottom:1px solid var(--border)}
+  :root[data-theme="members-club"] .ftr .mx-t:last-child{grid-row:2}
+  :root[data-theme="members-club"] .ftr .mx-t .mx-logo{grid-row:1/span 3;width:60px;height:60px}
+  :root[data-theme="members-club"] .ftr .mx-t>:not(.mx-logo){grid-column:2}
+  :root[data-theme="members-club"] .ftr .mx-mid:not(.pre),:root[data-theme="members-club"] .ftr .mx-mid:not(.pre) .mx-sc{display:contents}
+  :root[data-theme="members-club"] .ftr .mx-sc b{grid-column:2;font:400 var(--ftr-score)/.9 var(--font-display);color:var(--score-ink)}
+  :root[data-theme="members-club"] .ftr .mx-sc b:first-of-type{grid-row:1;color:var(--accent)}
+  :root[data-theme="members-club"] .ftr .mx-sc b:last-of-type{grid-row:2}
+  :root[data-theme="members-club"] .ftr .mx-sc i{display:none}
+  :root[data-theme="members-club"] .ftr .mx-dial{display:block;grid-area:1/3/3/4;width:100%;height:auto;filter:drop-shadow(0 0 14px color-mix(in srgb,var(--accent) 45%,transparent))}
+  :root[data-theme="members-club"] .ftr .mx-mid:not(.pre)>small{grid-area:1/3/3/4;place-self:center;font:italic 400 clamp(34px,4vw,60px)/1 var(--font-display);color:var(--text)}
+  :root[data-theme="members-club"] .ftr .mx-mid.pre{grid-area:1/3/3/4;display:grid;place-content:center;justify-items:center;aspect-ratio:1}
+  :root[data-theme="members-club"] .ftr .mx-mid.pre .mx-dial{position:absolute;inset:0}
+  :root[data-theme="members-club"] .ftr .mx-mid.pre .mx-time{font-size:clamp(28px,3vw,44px)}
+}
+:root[data-theme="members-club"] .mx-dial :is(.d-min,.d-maj){display:none}
+:root[data-theme="members-club"] .mx-dial .d-ring{stroke:var(--border);stroke-width:1.5}
+:root[data-theme="members-club"] .mx-dial .d-arc{stroke:var(--accent);stroke-width:4;stroke-linecap:round}
+:root[data-theme="members-club"] .pulse-stats{gap:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+:root[data-theme="members-club"] .pulse-s{flex-direction:row;align-items:baseline;gap:12px;padding:22px 8px;border:0;border-radius:0;background:none}
+:root[data-theme="members-club"] .pulse-s b{font-size:52px;color:var(--accent)}
+:root[data-theme="members-club"] .fld-d{border-radius:16px}
+:root[data-theme="members-club"] .form i,:root[data-theme="members-club"] .ftr .form i{background:none;border:1px solid var(--border);color:var(--text-2)}
+:root[data-theme="members-club"] .form i.W,:root[data-theme="members-club"] .ftr .form i.W{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}
+
+/* ---------- Aurora Glass: frosted glass over glowing colour ---------- */
+@supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  :root[data-theme="aurora-glass"] :is(.card,.ftr,.m.mx,.rail,.st-card,.pulse-s,.tile,.hm,.tb-ic,.tb-members,.tbs,.fld-d,.top .search){-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+  :root[data-theme="aurora-glass"] :is(.flmenu,.sresults,.drawer,.flsheet-in,.flbar,.toast){background:color-mix(in srgb,var(--pop) 82%,transparent);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+  @media (min-width:821px){:root[data-theme="aurora-glass"] .top-in{-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}}
+}
+@media (min-width:821px){
+  :root[data-theme="aurora-glass"] .top-in{width:calc(100% - 2*var(--pad));max-width:var(--wrap);margin-top:16px;padding:10px 12px 10px 24px;border-radius:var(--radius-pill);background:var(--surface);border:1px solid var(--border)}
+  :root[data-theme="aurora-glass"] .flmenu{right:0}
+}
+:root[data-theme="aurora-glass"] .ftr::before,:root[data-theme="aurora-glass"] .ftr::after,:root[data-theme="aurora-glass"] .m.mx::before,:root[data-theme="aurora-glass"] .m.mx::after{content:"";position:absolute;z-index:-1;border-radius:50%;pointer-events:none;inset:auto}
+:root[data-theme="aurora-glass"] .ftr::before{left:-8%;top:-30%;width:48%;height:90%;background:var(--hc);filter:blur(90px);opacity:.5}
+:root[data-theme="aurora-glass"] .ftr::after{right:-8%;top:-30%;width:48%;height:90%;background:var(--ac);filter:blur(90px);opacity:.5}
+:root[data-theme="aurora-glass"] .m.mx{position:relative;overflow:hidden;isolation:isolate}
+:root[data-theme="aurora-glass"] .m.mx::before{left:-12%;top:-40%;width:50%;height:90%;background:var(--hc);filter:blur(46px);opacity:.42}
+:root[data-theme="aurora-glass"] .m.mx::after{right:-12%;top:-40%;width:50%;height:90%;background:var(--ac);filter:blur(46px);opacity:.42}
+:root[data-theme="aurora-glass"] :is(.ftr,.m.mx) .mx-logo{padding:12%;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+:root[data-theme="aurora-glass"] .ftr .mx-n{font-weight:500}
+:root[data-theme="aurora-glass"] .pg-title{font-weight:200}
+
+/* ---------- Chrono: clean white, thin numerals, a watch dial ---------- */
+:root[data-theme="chrono"] .top{padding-bottom:16px;border-bottom:1px solid var(--text)}
+:root[data-theme="chrono"] .tb-brand b{font:400 17px/1 var(--font-body);letter-spacing:.32em!important;text-transform:uppercase!important}
+:root[data-theme="chrono"] .tb-dot{order:2;width:7px;height:7px;margin-left:-4px}
+:root[data-theme="chrono"] .ftr .mx-mid{display:grid;place-content:center;justify-items:center;gap:6px;width:clamp(230px,24vw,300px);aspect-ratio:1;flex:none}
+:root[data-theme="chrono"] .ftr .mx-dial{display:block;position:absolute;inset:0;width:100%;height:100%}
+:root[data-theme="chrono"] .mx-dial .d-min{stroke:var(--text);stroke-width:10;stroke-dasharray:1.5 13.16}
+:root[data-theme="chrono"] .mx-dial .d-maj{stroke:var(--text);stroke-width:18;stroke-dasharray:2.5 70.8}
+:root[data-theme="chrono"] .mx-dial .d-ring{stroke:var(--border);stroke-width:2}
+:root[data-theme="chrono"] .mx-dial .d-arc{stroke:var(--accent-fill);stroke-width:3;stroke-linecap:round}
+:root[data-theme="chrono"] :is(.ftr,.m.mx) .mx-logo{border-radius:50%;box-shadow:0 0 0 5px var(--surface),0 0 0 6px var(--text)}
+:root[data-theme="chrono"] .ftr .mx-n{font-weight:400}
+:root[data-theme="chrono"] .pulse-stats{gap:0;border-top:1px solid var(--text);border-bottom:1px solid var(--text)}
+:root[data-theme="chrono"] .pulse-s{padding:22px 8px;border:0;border-radius:0;background:none}
+:root[data-theme="chrono"] .pulse-s b{font-size:68px;font-weight:200}
+:root[data-theme="chrono"] .pulse-s.next b{font-size:34px;line-height:68px}
+:root[data-theme="chrono"] .fld-d{border-radius:var(--radius-pill)}
+:root[data-theme="chrono"] .sec-h h2,:root[data-theme="chrono"] .card h2{font-weight:300}
+
+:root[data-motion="reduce"] .ftr.is-live::after{animation:none!important}
+@media (prefers-reduced-motion:reduce){:root[data-theme] .ftr.is-live::after{animation:none!important}}
+/* signature fixes after the first look */
+:root[data-theme] .m.mx .mx-n{white-space:normal;text-wrap:balance;overflow:visible}
+:root[data-theme="team-colors"] .ftr-g b{color:inherit}
+:root[data-theme="chrono"] .form i.W,:root[data-theme="chrono"] .ftr .form i.W{background:var(--text);color:var(--surface)}
+@media (min-width:700px){
+  :root[data-theme="members-club"] .ftr .mx-n{font-size:clamp(26px,2.8vw,44px);line-height:.98}
+  :root[data-theme="members-club"] .ftr .mx-t{padding:12px 0}
+  :root[data-theme="members-club"] .ftr .mx-sc b{font-size:clamp(64px,6.4vw,96px)}
+}
+:root[data-theme="night-match"] .ftr .mx-n{font-weight:700;font-size:clamp(16px,1.45vw,21px)}

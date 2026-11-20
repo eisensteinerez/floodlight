@@ -29,14 +29,25 @@
   const logo = (t, cls) => `<img class="${cls}" src="${esc(t.logo || BLANK)}" alt="" loading="lazy" decoding="async" data-fb="${esc(BLANK)}" ${t.onerr || `onerror="this.onerror=null;this.src=this.dataset.fb"`}>`;
   const badge = (o) => o.state === 'in' ? '<span class="mx-badge live"><i></i>Live</span>' : o.state === 'post' ? '<span class="mx-badge">Final</span>' : `<span class="mx-badge">${esc(o.note || 'Upcoming')}</span>`;
   const time = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?([AP]M)$/i, '<small>$1</small>');
+  // Team Colors paints a card in the two teams' own colours: each is darkened until white type on it passes 4.5:1,
+  // the away side falls back to its second colour when the two are too alike, and a team with no colour gets the theme's pair.
+  const rgb = h => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '').trim()); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16, n >> 8 & 255, n & 255] };
+  const lum = c => { const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4 }; return .2126 * f(c[0]) + .7152 * f(c[1]) + .0722 * f(c[2]) };
+  const safe = h => { let c = rgb(h); if (!c) return null; for (let i = 0; i < 60 && 1.05 / (lum(c) + .05) < 4.5; i++) c = c.map(v => Math.round(v * .94)); return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('') };
+  const near = (a, b) => { const x = rgb(a), y = rgb(b); return !!x && !!y && Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 70 };
+  const colours = o => { const h = safe(o.hc); let a = safe(o.ac); if (h && a && near(h, a)) { const a2 = safe(o.ac2); a = a2 && !near(h, a2) ? a2 : null }
+    return `--hc:${o.hc || 'var(--muted)'};--ac:${o.ac || 'var(--muted)'};--hcs:${h || 'var(--team-a)'};--acs:${a || 'var(--team-b)'}` };
+  window.flTeamColours = colours;
+  // the watch dial some themes draw around the featured score: 60 ticks, 12 longer ones, and an arc for the minutes played
+  const dial = o => { const m = /^(\d+)(?:\+\d+)?'/.exec(o.clock || ''), p = o.progress != null ? o.progress : o.state === 'post' ? 1 : o.state !== 'in' ? 0 : /^HT/i.test(o.clock || '') ? .5 : m ? Math.min(1, +m[1] / 90) : 0;
+    return `<svg class="mx-dial" viewBox="0 0 300 300" aria-hidden="true"><circle class="d-min" cx="150" cy="150" r="140"/><circle class="d-maj" cx="150" cy="150" r="140"/><circle class="d-ring" cx="150" cy="150" r="122"/>${p > 0 ? `<circle class="d-arc" cx="150" cy="150" r="122" pathLength="100" stroke-dasharray="${(p * 100).toFixed(1)} 100" transform="rotate(-90 150 150)"/>` : ''}</svg>` };
   function middle(o, big) {
     if (o.state === 'pre') { const cd = o.date && !o.note ? untilText(+o.date) : '';
-      return `<span class="mx-mid pre"><b class="mx-time num">${o.time ? esc(o.time) : o.date ? time(o.date) : ''}</b>${cd ? `<small class="mx-cd num" data-cd="${+o.date}">${cd}</small>` : `<small>${esc(o.sub || (o.date ? o.date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) : ''))}</small>`}</span>` }
+      return `<span class="mx-mid pre">${big ? dial(o) : ''}<b class="mx-time num">${o.time ? esc(o.time) : o.date ? time(o.date) : ''}</b>${cd ? `<small class="mx-cd num" data-cd="${+o.date}">${cd}</small>` : `<small>${esc(o.sub || (o.date ? o.date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) : ''))}</small>`}</span>` }
     const [fa, fb] = o.state === 'in' ? bump(o.id, String(o.a.score), String(o.b.score)) : [false, false];
-    return `<span class="mx-mid"><span class="mx-sc num"><b class="${o.a.lose ? 'lose' : ''}${fa ? ' bump' : ''}">${esc(o.a.score)}</b><i>:</i><b class="${o.b.lose ? 'lose' : ''}${fb ? ' bump' : ''}">${esc(o.b.score)}</b></span><small class="${o.state === 'in' ? 'on' : ''}">${esc(o.state === 'in' ? o.clock : o.final || 'Final')}</small></span>`;
+    return `<span class="mx-mid">${big ? dial(o) : ''}<span class="mx-sc num"><b class="${o.a.lose ? 'lose' : ''}${fa ? ' bump' : ''}">${esc(o.a.score)}</b><i>:</i><b class="${o.b.lose ? 'lose' : ''}${fb ? ' bump' : ''}">${esc(o.b.score)}</b></span><small class="${o.state === 'in' ? 'on' : ''}">${esc(o.state === 'in' ? o.clock : o.final || 'Final')}</small></span>`;
   }
   const side = (t, extra = '') => `<span class="mx-t${t.lose ? ' lose' : ''}${t.win ? ' win' : ''}">${logo(t, 'mx-logo')}<span class="mx-n">${t.rank ? `<em>${esc(t.rank)}</em>` : ''}${esc(t.name)}</span>${t.record ? `<small>${esc(t.record)}</small>` : ''}${extra}</span>`;
-  const colours = o => `--hc:${o.hc || 'var(--muted)'};--ac:${o.ac || 'var(--muted)'}`;
 
   /* the standard card: crest and name either side, score or start time in the middle */
   window.flCard = function (o) {

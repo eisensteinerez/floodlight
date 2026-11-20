@@ -20,6 +20,7 @@
   --good:#7FCB5A; --bad:#FF8FAB; --gold-1:#2A2008; --gold-2:#F5C451; --gold-text:#FFF6DD;
   --heat-panel:var(--panel); --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
   --ring-w:7px; --ring-track-w:7px; --chart-under-border:0;
+  --score-ink:#FFF6DD; --score-glow:0 0 60px rgba(245,196,81,.55); --stripe:rgba(255,255,255,.024); --pop:#121821; --ftr-score:clamp(72px,9.2vw,132px); --title-size:clamp(44px,6.6vw,76px);
   --theme-color:#0A0D12; color-scheme:dark;
 }
 
@@ -39,6 +40,9 @@
   --good:#12804A; --bad:#C8211F; --gold-1:#FFF4D1; --gold-2:#8A5A00; --gold-text:#2A1E00;
   --heat-panel:#0E1116; --heat-panel-fg:#FFFFFF; --heat-panel-muted:#B8C0CC; --heat-panel-border:#0E1116; --heat-darken:0%; --heat-knob:#FFFFFF;
   --heat-badge-bg:#0E1116; --heat-badge-border:#0E1116; --ring-w:9px; --ring-track-w:9px; --ring-darken:45%; --chart-under-border:0;
+  --score-ink:#FFFFFF; --score-glow:none; --stripe:transparent; --pop:#FFFFFF; --ftr-score:clamp(60px,7vw,96px); --title-size:clamp(52px,7.4vw,96px);
+  --feature-bg:linear-gradient(160deg,#2B59FF,#1432B8); --feature-fg:#FFFFFF; --feature-muted:rgba(255,255,255,.88); --feature-ink:#1432B8;
+  --on-team:#FFFFFF; --team-ink:#0E1116; --team-shade:rgba(0,0,0,.3); --team-shade-2:rgba(0,0,0,.55); --team-dots:rgba(255,255,255,.14); --header-shadow:0 16px 40px rgba(16,24,40,.08);
   --theme-color:#EEF0F4; color-scheme:light;
 }
 
@@ -58,12 +62,13 @@
   --good:#D9BD86; --bad:#E08AA0; --gold-1:#2A2008; --gold-2:#F5C451; --gold-text:#FFF6DD;
   --heat-panel:transparent; --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
   --ring-w:3.5px; --ring-track-w:1.5px; --chart-under-border:1.5px solid rgba(217,189,134,.7);
+  --score-ink:var(--text); --score-glow:none; --stripe:transparent; --pop:#12211B; --ftr-score:clamp(72px,8vw,112px); --title-size:clamp(56px,8.4vw,112px);
   --theme-color:#0B1411; color-scheme:dark;
 }
 
 /* ---------- Aurora Glass: frosted glass over glowing colour ---------- */
 :root[data-theme="aurora-glass"],[data-theme-preview="aurora-glass"]{
-  --bg:#070A14; --surface:rgba(255,255,255,.06); --surface-2:rgba(255,255,255,.06); --border:rgba(255,255,255,.14); --border-2:rgba(255,255,255,.26);
+  --bg:#070A14; --surface:#111827; --surface-2:rgba(255,255,255,.06); --border:rgba(255,255,255,.14); --border-2:rgba(255,255,255,.26);
   --text:#F3F6FB; --text-2:#C7D0E0; --muted:#A3AEC2;
   --accent:#5EEAD4; --accent-fill:#5EEAD4; --on-accent:#04211D; --live:#FB7185; --live-fill:#FB7185; --on-live:#2A050C; --win:#5EEAD4; --loss:#A3AEC2;
   --radius-card:36px; --radius-tile:22px; --radius-pill:999px;
@@ -72,11 +77,13 @@
   --chart-over:linear-gradient(180deg,#5EEAD4,#3B82F6); --chart-under:rgba(255,255,255,.10); --chart-avg:#F9A8D4; --chart-line:rgba(255,255,255,.6);
   --chart-over-flat:#5EEAD4; --chart-under-flat:rgba(255,255,255,.18);
   --heat-ice:#67E8F9; --heat-mid:#F5F5F4; --heat-warm:#FDBA74; --heat-fire:#FB5E3C;
-  --panel:rgba(255,255,255,.06); --inset:rgba(0,0,0,.28); --pill-bg:#5EEAD4; --pill-fg:#04211D; --cta-bg:#5EEAD4; --cta-fg:#04211D;
+  --panel:#111827; --inset:rgba(0,0,0,.28); --pill-bg:#5EEAD4; --pill-fg:#04211D; --cta-bg:#5EEAD4; --cta-fg:#04211D;
   --page:radial-gradient(ellipse 50% 520px at 8% -60px,rgba(45,212,191,.34),transparent 70%),radial-gradient(ellipse 45% 560px at 96% 4%,rgba(244,114,182,.26),transparent 70%),radial-gradient(ellipse 60% 700px at 50% 110%,rgba(59,130,246,.28),transparent 70%),#070A14;
   --good:#6EE7A8; --bad:#FB7185; --gold-1:#2A2008; --gold-2:#F5C451; --gold-text:#FFF6DD;
   --heat-panel:rgba(8,12,24,.62); --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
   --ring-w:6px; --ring-track-w:6px; --chart-under-border:0;
+  --score-ink:#FFFFFF; --score-glow:0 0 50px rgba(255,255,255,.45); --stripe:transparent; --pop:#111827; --ftr-score:clamp(84px,12vw,176px); --title-size:clamp(46px,6.8vw,84px);
+  --glass-fallback:#111827; --glass-blur:blur(24px) saturate(140%);
   --theme-color:#070A14; color-scheme:dark;
 }
 
@@ -96,6 +103,7 @@
   --good:#12804A; --bad:#C2351F; --gold-1:#FBF3DC; --gold-2:#7A5200; --gold-text:#2A1E00;
   --heat-panel:#F5F5F3; --heat-panel-fg:#111111; --heat-panel-muted:#5B5B57; --heat-panel-border:#E3E3DE; --heat-darken:32%; --heat-knob:#FFFFFF;
   --heat-badge-bg:#FFFFFF; --heat-badge-fg:#111111; --heat-badge-border:#BDBDB6; --ring-w:5px; --ring-track-w:5px; --ring-darken:18%; --ring-ticks:.7 1.3; --ring-track:#BDBDB6; --chart-under-border:0;
+  --score-ink:var(--text); --score-glow:none; --stripe:transparent; --pop:#FFFFFF; --ftr-score:clamp(64px,7.4vw,104px); --title-size:clamp(60px,9.4vw,132px);
   --theme-color:#F5F5F3; color-scheme:light;
 }
 
@@ -110,6 +118,11 @@
   --strip-bg:transparent; --strip-fg:var(--text); --strip-mute:var(--muted); --strip-line:var(--border);
   --board-fg:var(--text); --board-bg:transparent;
   --ease:cubic-bezier(.2,.8,.2,1); --spring:var(--ease);
+  --team-a:#2B59FF; --team-b:#0E1116;
 }
 /* the heat ramp as one gradient, ice to fire, for gauges and legends */
 :root[data-theme]{--heat-ramp:linear-gradient(90deg,var(--heat-ice),var(--heat-mid) 50%,var(--heat-warm) 75%,var(--heat-fire))}
+/* Aurora Glass is frosted glass where the browser can blur what sits behind a card, and a solid panel where it cannot */
+@supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  :root[data-theme="aurora-glass"],[data-theme-preview="aurora-glass"]{--surface:rgba(255,255,255,.06); --panel:rgba(255,255,255,.06)}
+}
