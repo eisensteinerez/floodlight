@@ -22,6 +22,7 @@ if (os.environ.get("PORT") or os.environ.get("RENDER")) and not os.environ.get("
     os.environ["MALLOC_ARENA_MAX"] = "2"
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
+import datetime
 import gzip
 import hashlib
 import hmac
@@ -86,7 +87,8 @@ def signup_allowed(addr):
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
-                "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js"}
+                "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -982,7 +984,8 @@ USERS_FILE = CACHE_DIR / "users.json"
 SESSIONS_FILE = CACHE_DIR / "sessions.json"
 _acct_lock = threading.Lock()
 SESSION_DAYS = 30
-PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str}
+PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
+             "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list}   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -998,6 +1001,130 @@ def _save_accounts():
 # ---------- what members picked (the community split on a prediction) ----------
 
 VOTES_FILE = CACHE_DIR / "votes.json"
+# Awards and honours. No data provider the site uses carries them, so this file starts empty and only an admin adds to
+# it, one entry at a time, each with the page it was checked against. Nothing is ever filled in by the code.
+# ---------- Transfer window: league moves and key dates ----------
+# Moves come from the leagues' own public transaction lists: ESPN for the NBA and NFL (a team and a sentence per
+# move), MLB's stats API for baseball (player, both teams and a type code). Nothing public lists the college transfer
+# portal, so the college leagues have no moves source yet. Key dates are never guessed: an admin enters them.
+MOVE_SRC = {"nba": ("espn", "basketball/nba"), "nfl": ("espn", "football/nfl"), "mlb": ("mlb", ""), "cbb": ("", ""), "cfb": ("", "")}
+MOVE_LEAGUES = tuple(MOVE_SRC) + ("soccer",)
+
+def _espn_moves(path):
+    out = []
+    for page in (1, 2, 3):
+        d = fetch(f"https://site.api.espn.com/apis/site/v2/sports/{path}/transactions?limit=100&page={page}", 600, as_json=True)
+        for t in d.get("transactions") or []:
+            tm, text = t.get("team") or {}, str(t.get("description") or "").strip()
+            if not text or not t.get("date"):
+                continue
+            logo = tm.get("logo") or next((l.get("href") for l in tm.get("logos") or [] if l.get("href")), "")
+            out.append({"id": f"{tm.get('id', '')}:{t['date']}:{len(out)}", "date": t["date"], "text": text[:600],
+                        "team": {"id": str(tm.get("id") or ""), "name": tm.get("displayName") or tm.get("name") or "", "abbr": tm.get("abbreviation") or "",
+                                 "short": tm.get("shortDisplayName") or tm.get("name") or "", "logo": logo, "color": tm.get("color") or ""}})
+        if page >= int(d.get("pageCount") or 1) or len(out) >= 250:
+            break
+    return out
+
+def _mlb_moves(days=21):
+    end = datetime.date.today()
+    d = fetch(f"https://statsapi.mlb.com/api/v1/transactions?sportId=1&startDate={end - datetime.timedelta(days=days)}&endDate={end}", 600, as_json=True)
+    side = lambda x: {"id": str(x.get("id") or ""), "name": x.get("name") or ""} if x and x.get("id") else None
+    out = []
+    for t in d.get("transactions") or []:
+        text = str(t.get("description") or "").strip()
+        if not text or not (t.get("date") or t.get("effectiveDate")):
+            continue
+        person = t.get("person") or {}
+        out.append({"id": str(t.get("id") or len(out)), "date": t.get("date") or t.get("effectiveDate"), "text": text[:600], "code": t.get("typeCode") or "", "kind": t.get("typeDesc") or "",
+                    "player": {"id": str(person.get("id") or ""), "name": person.get("fullName") or ""} if person.get("id") else None,
+                    "from": side(t.get("fromTeam")), "to": side(t.get("toTeam"))})
+    out.sort(key=lambda m: m["date"], reverse=True)
+    return out[:600]
+
+def league_moves(lg):
+    src, path = MOVE_SRC[lg]
+    if not src:
+        return {"league": lg, "source": "", "moves": []}
+    try:
+        return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": _espn_moves(path) if src == "espn" else _mlb_moves()}
+    except Exception as e:
+        print(f"moves {lg}: {e}", file=sys.stderr)
+        return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": [], "error": "The moves list did not answer. It will be tried again shortly."}
+
+MOVE_DATES_FILE = CACHE_DIR / "transfer_dates.json"
+_move_dates = storage.load(MOVE_DATES_FILE, [])   # [{id, league, label, start, end, by, at}]  (end is empty for a single day such as a trade deadline)
+
+def move_dates_action(body, user):
+    op = body.get("op")
+    with _acct_lock:
+        if op == "remove":
+            before = len(_move_dates)
+            _move_dates[:] = [d for d in _move_dates if d.get("id") != body.get("id")]
+            if len(_move_dates) == before:
+                return 404, {"error": "That date is already gone."}
+            storage.save(MOVE_DATES_FILE, _move_dates)
+            return 200, {"ok": True, "dates": _move_dates}
+        if op != "add":
+            return 400, {"error": "Unknown action."}
+        lg, label = str(body.get("league") or ""), re.sub(r"\s+", " ", str(body.get("label") or "")).strip()[:40]
+        start, end = str(body.get("start") or ""), str(body.get("end") or "")
+        if lg not in MOVE_LEAGUES or not label:
+            return 400, {"error": "Choose the league and say what the date is."}
+        day = r"20\d\d-\d\d-\d\d"
+        if not re.fullmatch(day, start) or (end and not re.fullmatch(day, end)):
+            return 400, {"error": "Pick the date from the calendar."}
+        if end and end < start:
+            return 400, {"error": "The closing date is before the opening date."}
+        if len(_move_dates) >= 400:
+            return 400, {"error": "The dates list is full. Remove old dates first."}
+        _move_dates.append({"id": secrets.token_hex(6), "league": lg, "label": label, "start": start, "end": end, "by": user["username"], "at": int(time.time())})
+        storage.save(MOVE_DATES_FILE, _move_dates)
+        return 200, {"ok": True, "dates": _move_dates}
+
+AWARDS_FILE = CACHE_DIR / "awards.json"
+AWARD_SPORTS = ("nba", "wnba", "cbb", "nfl", "cfb", "mlb", "nhl", "soccer", "tennis", "ufc", "boxing")
+_awards = storage.load(AWARDS_FILE, [])   # [{id, sport, athlete, name, award, season, detail, source, by, at}]
+if not isinstance(_awards, list):
+    _awards = []
+
+
+def awards_for(sport, athlete):
+    with _acct_lock:
+        return [dict(a) for a in _awards if a.get("sport") == sport and str(a.get("athlete")) == str(athlete)]
+
+
+def awards_action(body, user):
+    op = body.get("op")
+    with _acct_lock:
+        if op == "remove":
+            before = len(_awards)
+            _awards[:] = [a for a in _awards if a.get("id") != body.get("id")]
+            if len(_awards) == before:
+                return 404, {"error": "That award entry is already gone."}
+            storage.save(AWARDS_FILE, _awards)
+            return 200, {"ok": True}
+        if op != "add":
+            return 400, {"error": "Unknown action."}
+        sport, athlete, award = str(body.get("sport") or ""), str(body.get("athlete") or ""), str(body.get("award") or "")
+        season, source = str(body.get("season") or "").strip(), str(body.get("source") or "").strip()
+        if sport not in AWARD_SPORTS or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,40}", athlete) or not re.fullmatch(r"[a-z0-9-]{2,40}", award):
+            return 400, {"error": "Pick the athlete and the award again."}
+        if not re.fullmatch(r"(19|20)\d\d(-\d\d)?", season):
+            return 400, {"error": "Write the season as a year, like 2025, or 2024-25."}
+        if not re.fullmatch(r"https?://[^\s<>\"']{4,300}", source):
+            return 400, {"error": "Add a link to the page that shows this award, starting with http."}
+        if any(a["sport"] == sport and str(a["athlete"]) == athlete and a["award"] == award and a["season"] == season and (a.get("detail") or "") == str(body.get("detail") or "").strip()[:60] for a in _awards):
+            return 409, {"error": "That award and season is already listed."}
+        if len(_awards) >= 20000:
+            return 400, {"error": "The awards file is full."}
+        entry = {"id": secrets.token_hex(6), "sport": sport, "athlete": athlete, "name": str(body.get("name") or "")[:80], "award": award, "season": season,
+                 "detail": str(body.get("detail") or "").strip()[:60], "source": source, "by": user["username"], "at": int(time.time())}
+        _awards.append(entry)
+        storage.save(AWARDS_FILE, _awards)
+        return 200, {"ok": True, "entry": entry}
+
+
 _votes = storage.load(VOTES_FILE, {})   # game key ("soccer:12345") -> {username: "home" | "draw" | "away"}
 VOTE_KEY = re.compile(r"[a-z]{2,12}:[A-Za-z0-9._-]{1,40}")
 VOTE_MAX_GAMES = 4000
@@ -1030,15 +1157,68 @@ def cast_vote(user, body):
         return 200, {"ok": True, "split": vote_split(key)}
 
 
-def role_of(u):
-    """admin, research (everything), viewer (games only) or pending (waiting for the admin)."""
+# ---------- members: roles, services and who can use what ----------
+# A member is an Owner, an Admin or a Member, and is active or paused. Every member has every service unless an admin
+# switched one off for them: only those exceptions are stored (u["off"]), so a service added to SERVICES later is on
+# for everyone without touching the accounts. Owners and admins always have every service.
+SERVICES = (("live", "Live scores", "Scores, match centre, lineups"), ("lab", "The Lab", "Players, teams, props, boards"),
+            ("predictions", "Predictions", "Edge board, slips, track record"), ("transfers", "Transfer window", "Moves, key dates, the soccer market"),
+            ("profiles", "Profiles and awards", "Players, fighters, honors"), ("alerts", "Alerts", "Follow teams and players"))
+SERVICE_KEYS = tuple(k for k, _, _ in SERVICES)
+SERVICE_NAME = {k: n for k, n, _ in SERVICES}
+MEMBERS_FILE = CACHE_DIR / "members.json"
+_mstate = storage.load(MEMBERS_FILE, {})   # {"policy": {"allNew": bool, "start": [service]}, "invites": [...], "log": [...], "feedback": [...]}
+for _k, _v in (("policy", {"allNew": True, "start": list(SERVICE_KEYS)}), ("invites", []), ("log", []), ("feedback", [])):
+    if not isinstance(_mstate.get(_k), type(_v)):
+        _mstate[_k] = _v
+
+
+def _save_members():
+    storage.save(MEMBERS_FILE, _mstate)
+
+
+def log_activity(by, what):
+    _mstate["log"].insert(0, {"at": int(time.time()), "by": by, "what": str(what)[:300]})
+    del _mstate["log"][500:]
+
+
+def rank_of(u):
+    """owner, admin or member. The account named in FLOODLIGHT_ADMIN is always an owner."""
     if not u:
         return None
     if ADMIN and u["username"].lower() == ADMIN:
+        return "owner"
+    return u.get("rank") if u.get("rank") in ("owner", "admin") else "member"
+
+
+def is_paused(u):
+    return u.get("status") == "paused"
+
+
+def off_of(u):
+    return [k for k in (u.get("off") or []) if k in SERVICE_KEYS]
+
+
+def has(u, service):
+    """Can this member use this service? No row means yes."""
+    if not u:
+        return not GATED            # on your own computer nobody has to log in
+    if rank_of(u) in ("owner", "admin"):
+        return True
+    if GATED and is_paused(u):
+        return False
+    return service not in off_of(u)
+
+
+def role_of(u):
+    """The older four names, still used across the code: admin (owners and admins), research (has the Lab), viewer, pending (paused)."""
+    if not u:
+        return None
+    if rank_of(u) in ("owner", "admin"):
         return "admin"
-    if not GATED:
-        return "research"   # running on your own computer: every account can use everything
-    return u.get("role") if u.get("role") in ROLES else "pending"
+    if GATED and is_paused(u):
+        return "pending"
+    return "research" if has(u, "lab") else "viewer"
 
 
 def can_view(u):
@@ -1046,13 +1226,64 @@ def can_view(u):
 
 
 def can_research(u):
-    return not GATED or role_of(u) in ("research", "admin")
+    return has(u, "lab")
 
 
-def _new_user(username, password, role, display=None, prefs=None):
+def service_for(path):
+    """Which service an API path belongs to, for the paths this server answers itself."""
+    if path in ("/api/awards", "/api/tm/player", "/api/fm/player", "/api/fm/playerstats", "/api/box/fighter"):
+        return "profiles"
+    if path.startswith(("/api/tm/transfers/", "/api/transfers/")):
+        return "transfers"
+    if path in ("/api/forecast/list", "/api/record") or path.startswith("/api/picks/"):
+        return "predictions"
+    if path.startswith(("/api/dfs/", "/api/forecast/")):
+        return "lab"
+    if path.startswith(("/api/fm/", "/api/odds/", "/api/bb/", "/api/hk/", "/api/bsb/", "/api/tn/", "/api/box/", "/api/tm/squad")):
+        return "live"
+    return None
+
+
+def touch(u):
+    """Remember when a member was last here, to the nearest quarter of an hour."""
+    now = int(time.time())
+    if now - int(u.get("seen") or 0) > 900:
+        with _acct_lock:
+            u["seen"] = now
+            _save_accounts()
+
+
+def _start_off():
+    pol = _mstate["policy"]
+    return [] if pol.get("allNew", True) else [k for k in SERVICE_KEYS if k not in (pol.get("start") or [])]
+
+
+def _new_user(username, password, role, display=None, prefs=None, rank="member", email=""):
     salt = secrets.token_hex(16)
-    return {"username": username, "salt": salt, "hash": _hash(password, salt), "created": int(time.time()), "role": role,
+    paused = role == "pending"
+    return {"username": username, "salt": salt, "hash": _hash(password, salt), "created": int(time.time()),
+            "role": "pending" if paused else "research", "rank": rank if rank in ("owner", "admin") else "member",
+            "status": "paused" if paused else "active", "off": _start_off(), "email": email,
             "prefs": clean_prefs(prefs or {}, {"display": (display or username).strip()[:40]})}
+
+
+def migrate_members():
+    """One time: the old roles (pending, viewer, research) become Member, active or paused, with every service."""
+    todo = [u for u in _users.values() if "status" not in u]
+    if not todo:
+        return
+    had_lab, gained, waiting = [], [], []
+    with _acct_lock:
+        for u in todo:
+            old = u.get("role")
+            u["status"], u["off"] = ("active" if old in ("viewer", "research") or (ADMIN and u["username"].lower() == ADMIN) else "paused"), []
+            u.setdefault("rank", "member")
+            (had_lab if old == "research" else gained if old == "viewer" else waiting).append(u["username"])
+        names = lambda xs: f"{len(xs)}" + ((" (" + ", ".join(xs[:60]) + (" and more" if len(xs) > 60 else "") + ")") if xs else "")
+        log_activity("Floodlight", f"Moved {len(todo)} accounts to the new access model. Already had everything: {len(had_lab)}. "
+                     f"Had games only and now have every service: {names(gained)}. Waiting for approval, kept paused: {names(waiting)}.")
+        _save_accounts()
+        _save_members()
 
 
 def ensure_admin():
@@ -1060,7 +1291,7 @@ def ensure_admin():
     if not (ADMIN and ADMIN_PASSWORD) or ADMIN in _users or not re.fullmatch(r"[a-z0-9_.]{3,20}", ADMIN):
         return
     with _acct_lock:
-        _users[ADMIN] = _new_user(ADMIN, ADMIN_PASSWORD, "admin")
+        _users[ADMIN] = _new_user(ADMIN, ADMIN_PASSWORD, "admin", rank="owner")
         _save_accounts()
     print(f"Created the admin account '{ADMIN}'")
 
@@ -1072,48 +1303,176 @@ def admin_list():
     return sorted(rows, key=lambda r: (order.get(r["role"], 9), -r["created"]))
 
 
-def admin_action(path, body):
-    key = str(body.get("username") or "").strip().lower()
-    if path == "/api/admin/add":
-        username = str(body.get("username") or "").strip()
-        password = str(body.get("password") or "")
-        role = body.get("role") if body.get("role") in ("viewer", "research") else "viewer"
-        if not re.fullmatch(r"[A-Za-z0-9_.]{3,20}", username):
-            return 400, {"error": "Usernames are 3–20 letters, numbers, dots or underscores."}
-        if len(password) < 8:
-            return 400, {"error": "Use a password of at least 8 characters."}
-        with _acct_lock:
-            if key in _users:
-                return 409, {"error": "That username is taken."}
-            _users[key] = _new_user(username, password, role)
-            _save_accounts()
-        return 200, {"users": admin_list()}
-    u = _users.get(key)
-    if not u:
-        return 404, {"error": "No member with that username."}
-    if role_of(u) == "admin":
-        return 400, {"error": "You can't change the admin account here."}
+def members_view(actor):
+    now = time.time()
+    _mstate["invites"][:] = [i for i in _mstate["invites"] if i.get("exp", 0) > now - 30 * 86400]
+    rows = [{"username": u["username"], "display": u.get("prefs", {}).get("display") or u["username"], "email": u.get("email") or "",
+             "color": u.get("prefs", {}).get("color") or "", "rank": rank_of(u), "status": "paused" if is_paused(u) else "active",
+             "off": [] if rank_of(u) != "member" else off_of(u), "created": u.get("created", 0), "seen": u.get("seen", 0),
+             "fixed": bool(ADMIN and u["username"].lower() == ADMIN)} for u in _users.values()]
+    order = {"owner": 0, "admin": 1, "member": 2}
+    rows.sort(key=lambda r: (order[r["rank"]], r["display"].lower()))
+    return {"members": rows, "invites": [{**i, "expired": i.get("exp", 0) < now} for i in _mstate["invites"]], "policy": _mstate["policy"],
+            "services": [list(x) for x in SERVICES], "log": _mstate["log"][:120], "feedback": _mstate["feedback"][:60],
+            "me": {"username": actor["username"], "rank": rank_of(actor)}, "gated": GATED}
+
+
+def _owners():
+    return [u for u in _users.values() if rank_of(u) == "owner"]
+
+
+def members_action(body, actor):
+    """Everything the Members page can change. Each change is written to the activity log."""
+    op, me, mine = body.get("op"), actor["username"], rank_of(actor)
+    name = lambda u: u.get("prefs", {}).get("display") or u["username"]
+    keys = body.get("usernames") if isinstance(body.get("usernames"), list) else [body.get("username")]
+    keys = [str(k or "").strip().lower() for k in keys if k][:200]
     with _acct_lock:
-        if path == "/api/admin/set":
-            if body.get("role") not in ROLES:
-                return 400, {"error": "Pick viewer, research or pending."}
-            u["role"] = body["role"]
-        elif path == "/api/admin/password":   # the member forgot it: a temporary one the admin passes on
-            temp = "-".join(secrets.token_hex(2) for _ in range(3))
-            u["salt"] = secrets.token_hex(16)
-            u["hash"] = _hash(temp, u["salt"])
-            for t in [t for t, v in _sessions.items() if v["user"] == key]:
-                _sessions.pop(t, None)
-            _save_accounts()
-            return 200, {"users": admin_list(), "password": temp}
-        elif path == "/api/admin/remove":
-            _users.pop(key, None)
-            for t in [t for t, v in _sessions.items() if v["user"] == key]:
-                _sessions.pop(t, None)
+        if op == "policy":
+            if mine != "owner":
+                return 403, {"error": "Only an owner can change what new members get."}
+            start = [k for k in (body.get("start") or []) if k in SERVICE_KEYS]
+            _mstate["policy"] = {"allNew": bool(body.get("allNew")), "start": start if not body.get("allNew") else list(SERVICE_KEYS)}
+            log_activity(me, "New members get every service" if body.get("allNew") else
+                         "New members start with: " + (", ".join(SERVICE_NAME[k] for k in start) or "no services"))
+        elif op == "invite":
+            email, rank = str(body.get("email") or "").strip().lower()[:120], body.get("rank") if body.get("rank") in ("admin", "member") else "member"
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+                return 400, {"error": "Enter the person's email address."}
+            if any(i["email"] == email and i.get("exp", 0) > time.time() for i in _mstate["invites"]):
+                return 409, {"error": "That address already has an invite. Use Resend to get its link again."}
+            if any((u.get("email") or "").lower() == email for u in _users.values()):
+                return 409, {"error": "Someone with that address is already a member."}
+            if len(_mstate["invites"]) >= 300:
+                return 400, {"error": "There are too many open invites. Remove some first."}
+            _mstate["invites"].insert(0, {"id": secrets.token_hex(5), "token": secrets.token_urlsafe(18), "email": email, "rank": rank, "by": me,
+                                          "at": int(time.time()), "exp": int(time.time()) + 14 * 86400})
+            log_activity(me, f"Invited {email} as {'an admin' if rank == 'admin' else 'a member'}")
+        elif op in ("reinvite", "uninvite"):
+            inv = next((i for i in _mstate["invites"] if i["id"] == body.get("id")), None)
+            if not inv:
+                return 404, {"error": "That invite is gone."}
+            if op == "uninvite":
+                _mstate["invites"].remove(inv)
+                log_activity(me, f"Cancelled the invite for {inv['email']}")
+            else:
+                inv.update(token=secrets.token_urlsafe(18), at=int(time.time()), exp=int(time.time()) + 14 * 86400)
+                log_activity(me, f"Made a new invite link for {inv['email']}")
+        elif op == "add":
+            username, password = str(body.get("username") or "").strip(), str(body.get("password") or "")
+            rank = body.get("rank") if body.get("rank") in ("admin", "member") else "member"
+            if not re.fullmatch(r"[A-Za-z0-9_.]{3,20}", username):
+                return 400, {"error": "Usernames are 3–20 letters, numbers, dots or underscores."}
+            if len(password) < 8:
+                return 400, {"error": "Use a password of at least 8 characters."}
+            if username.lower() in _users:
+                return 409, {"error": "That username is taken."}
+            _users[username.lower()] = _new_user(username, password, "research", rank=rank)
+            log_activity(me, f"Added {username} as {'an admin' if rank == 'admin' else 'a member'}")
+        elif op == "feedback-clear":
+            _mstate["feedback"][:] = [f for f in _mstate["feedback"] if f.get("id") != body.get("id")]
         else:
-            return 404, {"error": "unknown endpoint"}
+            targets = [_users[k] for k in keys if k in _users]
+            if not targets:
+                return 404, {"error": "No member with that username."}
+            for u in targets:
+                r, who = rank_of(u), name(u)
+                if op in ("pause", "remove", "rank", "password") and u["username"].lower() == me.lower():
+                    return 400, {"error": "You can't do that to your own account here."}
+                if r == "owner" and mine != "owner":
+                    return 403, {"error": f"{who} is an owner. Admins can't change or remove owners."}
+                if ADMIN and u["username"].lower() == ADMIN and op in ("pause", "remove", "rank", "password"):
+                    return 400, {"error": f"{who} is the site owner's account and can't be changed here."}
+            if op == "rank":
+                rank = body.get("rank")
+                if rank not in ("owner", "admin", "member"):
+                    return 400, {"error": "Pick Owner, Admin or Member."}
+                if mine != "owner" and (rank == "owner"):
+                    return 403, {"error": "Only an owner can make someone an owner."}
+                losing = [u for u in targets if rank_of(u) == "owner" and rank != "owner"]
+                if losing and len(_owners()) - len(losing) < 1:
+                    return 400, {"error": "There must always be at least one owner."}
+                for u in targets:
+                    u["rank"] = rank
+                    log_activity(me, f"Made {name(u)} {'an owner' if rank == 'owner' else 'an admin' if rank == 'admin' else 'a member'}")
+            elif op in ("pause", "resume"):
+                for u in targets:
+                    if op == "pause" and rank_of(u) == "owner":
+                        return 400, {"error": "An owner can't be paused."}
+                    u["status"], u["role"] = ("paused", "pending") if op == "pause" else ("active", "research")
+                    if op == "pause":
+                        for t in [t for t, v in _sessions.items() if v["user"] == u["username"].lower()]:
+                            _sessions.pop(t, None)
+                    log_activity(me, f"{'Paused' if op == 'pause' else 'Resumed'} {name(u)}")
+            elif op == "services":
+                off = [k for k in (body.get("off") or []) if k in SERVICE_KEYS]
+                for u in targets:
+                    if rank_of(u) != "member":
+                        return 400, {"error": f"{name(u)} is {'an owner' if rank_of(u) == 'owner' else 'an admin'} and always has every service."}
+                    before = set(off_of(u))
+                    u["off"] = off
+                    for k in SERVICE_KEYS:
+                        if (k in off) != (k in before):
+                            log_activity(me, f"Switched {'off' if k in off else 'on'} {SERVICE_NAME[k]} for {name(u)}")
+            elif op == "reset":
+                for u in targets:
+                    if off_of(u):
+                        u["off"] = []
+                        log_activity(me, f"Reset {name(u)} to all services")
+            elif op == "password":   # the member forgot it: a temporary one the admin passes on
+                u = targets[0]
+                temp = "-".join(secrets.token_hex(2) for _ in range(3))
+                u["salt"] = secrets.token_hex(16)
+                u["hash"] = _hash(temp, u["salt"])
+                for t in [t for t, v in _sessions.items() if v["user"] == u["username"].lower()]:
+                    _sessions.pop(t, None)
+                log_activity(me, f"Gave {name(u)} a temporary password")
+                _save_accounts()
+                _save_members()
+                return 200, {**members_view(actor), "password": temp, "for": u["username"]}
+            elif op == "remove":
+                losing = [u for u in targets if rank_of(u) == "owner"]
+                if losing and len(_owners()) - len(losing) < 1:
+                    return 400, {"error": "There must always be at least one owner."}
+                for u in targets:
+                    k = u["username"].lower()
+                    _users.pop(k, None)
+                    for t in [t for t, v in _sessions.items() if v["user"] == k]:
+                        _sessions.pop(t, None)
+                    log_activity(me, f"Removed {name(u)}")
+            else:
+                return 400, {"error": "Unknown action."}
         _save_accounts()
-    return 200, {"users": admin_list()}
+        _save_members()
+    return 200, members_view(actor)
+
+
+def admin_action(path, body, actor):
+    """The older member endpoints, kept working on top of the new ones."""
+    op = {"/api/admin/add": "add", "/api/admin/password": "password", "/api/admin/remove": "remove"}.get(path)
+    if path == "/api/admin/set":
+        op = "pause" if body.get("role") == "pending" else "resume"
+    if not op:
+        return 404, {"error": "unknown endpoint"}
+    status, out = members_action({**body, "op": op, "rank": "member"}, actor)
+    return (status, out) if status != 200 else (200, {"users": admin_list(), **({"password": out["password"]} if "password" in out else {})})
+
+
+def invite_for(token):
+    now = time.time()
+    return next((i for i in _mstate["invites"] if token and hmac.compare_digest(i.get("token", ""), token) and i.get("exp", 0) > now), None)
+
+
+def add_feedback(body, user):
+    text = re.sub(r"\s+", " ", str(body.get("text") or "")).strip()[:1000]
+    if len(text) < 3:
+        return 400, {"error": "Write a few words first."}
+    with _acct_lock:
+        _mstate["feedback"].insert(0, {"id": secrets.token_hex(5), "at": int(time.time()), "by": user["username"] if user else "",
+                                       "text": text, "page": str(body.get("page") or "")[:120], "theme": str(body.get("theme") or "")[:30]})
+        del _mstate["feedback"][300:]
+        _save_members()
+    return 200, {"ok": True}
 
 
 def _hash(password, salt):
@@ -1122,7 +1481,8 @@ def _hash(password, salt):
 
 def public_user(u):
     return {"username": u["username"], "display": u.get("prefs", {}).get("display") or u["username"],
-            "created": u["created"], "prefs": u.get("prefs", {}), "role": role_of(u)}
+            "created": u["created"], "prefs": u.get("prefs", {}), "role": role_of(u), "rank": rank_of(u),
+            "status": "paused" if is_paused(u) else "active", "services": {k: has(u, k) for k in SERVICE_KEYS}}
 
 
 def clean_prefs(raw, old):
@@ -1131,7 +1491,7 @@ def clean_prefs(raw, old):
         if k in raw and isinstance(raw[k], typ):
             v = raw[k]
             if typ is list:
-                v = [x for x in v if isinstance(x, dict)][:200]
+                v = [x for x in v if isinstance(x, dict) or (k == "favSports" and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
             prefs[k] = v
@@ -1149,8 +1509,13 @@ def signup(body):
     with _acct_lock:
         if key in _users:
             return 409, {"error": "That username is taken. Try another."}
-        _users[key] = _new_user(username, password, "admin" if key == ADMIN else SIGNUP_ROLE,
-                                body.get("display"), body.get("prefs"))
+        inv = invite_for(str(body.get("invite") or ""))
+        _users[key] = _new_user(username, password, "research" if key == ADMIN or inv else SIGNUP_ROLE, body.get("display"), body.get("prefs"),
+                                rank="owner" if key == ADMIN else inv["rank"] if inv else "member", email=inv["email"] if inv else "")
+        if inv:
+            _mstate["invites"].remove(inv)
+            log_activity(username, f"Joined from the invite sent to {inv['email']}")
+            _save_members()
         token = new_session(key)
         _save_accounts()
     return 200, {"user": public_user(_users[key]), "_token": token}
@@ -1268,7 +1633,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self.wfile.write(body)
         _, user = session_user(self.headers.get("Cookie"))
         q["_pass"] = self.headers.get("X-Lab-Pass") or ""
-        status, obj = lab.handle(u.path[len("/api/lab/"):], q, signed_in=bool(user and can_research(user)) or not GATED)
+        board = u.path == "/api/lab/board"   # Predictions and Home read the board too
+        ok = (has(user, "lab") or (board and has(user, "predictions"))) if user else not GATED
+        if user and not ok and u.path not in ("/api/lab/img", "/api/lab/fonts.css", "/api/lab/session"):
+            svc = "predictions" if board and has(user, "lab") else "lab"
+            return self.send_json({"error": f"Your account doesn't include {SERVICE_NAME[svc]}. Ask your admin for access.", "service": svc}, 403)
+        status, obj = lab.handle(u.path[len("/api/lab/"):], q, signed_in=ok)
         if isinstance(obj, tuple):
             ct, data = obj
             self.send_response(status)
@@ -1321,7 +1691,17 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path.startswith("/api/admin/"):
             if role_of(user) != "admin":
                 return self.send_auth(403, {"error": "Only the admin can manage members."})
-            return self.send_auth(*admin_action(u.path, body))
+            if u.path == "/api/admin/awards":
+                return self.send_auth(*awards_action(body, user))
+            if u.path == "/api/admin/transfers/dates":
+                return self.send_auth(*move_dates_action(body, user))
+            if u.path == "/api/admin/members":
+                return self.send_auth(*members_action(body, user))
+            return self.send_auth(*admin_action(u.path, body, user))
+        if u.path == "/api/feedback":   # a note from the Help page, kept for the admins to read
+            if GATED and not user:
+                return self.send_auth(401, {"error": "Log in first."})
+            return self.send_auth(*add_feedback(body, user))
         if u.path == "/api/forecast/track":
             if not can_research(user):
                 return self.send_auth(200, {"ok": True, "added": 0})
@@ -1337,9 +1717,13 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(401, {"error": "Log in first."})
         if u.path == "/api/picks/vote":
             if not can_view(user):
-                return self.send_auth(403, {"error": "Your account is waiting for the admin to approve it."})
+                return self.send_auth(403, {"error": "Your account is paused or waiting for an admin to switch it on."})
+            if not has(user, "predictions"):
+                return self.send_auth(403, {"error": "Your account doesn't include Predictions. Ask your admin for access.", "service": "predictions"})
             return self.send_auth(*cast_vote(user, body))
         if u.path == "/api/me/prefs":
+            if "follows" in body and not has(user, "alerts"):
+                return self.send_auth(403, {"error": "Your account doesn't include Alerts. Ask your admin for access.", "service": "alerts"})
             with _acct_lock:
                 user["prefs"] = clean_prefs(body, user.get("prefs", {}))
                 _save_accounts()
@@ -1350,7 +1734,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(*forecaster.update_settings(body))
         if u.path == "/api/forecast/run":
             if not can_research(user):
-                return self.send_auth(403, {"error": "Your account doesn't include research."})
+                return self.send_auth(403, {"error": "Your account doesn't include the Lab. Ask your admin for access.", "service": "lab"})
             key = str(body.get("key") or "")
             if not forecaster.request_now(key):
                 return self.send_auth(404, {"error": "That match isn't tracked yet."})
@@ -1386,14 +1770,17 @@ class Handler(SimpleHTTPRequestHandler):
             return self.wfile.write(data)
         if u.path.startswith("/api/lab/") or u.path == "/lab" or (u.path == "/" and "frame_id" in q and "instance_id" in q):
             return self.lab(u, q)   # Floodlight Lab (lab.py): Discord members get in with a pass, not a site login
-        if GATED and u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users"):
+        if u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users", "/api/admin/members", "/api/invite"):
             _, user = session_user(self.headers.get("Cookie"))
-            if not user:
+            if GATED and not user:
                 return self.send_json({"error": "Log in to use Floodlight."}, 401)
-            if not can_view(user):
-                return self.send_json({"error": "Your account is waiting for the admin to approve it."}, 403)
-            if u.path.startswith(("/api/dfs/", "/api/forecast/")) and not can_research(user):
-                return self.send_json({"error": "Your account doesn't include research."}, 403)
+            if GATED and not can_view(user):
+                return self.send_json({"error": "Your account is paused or waiting for an admin to switch it on."}, 403)
+            svc = service_for(u.path)   # a service switched off for this member is refused here, not just hidden in the page
+            if svc and user and not has(user, svc):
+                return self.send_json({"error": f"Your account doesn't include {SERVICE_NAME[svc]}. Ask your admin for access.", "service": svc}, 403)
+            if user:
+                touch(user)
         if u.path == "/api/picks/split":
             keys = [k for k in (q.get("keys") or "").split(",") if VOTE_KEY.fullmatch(k)][:60]
             with _acct_lock:
@@ -1450,11 +1837,31 @@ class Handler(SimpleHTTPRequestHandler):
                 if role_of(user) != "admin":
                     return self.send_json({"error": "Only the admin can manage members."}, 403)
                 return self.send_auth(200, {"users": admin_list()})
+            if u.path == "/api/admin/members":
+                _, user = session_user(self.headers.get("Cookie"))
+                if role_of(user) != "admin":
+                    return self.send_json({"error": "Only owners and admins can manage members."}, 403)
+                return self.send_auth(200, members_view(user))
+            if u.path == "/api/invite":   # what an invite link says, for the person opening it
+                inv = invite_for(q.get("token", ""))
+                return self.send_auth(200, {"ok": True, "email": inv["email"], "rank": inv["rank"], "by": inv["by"]}) if inv else self.send_auth(404, {"error": "This invite link has expired or was already used. Ask for a new one."})
+            if u.path == "/api/transfers/moves":   # one league's latest moves, from the league's own transaction list
+                if q.get("league") not in MOVE_SRC:
+                    return self.send_json({"error": "bad request"}, 400)
+                return self.send_auth(200, league_moves(q["league"]))
+            if u.path == "/api/transfers/dates":   # key dates an admin has entered (trade deadline, free agency, portal and transfer windows)
+                return self.send_auth(200, {"dates": _move_dates})
+            if u.path == "/api/awards":   # an athlete's awards, as entered by an admin (empty until then)
+                if q.get("sport") not in AWARD_SPORTS or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,40}", q.get("id", "")):
+                    return self.send_json({"error": "bad request"}, 400)
+                return self.send_auth(200, {"awards": awards_for(q["sport"], q["id"])})
             if u.path == "/api/record":   # Floodlight's own graded predictions (record.py)
                 return self.send_json({"entries": record.entries(), "summary": record.summary(), "now": int(time.time())}, max_age=60)
             if u.path == "/api/forecast/get":
                 keys = [k for k in q.get("keys", "").split(",") if re.fullmatch(r"(soccer|football):[A-Za-z0-9_-]{1,24}", k)][:40]
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
+            if u.path == "/api/forecast/list":   # every tracked match with its latest forecast (read-only)
+                return self.send_auth(200, {"matches": forecaster.upcoming(), "now": int(time.time())})
             if u.path == "/api/odds/board":
                 if q.get("sport") not in ("soccer", "football", "basketball", "baseball") or not re.fullmatch(r"[A-Za-z0-9_.]{1,20}", q.get("lg", "")):
                     return self.send_json({"error": "bad request"}, 400)
@@ -1633,6 +2040,7 @@ if __name__ == "__main__":
     atexit.register(save_photos)
     odds.setup(fetch=fetch, similar=similar)
     ensure_admin()
+    migrate_members()
     if MEM_LIMIT_MB:
         threading.Thread(target=_memory_guard, daemon=True, name="memory-guard").start()
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,

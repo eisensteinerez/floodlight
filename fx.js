@@ -1,6 +1,6 @@
 /* Floodlight · the finishing layer: the design sheet gets the last word, and cards light up under the pointer. */
 document.head.appendChild(document.getElementById('flTheme'));
-{ const ar = document.getElementById('flArena'); if (ar) document.head.appendChild(ar) }   // arena.css is the current look and goes last
+for (const id of ['flArena', 'flTokens', 'flThemes']) { const n = document.getElementById(id); if (n) document.head.appendChild(n) }   // the base sheet, then the theme tokens and the theme skin, which have the last word
 { // at most once a frame, and only on devices with a mouse
   let pend = null, raf = 0;
   if (matchMedia('(hover:hover) and (pointer:fine)').matches) document.addEventListener('pointermove', ev => {

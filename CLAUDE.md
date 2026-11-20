@@ -32,6 +32,6 @@ If a skill isn't installed in the session, read its copy in `~/Documents/Floodli
 - Work on the `redesign` branch. Never merge into `main` without Erez's go-ahead.
 - One local preview only: http://localhost:8650 (`python3 server.py 8650`). Stop any other preview first.
 - No purple anywhere.
-- Theme tokens (colours, fonts, radii, spacing, timing) live in `arena.css`, in the first block.
+- Theme tokens (colours, fonts, radii, spacing, timing) live in `tokens.css`, one block per theme. Shared components are in `themes.css`, page styles in `pages.css`.
 - New public files must be added to `PUBLIC_FILES` in `server.py`, or the server won't serve them.
 - One commit per section, with a clear message, so any section can be undone on its own.

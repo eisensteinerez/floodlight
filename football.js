@@ -391,7 +391,7 @@ function fbPredPane(e){
 
 /* ---------- team & player pages ---------- */
 function openFbTeam(id, lgKey){
-  pushView({ type: 'fbteam', id: String(id), lg: lgKey || 'nfl', tab: 'sched' });
+  if (viewBlocked({ type: 'fbteam' })) return; pushView({ type: 'fbteam', id: String(id), lg: lgKey || 'nfl', tab: 'sched' });
   const v = S.stack[S.stack.length - 1], l = FBL[v.lg];
   if (l.tsdb) { v.err = true; return renderSheet() }
   Promise.allSettled([cj(`${FBB}/${l.path}/teams/${id}/schedule`), cj(`${FBB}/${l.path}/teams/${id}/roster`), fbStandings(v.lg)]).then(([s, r]) => {
@@ -554,7 +554,7 @@ function fbRankIn(v, key, val){
 
 function openFbPlayer(id, lgKey){
   if (!id) return;
-  pushView({ type: 'fbplayer', id: String(id), lg: lgKey || 'nfl', tab: 'stats' });
+  if (viewBlocked({ type: 'fbplayer' })) return; pushView({ type: 'fbplayer', id: String(id), lg: lgKey || 'nfl', tab: 'stats' });
   const v = S.stack[S.stack.length - 1], l = FBL[v.lg] || FBL.nfl;
   Promise.allSettled([cj(`${FBW}/${l.path}/athletes/${id}`), cj(`${FBW}/${l.path}/athletes/${id}/overview`), cj(`${FBW}/${l.path}/athletes/${id}/stats`)]).then(([b, o, c]) => {
     v.bio = val(b)?.athlete; v.ov = val(o); v.car = val(c); if (!v.bio) v.err = true;
@@ -587,15 +587,22 @@ function fbPeerLabel(v){ const g = FBP_GROUPS[v.gk]; return g ? (FBL[v.lg]?.coll
 function fbPlayerHero(v, back){
   const a = v.bio, t = a?.team; const col = hex(t?.color) && lum(hex(t.color)) > .03 ? hex(t.color) : '#3D6FD9'; v.color = col;
   const ss = v.ss?.[v.season], keys = FBP_KEY[v.gk]?.tiles || [];
-  let tiles = '';
+  let stats = [], caption = '';
   if (ss?.raw && keys.some(k => ss.raw[k])) {
-    tiles = `<div class="tiles">${keys.map(k => { const x = ss.raw[k]; if (!x) return ''; const r = fbRankIn(v, k, fbStatVal(x));
-      return `<div class="tile"><b class="num">${esc(x.displayValue)}</b><span>${esc(x.shortDisplayName || x.displayName)}</span>${r ? `<em class="fbt-rk">${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}</em>` : ''}</div>` }).join('')}</div>
-      <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(v.season)} regular season${ss.gp ? ` · ${ss.gp} game${ss.gp === 1 ? '' : 's'}` : ''}${ss.peers ? ` · ranked among ${esc(fbPeerLabel(v))}` : ''}</p>`;
-  } else if (a?.statsSummary?.statistics?.length) tiles = `<div class="tiles">${a.statsSummary.statistics.slice(0, 4).map(s => `<div class="tile"><b class="num">${esc(s.displayValue)}</b><span>${esc(s.shortDisplayName || s.displayName)}</span>${s.rankDisplayValue ? `<em class="fbt-rk">${esc(s.rankDisplayValue)}</em>` : ''}</div>`).join('')}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(a.statsSummary.displayName || '')}</p>`;
-  return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(a ? fbShot(a, v.lg) : SIL)}" alt="" onerror="this.onerror=null;this.src=SIL"><div><h3>${esc(a?.displayName || 'Loading…')}</h3>
-    ${a ? `<p>${a.displayJersey ? `<span class="num">${esc(a.displayJersey)}</span>` : ''}<span>${esc(a.position?.displayName || '')}</span>${t ? `<span><img src="${esc(t.logos?.[0]?.href || '')}" alt=""> <button class="linkbtn" data-fbteam="${esc(t.id)}" data-fbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : ''}</p>
-      ${a.injuries?.length ? `<p><span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}</span></p>` : ''}` : ''}</div></div>${tiles}</div>`;
+    stats = keys.map(k => { const x = ss.raw[k]; if (!x) return null; const r = fbRankIn(v, k, fbStatVal(x));
+      return { label: x.shortDisplayName || x.displayName, value: x.displayValue, rank: r ? `${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}` : '' } });
+    caption = `${esc(v.season)} regular season${ss.gp ? ` · ${ss.gp} game${ss.gp === 1 ? '' : 's'}` : ''}${ss.peers ? ` · ranked among ${esc(fbPeerLabel(v))}` : ''}`;
+  } else if (a?.statsSummary?.statistics?.length) {
+    stats = a.statsSummary.statistics.slice(0, 4).map(x => ({ label: x.shortDisplayName || x.displayName, value: x.displayValue, rank: x.rankDisplayValue || '' }));
+    caption = esc(a.statsSummary.displayName || '');
+  }
+  const sport = /college/.test(FBL[v.lg]?.path || v.lg) ? 'cfb' : 'nfl';
+  return flProfile.hero({ back, sport, heatSport: sport === 'cfb' ? '' : 'nfl', id: v.id, name: a?.displayName, color: col,
+    face: `<img class="face espn-shot" src="${esc(a ? fbShot(a, v.lg) : SIL)}" alt="" onerror="this.onerror=null;this.src=SIL">`,
+    team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-fbteam="${esc(t.id)}" data-fbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
+    number: a?.displayJersey, position: a?.position?.displayName,
+    chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace, a.college?.name] : [],
+    status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}</span>` : '', stats, caption });
 }
 function fbSeasonPicker(v){
   const ys = v.seasons?.length ? v.seasons : [v.season]; if (ys.length < 2) return '';

@@ -1019,7 +1019,7 @@ def research(m, d, M, stage, prev):
                 break
             messages.append({"role": "assistant", "content": msg.content})
     except anthropic.AuthenticationError:
-        CONFIG["keyError"] = "Anthropic rejected the saved API key. Save a new key to turn research back on."
+        CONFIG["keyError"] = "Anthropic rejected the saved API key. Save a new key to turn the news check back on."
         _save_config()
         return {"error": CONFIG["keyError"]}
     except anthropic.PermissionDeniedError:
@@ -1184,6 +1184,38 @@ def view(key):
         out["running"] = _state["running"] is not None and _state["running"][0] == key
         out["queued"] = any(j[0] == key for j in _jobs)
     return out
+
+
+def upcoming(limit=80):
+    """Read-only: every tracked match that has not long finished, with its latest forecast. For the Predictions page."""
+    now = time.time()
+    with _lock:
+        items = [(k, dict(m), dict(FORECASTS.get(k) or {})) for k, m in TRACKED.items()]
+    out = []
+    for key, m, f in items:
+        ko = m.get("ko") or 0
+        if ko < now - 5 * 3600:
+            continue
+        snaps = [s for s in f.get("snaps") or [] if s.get("pick") and isinstance(s.get("final"), dict)]
+        if not snaps:
+            continue
+        s = snaps[-1]
+        mk = s.get("market") if isinstance(s.get("market"), dict) else {}
+        market = None
+        if all(isinstance(mk.get(k), (int, float)) for k in ("home", "away")):
+            market = {k: round(mk[k], 3) for k in ("home", "draw", "away") if isinstance(mk.get(k), (int, float))}
+        elif isinstance(mk.get("pH"), (int, float)):
+            market = {"home": round(mk["pH"], 3), "away": round(1 - mk["pH"], 3)}
+        num_ = lambda v: round(v, 2) if isinstance(v, (int, float)) else None
+        xg = s.get("xg")
+        out.append({"key": key, "sport": m["sport"], "lg": m.get("lg"), "id": m["id"], "src": m.get("src") or "espn", "fmId": m.get("fmId"), "ko": ko,
+                    "home": s.get("home") or m.get("home"), "away": s.get("away") or m.get("away"), "pick": s["pick"], "top": round(s.get("top") or 0, 3),
+                    "conf": s.get("conf"), "stage": s.get("stage"), "at": s.get("at"), "probs": {k: round(v, 3) for k, v in s["final"].items() if isinstance(v, (int, float))},
+                    "market": market, "score": s.get("score") if isinstance(s.get("score"), list) else None,
+                    "xg": [num_(x) for x in xg][:2] if isinstance(xg, (list, tuple)) else None, "o25": num_(s.get("o25")), "btts": num_(s.get("btts")),
+                    "margin": num_(s.get("margin")), "total": num_(s.get("total")), "ai": bool(s.get("ai") and not (s.get("ai") or {}).get("error"))})
+    out.sort(key=lambda e: e["ko"])
+    return out[:limit]
 
 
 def settings_view():

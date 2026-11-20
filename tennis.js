@@ -430,7 +430,7 @@ function tnPredPane(v){
 function openTnPlayer(id, slug, name){
   if (!id && !name) return;
   if (!slug) return tnFindPlayer(name, null, id);
-  pushView({ type: 'tnplayer', id: String(id), slug, tab: 'overview', mfilter: 'S' });
+  if (viewBlocked({ type: 'tnplayer' })) return; pushView({ type: 'tnplayer', id: String(id), slug, tab: 'overview', mfilter: 'S' });
   const v = S.stack[S.stack.length - 1]; if (v.p) return;
   getJSON(`/api/tn/player?id=${id}&slug=${encodeURIComponent(slug)}`).then(d => { v.p = d; tnPlayerEspn(v).then(() => S.stack.includes(v) && renderSheet()); S.stack.includes(v) && renderSheet() })
     .catch(() => { v.err = true; S.stack.includes(v) && renderSheet() });
@@ -458,10 +458,13 @@ async function tnPlayerEspn(v){
 }
 function tnPlayerHero(v, back){
   const p = v.p, es = v.espn, b = v.espnBio, fav = S.fav.some(f => f.id === 'tn-' + v.id);
-  return `<div class="hero solo tn-phero" style="--tc:var(--accent)">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(es?.photo || p?.photo || SIL)}" data-alt="${esc(es?.photo && p?.photo ? p.photo : '')}" alt="" ${tnFaceErr}><div><h3>${esc(p?.name || 'Loading…')}</h3>
-    ${p ? `<p>${p.rank ? `<span><b>${esc(p.tour || '')} No. ${p.rank}</b></span>` : ''}${es?.pts ? `<span>${(+es.pts).toLocaleString()} pts</span>` : ''}${p.country ? `<span>${es?.flag ? `<img class="tn-flag" src="${esc(es.flag)}" alt="">` : ''}${esc(p.country)}</span>` : ''}${p.injury ? `<span class="tn-inj">${esc(p.injury)}</span>` : ''}</p>
-      <p class="bb-bio">${[p.born ? tnAge(p.born) + ' yrs' : '', p.born ? 'Born ' + new Date(p.born * 1000).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '', b?.displayHeight, b?.displayWeight, b?.hand?.displayValue ? b.hand.displayValue + '-handed' : '', b?.displayExperience].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>
-      <p><button class="btn ghost tn-favbtn" data-tnact="fav">${fav ? '★ Following' : '☆ Follow'}</button></p>` : ''}</div></div></div>`;
+  return flProfile.hero({ back, sport: 'tennis', id: v.id, name: p?.name, color: 'var(--accent)', cls: 'tn-phero',
+    face: `<img class="face espn-shot" src="${esc(es?.photo || p?.photo || SIL)}" data-alt="${esc(es?.photo && p?.photo ? p.photo : '')}" alt="" ${tnFaceErr}>`,
+    team: p?.country ? `<span class="pfh-team">${es?.flag ? `<img class="tn-flag" src="${esc(es.flag)}" alt="">` : ''}<span>${esc(p.country)}</span></span>` : '',
+    status: p?.injury ? `<span class="stat-badge injured">${esc(p.injury)}</span>` : '',
+    chips: p ? [p.born ? 'Age ' + tnAge(p.born) : '', p.born ? 'Born ' + new Date(p.born * 1000).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '', b?.displayHeight, b?.displayWeight, b?.hand?.displayValue ? b.hand.displayValue + '-handed' : '', b?.displayExperience] : [],
+    stats: p ? [p.rank ? { label: `${p.tour || 'Tour'} ranking`, value: 'No. ' + p.rank } : null, es?.pts ? { label: 'Ranking points', value: (+es.pts).toLocaleString() } : null] : [],
+    extra: p ? `<div class="tact"><button class="btn ghost tn-favbtn" data-tnact="fav">${fav ? '★ Following' : '☆ Follow'}</button></div>` : '' });
 }
 const tnPc = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '–';
 const tnWL = x => x ? `${x[0]}–${x[1]}` : '–';
@@ -541,7 +544,7 @@ function tnLogRow(m, pid){
 function tnOpenLogMatch(v, id){
   const m = [...(v.p?.matches || []), ...(v.p?.upcoming || [])].find(x => x.id === id); if (!m) return;
   if (!S.tn.matches.has(m.id)) { S.tn.matches.set(m.id, { ...m, date: new Date(m.ts * 1000) }); if (!S.tn.tours[m.tn]) S.tn.tours[m.tn] = { id: m.tn, name: m.tnName, level: m.level, disc: m.disc, surface: m.surface, indoor: m.indoor, tour: m.levelName, path: m.tnPath, qual: m.qual } }
-  const e = S.tn.matches.get(m.id); pushView({ type: 'tngame', id: e.id, e, tab: e.state === 'pre' ? 'pred' : 'summary' }); tnLoadGame(S.stack[S.stack.length - 1]);
+  const e = S.tn.matches.get(m.id); if (viewBlocked({ type: 'tngame' })) return; pushView({ type: 'tngame', id: e.id, e, tab: e.state === 'pre' ? 'pred' : 'summary' }); tnLoadGame(S.stack[S.stack.length - 1]);
 }
 
 /* ---------- tournament sheet ---------- */

@@ -58,7 +58,7 @@ async function fcTick(){
     for (const [k, f] of fresh) {
       const s = f.snaps[f.snaps.length - 1], e = all.find(x => fcKeyOf(x) === k); if (!e) continue;
       const t = document.createElement('div'); t.className = 'toast';
-      t.innerHTML = `<b>${esc(FC_LABEL[s.stage] || 'Update')}</b><span>${esc(e.away.name)} ${isFbEv(e) ? '@' : 'v'} ${esc(e.home.name)}<br><span style="opacity:.75">${esc(fcPickLabel(s))} · ${pct(s.top)}%${s.ai && !s.ai.error ? ' · with Claude research' : ''}</span></span>`;
+      t.innerHTML = `<b>${esc(FC_LABEL[s.stage] || 'Update')}</b><span>${esc(e.away.name)} ${isFbEv(e) ? '@' : 'v'} ${esc(e.home.name)}<br><span style="opacity:.75">${esc(fcPickLabel(s))} · ${pct(s.top)}%${s.ai && !s.ai.error ? ' · with Claude\'s news check' : ''}</span></span>`;
       t.onclick = () => { if (isFbEv(e)) { openFbGame(e.id, e.lg); const v = S.stack[S.stack.length - 1]; if (v) { v.tab = 'pred'; renderSheet() } } else { S.tab = 'insight'; select(e.id) } };
       $('toasts').appendChild(t); setTimeout(() => t.remove(), 12000);
       $('announce').textContent = `Forecast updated for ${e.home.name} versus ${e.away.name}: ${fcPickLabel(s)}, ${pct(s.top)} percent.`;
@@ -80,7 +80,7 @@ function fcApplyFootball(e, P){
   const L = fcLatest(e); if (!L || !L.final) return P;
   return { ...P, pH: L.final.home, pick: L.pick, top: L.top, conf: L.conf, score: L.score, effMargin: L.margin, total: L.total, fromServer: L };
 }
-const fcTag = P => P.fromServer ? ` <small class="fc-tag">${esc(FC_LABEL[P.fromServer.stage] || '')} update${P.fromServer.ai && !P.fromServer.ai.error ? ' · Claude research' : ''}</small>` : '';
+const fcTag = P => P.fromServer ? ` <small class="fc-tag">${esc(FC_LABEL[P.fromServer.stage] || '')} update${P.fromServer.ai && !P.fromServer.ai.error ? ' · with Claude\'s news check' : ''}</small>` : '';
 
 /* ---------- the timeline ----------
    Hidden from visitors (Erez, 2026-11-18). Tracking and fetching still run here, so the latest scheduled forecast
@@ -120,7 +120,7 @@ function fcBlock(e){
           ${['lineups', 'injuries', 'coaches'].filter(k => ai[k]).map(k => `<p><strong>${k[0].toUpperCase() + k.slice(1)}:</strong> ${esc(ai[k])}</p>`).join('')}
           ${ai.props?.length ? `<h6>Player props Claude likes</h6><ul class="why">${ai.props.filter(x => x?.player).map(x => `<li><strong>${esc(x.player)} · ${esc(x.pick || '')}</strong> (${esc(x.market || '')}): ${esc(x.why || '')}</li>`).join('')}</ul>` : ''}
           <p class="pf-hint">Claude's own call: ${Object.entries(ai.probabilities || {}).map(([k, v]) => `${esc(k === 'draw' ? 'draw' : s[k])} ${pct(v)}%`).join(', ')}${ai.score ? `, ${esc(ai.score)}` : ''} (${esc(ai.confidence || '')} confidence). The headline blends this 50/50 with the numbers below.</p>` : ''}
-        ${s.ai?.error ? `<p class="pf-hint">Research didn't run: ${esc(s.ai.error)}</p>` : ''}
+        ${s.ai?.error ? `<p class="pf-hint">The news check didn't run: ${esc(s.ai.error)}</p>` : ''}
         ${s.value?.length ? `<h6>Best prices vs the market at this time</h6><ul class="why">${s.value.map(v => `<li>${esc(v.type === 'ml' ? (v.label === 'draw' ? 'Draw' : s[v.label] + ' to win') : v.label)}: ${v.price.am > 0 ? '+' : ''}${v.price.am} at ${esc(BOOK_NAME[v.book] || v.book)} (+${(v.ev * 100).toFixed(1)}% vs the other books)</li>`).join('')}</ul>` : ''}
         <h6>The numbers</h6><ul class="why">${(s.reasons || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>
         <p class="pf-hint">${fb ? `Numbers: ${s.market ? 'the sportsbook line (55%), ' : ''}${s.fpi ? 'ESPN’s matchup predictor (25%), ' : ''}and a points model with home field, recent form and position-weighted injuries, including the quarterback.` : `Numbers: a goals model built from attack and defense split by home and away, recent form, lineup strength by market value, injuries and head-to-head${s.market ? ', blended 60/40 with the sportsbook price' : ''}.`}</p>
@@ -137,15 +137,15 @@ function fcSettingsRow(e, f){
   const run = S.me && e.state === 'pre' ? `<button class="btn ghost sm" data-fc="run" data-to="${esc(fcKeyOf(e))}"${f.running || f.queued ? ' disabled' : ''}>Update now</button>` : '';
   const scope = s.scope === 'all' ? 'every tracked match' : 'followed teams and saved picks';
   let h;
-  if (s.hasKey && s.enabled && !s.keyError) h = `<p class="pf-hint"><strong>Claude research is on</strong> for ${scope} · ${s.used} of ${s.cap} today${f.research ? '' : '. This match gets the numbers only; follow a team or save a pick to include it.'}</p>`;
+  if (s.hasKey && s.enabled && !s.keyError) h = `<p class="pf-hint"><strong>Claude's news check is on</strong> for ${scope} · ${s.used} of ${s.cap} today${f.research ? '' : '. This match gets the numbers only; follow a team or save a pick to include it.'}</p>`;
   else if (s.keyError) h = `<p class="pf-hint err">${esc(s.keyError)}</p>`;
-  else if (s.hasKey) h = `<p class="pf-hint">Claude research is off for scheduled forecasts.</p>`;
-  else h = `<p class="pf-hint">Add Claude research to these updates: at each one, Claude reads the latest team news, lineups, injuries and coaching notes on the web and gives its own forecast, blended 50/50 with the numbers. It uses your Anthropic API key, billed per update; a daily cap keeps the cost in check.</p>`;
-  const ctl = !S.me ? `<p class="pf-hint">Log in from the profile icon to change research settings${s.hasKey ? '' : ' or add your key'}.</p>`
-    : `<details class="fc-set"><summary>Research settings</summary>
+  else if (s.hasKey) h = `<p class="pf-hint">Claude's news check is off for scheduled forecasts.</p>`;
+  else h = `<p class="pf-hint">Add Claude's news check to these updates: at each one, Claude reads the latest team news, lineups, injuries and coaching notes on the web and gives its own forecast, blended 50/50 with the numbers. It uses your Anthropic API key, billed per update; a daily cap keeps the cost in check.</p>`;
+  const ctl = !S.me ? `<p class="pf-hint">Log in from the profile icon to change the news check settings${s.hasKey ? '' : ' or add your key'}.</p>`
+    : `<details class="fc-set"><summary>News check settings</summary>
       ${!s.hasKey || s.keyError ? (store.get('fl.key', '') ? `<p><button class="btn sm" data-fc="usekey">Use the key saved in this browser</button></p>` : '')
         + `<form id="fcKeyForm" class="keyrow"><input id="fcKey" type="password" placeholder="Anthropic API key (sk-ant-…)" autocomplete="off" aria-label="Anthropic API key"><button class="btn" type="submit">Save on server</button></form>` : ''}
-      ${s.hasKey ? `<div class="fc-ctl"><label>Research <select data-fc="enabled"><option value="1"${s.enabled ? ' selected' : ''}>On</option><option value="0"${!s.enabled ? ' selected' : ''}>Off</option></select></label>
+      ${s.hasKey ? `<div class="fc-ctl"><label>News check <select data-fc="enabled"><option value="1"${s.enabled ? ' selected' : ''}>On</option><option value="0"${!s.enabled ? ' selected' : ''}>Off</option></select></label>
         <label>For <select data-fc="scope"><option value="watched"${s.scope !== 'all' ? ' selected' : ''}>Followed teams &amp; picks</option><option value="all"${s.scope === 'all' ? ' selected' : ''}>Every tracked match</option></select></label>
         <label>Daily limit <select data-fc="cap">${[5, 10, 20, 40, 80].map(n => `<option${n === s.cap ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
         <button class="btn ghost sm" data-fc="forget">Remove key</button></div>` : ''}
@@ -153,7 +153,7 @@ function fcSettingsRow(e, f){
   return `<div class="fc-foot">${h}${run}${ctl}</div>`;
 }
 async function fcSave(body){
-  try { S.fcSettings = await api('/api/forecast/settings', body); toast('Research settings saved') }
+  try { S.fcSettings = await api('/api/forecast/settings', body); toast('News check settings saved') }
   catch (err) { toast(err.message) }
   const e = fcOpenEvent(); if (e) fcRerender(fcKeyOf(e));
 }

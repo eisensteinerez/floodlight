@@ -138,29 +138,33 @@ def img(u):
     return 200, ct, data
 
 
-FONTS = "https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400..800&family=Sofia+Sans+Condensed:wght@500..800&family=Sofia+Sans+Extra+Condensed:wght@400..900&display=swap"
-# the display and reading faces, declared the same way theme.css declares them
-FONT_FACES = """@font-face{font-family:"FL Wide";font-style:normal;font-weight:100 900;font-stretch:100% 125%;font-display:swap;size-adjust:70%;src:url(https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdnoLmvDIaI.woff2) format("woff2")}
-@font-face{font-family:"FL Board";font-style:normal;font-weight:100 900;font-display:swap;src:url(https://fonts.gstatic.com/s/doto/v3/t5t6IRMbNJ6TQG7Il_EKPqP9zTnvqouBWhoxrW5O.woff2) format("woff2")}
-"""
+# each theme's faces, the same families index.html loads for it
+THEME_FONTS = {
+    "night-match": "Syne:wght@600..800&family=Manrope:wght@400..800",
+    "team-colors": "Outfit:wght@400..900",
+    "members-club": "Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400..800",
+    "aurora-glass": "Sora:wght@200..800",
+    "chrono": "Jost:wght@200..700",
+}
 _fonts = {}
 
 
-def fonts_css():
-    """Google's font sheet with the font files pointed at this server, so the Lab's type also loads inside Discord."""
-    if not _fonts.get("css"):
+def fonts_css(theme="night-match"):
+    """Google's font sheet for one theme with the font files pointed at this server, so the Lab's type also loads inside Discord."""
+    theme = theme if theme in THEME_FONTS else "night-match"
+    if not _fonts.get(theme):
         try:
-            req = urllib.request.Request(FONTS, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"})
+            url = f"https://fonts.googleapis.com/css2?family={THEME_FONTS[theme]}&display=swap"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"})
             css = urllib.request.urlopen(req, timeout=10).read().decode()
             # the Latin files are enough; the other scripts would only add requests
             blocks = re.findall(r"/\* ([a-z-]+) \*/\s*(@font-face\s*{[^}]*})", css)
             keep = [b for name, b in blocks if name == "latin"] or [b for _, b in blocks]
             css = "\n".join(keep) if keep else css
-            css = FONT_FACES + css
-            _fonts["css"] = re.sub(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", lambda m: f"url({img_url(m.group(1))})", css)
+            _fonts[theme] = re.sub(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", lambda m: f"url({img_url(m.group(1))})", css)
         except Exception:
-            return re.sub(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", lambda m: f"url({img_url(m.group(1))})", FONT_FACES)
-    return _fonts["css"]
+            return ""
+    return _fonts[theme]
 
 
 def _extras(sport, p, name):
@@ -262,10 +266,16 @@ def player(sport, name, stat=""):
 def board(sport, count=24):
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
-    b = bot.memo(("labboard", sport), 900, lambda: bot.props_board(sport, None, count))
+    b = bot.memo(("labboard", sport), 900, lambda: bot.props_board(sport, None, count, None if sport == "soccer" else _deeper))
     rows = [{"player": r["player"], "team": r.get("team") or "", "opp": r.get("opp") or "", "k": r["k"], "label": r["label"], "line": r["line"],
              "side": r["side"], "l5": r["l5"]["pct"], "l10": r["l10"]["pct"], "l20": r["l20"]["pct"], "avg": _r(r["avg"]),
-             "books": sorted({x["book"] for x in r["offers"]})} for r in b["rows"]]
+             "books": sorted({x["book"] for x in r["offers"]}),
+             # what the site's own pages need to show the same heat reading the Lab shows for this player and line:
+             # the games behind the hit rates (value, home or away, minutes), newest first, and every posted price
+             "games": [[_r(v), None if h is None else int(bool(h)), _r(m, 1), o, oa] for v, h, m, o, oa in r.get("recent") or []],
+             "offers": [{"book": x.get("book"), "line": x.get("line"), "kind": x.get("kind") or "standard", "pOver": x.get("pOver")} for x in r["offers"]],
+             "start": next((x.get("start") for x in r["offers"] if x.get("start")), None), "photo": img_url(r.get("photo")),
+             "n": r["l10"].get("n"), "hit": r["l10"].get("hit")} for r in b["rows"]]
     return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"]}
 
 
@@ -517,7 +527,7 @@ def handle(path, q, signed_in=False):
         st, ct, data = img(q.get("u"))
         return st, (ct, data)
     if path == "fonts.css":
-        return 200, ("text/css; charset=utf-8", fonts_css().encode())
+        return 200, ("text/css; charset=utf-8", fonts_css(q.get("theme") or "").encode())
     if path == "session":
         return session(q, signed_in)
     if not signed_in and not check_pass(q.get("_pass")):

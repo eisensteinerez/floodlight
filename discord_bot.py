@@ -679,7 +679,7 @@ def cmd_research(o):
 
 
 # ---------- /props: today's lines ranked by hit rate ----------
-def props_board(sport, stat=None, count=10):
+def props_board(sport, stat=None, count=10, deepen=None):
     key = stat_key(sport, stat) if stat else None
     if stat and not key:
         raise LookupError(f"I don't know the stat \"{stat}\" for {SPORTS[sport]}.")
@@ -710,6 +710,8 @@ def props_board(sport, stat=None, count=10):
     def analyse(n):
         try:
             p = load_player(sport, players[n][0]["player"])
+            if deepen and len(p["games"]) < 60:   # the Lab reads up to 60 games back; fetch the older seasons it would
+                p = deepen(sport, p)
         except Exception:
             return
         for r in players[n]:
@@ -721,7 +723,8 @@ def props_board(sport, stat=None, count=10):
             u10 = rate(gs[:10], sd["get"], r["line"], "under")
             side, best = ("over", o10) if (o10["pct"] or 0) >= (u10["pct"] or 0) else ("under", u10)
             r.update(side=side, l10=best, l5=o5 if side == "over" else rate(gs[:5], sd["get"], r["line"], "under"),
-                     l20=o20 if side == "over" else rate(gs[:20], sd["get"], r["line"], "under"), avg=o10["avg"], label=sd["l"])
+                     l20=o20 if side == "over" else rate(gs[:20], sd["get"], r["line"], "under"), avg=o10["avg"], label=sd["l"],
+                     recent=[(sd["get"](g), g.get("home"), g.get("min"), g.get("opp") or "", g.get("oppAbbr") or "") for g in gs[:60]], photo=p.get("photo"))
 
     with cf.ThreadPoolExecutor(4) as ex:
         list(ex.map(analyse, order))

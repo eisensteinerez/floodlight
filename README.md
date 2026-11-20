@@ -10,8 +10,11 @@ Live scores, odds and predictions for football, basketball, baseball, hockey and
 
 `render.yaml` sets up one free Render web service that serves both the site and its `/api/` backend.
 
-The hosted site is members only. People ask for an account on the login screen, and the admin approves them
-from the **Members** button, choosing "Games only" or "Games + research" (prop research and AI forecasts).
+The hosted site is members only. Every member gets every service (Live scores, The Lab, Predictions, Transfer
+window, Profiles and awards, Alerts) unless an owner or admin switches one off for them on the **Members** page.
+Only the switched-off services are stored, so a service added to `SERVICES` in `server.py` is on for everyone.
+Owners and admins invite people with a link, pause or remove them, and see every change in the activity log.
+The account named in `FLOODLIGHT_ADMIN` is always an owner.
 
 Environment variables (set in the Render dashboard):
 

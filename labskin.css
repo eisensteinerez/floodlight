@@ -1,0 +1,286 @@
+/* Floodlight · the Lab's skin. lab.html keeps its layout and behaviour; this sheet dresses it in the active theme.
+   Tokens only: every colour, face, corner and shadow comes from tokens.css. Loaded after lab.html's own styles. */
+:root[data-theme]{
+  --win:var(--good); --loss:var(--bad); --draw:var(--muted); --accent-2:var(--accent);
+  --r:var(--radius-tile); --rc:14px; --hair:transparent; --dots:transparent; --beam:transparent; --beam-2:transparent; --slant:none;
+  --glass:var(--bg); --shadow-lg:var(--shadow-pop); --pill:var(--pill-bg);
+  font-variant-numeric:tabular-nums;
+}
+/* colour-blind friendly: blue and orange from the heat ramp, and the stripes lab.html already draws on misses */
+:root[data-theme][data-cb]{--win:var(--heat-ice);--loss:var(--heat-warm)}
+:root[data-theme] *{text-transform:none!important;letter-spacing:0!important}
+:root[data-theme] body{font:15px/1.5 var(--font-body);color:var(--text);background:none}
+:root[data-theme] body::before{content:"";position:fixed;inset:0;z-index:-2;background:var(--page);pointer-events:none}
+:root[data-theme] body::after,:root[data-theme] .ghost,:root[data-theme] .hero::before,:root[data-theme] .hero::after,:root[data-theme] .card::after,:root[data-theme] .tile::after,:root[data-theme] .top::after,:root[data-theme] .sec::after,:root[data-theme] .face::before,:root[data-theme] .face::after,:root[data-theme] .read::before{display:none}
+:root[data-theme] body.embed{min-height:0}:root[data-theme] body.embed::before{display:none}
+:root[data-theme] html,:root[data-theme]{background:var(--bg)}
+:root[data-theme]:has(body.embed){background:transparent}
+:root[data-theme] :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:10px}
+:root[data-theme] .wrap{max-width:1320px;padding:0 32px 70px}
+:root[data-theme] body.embed .wrap{max-width:none;padding:0 0 8px}
+:root[data-theme] .lbl,:root[data-theme] .filters label{font:500 13px/1.2 var(--font-body);color:var(--muted)}
+:root[data-theme] h1,:root[data-theme] h2,:root[data-theme] .chh>b,:root[data-theme] .sec b{font-family:var(--font-display);font-weight:var(--display-weight);letter-spacing:var(--display-track)!important}
+
+/* top row: tabs, sports, search */
+:root[data-theme] .top{position:static;margin:0;padding:20px 0 4px;gap:12px;background:none;border:0}
+:root[data-theme] body.embed .top{padding-top:0}
+:root[data-theme] .brand{font:var(--display-weight) 24px/1 var(--font-display);gap:10px}
+:root[data-theme] .brand b{color:var(--accent)}
+:root[data-theme] .seg{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-pill);padding:4px;gap:2px}
+:root[data-theme] .seg button{min-height:38px;padding:0 15px;border-radius:var(--radius-pill);font:600 14px/1 var(--font-body);color:var(--text-2)}
+:root[data-theme] .seg.sm button{min-height:34px;padding:0 13px;font-size:13px}
+:root[data-theme] .seg button:hover{color:var(--text)}
+:root[data-theme] .seg button.on{background:var(--pill-bg);color:var(--pill-fg);font-weight:700}
+:root[data-theme] #sports button.fight{padding-left:15px}:root[data-theme] #sports button.fight::before{display:none}
+:root[data-theme] .search .box{min-height:46px;border-radius:var(--radius-pill);background:var(--surface-2);border:1px solid var(--border);padding:0 18px}
+:root[data-theme] .search .box:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+:root[data-theme] .search input{height:44px;font-size:15px}
+:root[data-theme] .go{min-height:46px;padding:0 22px;border-radius:var(--radius-pill);background:var(--cta-bg);color:var(--cta-fg);font:700 15px/1 var(--font-body)}
+:root[data-theme] .ico{width:46px;height:46px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+:root[data-theme] .recent{margin-top:10px;gap:8px}
+:root[data-theme] .recent button,:root[data-theme] .qf,:root[data-theme] .ex,:root[data-theme] .lchip{min-height:40px;padding:0 15px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font:600 14px/1 var(--font-body)}
+:root[data-theme] .recent button{min-height:36px;font-size:13px}
+:root[data-theme] .recent button:hover,:root[data-theme] .qf:hover,:root[data-theme] .ex:hover,:root[data-theme] .lchip:hover{color:var(--text);border-color:var(--border-2)}
+:root[data-theme] .qf.on{background:var(--pill-bg);border-color:var(--pill-bg);color:var(--pill-fg);font-weight:700}
+:root[data-theme] .qf .qv{background:none;padding:0;margin-left:7px;color:var(--accent);font:700 13px/1 var(--font-body)}
+:root[data-theme] .qf.on .qv{color:inherit;opacity:.8}
+:root[data-theme] .ex.primary{background:var(--cta-bg);color:var(--cta-fg);border-color:transparent}
+:root[data-theme] .lchip{display:inline-flex;align-items:center;gap:5px}
+:root[data-theme] .lchip b{font:700 12px/1 var(--font-body);color:var(--muted);margin:0}
+:root[data-theme] .lchip.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:var(--text)}
+:root[data-theme] .err{border-radius:var(--radius-tile);border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);background:color-mix(in srgb,var(--bad) 9%,transparent)}
+
+/* workspace: the player card and its rings on the left, the stat, line and chart on the right */
+:root[data-theme] .ws{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:24px;align-items:start;margin-top:20px}
+:root[data-theme] .ws-l,:root[data-theme] .ws-r{display:grid;gap:16px;min-width:0}
+:root[data-theme] .hero{display:grid;gap:18px;margin:0;padding:26px;border-radius:var(--radius-card);background:var(--feature-bg,var(--panel));border:1px solid var(--border);box-shadow:var(--shadow-card);color:var(--feature-fg,var(--text));overflow:hidden}
+:root[data-theme] .hero-bg img{left:-140px;top:0;width:420px;height:420px;transform:none;filter:blur(90px) saturate(2);opacity:var(--blob-o,.28)}
+:root[data-theme] .ph{flex:none;gap:16px;align-items:center}
+:root[data-theme] .face{width:76px;height:76px;padding:0}
+:root[data-theme] .face>span{border:2px solid var(--accent);background:var(--surface-2);color:var(--accent);font:var(--display-weight) 26px/1 var(--font-display)}
+:root[data-theme] .hero.team .face,:root[data-theme] .hero.team .face>span{border-radius:20px}
+:root[data-theme] .ph h1{margin:0;font-size:clamp(26px,2.4vw,36px);line-height:1.05;text-wrap:balance}
+:root[data-theme] .ph p{margin:6px 0 0;font-size:14px;color:var(--feature-muted,var(--muted))}
+:root[data-theme] .ph .next b{color:inherit;font-weight:700}
+:root[data-theme] .form{gap:4px;margin-top:10px}
+:root[data-theme] .form i{width:24px;height:24px;border-radius:50%;font:700 12px/1 var(--font-body);background:var(--surface-2);color:var(--muted);border:1px solid var(--border)}
+:root[data-theme] .form .W{background:var(--pill-bg);border-color:var(--pill-bg);color:var(--pill-fg)}
+:root[data-theme] .form .L{background:none;color:var(--muted)}
+:root[data-theme] .side{display:grid;gap:14px;flex:none}
+:root[data-theme] .meterbox{min-width:0}
+:root[data-theme] .strip{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+:root[data-theme] .strip>div{padding:12px 14px;border-radius:var(--radius-tile);background:var(--surface-2);border:1px solid var(--border);color:var(--text)}
+:root[data-theme] .strip span{font:500 12.5px/1.2 var(--font-body);color:var(--muted)}
+:root[data-theme] .strip b{margin-top:4px;font:var(--display-weight) 28px/1 var(--font-display)}
+:root[data-theme] .strip small{font-size:12.5px;color:var(--muted)}
+:root[data-theme] .strip small.up,:root[data-theme] .up{color:var(--good)}:root[data-theme] .strip small.down,:root[data-theme] .down{color:var(--bad)}
+:root[data-theme] .spark .sb i{border-radius:4px 4px 1px 1px;background:var(--chart-under-flat);border:var(--chart-under-border)}
+:root[data-theme] .spark .sb i.hit{background:var(--chart-over-flat);border:0}
+:root[data-theme] .spark .sb u{border-top:1.5px dashed var(--chart-line)}
+
+/* hit-rate rings */
+:root[data-theme] .tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+:root[data-theme] .tile,:root[data-theme] .tile.hi,:root[data-theme] .tile.lo{min-height:44px;padding:14px 6px 12px;border-radius:var(--radius-tile);background:var(--surface);border:1px solid var(--border);box-shadow:none;color:var(--text)}
+:root[data-theme] .tile:hover{transform:translateY(-2px);border-color:var(--border-2)}
+:root[data-theme] .tile.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+:root[data-theme] .tile>span:first-child{font:600 13px/1.2 var(--font-body);color:var(--text-2)}
+:root[data-theme] .tile small{font:500 12.5px/1.2 var(--font-body);color:var(--muted)}
+:root[data-theme] .ring{width:86px;height:86px}
+:root[data-theme] .ring circle{stroke-width:var(--ring-w);stroke:var(--ring-track,color-mix(in srgb,var(--text) 14%,transparent))}
+:root[data-theme] .ring circle.hit,:root[data-theme] .ring circle.arc,:root[data-theme] .tile.hi .ring circle.arc,:root[data-theme] .tile.lo .ring circle.arc{stroke:color-mix(in oklab,var(--text) var(--ring-darken,0%),var(--heat-c))}
+:root[data-theme] .ring circle.push{stroke:var(--muted)}
+:root[data-theme] .ring circle.trk{stroke-width:var(--ring-track-w);stroke-dasharray:var(--ring-ticks,none)}
+:root[data-theme] .ring b{font:800 20px/1 var(--font-body);color:var(--text)}
+
+/* line controls */
+:root[data-theme] .stats{gap:8px;padding:2px 0 6px;scrollbar-width:none}
+:root[data-theme] .linebar{margin:0;gap:10px 14px}
+:root[data-theme] .lc button{width:44px;height:44px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);color:var(--text)}
+:root[data-theme] .lc button:hover{border-color:var(--accent);color:var(--accent)}
+:root[data-theme] .lc input{width:92px;height:44px;border-radius:var(--radius-pill);background:var(--surface-2);border:1px solid var(--border);font:700 19px/1 var(--font-body);color:var(--text)}
+:root[data-theme] .sum{font-size:14px;color:var(--muted)}:root[data-theme] .sum b{color:var(--text)}
+
+/* cards and section heads */
+:root[data-theme] .card{padding:24px;border-radius:var(--radius-card);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-card);color:var(--text)}
+:root[data-theme] .card:hover{border-color:var(--border);box-shadow:var(--shadow-card)}
+:root[data-theme] .card .card,:root[data-theme] .grid2>.card,:root[data-theme] .grid3>.card{box-shadow:none}
+:root[data-theme] .chh{gap:6px 14px;min-height:30px}
+:root[data-theme] .chh>b{font-size:24px;line-height:1.1}
+:root[data-theme] .chh>span{font-size:13.5px;color:var(--muted)}
+:root[data-theme] .sec{margin:40px 0 16px;padding:0;border:0}
+:root[data-theme] .sec>i{display:none}
+:root[data-theme] .sec b{font-size:clamp(24px,2.4vw,32px);line-height:1.1}
+:root[data-theme] .hint,:root[data-theme] .sub{font-size:13px;color:var(--muted)}
+:root[data-theme] .grid2,:root[data-theme] .grid3{gap:16px;margin-top:16px}
+
+/* the chart */
+:root[data-theme] .chart{margin:0}
+:root[data-theme] .key{font:500 12.5px/1 var(--font-body);color:var(--muted)}
+:root[data-theme] .key i{width:12px;height:12px;border-radius:4px;background:var(--chart-under);border:var(--chart-under-border)}
+:root[data-theme] .key i.ov{background:var(--chart-over);border:0}
+:root[data-theme] .key i.avg{width:18px;height:2px;border-radius:2px;background:var(--chart-avg);border:0}
+:root[data-theme] .bars{height:260px;margin:34px 0 52px;padding:0 84px 0 30px;gap:clamp(3px,1vw,14px)}
+:root[data-theme] .gl{border-top:1px solid var(--border)}
+:root[data-theme] .gl span,:root[data-theme] .bl,:root[data-theme] .bl small,:root[data-theme] .ladx{font-family:var(--font-body);color:var(--muted)}
+:root[data-theme] .b::before{border-radius:12px;background:color-mix(in srgb,var(--text) 6%,transparent)}
+:root[data-theme] .b i{max-width:46px;border-radius:10px 10px 3px 3px;background:var(--chart-under);border:var(--chart-under-border)}
+:root[data-theme] .b.neg i{border-radius:3px 3px 10px 10px}
+:root[data-theme] .b.ov i{background:var(--chart-over);border:0}
+:root[data-theme] .b.eq i{background:var(--muted);border:0}
+:root[data-theme][data-cb] .b.miss i{background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--bg) 35%,transparent) 0 4px,transparent 4px 8px)}
+:root[data-theme] .b em{display:flex;align-items:center;gap:2px;font:700 13px/1 var(--font-body);color:var(--text-2)}
+:root[data-theme] .b.ov em{color:var(--text)}
+:root[data-theme] .bl{gap:3px;font-weight:600;color:var(--text-2)}
+:root[data-theme] .bl b{font-weight:800;color:var(--muted)}:root[data-theme] .bl b.W{color:var(--text)}:root[data-theme] .bl b.L{color:var(--muted)}
+:root[data-theme] .roll{width:calc(100% - 114px)}
+:root[data-theme] .roll path,:root[data-theme] .roll polyline{fill:none;stroke:var(--chart-avg);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+:root[data-theme] .roll.tl polyline.raw{stroke:var(--text-2);stroke-width:1.5}
+:root[data-theme] .roll.tl path{stroke:none}
+:root[data-theme] .chart.trend .roll:not(.tl) path{stroke-dasharray:4 4;opacity:.85}
+:root[data-theme] .ln{border-top:2px dashed var(--chart-line)}
+:root[data-theme] .ln span{right:0;top:-14px;padding:7px 9px 7px 11px;border-radius:var(--radius-pill);background:var(--pill-bg);color:var(--pill-fg);font:700 12px/1 var(--font-body)}
+:root[data-theme] .ln:not(.fixed):hover span,:root[data-theme].dragging .ln span{background:var(--accent-fill);color:var(--on-accent)}
+:root[data-theme] .avgl{border-top:1px dotted var(--muted)}
+:root[data-theme] .avgl span{left:0;color:var(--muted);background:var(--surface);font:600 12px/1 var(--font-body);border-radius:6px}
+:root[data-theme] .b u{box-shadow:0 0 0 2px var(--surface);background:var(--chart-under-flat)}
+:root[data-theme] .b.ov u{background:var(--chart-over-flat)}
+:root[data-theme] .back{gap:8px 12px;margin-top:14px}
+:root[data-theme] .back b{font:800 18px/1 var(--font-body)}
+:root[data-theme] .backt,:root[data-theme] .filters input[type=number],:root[data-theme] .filters select{min-height:40px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:600 14px/1 var(--font-body);padding:0 14px}
+:root[data-theme] .backt{width:72px;padding:0 6px}
+:root[data-theme] .back input[type=range]{accent-color:var(--accent-fill)}
+@media (max-width:640px){:root[data-theme] .bars{height:200px;padding:0 70px 0 22px}:root[data-theme] .roll{left:22px;width:calc(100% - 92px)}}
+
+/* stat profile, the read, ladders and maps */
+:root[data-theme] .prof{margin-top:24px}
+:root[data-theme] .rangep .trk{border-radius:6px;background:color-mix(in srgb,var(--text) 9%,transparent)}
+:root[data-theme] .rangep .mid{border-radius:6px;background:color-mix(in srgb,var(--accent) 40%,transparent)}
+:root[data-theme] .rangep .pt{background:var(--text)}
+:root[data-theme] .rangep .pt b{font:var(--display-weight) 19px/1 var(--font-display);color:var(--text)}
+:root[data-theme] .rangep .pt span{font-family:var(--font-body);color:var(--muted)}
+:root[data-theme] .rangep .pt.ln2{background:none;border-left:2px dashed var(--chart-line)}
+:root[data-theme] .rangep .pt.ln2 b{background:var(--pill-bg);color:var(--pill-fg);font:700 12px/1 var(--font-body);padding:5px 8px;border-radius:var(--radius-pill)}
+:root[data-theme] .rangep .dot{background:var(--chart-under-flat);border:var(--chart-under-border);opacity:.9}:root[data-theme] .rangep .dot.hit{background:var(--chart-over-flat);border:0}
+:root[data-theme] .kpis{gap:10px}
+:root[data-theme] .kpis>div,:root[data-theme] .read-n div,:root[data-theme] .sgrid>div{padding:14px 16px;border-radius:var(--radius-tile);background:var(--surface-2);border:1px solid var(--border)}
+:root[data-theme] .kpis span,:root[data-theme] .sgrid .l{font:500 12.5px/1.25 var(--font-body);color:var(--muted)}
+:root[data-theme] .kpis b,:root[data-theme] .read-n b,:root[data-theme] .sgrid .v,:root[data-theme] .du b,:root[data-theme] .split .p,:root[data-theme] .ladr b{font-family:var(--font-display);font-weight:var(--display-weight)}
+:root[data-theme] .kpis b{font-size:30px}:root[data-theme] .read-n b{font-size:28px}
+:root[data-theme] .kpis small,:root[data-theme] .read-n small,:root[data-theme] .du small,:root[data-theme] .split small{font:500 12.5px/1.3 var(--font-body);color:var(--muted)}
+:root[data-theme] .kpis .bar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--text) 10%,transparent)}:root[data-theme] .kpis .bar i{border-radius:3px;background:var(--accent-fill)}
+:root[data-theme] .read{gap:20px 28px}
+:root[data-theme] .read-v>span{font:500 13px/1.2 var(--font-body);color:var(--muted)}
+:root[data-theme] .read-v strong{font:var(--display-weight) clamp(30px,3.4vw,44px)/1.02 var(--font-display);letter-spacing:var(--display-track)!important;color:var(--text)}
+:root[data-theme] .read.pos strong{color:var(--good)}:root[data-theme] .read.neg strong{color:var(--bad)}
+:root[data-theme] .read-l li{font-size:14.5px;color:var(--text-2)}:root[data-theme] .read-l li b{color:var(--text)}
+:root[data-theme] .read-l i{background:var(--muted)}:root[data-theme] .read-l .up i{background:var(--good)}:root[data-theme] .read-l .down i{background:var(--bad)}
+:root[data-theme] .ladp,:root[data-theme] .distp{border-bottom:1px solid var(--border)}
+:root[data-theme] .ladl{stroke:var(--accent)}
+:root[data-theme] .ladc,:root[data-theme] .ladh{border-left-color:var(--text)}:root[data-theme] .ladh{border-left:1.5px dashed var(--accent)}
+:root[data-theme] .ladc i{background:var(--text);box-shadow:0 0 0 3px var(--surface)}:root[data-theme] .ladh i{background:var(--accent-fill);box-shadow:0 0 0 3px var(--surface)}
+:root[data-theme] .ladm span{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font-body)}
+:root[data-theme] .db>i{border-radius:6px 6px 2px 2px;background:var(--chart-under-flat);border:var(--chart-under-border)}:root[data-theme] .db.hit>i,:root[data-theme] .distp.units .db>i.hit{background:var(--chart-over-flat);border:0}
+:root[data-theme] .distp.units .db>i{border-radius:5px;background:var(--chart-under-flat)}
+:root[data-theme] .distl{border-left:2px dashed var(--chart-line)}
+:root[data-theme] .distl span{background:var(--pill-bg);color:var(--pill-fg);border-radius:var(--radius-pill);font:700 12px/1 var(--font-body);padding:5px 8px}
+:root[data-theme] .mc{border-radius:8px;background:color-mix(in oklab,var(--chart-under-flat) calc(var(--a)*100%),var(--surface-2))}
+:root[data-theme] .mc.hit{background:color-mix(in oklab,var(--chart-over-flat) calc(var(--a)*100%),var(--surface-2))}
+:root[data-theme] .mc em{color:var(--text);font-family:var(--font-body)}
+:root[data-theme] .scale i{background:color-mix(in oklab,var(--chart-under-flat) calc(var(--a)*100%),var(--surface-2))!important}
+:root[data-theme] .scale i.hit{background:color-mix(in oklab,var(--chart-over-flat) calc(var(--a)*100%),var(--surface-2))!important}
+:root[data-theme] .du span,:root[data-theme] .dvs em{font:500 12.5px/1.2 var(--font-body);color:var(--muted)}
+:root[data-theme] .du b{font-size:44px}:root[data-theme] .du.hi b{color:var(--good)}:root[data-theme] .du.lo b{color:var(--bad)}
+:root[data-theme] .dvs i{font:700 13px/1 var(--font-body);color:var(--muted)}
+:root[data-theme] .dbar{height:8px;border-radius:4px}:root[data-theme] .dbar u{background:var(--muted)}:root[data-theme] .dbar u.hi{background:var(--good)}:root[data-theme] .dbar u.lo{background:var(--bad)}
+:root[data-theme] .split{border-bottom:1px solid var(--border)}
+:root[data-theme] .split .track{height:8px;border-radius:4px;background:color-mix(in srgb,var(--text) 9%,transparent)}
+:root[data-theme] .split .s{font-family:var(--font-body);color:var(--muted)}
+
+/* tables */
+:root[data-theme] .tbl{font-size:14px}
+:root[data-theme] .tbl th{background:var(--pop);font:600 12.5px/1.2 var(--font-body);color:var(--muted);border-bottom:1px solid var(--border-2);padding:12px 10px}
+:root[data-theme] .tbl td{padding:11px 10px;border-bottom:1px solid var(--border)}
+:root[data-theme] .tbl tbody tr:hover td{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+:root[data-theme] .tbl tr.sel td,:root[data-theme] .tbl th.fc,:root[data-theme] .tbl td.fc{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+:root[data-theme] .scroll{border-radius:var(--radius-tile)}
+:root[data-theme] .heat{min-width:52px;padding:6px 8px;border-radius:var(--radius-pill);font:700 13px/1 var(--font-body);color:var(--text)}
+:root[data-theme] .cell-h{color:var(--good)}:root[data-theme] .cell-m{color:var(--bad)}
+:root[data-theme] .sidec{padding:6px 10px;border-radius:var(--radius-pill);font:700 12.5px/1 var(--font-body)}
+:root[data-theme] .sidec.over{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}:root[data-theme] .sidec.under{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+:root[data-theme] .brow{padding:12px 8px;border-bottom:1px solid var(--border);border-radius:14px}
+:root[data-theme] .brow:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+:root[data-theme] .brow .rk{font:var(--display-weight) 26px/1 var(--font-display);color:var(--muted)}:root[data-theme] .brow.top3 .rk{color:var(--accent)}
+:root[data-theme] .rp{padding:10px 12px;border-radius:var(--radius-tile);background:var(--surface-2);border:1px solid var(--border);min-height:44px}
+:root[data-theme] .rp:hover{border-color:var(--accent)}:root[data-theme] .rp em{color:var(--bad)}
+:root[data-theme] .sgrid .rk{font:700 12.5px/1 var(--font-body);color:var(--accent)}
+
+/* front page of the Lab, empty and locked states */
+:root[data-theme] .lh{gap:20px;margin-top:20px}
+:root[data-theme] .lh-hero{padding:32px;border-radius:var(--radius-card);background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow-card)}
+:root[data-theme] .lh-hero h1{margin:0 0 10px;font-size:clamp(30px,4vw,52px);line-height:1.02;text-wrap:balance}
+:root[data-theme] .lh-hero p{color:var(--text-2);font-size:16px}
+:root[data-theme] .lh-steps{gap:16px}
+:root[data-theme] .lh-steps li,:root[data-theme] .lh-card{padding:20px;border-radius:var(--radius-tile);background:var(--surface);border:1px solid var(--border)}
+:root[data-theme] .lh-steps li::before{width:32px;height:32px;background:var(--surface-2);color:var(--accent);font:700 15px/1 var(--font-body)}
+:root[data-theme] .lh-steps b{font-size:16px}.lh-steps span{color:var(--muted)}
+:root[data-theme] .lh-card h3{margin:0 0 12px;font:700 16px/1.2 var(--font-body)}
+:root[data-theme] .lh-hot button{min-height:48px;padding:6px 12px;border-radius:14px;color:var(--text)}
+:root[data-theme] .lh-hot button:hover{background:var(--surface-2)}
+:root[data-theme] .lh-hot em{font:var(--display-weight) 20px/1 var(--font-display);color:var(--accent)}
+:root[data-theme] .lh-hot small,:root[data-theme] .lh-small{color:var(--muted)}
+:root[data-theme] .empty h2{font:var(--display-weight) clamp(28px,4vw,44px)/1.02 var(--font-display);color:var(--text)}
+:root[data-theme] .skel{border-radius:var(--radius-tile);background:linear-gradient(90deg,var(--surface-2),color-mix(in srgb,var(--text) 8%,var(--surface-2)),var(--surface-2));background-size:200% 100%}
+:root[data-theme] .foot{color:var(--muted);font-size:12.5px}
+:root[data-theme] .tip{border-radius:16px;background:var(--pill-bg);color:var(--pill-fg);border:0;box-shadow:var(--shadow-pop);padding:12px 14px}
+:root[data-theme] .tip small{color:inherit;opacity:.75;font-family:var(--font-body)}
+:root[data-theme] .tip .tv{color:inherit}:root[data-theme] .tip .tv b{font:800 24px/1 var(--font-body)}
+:root[data-theme] .tip .hit,:root[data-theme] .tip .miss,:root[data-theme] .tip .push{color:inherit;font-weight:700}
+
+/* the bar that follows you down the page (not inside the site, where the Lab page has its own header) */
+:root[data-theme] .mini{background:var(--pop);border-bottom:1px solid var(--border)}
+:root[data-theme] .mini-in{max-width:1320px;padding:8px 32px}
+:root[data-theme] .mini .who{font:var(--display-weight) 19px/1 var(--font-display)}
+:root[data-theme] .mini .who span{background:var(--surface-2);color:var(--accent)}
+:root[data-theme] .mini .pick{font:600 13px/1 var(--font-body);color:var(--muted)}:root[data-theme] .mini .pick b{color:var(--text)}
+:root[data-theme] .mini nav a{font:600 13px/1 var(--font-body);color:var(--muted);padding:10px 12px;border-radius:var(--radius-pill)}
+:root[data-theme] .mini nav a:hover{color:var(--text);background:var(--surface-2)}
+:root[data-theme] .mini .lc button{width:36px;height:36px}
+:root[data-theme] body.embed .mini{display:none}
+
+@media (max-width:1020px){:root[data-theme] .ws{grid-template-columns:1fr}:root[data-theme] .tiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (max-width:820px){:root[data-theme] .wrap{padding:0 16px 60px}:root[data-theme] .tiles{grid-template-columns:repeat(3,minmax(0,1fr))}:root[data-theme] .card{padding:18px;border-radius:var(--radius-tile)}:root[data-theme] .hero{padding:20px}
+  :root[data-theme] .sec{margin-top:30px}:root[data-theme] .mini-in{padding:8px 16px}:root[data-theme] .lh-hero{padding:22px}}
+@media (pointer:coarse){:root[data-theme] .seg button,:root[data-theme] .seg.sm button,:root[data-theme] .recent button,:root[data-theme] .qf,:root[data-theme] .ex,:root[data-theme] .lchip{min-height:44px}}
+:root[data-motion="reduce"] *,:root[data-motion="reduce"] *::before,:root[data-motion="reduce"] *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+
+/* ---------- theme signatures ---------- */
+/* Team Colors: the player card is solid accent blue, white type */
+
+:root[data-theme="team-colors"] .hero{border-color:transparent}
+:root[data-theme="team-colors"] .hero .face>span{border-color:var(--on-team);background:var(--on-team);color:var(--feature-ink)}
+:root[data-theme="team-colors"] .hero .strip>div{background:var(--team-shade);border-color:transparent;color:var(--on-team)}
+:root[data-theme="team-colors"] .hero .strip span,:root[data-theme="team-colors"] .hero .strip small{color:var(--feature-muted)}
+:root[data-theme="team-colors"] .hero .form i{background:var(--team-shade);border-color:transparent;color:var(--on-team)}
+:root[data-theme="team-colors"] .hero .form .W{background:var(--on-team);color:var(--team-ink)}:root[data-theme="team-colors"] .hero .form .L{background:var(--team-shade-2)}
+:root[data-theme="team-colors"] .hero .spark .sb i{background:var(--team-shade)}:root[data-theme="team-colors"] .hero .spark .sb i.hit{background:var(--on-team)}:root[data-theme="team-colors"] .hero .spark .sb u{border-color:var(--on-team)}
+/* Members' Club: hairlines and an inner gold frame, serif figures */
+:root[data-theme="members-club"] .hero,:root[data-theme="members-club"] .lh-hero{box-shadow:var(--shadow-card),inset 0 0 0 10px var(--surface),inset 0 0 0 11px var(--border)}
+:root[data-theme="members-club"] .hero{padding:34px}
+:root[data-theme="members-club"] .ring b,:root[data-theme="members-club"] .strip b{font-family:var(--font-display);font-weight:400}
+:root[data-theme="members-club"] .ring b{font-size:26px}
+:root[data-theme="members-club"] .b i{max-width:22px;border-radius:3px 3px 0 0}
+:root[data-theme="members-club"] .ln span::before{content:"the line, ";font-style:italic;font-weight:500}
+/* Aurora Glass: frosted cards, with a solid panel where the browser cannot blur */
+@supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  :root[data-theme="aurora-glass"] .card,:root[data-theme="aurora-glass"] .hero,:root[data-theme="aurora-glass"] .lh-hero,:root[data-theme="aurora-glass"] .lh-card,:root[data-theme="aurora-glass"] .lh-steps li,:root[data-theme="aurora-glass"] .tile{-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+}
+:root[data-theme="aurora-glass"]{--blob-o:.5}
+/* Chrono: hairline rules, thin numerals, slim bars */
+:root[data-theme="chrono"] .b i{max-width:26px;border-radius:2px 2px 0 0}
+:root[data-theme="chrono"] .strip b,:root[data-theme="chrono"] .kpis b{font-weight:200;font-size:38px}
+:root[data-theme="chrono"] .ring b{font-weight:500}
+:root[data-theme="chrono"] .sec{padding-top:18px;border-top:1px solid var(--text)}
+
+/* inside the site's Lab page: the page has the search bar, so the Lab keeps only its mode and sport controls */
+:root[data-theme] body.inpage #sf,:root[data-theme] body.inpage .recent{display:none}
+:root[data-theme] body.inpage .top{position:static}
