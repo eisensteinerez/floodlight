@@ -658,3 +658,152 @@ html:root[data-theme] .tw-busy th[scope="row"]{padding:6px 12px 6px 0;border-bot
 @media (max-width:900px){:root[data-theme] .mb-tbl th{background:none}}
 html.fl-no-live #tbLive,html.fl-no-live #flBarLive{display:none}
 :root[data-theme] .mb-bar .cx,:root[data-theme] .mb-roles .cx,:root[data-theme] .mb-start .cx,:root[data-theme] .mb-bulk .bt,:root[data-theme] .mb-log .bt,:root[data-theme] .mb-temp .bt,:root[data-theme] .mb-link .bt{min-height:44px}
+
+/* ---------- Parlays: parlays.js. A parlay is a ticket: the read on top, a perforation, then its picks ---------- */
+.py-new svg,.py-lock svg{flex:none}
+:root[data-theme] .py-said{display:flex;align-items:center;gap:10px;padding:16px 20px;margin:0;font:600 15px/1.4 var(--font-body)}.py-said svg{flex:none;color:var(--good)}
+.py-err{margin:0;font:600 14px/1.45 var(--font-body);color:var(--text)}
+.py-err::before{content:"";display:inline-block;width:10px;height:10px;margin-right:8px;border-radius:2px;background:var(--bad);transform:rotate(45deg)}
+.py-main{gap:28px}.py-main > section{display:grid;gap:0}.py-list{gap:16px}
+.py-none .bt{margin-top:8px}
+
+:root[data-theme] .py-card{padding:0;overflow:hidden}
+.py-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--border-2)}
+.py-card.on::before{background:var(--live-fill)}.py-card.won::before{background:var(--good)}
+.py-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:22px 24px 0 28px}
+.py-name{min-width:0}.py-name h3{font:700 19px/1.25 var(--font-body);overflow-wrap:anywhere}
+.py-name small{display:block;margin-top:3px;font:500 13px/1.3 var(--font-body);color:var(--muted)}
+.py-h .pl{flex:none}.py-h .pl svg{flex:none}
+.py-st.won{border-color:var(--good);color:var(--text)}.py-st.won svg{color:var(--good)}
+.py-st.lost{color:var(--text-2)}
+.py-read{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px 28px;align-items:end;padding:18px 24px 22px 28px}
+.py-now{display:grid;gap:6px;min-width:0}
+:root[data-theme] .py-big{font-size:clamp(52px,6.2vw,84px);line-height:.92;color:var(--text)}
+.py-card.on .py-big{color:var(--accent)}
+.py-big small{font:500 14px/1.2 var(--font-body);letter-spacing:0;color:var(--text-2)}
+.py-read.done .py-big{font-size:clamp(36px,4vw,52px)}
+.py-mood{display:inline-flex;align-items:center;gap:6px;font:600 14px/1.3 var(--font-body);color:var(--text)}.py-mood svg{flex:none;color:var(--text-2)}
+.py-facts{display:grid;gap:0;margin:0;min-width:0}
+.py-facts > div{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border)}
+.py-facts > div:first-child{border-top:0}
+.py-facts dt{font:500 13px/1.3 var(--font-body);color:var(--text-2)}
+.py-facts dd{margin:0;text-align:right;font:700 17px/1.2 var(--font-body);color:var(--text)}
+.py-facts dd small{display:block;margin-top:2px;font:500 12px/1.3 var(--font-body);color:var(--muted)}
+.py-trail{grid-column:1 / -1;margin:0;display:grid;gap:6px}
+.py-trail svg{display:block;width:100%;height:64px;overflow:visible}
+.py-trail polyline{fill:none;stroke:var(--chart-line);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.py-trail .base{stroke:var(--border-2);stroke-width:1;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
+.py-trail circle{fill:var(--accent-fill);stroke:var(--surface);stroke-width:2;vector-effect:non-scaling-stroke}
+.py-link{display:block;margin:0;padding:0 24px 18px 28px}.py-link svg{vertical-align:-2px;margin-right:6px}
+
+.py-legs{list-style:none;margin:0;padding:0 24px 0 28px;border-top:2px dashed var(--border-2)}
+.py-leg{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px 12px;align-items:start;padding:16px 0;border-top:1px solid var(--border)}
+.py-leg:first-child{border-top:0}
+.py-mark{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--border-2);color:var(--text-2);background:var(--surface-2)}
+.py-mark.hit{border-color:var(--good);color:var(--good)}.py-mark.miss{border-style:dashed}
+.py-mark .dot-live{width:10px;height:10px}
+.py-lt{min-width:0;display:grid;gap:3px}
+.py-lt b{font:700 16px/1.3 var(--font-body);overflow-wrap:anywhere}
+.py-lt small{font:500 13px/1.35 var(--font-body);color:var(--muted)}.py-lt .py-note{color:var(--text-2)}
+.py-leg.miss .py-lt b{color:var(--text-2);text-decoration:line-through;text-decoration-thickness:1px}
+.py-word{flex:none}.py-word svg{flex:none}
+.py-word.up,.py-word.check,.py-word.hit{border-color:var(--good);color:var(--text)}.py-word.up svg,.py-word.check svg,.py-word.hit svg{color:var(--good)}
+.py-word.down,.py-word.x{border-color:var(--bad);color:var(--text)}.py-word.down svg,.py-word.x svg{color:var(--bad)}
+.py-prog{grid-column:2 / -1;display:grid;gap:7px;min-width:0}
+.py-trak{position:relative;display:block;height:10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border)}
+.py-trak i{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:var(--accent-fill)}
+.py-trak em{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;background:var(--text);border-radius:1px}
+.py-pt{font:500 13px/1.35 var(--font-body);color:var(--text-2)}
+.py-nums{grid-column:2 / -1;display:flex;flex-wrap:wrap;gap:8px 28px;margin:0}
+.py-nums > div{display:grid;gap:2px}
+.py-nums dt{font:500 12px/1.3 var(--font-body);color:var(--muted)}
+.py-nums dd{margin:0;font:700 17px/1.2 var(--font-body);color:var(--text)}
+.py-nums dd small{margin-left:8px;font:500 12px/1.3 var(--font-body);color:var(--text-2)}
+.py-nums .py-moved{font:500 13px/1.35 var(--font-body);color:var(--text-2)}
+.py-fold > summary{display:flex;align-items:center;min-height:48px;padding:0 24px 0 28px;border-top:2px dashed var(--border-2);cursor:pointer;font:500 13px/1.4 var(--font-body);color:var(--text-2)}
+.py-fold[open] > summary{color:var(--text)}.py-fold .py-legs{border-top:1px solid var(--border)}
+.py-read.done{padding-bottom:16px}
+.py-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:14px 24px 18px 28px;border-top:1px solid var(--border)}
+.py-tools > b{flex:1 1 220px;font:600 14px/1.4 var(--font-body)}
+.py-tools .bt svg{flex:none}
+.py-edit{align-items:flex-end}.py-edit .fl-f{flex:1 1 150px}.py-edit .py-err{flex-basis:100%}
+
+.py-rec{display:grid;gap:16px}.py-rec .sec-h{margin:0}.py-rec p{margin:0}.py-rec p:empty{display:none}
+.py-tiles,.me-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.py-tiles .tile,.me-tiles .tile{padding:14px;display:grid;gap:6px;align-content:start}
+.py-tiles .fig{font-size:clamp(19px,1.55vw,24px)}.py-tiles .tile{padding:12px 10px}.py-tiles small,.me-tiles small{font-size:12px}
+.py-strip{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0;padding:0}
+.py-strip li{width:30px;height:30px;display:grid;place-items:center;font:700 13px/1 var(--font-body);border:1.5px solid var(--border-2);color:var(--text-2);border-radius:6px}
+.py-strip li.won{border-radius:50%;background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}
+.py-strip li.push{border-style:dashed}
+.py-how{display:grid;gap:12px}.py-how .sec-h{margin:0}
+.py-how p,.py-how ul{margin:0;font:500 14px/1.55 var(--font-body);color:var(--text-2)}
+.py-how ul{padding-left:18px;display:grid;gap:8px}.py-how li b{color:var(--text)}.py-how p.lb{font-size:13px;color:var(--muted)}
+
+/* the builder */
+.py-build{display:grid;gap:0}
+:root[data-theme] .py-bcols{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+:root[data-theme] .py-pick{display:grid;gap:16px;align-content:start;padding:24px}
+.py-pick > .lb{margin:0}.py-pick > .seg{justify-self:start}
+.py-games{display:grid}
+.py-g{border-top:1px solid var(--border)}.py-g:first-child{border-top:0}
+:root[data-theme] .py-gh{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:8px 4px;text-align:left;color:var(--text);border-radius:10px}
+.py-gh > svg{flex:none;color:var(--text-2)}
+.py-logos{display:inline-flex;flex:none}.py-logos img{width:30px;height:30px;object-fit:contain}.py-logos img + img{margin-left:-6px}
+.py-mk{display:grid;gap:14px;padding:4px 4px 20px}
+.py-mrow{display:grid;grid-template-columns:128px minmax(0,1fr);gap:8px 14px;align-items:center}
+.py-mrow > .lb{display:grid;gap:2px;color:var(--text-2);font-weight:600}.py-mrow > .lb small{font:500 12px/1.3 var(--font-body);color:var(--muted)}
+.py-mrow .cx-row{align-items:center}
+:root[data-theme] .py-opt{white-space:normal;text-align:left;line-height:1.2;padding-block:6px}.py-opt svg{flex:none}
+.py-opt small{font:500 12px/1 var(--font-body);opacity:.85}
+.py-step{display:inline-flex;align-items:center;gap:4px;margin-left:4px}.py-step b{min-width:44px;text-align:center;font:700 15px/1 var(--font-body)}
+.py-pr{display:flex;align-items:center;gap:12px;min-height:68px;padding:8px 0;border-top:1px solid var(--border)}.py-pr:first-child{border-top:0}
+.py-pr .rw-t b,.py-pr .rw-t small,.py-gh .rw-t b,.py-gh .rw-t small{white-space:normal}
+.py-pr .cx-row{flex:none;flex-wrap:nowrap}
+.py-find{margin:0}
+:root[data-theme] .py-jump{display:none}.py-jump svg{flex:none}
+
+:root[data-theme] .py-ticket{background:var(--accent);color:var(--on-accent);border-color:transparent;padding:26px 26px 22px;backdrop-filter:none;position:sticky;top:132px}
+:root[data-theme] .py-ticket h2,.py-ticket .rw-t b,.py-ticket .rw-t small,.py-ticket .py-k,.py-ticket .fl-f,.py-ticket .py-hint,.py-ticket .py-err{color:var(--on-accent)}
+.py-ticket .pl{background:transparent;border-color:color-mix(in oklab,var(--on-accent) 45%,transparent);color:var(--on-accent)}
+.py-dl{list-style:none;margin:0;padding:0;display:grid}
+.py-dl li{display:flex;align-items:center;gap:10px;min-height:56px;padding:4px 0;border-top:1px solid color-mix(in oklab,var(--on-accent) 22%,transparent)}.py-dl li:first-child{border-top:0}
+.py-dl .rw-t b,.py-dl .rw-t small{white-space:normal}
+.py-ticket .py-rm{background:transparent;border-color:transparent;color:var(--on-accent)}
+.py-tt{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-top:12px;padding-top:16px;border-top:2px dashed color-mix(in oklab,var(--on-accent) 40%,transparent)}
+.py-k{display:block;font:500 13px/1.3 var(--font-body);margin-bottom:4px}
+.py-tbig{display:block;font:var(--display-weight) clamp(40px,4.4vw,56px)/.95 var(--font-display)}
+.py-tm{text-align:right}.py-tm b{font:var(--display-weight) 28px/1 var(--font-display)}
+.py-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px}.py-fields .fl-f:first-child{grid-column:1 / -1}
+:root[data-theme] .py-ticket .inp{background:color-mix(in oklab,var(--on-accent) 10%,transparent);border-color:color-mix(in oklab,var(--on-accent) 45%,transparent);color:var(--on-accent)}
+:root[data-theme] .py-ticket .inp::placeholder{color:color-mix(in oklab,var(--on-accent) 72%,transparent)}
+.py-hint{margin:10px 0 0;font:500 13px/1.45 var(--font-body)}
+.py-ticket .py-err{margin-top:12px}.py-ticket .py-err::before{background:var(--on-accent)}
+.py-acts{display:flex;gap:10px;margin-top:16px}
+:root[data-theme] .py-lock{background:var(--on-accent);color:var(--accent);border-color:transparent;flex:1}
+:root[data-theme] .py-lock[disabled]{opacity:.55;cursor:not-allowed}
+:root[data-theme] .py-ticket .bt.ghost.py-clr,:root[data-theme] .py-ticket .bt.ghost.py-clr:hover{background:transparent;color:var(--on-accent);border-color:color-mix(in oklab,var(--on-accent) 45%,transparent)}
+:root[data-theme] .py-ticket :focus-visible{outline-color:var(--on-accent)}
+.py-empty{margin:0;font:500 15px/1.5 var(--font-body)}
+/* the slip on Predictions now has three actions */
+.pd-acts{flex-wrap:wrap}.pd-acts .pd-save{flex:1 1 100%}.pd-acts .pd-clear{flex:1}
+@media (max-width:1100px){
+  :root[data-theme] .py-cols,:root[data-theme] .py-bcols{display:flex;flex-direction:column}
+  :root[data-theme] .py-ticket{position:static;scroll-margin-top:140px}
+  :root[data-theme] .py-jump{display:inline-flex;justify-self:start}
+}
+@media (max-width:700px){
+  .py-h{padding:18px 16px 0 20px;flex-wrap:wrap}
+  .py-read{grid-template-columns:minmax(0,1fr);padding:14px 16px 18px 20px}
+  .py-legs{padding:0 16px 0 20px}.py-link{padding:0 16px 16px 20px}.py-fold > summary{padding:8px 16px 8px 20px}
+  .py-leg{grid-template-columns:28px minmax(0,1fr)}
+  .py-word{grid-column:2;justify-self:start}
+  .py-tools{padding:12px 16px 16px 20px}
+  :root[data-theme] .py-pick{padding:18px 16px}
+  .py-mrow{grid-template-columns:minmax(0,1fr)}
+  .py-pr{flex-wrap:wrap}.py-pr .cx-row{margin-left:56px}
+  .py-ticket{padding:22px 18px}
+  .py-fields{grid-template-columns:minmax(0,1fr)}
+  .py-tiles,.me-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
