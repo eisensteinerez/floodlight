@@ -656,13 +656,16 @@ function bbPlayerHero(v, back){
   const col = hex(t?.color) && lum(hex(t.color)) > .03 ? hex(t.color) : '#3D6FD9'; v.color = col;
   const av = v.stats?.categories?.find(c => c.name === 'averages'), last = av?.statistics?.[av.statistics.length - 1];
   const sv = n => { const i = av?.names?.indexOf(n); return i >= 0 ? last?.stats?.[i] : null };
-  const tiles = last ? [['avgPoints', 'Points', 'offensive.avgPoints'], ['avgRebounds', 'Rebounds', 'general.avgRebounds'], ['avgAssists', 'Assists', 'offensive.avgAssists'], ['fieldGoalPct', 'FG %', 'offensive.fieldGoalPct']].map(([n, lbl, key]) => {
-    const r = bbRankIn(v.pool, v.id, key); return `<div class="tile"><b class="num">${esc(sv(n) ?? '–')}</b><span>${lbl} ${n === 'fieldGoalPct' ? '' : 'a game'}</span>${r ? `<em class="bb-rk">${bbOrd(r.rank)} of ${r.n}</em>` : ''}</div>` }).join('') : '';
-  return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(a?.headshot?.href || bbShot(v.id, l.path))}" alt="" onerror="this.onerror=null;this.src=SIL"><div><h3>${esc(a?.displayName || 'Loading…')}</h3>
-    ${a ? `<p>${a.displayJersey ? `<span class="num">${esc(a.displayJersey)}</span>` : ''}<span>${esc(a.position?.displayName || '')}</span>${t ? `<span><img src="${esc(t.logos?.[0]?.href || '')}" alt=""> <button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : ''}</p>
-      <p class="bb-bio">${[a.age ? a.age + ' yrs' : '', a.displayHeight, a.displayWeight, a.displayBirthPlace, a.displayDraft ? 'Draft: ' + a.displayDraft : '', a.displayExperience, a.college?.name].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>
-      ${a.injuries?.length ? `<p><span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span></p>` : ''}` : ''}</div></div>
-    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(last.season?.displayName || '')} per game${v.pool ? ` · ranked among ${esc(l.name)} players with enough games` : ''}</p>` : ''}</div>`;
+  const hl = last ? [['avgPoints', 'Points', 'offensive.avgPoints'], ['avgRebounds', 'Rebounds', 'general.avgRebounds'], ['avgAssists', 'Assists', 'offensive.avgAssists'], ['fieldGoalPct', 'FG %', 'offensive.fieldGoalPct']].map(([n, lbl, key]) => {
+    const r = bbRankIn(v.pool, v.id, key); return { label: lbl, value: sv(n), rank: r ? `${bbOrd(r.rank)} in ${l.name}` : '' } }) : [];
+  const sport = /college/.test(l.path) ? 'cbb' : l.key === 'wnba' ? 'wnba' : 'nba';
+  return flProfile.hero({ back, sport, heatSport: sport === 'cbb' ? '' : sport, id: v.id, name: a?.displayName, color: col,
+    face: `<img class="face espn-shot" src="${esc(a?.headshot?.href || bbShot(v.id, l.path))}" alt="" onerror="this.onerror=null;this.src=SIL">`,
+    team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
+    number: a?.displayJersey, position: a?.position?.displayName,
+    chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace, a.college?.name] : [],
+    status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span>` : '',
+    stats: hl, caption: last ? `${esc(last.season?.displayName || '')} per game${v.pool ? ` · ranked among ${esc(l.name)} players with enough games` : ''}` : '' });
 }
 function bbPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
@@ -694,7 +697,8 @@ function bbPlayerPane(v){
     const tot = v.stats?.categories?.find(c => c.name === 'totals'), misc = v.stats?.categories?.find(c => c.name === 'miscellaneous');
     const table = (c, title) => c ? `<div class="sub-h"><h5>${esc(title)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${c.labels.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>
       ${c.statistics.slice().reverse().map(s => `<tr><td class="t">${esc(s.season?.displayName || '')} <small>${esc((s.teamSlug || '').split('-').pop())}</small></td>${s.stats.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
-    return h + table(av, 'Career per game') + table(tot, 'Career totals') + table(misc, 'Miscellaneous');
+    const recent = flProfile.recent(v, flProfile.espnSeries(v.log, [['PTS', 'Points', 'points'], ['AST', 'Assists', 'assists'], ['REB', 'Rebounds', 'rebounds'], ['3PT', '3-pointers', 'threes'], ['MIN', 'Minutes', 'minutes']]), { span: 'Season' });
+    return recent + h + flProfile.careerTable(av, 'Career per game', 'PTS') + table(tot, 'Career totals') + table(misc, 'Miscellaneous');
   }
   if (v.tab === 'log') {
     const g = v.log; if (!g?.seasonTypes?.length) return `<div class="note">No games logged this season.</div>`;

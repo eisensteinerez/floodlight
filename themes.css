@@ -387,7 +387,8 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 :root[data-theme] .tabs,:root[data-theme] .shell.stage .tabs{gap:6px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
 :root[data-theme] .tab,:root[data-theme] .shell.stage .tab,:root[data-theme] .shell:not(.sheet-wide) .tab{min-height:40px;padding:0 16px;border:1px solid transparent;border-radius:var(--radius-pill);font:600 14px/1 var(--font-body);color:var(--text-2);display:inline-flex;align-items:center;gap:8px}
 :root[data-theme] .tab:hover{color:var(--text);background:var(--surface-2)}
-:root[data-theme] .tab.on{background:var(--pill-bg);color:var(--pill-fg);border-color:transparent}
+:root[data-theme] .tab.on,:root[data-theme] .shell.stage .tab.on,:root[data-theme] .shell:not(.sheet-wide) .tab.on{background:var(--pill-bg);color:var(--pill-fg);border-color:transparent}
+:root[data-theme] .tab.on .tab-i{color:inherit}
 :root[data-theme] .pane{padding:24px 28px 32px}
 :root[data-theme] .pane h5,:root[data-theme] .sub-h h5{font:700 16px/1.2 var(--font-body);color:var(--text)}
 :root[data-theme] .icon-btn{width:44px;height:44px;border-radius:50%;border:1px solid var(--border);background:var(--surface-2);color:var(--text)}

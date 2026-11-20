@@ -672,14 +672,16 @@ function hkPlayerHero(v, back){
   const goalie = /^G/.test(a?.position?.abbreviation || '');
   const cats = v.stats?.categories || [], seasonOf = c => c?.statistics?.[c.statistics.length - 1];
   const sv = names => { for (const c of cats) { const s = seasonOf(c); for (const n of names) { const i = c.names?.indexOf(n); if (i >= 0 && s?.stats?.[i] != null) return s.stats[i] } } return null };
-  const tiles = (goalie ? [[['wins'], 'Wins'], [['goalsAgainstAverage', 'avgGoalsAgainst'], 'GAA'], [['savePct', 'savePercentage'], 'Save %'], [['shutouts'], 'Shutouts']]
-    : [[['goals'], 'Goals'], [['assists'], 'Assists'], [['points'], 'Points'], [['plusMinus'], '+/-']]).map(([ns, lbl]) => { const x = sv(ns); return x == null ? '' : `<div class="tile"><b class="num">${esc(x)}</b><span>${lbl}</span></div>` }).join('');
+  const stats = (goalie ? [[['wins'], 'Wins'], [['goalsAgainstAverage', 'avgGoalsAgainst'], 'GAA'], [['savePct', 'savePercentage'], 'Save %'], [['shutouts'], 'Shutouts']]
+    : [[['goals'], 'Goals'], [['assists'], 'Assists'], [['points'], 'Points'], [['plusMinus'], '+/-']]).map(([ns, lbl]) => ({ label: lbl, value: sv(ns) }));
   const season = seasonOf(hkStatCat(v))?.season?.displayName || '';
-  return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(a?.headshot?.href || hkShot(v.id, l.path))}" alt="" ${hkFaceErr}><div><h3>${esc(a?.displayName || 'Loading…')}</h3>
-    ${a ? `<p>${a.displayJersey ? `<span class="num">${esc(a.displayJersey)}</span>` : ''}<span>${esc(a.position?.displayName || '')}</span>${t ? `<span><img src="${esc(t.logos?.[0]?.href || '')}" alt=""> <button class="linkbtn" data-hkteam="${esc(t.id)}" data-hkl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : ''}</p>
-      <p class="bb-bio">${[a.age ? a.age + ' yrs' : '', a.displayHeight, a.displayWeight, a.hand?.displayValue ? (goalie ? 'Catches ' : 'Shoots ') + a.hand.displayValue.toLowerCase() : '', a.displayBirthPlace, a.displayDraft ? 'Draft: ' + a.displayDraft : '', a.displayExperience].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>
-      ${a.injuries?.length ? `<p><span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span></p>` : ''}` : ''}</div></div>
-    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(season)}</p>` : ''}</div>`;
+  return flProfile.hero({ back, sport: l.key === 'nhl' || /nhl/.test(l.path || '') ? 'nhl' : '', heatSport: 'nhl', id: v.id, name: a?.displayName, color: col,
+    face: `<img class="face espn-shot" src="${esc(a?.headshot?.href || hkShot(v.id, l.path))}" alt="" ${hkFaceErr}>`,
+    team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-hkteam="${esc(t.id)}" data-hkl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
+    number: a?.displayJersey, position: a?.position?.displayName,
+    chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.hand?.displayValue ? (goalie ? 'Catches ' : 'Shoots ') + a.hand.displayValue.toLowerCase() : '', a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace] : [],
+    status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span>` : '',
+    stats, caption: esc(season) });
 }
 function hkPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
@@ -687,6 +689,7 @@ function hkPlayerPane(v){
   if (v.tab === 'stats') {
     const cats = (v.stats?.categories || []).filter(c => c.statistics?.length);
     if (!cats.length) return `<div class="note">No stats for this player yet.</div>`;
+    const pfRecent = flProfile.recent(v, flProfile.espnSeries(v.log, /^G/.test(v.bio?.position?.abbreviation || '') ? [['SV', 'Saves', 'saves'], ['GA', 'Goals against', 'goals against'], ['SA', 'Shots faced', 'shots']] : [['PTS', 'Points', 'points'], ['G', 'Goals', 'goals'], ['A', 'Assists', 'assists'], ['S', 'Shots', 'shots']]), { span: 'Season' });
     // this season at a glance: the main numbers, each with its last 10 games and how that compares with the season
     const c0 = cats[0], cur = c0.statistics[c0.statistics.length - 1], L = c0.labels || [];
     const gl = v.log, gL = gl?.labels || [], evs = (gl?.seasonTypes || []).flatMap(st => (st.categories || []).flatMap(c => c.events || [])).slice(0, 10).reverse();
@@ -696,7 +699,7 @@ function hkPlayerPane(v){
       const trend = per != null && l10 != null ? (l10 > per * 1.1 ? `Up lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)} for the season` : l10 < per * .9 ? `Quieter lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)}` : `Steady: ${l10.toFixed(2)} a game over the last ${sp.length}`) : (cur.season?.displayName || '');
       return `<article class="pb-story"><b class="num">${esc(val)}</b><span>${esc(k === 'G' ? 'Goals' : k === 'A' ? 'Assists' : k === 'PTS' ? 'Points' : k === 'SOG' ? 'Shots on goal' : k === 'W' ? 'Wins' : k)}</span>${sp.length > 1 ? flViz.spark(sp, { label: k + ', last ' + sp.length + ' games', w: 120, h: 26 }) : ''}<p>${esc(trend)}</p></article>` }).join('');
     const top = glance ? `<div class="pb"><div class="pb-stories">${glance}</div></div>` : '';
-    return top + cats.map(c => `<div class="sub-h"><h5>${esc(c.displayName || c.name)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${(c.labels || []).map((x, i) => `<th title="${esc(c.displayNames?.[i] || c.descriptions?.[i] || '')}">${esc(x)}</th>`).join('')}</tr></thead><tbody>
+    return pfRecent + top + cats.map(c => `<div class="sub-h"><h5>${esc(c.displayName || c.name)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${(c.labels || []).map((x, i) => `<th title="${esc(c.displayNames?.[i] || c.descriptions?.[i] || '')}">${esc(x)}</th>`).join('')}</tr></thead><tbody>
       ${c.statistics.slice().reverse().map(s => `<tr><td class="t">${esc(s.season?.displayName || '')} <small>${esc((s.teamSlug || '').split('-').pop())}</small></td>${(s.stats || []).map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}
       ${c.totals?.length ? `<tr class="tot"><td class="t">Career</td>${c.totals.map(x => `<td>${esc(x)}</td>`).join('')}</tr>` : ''}</tbody></table></div>`).join('')
       + `<p class="srcnote">Every season ESPN keeps for this player. Hover a column for its meaning.</p>`;
@@ -726,13 +729,16 @@ const hkTxt = x => x?.default ?? x ?? '';
 function hkNhlHero(v, back){
   const p = v.p, col = '#' + fmColor(p?.currentTeamAbbrev || String(v.id)); v.color = col;
   const goalie = p?.position === 'G', f = p?.featuredStats?.regularSeason?.subSeason;
-  const tiles = !f ? '' : (goalie ? [['wins', 'Wins'], ['goalsAgainstAvg', 'GAA', 2], ['savePctg', 'Save %', 3], ['shutouts', 'Shutouts']] : [['goals', 'Goals'], ['assists', 'Assists'], ['points', 'Points'], ['plusMinus', '+/-']])
-    .map(([k, l, d]) => `<div class="tile"><b class="num">${f[k] == null ? '–' : d ? (+f[k]).toFixed(d).replace(/^0\./, '.') : f[k]}</b><span>${l}</span></div>`).join('');
   const ht = p?.heightInInches ? `${Math.floor(p.heightInInches / 12)}′${p.heightInInches % 12}″` : '';
-  return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(p?.headshot || SIL)}" alt="" ${hkFaceErr}><div><h3>${esc(p ? `${hkTxt(p.firstName)} ${hkTxt(p.lastName)}` : 'Loading…')}</h3>
-    ${p ? `<p>${p.sweaterNumber ? `<span class="num">#${esc(p.sweaterNumber)}</span>` : ''}<span>${esc({ C: 'Centre', L: 'Left wing', R: 'Right wing', D: 'Defence', G: 'Goalie' }[p.position] || p.position || '')}</span>${p.teamLogo ? `<span><img src="${esc(p.teamLogo)}" alt=""> ${esc(hkTxt(p.fullTeamName) || p.currentTeamAbbrev || '')}</span>` : ''}</p>
-      <p class="bb-bio">${[p.birthDate ? 'Born ' + fmtDate(p.birthDate + 'T12:00:00', { day: 'numeric', month: 'short', year: 'numeric' }) : '', [hkTxt(p.birthCity), p.birthCountry].filter(Boolean).join(', '), ht, p.weightInPounds ? p.weightInPounds + ' lb' : '', p.shootsCatches ? (goalie ? 'Catches ' : 'Shoots ') + p.shootsCatches : '', p.draftDetails ? `Draft ${p.draftDetails.year} · round ${p.draftDetails.round}, ${bbOrd(p.draftDetails.overallPick)} overall (${p.draftDetails.teamAbbrev})` : 'Undrafted'].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div></div>
-    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(String(p.featuredStats.season || '').replace(/^(\d{4})(\d{2})(\d{2})$/, '$1–$3'))} regular season · official NHL stats</p>` : ''}</div>`;
+  const stats = !f ? [] : (goalie ? [['wins', 'Wins'], ['goalsAgainstAvg', 'GAA', 2], ['savePctg', 'Save %', 3], ['shutouts', 'Shutouts']] : [['goals', 'Goals'], ['assists', 'Assists'], ['points', 'Points'], ['plusMinus', '+/-']])
+    .map(([k, l, d]) => ({ label: l, value: f[k] == null ? '–' : d ? (+f[k]).toFixed(d).replace(/^0\./, '.') : f[k] }));
+  return flProfile.hero({ back, sport: 'nhl', id: v.id, name: p ? `${hkTxt(p.firstName)} ${hkTxt(p.lastName)}` : '', color: col,
+    face: `<img class="face espn-shot" src="${esc(p?.headshot || SIL)}" alt="" ${hkFaceErr}>`,
+    team: p?.teamLogo ? `<span class="pfh-team"><img src="${esc(p.teamLogo)}" alt=""><span>${esc(hkTxt(p.fullTeamName) || p.currentTeamAbbrev || '')}</span></span>` : '',
+    number: p?.sweaterNumber, position: p ? ({ C: 'Centre', L: 'Left wing', R: 'Right wing', D: 'Defence', G: 'Goalie' }[p.position] || p.position || '') : '',
+    chips: p ? [p.birthDate ? 'Born ' + fmtDate(p.birthDate + 'T12:00:00', { day: 'numeric', month: 'short', year: 'numeric' }) : '', [hkTxt(p.birthCity), p.birthCountry].filter(Boolean).join(', '), ht, p.weightInPounds ? p.weightInPounds + ' lb' : '', p.shootsCatches ? (goalie ? 'Catches ' : 'Shoots ') + p.shootsCatches : '',
+      p.draftDetails ? `Drafted ${p.draftDetails.year} · round ${p.draftDetails.round}, ${bbOrd(p.draftDetails.overallPick)} overall (${p.draftDetails.teamAbbrev})` : 'Undrafted'] : [],
+    stats, caption: f ? `${esc(String(p.featuredStats.season || '').replace(/^(\d{4})(\d{2})(\d{2})$/, '$1–$3'))} regular season · official NHL stats` : '' });
 }
 function hkNhlPane(v){
   if (v.err) return `<div class="note">Couldn't load this player. The NHL's player pages come through the local server.</div>`;

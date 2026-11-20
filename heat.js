@@ -72,12 +72,12 @@
     return `<div class="hc${n > 14 ? ' dense' : ''}${opts.fresh === false ? '' : ' fresh'}" role="group" aria-label="${esc(opts.label || 'Game by game')}">
       <div class="hc-plot" style="--n:${n}">${gs.map((g, i) => { const v = +g.v, d = has ? v - line : 0, cls = !has ? 'ov' : v > line ? 'ov' : v < line ? 'un' : 'push', big = has && Math.abs(d) >= 5;
         const tip = [g.date ? new Date(g.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '', `${g.home === false ? 'at ' : g.home ? 'vs ' : ''}${g.opp || ''}`, `${fmt(v)}${opts.unit ? ' ' + opts.unit : ''}`,
-          has ? (d === 0 ? 'Push, right on the line' : `${fmt(Math.abs(d))} ${d > 0 ? 'over' : 'under'} the line`) : '', g.res === 'W' ? 'Won' : g.res === 'L' ? 'Lost' : g.res === 'D' ? 'Drew' : ''].filter(Boolean).join(' · ');
+          has ? (d === 0 ? (opts.lineLabel ? 'Right on the ' + opts.lineLabel.toLowerCase() : 'Push, right on the line') : `${fmt(Math.abs(d))} ${d > 0 ? 'over' : 'under'} the ${opts.lineLabel ? opts.lineLabel.toLowerCase() : 'line'}`) : '', g.res === 'W' ? 'Won' : g.res === 'L' ? 'Lost' : g.res === 'D' ? 'Drew' : ''].filter(Boolean).join(' · ');
         return `<div class="hc-b ${cls}" style="--i:${i}" tabindex="0" role="img" aria-label="${esc(tip)}" data-hctip="${esc(tip)}"><span class="hc-col"><em class="num">${big ? icon(d > 0 ? 'fire' : 'ice', 12) : ''}${fmt(v)}</em><i style="height:${Math.max(1.5, y(v)).toFixed(2)}%"></i></span>
           <span class="hc-x">${esc(g.opp || '')}<small>${esc(day(g.date))}</small>${g.res ? `<b class="${esc(g.res)}">${esc(g.res)}</b>` : ''}</span></div>` }).join('')}
         ${opts.avg !== false && n > 2 ? `<svg class="hc-avg" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true"><path d="${smooth(roll.map((v, i) => [i + .5, +(100 - y(v)).toFixed(2)]))}"/></svg>` : ''}
-        ${has ? `<div class="hc-ln" style="bottom:${y(line).toFixed(2)}%"><span class="num">Line ${fmt(line)}</span></div>` : ''}</div>
-      <p class="hc-key">${has ? '<span><i class="ov"></i>Over the line</span><span><i class="un"></i>Under the line</span>' : ''}${opts.avg !== false && n > 2 ? '<span><i class="av"></i>5-game average</span>' : ''}</p></div>`;
+        ${has ? `<div class="hc-ln" style="bottom:${y(line).toFixed(2)}%"><span class="num">${esc(opts.lineLabel || 'Line')} ${fmt(line)}</span></div>` : ''}</div>
+      <p class="hc-key">${has ? `<span><i class="ov"></i>${esc(opts.over || 'Over the line')}</span><span><i class="un"></i>${esc(opts.under || 'Under the line')}</span>` : ''}${opts.avg !== false && n > 2 ? '<span><i class="av"></i>5-game average</span>' : ''}</p></div>`;
   }
   // one small tooltip for every shared chart on the page
   let tip;

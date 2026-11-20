@@ -87,7 +87,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js"}
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -1000,6 +1000,51 @@ def _save_accounts():
 # ---------- what members picked (the community split on a prediction) ----------
 
 VOTES_FILE = CACHE_DIR / "votes.json"
+# Awards and honours. No data provider the site uses carries them, so this file starts empty and only an admin adds to
+# it, one entry at a time, each with the page it was checked against. Nothing is ever filled in by the code.
+AWARDS_FILE = CACHE_DIR / "awards.json"
+AWARD_SPORTS = ("nba", "wnba", "cbb", "nfl", "cfb", "mlb", "nhl", "soccer", "tennis", "ufc", "boxing")
+_awards = storage.load(AWARDS_FILE, [])   # [{id, sport, athlete, name, award, season, detail, source, by, at}]
+if not isinstance(_awards, list):
+    _awards = []
+
+
+def awards_for(sport, athlete):
+    with _acct_lock:
+        return [dict(a) for a in _awards if a.get("sport") == sport and str(a.get("athlete")) == str(athlete)]
+
+
+def awards_action(body, user):
+    op = body.get("op")
+    with _acct_lock:
+        if op == "remove":
+            before = len(_awards)
+            _awards[:] = [a for a in _awards if a.get("id") != body.get("id")]
+            if len(_awards) == before:
+                return 404, {"error": "That award entry is already gone."}
+            storage.save(AWARDS_FILE, _awards)
+            return 200, {"ok": True}
+        if op != "add":
+            return 400, {"error": "Unknown action."}
+        sport, athlete, award = str(body.get("sport") or ""), str(body.get("athlete") or ""), str(body.get("award") or "")
+        season, source = str(body.get("season") or "").strip(), str(body.get("source") or "").strip()
+        if sport not in AWARD_SPORTS or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,40}", athlete) or not re.fullmatch(r"[a-z0-9-]{2,40}", award):
+            return 400, {"error": "Pick the athlete and the award again."}
+        if not re.fullmatch(r"(19|20)\d\d(-\d\d)?", season):
+            return 400, {"error": "Write the season as a year, like 2025, or 2024-25."}
+        if not re.fullmatch(r"https?://[^\s<>\"']{4,300}", source):
+            return 400, {"error": "Add a link to the page that shows this award, starting with http."}
+        if any(a["sport"] == sport and str(a["athlete"]) == athlete and a["award"] == award and a["season"] == season and (a.get("detail") or "") == str(body.get("detail") or "").strip()[:60] for a in _awards):
+            return 409, {"error": "That award and season is already listed."}
+        if len(_awards) >= 20000:
+            return 400, {"error": "The awards file is full."}
+        entry = {"id": secrets.token_hex(6), "sport": sport, "athlete": athlete, "name": str(body.get("name") or "")[:80], "award": award, "season": season,
+                 "detail": str(body.get("detail") or "").strip()[:60], "source": source, "by": user["username"], "at": int(time.time())}
+        _awards.append(entry)
+        storage.save(AWARDS_FILE, _awards)
+        return 200, {"ok": True, "entry": entry}
+
+
 _votes = storage.load(VOTES_FILE, {})   # game key ("soccer:12345") -> {username: "home" | "draw" | "away"}
 VOTE_KEY = re.compile(r"[a-z]{2,12}:[A-Za-z0-9._-]{1,40}")
 VOTE_MAX_GAMES = 4000
@@ -1323,6 +1368,8 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path.startswith("/api/admin/"):
             if role_of(user) != "admin":
                 return self.send_auth(403, {"error": "Only the admin can manage members."})
+            if u.path == "/api/admin/awards":
+                return self.send_auth(*awards_action(body, user))
             return self.send_auth(*admin_action(u.path, body))
         if u.path == "/api/forecast/track":
             if not can_research(user):
@@ -1452,6 +1499,10 @@ class Handler(SimpleHTTPRequestHandler):
                 if role_of(user) != "admin":
                     return self.send_json({"error": "Only the admin can manage members."}, 403)
                 return self.send_auth(200, {"users": admin_list()})
+            if u.path == "/api/awards":   # an athlete's awards, as entered by an admin (empty until then)
+                if q.get("sport") not in AWARD_SPORTS or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,40}", q.get("id", "")):
+                    return self.send_json({"error": "bad request"}, 400)
+                return self.send_auth(200, {"awards": awards_for(q["sport"], q["id"])})
             if u.path == "/api/record":   # Floodlight's own graded predictions (record.py)
                 return self.send_json({"entries": record.entries(), "summary": record.summary(), "now": int(time.time())}, max_age=60)
             if u.path == "/api/forecast/get":

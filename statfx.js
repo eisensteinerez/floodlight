@@ -221,7 +221,8 @@
       <th scope="col" tabindex="0" data-sort="0" aria-sort="none">Stat</th><th scope="col" tabindex="0" data-sort="1" class="r">Value</th><th scope="col" tabindex="0" data-sort="2" class="r">Rank</th><th scope="col" tabindex="0" data-sort="3" aria-sort="descending">Percentile</th><th scope="col">Last 10</th></tr></thead><tbody>
       ${rows.slice().sort((a, b) => b.pc - a.pc).map(r => `<tr><td data-k="${esc(r.label)}">${esc(r.label)}</td><td class="r num" data-k="${parseFloat(r.val) || 0}">${esc(r.val)}</td><td class="r num" data-k="${r.rank || 9999}">${r.rank ? `${ord(r.rank)}<small> of ${r.n}</small>` : '–'}</td>
         <td data-k="${r.pc}"><span class="pb-cell" style="--p:${r.pc}%;--c:${pcHue(r.pc)}"><i aria-hidden="true"><em></em></i><b class="num">${r.pc}</b></span></td><td>${r.spark?.length > 1 ? spark(r.spark, { label: r.label + ', last ' + r.spark.length + ' games', w: 76, h: 22 }) : ''}</td></tr>`).join('')}</tbody></table></div>`;
-    return `<div class="pb">${o.note ? `<p class="pb-note">${esc(o.note)}</p>` : ''}<div class="pb-stories">${stories}</div>
+    const six = window.flProfile?.statTiles(rows, peers);   // the six headline tiles: value, league rank, percentile bar
+    return `<div class="pb">${o.note ? `<p class="pb-note">${esc(o.note)}</p>` : ''}${six || `<div class="pb-stories">${stories}</div>`}
       <div class="pb-grid">${rad ? `<figure class="pb-radar"><figcaption>Against ${esc(peers)}${o.season ? `, ${esc(o.season)}` : ''}</figcaption>${rad}<small>Percentile, 100 is best. Hover a point for the number.</small></figure>` : ''}
         <section class="pb-bars" aria-label="Percentile by stat"><h5>Where ${esc(o.name || 'he')} ranks</h5><ul>${bars}</ul></section></div>${table}</div>`;
   }

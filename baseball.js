@@ -816,12 +816,16 @@ function bsPlayerSeason(v, yr){
 function bsPlayerHero(v, back){
   const a = v.bio, t = a?.currentTeam, c = bsColorFor(t, t?.name), col = (() => { const x = hex('#' + c.color); return x && lum(x) > .03 ? x : hex('#' + (c.alt || '')) || '#3D6FD9' })(); v.color = col;
   const ss = v.ss?.[v.season], g = v.grp, st = ss?.season?.[g], mlb = BSL[v.lg].sport === 1 || t?.sport?.id === 1;
-  let tiles = '';
-  if (st) tiles = `<div class="tiles">${BS_KEY[g].tiles.map(k => { if (st[k] == null) return ''; const r = bsRankIn(ss.peers?.[g], g, k, st, v.id);
-      return `<div class="tile"><b class="num">${esc(st[k])}</b><span>${BS_TILE[k]}</span>${r ? `<em class="fbt-rk">${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}</em>` : ''}</div>` }).join('')}</div>
-    <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(v.season)} · ${esc(BSL[v.lg].name)} · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}</p>`;
-  return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(a ? bsShot(a.id, mlb) : SIL)}" alt="" ${bsImgErr}><div><h3>${esc(a?.fullName || 'Loading…')}</h3>
-    ${a ? `<p>${a.primaryNumber ? `<span class="num">#${esc(a.primaryNumber)}</span>` : ''}<span>${esc(a.primaryPosition?.name || '')}</span>${t ? `<span><img src="${esc(bsLogo(t.id))}" alt="" ${bsLogoErr}> <button class="linkbtn" data-bsteam="${esc(t.id)}" data-bsl="${esc(BS_LEAGUES.find(l => l.src === 'sa' && l.sport === t.sport?.id && (!l.league || l.league === t.league?.id))?.key || v.lg)}">${esc(t.name)}</button></span>` : ''}</p>` : ''}</div></div>${tiles}</div>`;
+  const stats = st ? BS_KEY[g].tiles.map(k => { if (st[k] == null) return null; const r = bsRankIn(ss.peers?.[g], g, k, st, v.id);
+    return { label: BS_TILE[k], value: st[k], rank: r ? `${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}` : '' } }) : [];
+  const caption = st ? `${esc(v.season)} · ${esc(BSL[v.lg].name)} · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}` : '';
+  return flProfile.hero({ back, sport: mlb ? 'mlb' : '', heatSport: 'mlb', id: v.id, name: a?.fullName, color: col,
+    face: `<img class="face espn-shot" src="${esc(a ? bsShot(a.id, mlb) : SIL)}" alt="" ${bsImgErr}>`,
+    team: t ? `<span class="pfh-team"><img src="${esc(bsLogo(t.id))}" alt="" ${bsLogoErr}><button class="linkbtn" data-bsteam="${esc(t.id)}" data-bsl="${esc(BS_LEAGUES.find(l => l.src === 'sa' && l.sport === t.sport?.id && (!l.league || l.league === t.league?.id))?.key || v.lg)}">${esc(t.name)}</button></span>` : '',
+    number: a?.primaryNumber, position: a?.primaryPosition?.name,
+    chips: a ? [a.currentAge ? 'Age ' + a.currentAge : '', a.height, a.weight ? a.weight + ' lb' : '', a.batSide?.description ? 'Bats ' + a.batSide.description.toLowerCase() : '', a.pitchHand?.description ? 'Throws ' + a.pitchHand.description.toLowerCase() : '',
+      a.mlbDebutDate ? 'Debut ' + String(a.mlbDebutDate).slice(0, 4) : '', a.draftYear ? 'Drafted ' + a.draftYear : '', [a.birthCity, a.birthCountry].filter(Boolean).join(', ')] : [],
+    stats, caption });
 }
 function bsPlayerPicker(v){
   const ys = v.years?.length ? v.years : [v.season];

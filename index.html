@@ -2824,14 +2824,14 @@ function playerHero(v, back){
     : f?.team?.id ? `<span class="tclub"><img src="${esc(f.team.crest)}" alt=""><button class="linkbtn" data-team="fm${esc(f.team.id)}">${esc(f.team.name)}</button></span>` : '';
   const injured = f?.injury && !v.status;
   const status = v.status ? statusBadge(v.status) : injured ? `<span class="stat-badge injured">Injured</span>` : a && v.status === null ? `<span class="stat-badge ok">Available</span>` : '';
-  const strip = fmHeroTiles(v) || (ss.length ? `<div class="hcap">${esc(a.statsSummary.displayName||'')}</div><div class="tiles">${ss.slice(0,4).map(s=>`<div class="tile"><b class="num">${esc(s.displayValue)}</b><span>${esc(s.displayName.replace('Starts-Substitute Appearances','Starts (sub)'))}</span></div>`).join('')}</div>` : '');
-  return `<div class="hero solo" style="--tc:${v.color}">${topBar(back)}
-    <div class="thead">${name ? `<fl-tilt class="tcard" style="--tc:${v.color}"><span class="tcard-top"><b class="num">${esc(jersey || '')}</b><i>${esc(a?.position?.abbreviation || (pos || '').split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase())}</i></span>${face(name, club, v.tmp?.photo || (f ? FMP(f.id) : ''), 'face')}<span class="tcard-n">${esc(name.split(' ').slice(-1)[0])}</span><span class="tcard-f">${t ? `<img src="${esc(logoOf(t))}" alt="">` : f?.team?.crest ? `<img src="${esc(f.team.crest)}" alt="">` : ''}${a?.flag?.href ? `<img src="${esc(a.flag.href)}" alt="">` : ''}</span><i class="tcard-shine"></i></fl-tilt>` : `<img class="face" src="${SIL}" alt="">`}
-      <div><h3>${esc(name || 'Loading…')}</h3>
-      ${name ? `<p>${jersey ? `<span class="num">#${esc(jersey)}</span>` : ''}${pos ? `<span>${esc(pos)}</span>` : ''}${teamBtn}</p>` : ''}
-      ${name ? `<div class="tact">${status}<button class="favbtn" data-act="pfav" aria-pressed="${isFavPlayer(v.id)}">${isFavPlayer(v.id) ? '★ Following' : '☆ Follow'}</button></div>` : ''}</div></div>
-    ${playerFacts(v)}${strip}
-  </div>`;
+  const fmSt = f?.mainLeague?.stats || [], fg = k => fmSt.find(x => x.key === k)?.value;
+  const stats = fmSt.length ? [['Matches', fg('matches_uppercase')], ['Goals', fg('goals')], ['Assists', fg('assists')], ['Rating', fg('rating') ? (+fg('rating')).toFixed(2) : null]].filter(x => x[1] != null).map(([label, value]) => ({ label, value }))
+    : ss.slice(0, 4).map(x => ({ label: x.displayName.replace('Starts-Substitute Appearances', 'Starts (sub)'), value: x.displayValue }));
+  const caption = fmSt.length ? `${esc(f.mainLeague.name || '')} ${esc(f.mainLeague.season || '')}` : ss.length ? esc(a.statsSummary.displayName || '') : '';
+  const card = name ? `<fl-tilt class="tcard" style="--tc:${v.color}"><span class="tcard-top"><b class="num">${esc(jersey || '')}</b><i>${esc(a?.position?.abbreviation || (pos || '').split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase())}</i></span>${face(name, club, v.tmp?.photo || (f ? FMP(f.id) : ''), 'face')}<span class="tcard-n">${esc(name.split(' ').slice(-1)[0])}</span><span class="tcard-f">${t ? `<img src="${esc(logoOf(t))}" alt="">` : f?.team?.crest ? `<img src="${esc(f.team.crest)}" alt="">` : ''}${a?.flag?.href ? `<img src="${esc(a.flag.href)}" alt="">` : ''}</span><i class="tcard-shine"></i></fl-tilt>` : `<img class="face" src="${SIL}" alt="">`;
+  return flProfile.hero({ back, sport: 'soccer', id: v.id, name: name || '', color: v.color, cls: 'pfh-soccer', face: card,
+    team: teamBtn, number: jersey, position: pos, status,
+    extra: name ? `<div class="tact"><button class="favbtn" data-act="pfav" aria-pressed="${isFavPlayer(v.id)}">${isFavPlayer(v.id) ? '★ Following' : '☆ Follow'}</button></div>${playerFacts(v)}` : '', stats, caption });
 }
 // the quick facts under a player's name, like the bio line on ESPN player pages
 function playerFacts(v){
@@ -4970,6 +4970,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="record.js"></script>
 <script src="fx.js"></script>
 <script src="heat.js"></script>
+<script src="profile.js"></script>
 <script src="meter.js"></script>
 <script src="edge.js"></script>
 <script src="pages.js"></script>
