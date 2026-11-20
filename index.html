@@ -4001,6 +4001,7 @@ function renderProfile(){
     const since = new Date(me.created * 1000).toLocaleDateString([], { month: 'long', year: 'numeric' });
     body = `<div class="pf-card">${avatarHTML('lg')}<div><strong id="pfDisplay">${esc(me.display)}</strong><span>@${esc(me.username)}</span><small>Member since ${esc(since)}</small></div></div>
       ${me.prefs?.bio && !P.edit ? `<p class="pf-bio">${esc(me.prefs.bio)}</p>` : ''}
+      <button class="btn ghost pf-editbtn" data-page="profile" data-act="pfclose">My profile page: record, stats and themes</button>
       <div class="pf-stats"><span><b class="num">${S.fav.length}</b> teams</span><span><b class="num">${S.favPlayers.length}</b> players</span><span><b class="num">${S.favLeagues.length}</b> leagues</span></div>
       ${P.edit ? `<form id="editForm" class="pf-form">
           <label for="edName">Display name</label><input id="edName" maxlength="40" value="${esc(me.display)}">
@@ -4985,10 +4986,13 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="live.js"></script>
 <script src="labpage.js"></script>
 <script src="predictions.js"></script>
+<script src="parlaycore.js"></script>
+<script src="parlays.js"></script>
 <script src="transfers.js"></script>
 <script src="members.js"></script>
 <script src="palette.js"></script>
 <script src="settings.js"></script>
+<script src="me.js"></script>
 <script src="guide.js"></script>
 <script type="module">
 // Predicted lineups: Claude researches recent team news with web search, using the viewer's own API key.

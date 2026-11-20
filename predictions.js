@@ -175,7 +175,7 @@
         <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${range(ours)}</b></div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk ? range(mk) : '–'}</b></div></div>
         <p class="pd-warn">${games.length ? `${ic('help', 16)}<span><b>Linked picks.</b> ${games.length === 1 ? `More than one pick comes from ${esc(games[0] || 'the same game')}` : 'Some picks come from the same games'}, so they move together and can't be multiplied. The range shows the limits the true chance sits between.</span>`
           : n > 1 ? `<span>No two picks come from the same game, so the chances are multiplied together.</span>` : `<span>Add another pick to see the chance they all hit.</span>`}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}</p>
-        <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="save" data-fk="save">${ic('save', 18)}Save slip</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
+        <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="track" data-fk="track">${ic('ticket', 18)}Track it live</button><button type="button" class="bt ghost pd-clear" data-pd="save" data-fk="save">Save slip</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
         <p class="pd-said" role="status">${P.saved ? `Saved. ${window.S?.me ? 'It is kept with your account.' : 'It is kept in this browser; log in to keep it with your account.'}` : ''}</p>`
         : `<p class="pd-empty">Your slip is empty. Press ${ic('plus', 14)}<span class="sr-only">the plus button</span> on a pick to add it, and see the chance they all hit.</p>`}
       ${P.slips.length ? `<div class="pd-saved"><span class="pd-k">Saved slips</span>${P.slips.slice(0, 3).map(s => { const c = combine(s.legs, 'ours');
@@ -246,6 +246,7 @@
     if (d.pdyes) { P.slips = P.slips.filter(x => x.id !== d.pdyes); P.confirm = null; saveSlips(); return draw() }
     if (d.pd === 'keep') { P.confirm = null; return draw() }
     if (d.pd === 'save') return saveSlip();
+    if (d.pd === 'track') { const live = new Map(allPicks().map(p => [p.id, p])); return window.flParlays?.build(P.slip.map(l => live.get(l.id) || { gone: true })) }   // the slip becomes a parlay to lock in and follow
     if (d.pd === 'empty') { P.slip = []; store.set('fl.slip', P.slip); P.saved = 0; return draw() }
     if (d.pd === 'all') { P.all = !P.all; return draw() }
     if (d.pd === 'clear') { P.sport = 'all'; P.when = 'tonight'; P.min = 0; return draw() }
@@ -263,5 +264,5 @@
   window.flPages.add('predictions', { title: 'Predictions', render,
     onShow() { load(); clearInterval(P.timer); P.timer = setInterval(() => { if (window.flPages.current() !== 'predictions') return; if (Date.now() - P.at > 5 * 60000) load(true); else if (!document.activeElement?.closest?.('#pg-predictions select')) draw() }, 60000) },
     onHide() { clearInterval(P.timer) } });
-  window.flPredictions = { combine, results, state: P };   // not flPred: that is the match prediction card in predict.js
+  window.flPredictions = { combine, results, state: P, picks: allPicks };   // not flPred: that is the match prediction card in predict.js
 })();

@@ -21,6 +21,11 @@
     predictions: () => `<div class="gd-edge"><div class="gd-edge-r"><span class="lb">Our number</span><div class="trak"><i style="width:58%"></i></div><b class="num">58%</b></div>
         <div class="gd-edge-r"><span class="lb">Market</span><div class="trak mk"><i style="width:52%"></i></div><b class="num">52%</b></div>
         <div class="gd-edge-t"><span class="lb">Edge</span><b class="fig num">+6</b></div><span class="lb">A worked example, not a pick</span></div>`,
+    parlays: () => `<div class="gd-edge"><span class="lb">18 points so far, line 20.5</span><span class="py-trak"><i style="width:62%"></i><em style="left:71%"></em></span>
+        <div class="gd-edge-r"><span class="lb">Our live read</span><div class="trak"><i style="width:64%"></i></div><b class="num">64%</b></div>
+        <div class="gd-edge-r"><span class="lb">Books now</span><div class="trak mk"><i style="width:61%"></i></div><b class="num">61%</b></div><span class="lb">A worked example, not a pick</span></div>`,
+    myprofile: () => `<div class="gd-edge"><ol class="py-strip">${['won', 'lost', 'won', 'won', 'lost', 'won'].map(r => `<li class="${r}">${r === 'won' ? 'W' : 'L'}</li>`).join('')}</ol>
+        <div class="gd-edge-t"><span class="lb">Record</span><b class="fig num">4–2</b></div><span class="lb">A worked example. Yours is counted from your own parlays.</span></div>`,
     transfers: () => `<div class="gd-move"><span class="avx crest" aria-hidden="true">${ic('profile', 20)}</span><span class="gd-move-a">${ic('arrow', 22)}</span><span class="avx crest" aria-hidden="true">${ic('profile', 20)}</span>
         <div class="gd-move-t"><span class="pl">Confirmed</span><span class="pl">Fee, when it is reported</span></div></div>`,
     profiles: () => `<div class="gd-prof"><span class="avx av-lg" aria-hidden="true">${ic('profile', 30)}</span><div><div class="gd-prof-l"><i></i><i></i></div>
@@ -39,6 +44,10 @@
       text: `The heat meter is one number from 0 to 100 for how a player is running against a line. Up to 19 is ice cold, 20 to 39 is cool, 40 to 59 is a coin flip, 60 to 79 is heating up, and 80 or more is on fire. It always shows the number, the label and an icon, so you never have to read it by color alone.` },
     { id: 'predictions', title: 'Predictions', go: 'data-shell="pred"', words: 'predictions edge market odds track record calibration slip picks',
       text: `Predictions ranks the picks where our number and the market disagree most. Edge is our chance minus the market’s chance: if we say 58% and the odds imply 52%, the edge is +6. The track record shows how often picks at each confidence level really hit, and it stays on the page when the results are bad. These are estimates, never guarantees.` },
+    { id: 'parlays', title: 'Parlays', go: 'data-shell="parlays"', words: 'parlays parlay tracker legs picks live read odds books record units stake slip lock',
+      text: `Parlays lets you lock in a set of picks before their games start and follow them live. Add games (to win, a spread or a total) or player lines, then press Lock it in. Once a game is on, each pick shows the count so far against the line, our live read on its chance and what the books are pricing it at right now. Our live read is an estimate from the score, the time left and what was expected before the start. Finished parlays build your record on your profile. Add the odds you got to count units as well as wins. Floodlight never places a bet.` },
+    { id: 'myprofile', title: 'Your profile', go: 'data-page="profile"', goLabel: 'Open my profile', words: 'profile record stats graph chart units hit rate streak favorite favourite themes star avatar bio',
+      text: `Your profile shows your parlay record, hit rate, units and streak, a chart of how you have done, and how your picks split by league and by kind. It also holds your match picks, the teams and players you follow, and your favorite themes. Star a theme there and it appears in the three-dot menu, so you can switch in one press.` },
     { id: 'transfers', title: 'Transfer window', go: 'data-shell="transfers"', words: 'transfers transfer window moves signings trades fee rumours rumors',
       text: `The transfer window lists confirmed moves, newest first, with a tab for each league: NBA, NFL, MLB, college basketball, college football and soccer. The banner says whether the window is open and counts down to the next key date. Open a trade to see what each side received, filter by the kind of move, and tap the bell to follow a team. Where a league has no feed yet, the page says so instead of guessing.` },
     { id: 'profiles', title: 'Profiles and awards', go: 'data-guide="search"', goLabel: 'Search for a player', words: 'profile player fighter awards trophies champion career season belt',
@@ -47,6 +56,8 @@
       text: `Floodlight comes in five looks: Night Match, Team Colors, Members’ Club, Aurora Glass and Chrono. Choose one here or in Settings; it applies at once and follows your account. Text size, brightness, reduced motion and high contrast live in Settings too.` },
   ];
   const NEWS = [
+    ['Parlays you can follow live', 'Lock in your picks before the games start. During the games, see how each one is doing, our live read on the whole parlay and the books’ live price.'],
+    ['Your record on your profile', 'Wins, losses, hit rate, units and a chart, counted from your own finished parlays. Plus favorite themes you can switch between from the menu.'],
     ['Five themes', 'Night Match, Team Colors, Members’ Club, Aurora Glass and Chrono. Choose yours in Settings. The old light and dark switch is now part of the themes.'],
     ['One menu for your account', 'The round button at the top right holds your profile, Settings, the theme, this guide and Sign out.'],
     ['One Lab for players, teams and props', 'The player, team and prop screens are now one place, with a command bar you can open from anywhere and boards you can save.'],
