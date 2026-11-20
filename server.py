@@ -88,7 +88,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js"}
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -985,7 +985,7 @@ SESSIONS_FILE = CACHE_DIR / "sessions.json"
 _acct_lock = threading.Lock()
 SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
-             "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list}   # saved Lab boards, saved prediction slips, favorite sports, time zone
+             "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list, "favThemes": list}   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -1235,7 +1235,7 @@ def service_for(path):
         return "profiles"
     if path.startswith(("/api/tm/transfers/", "/api/transfers/")):
         return "transfers"
-    if path in ("/api/forecast/list", "/api/record") or path.startswith("/api/picks/"):
+    if path in ("/api/forecast/list", "/api/record", "/api/parlays") or path.startswith("/api/picks/"):
         return "predictions"
     if path.startswith(("/api/dfs/", "/api/forecast/")):
         return "lab"
@@ -1450,6 +1450,8 @@ def members_action(body, actor):
                 for u in targets:
                     k = u["username"].lower()
                     _users.pop(k, None)
+                    if _parlays.pop(k, None) is not None:
+                        storage.save(PARLAYS_FILE, _parlays)
                     for t in [t for t, v in _sessions.items() if v["user"] == k]:
                         _sessions.pop(t, None)
                     log_activity(me, f"Removed {name(u)}")
@@ -1474,6 +1476,114 @@ def admin_action(path, body, actor):
 def invite_for(token):
     now = time.time()
     return next((i for i in _mstate["invites"] if token and hmac.compare_digest(i.get("token", ""), token) and i.get("exp", 0) > now), None)
+
+
+# ---------- parlays: what a member is tracking, and their record ----------
+PARLAYS_FILE = CACHE_DIR / "parlays.json"
+_parlays = storage.load(PARLAYS_FILE, {})   # {username: [parlay, ...]} newest first
+PARLAY_MAX, PARLAY_LEGS = 300, 12
+LEG_TYPES = ("prop", "win", "draw", "total", "spread")
+LEG_TEXT = ("id", "type", "sport", "lg", "path", "eid", "game", "gameKey", "home", "away", "homeAbbr", "awayAbbr", "side", "team", "player", "opp",
+            "k", "label", "text", "short", "photo", "logo", "book")
+LEG_NUM = ("start", "line", "ours0", "market0", "mu", "sd", "m0", "t0")
+LEG_RESULTS = ("hit", "miss", "push", "void")
+
+
+def _num(v, lo=-1e7, hi=1e14):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or not lo <= v <= hi:
+        return None
+    return v
+
+
+def _leg_clean(raw):
+    """A leg as the page sent it, cut down to the fields a leg has. None when it isn't a leg."""
+    if not isinstance(raw, dict) or raw.get("type") not in LEG_TYPES:
+        return None
+    leg = {k: str(raw[k])[:160] for k in LEG_TEXT if isinstance(raw.get(k), (str, int, float)) and not isinstance(raw.get(k), bool) and str(raw[k]) != ""}
+    for k in LEG_NUM:
+        v = _num(raw.get(k))
+        if v is not None:
+            leg[k] = v
+    if raw.get("yes") is True:
+        leg["yes"] = True
+    if not leg.get("id") or not leg.get("text") or _num(leg.get("start")) is None:
+        return None
+    return leg
+
+
+def _parlay_status(legs):
+    """Lost as soon as one leg misses. Won when every leg is settled and none missed; a parlay of only pushes and voids is a push."""
+    res = [l.get("res") for l in legs]
+    if "miss" in res:
+        return "lost"
+    if any(r is None for r in res):
+        return "open"
+    return "won" if "hit" in res else "push"
+
+
+def parlays_of(user):
+    return _parlays.get(user["username"].lower(), [])
+
+
+def parlays_action(body, user):
+    op, now = body.get("op"), time.time()
+    key = user["username"].lower()
+    with _acct_lock:
+        mine = _parlays.setdefault(key, [])
+        cur = next((p for p in mine if p.get("id") == str(body.get("id") or "")), None)
+        if op == "add":
+            legs = [l for l in (_leg_clean(x) for x in (body.get("legs") if isinstance(body.get("legs"), list) else [])[:PARLAY_LEGS]) if l]
+            if not legs:
+                return 400, {"error": "Add at least one pick first."}
+            if len({l["id"] for l in legs}) != len(legs):
+                return 400, {"error": "The same pick is in this parlay twice."}
+            late = next((l for l in legs if l["start"] / 1000 < now - 120), None)
+            if late:   # a parlay is locked in before its games start, so the record can't be written after the fact
+                return 400, {"error": f"{late.get('game') or late['text']} has already started. Take that pick out and save again."}
+            if len(mine) >= PARLAY_MAX:
+                return 400, {"error": f"You can keep {PARLAY_MAX} parlays. Delete an old one first."}
+            p = {"id": "p" + secrets.token_hex(6), "at": int(now * 1000), "name": re.sub(r"\s+", " ", str(body.get("name") or "")).strip()[:80],
+                 "legs": legs, "status": "open"}
+            for k, lo, hi in (("odds", -100000, 1000000), ("stake", 0, 1e6), ("ours0", 0, 1), ("market0", 0, 1)):
+                v = _num(body.get(k), lo, hi)
+                if v is not None and not (k == "odds" and -100 < v < 100):
+                    p[k] = v
+            mine.insert(0, p)
+            cur = p
+        elif not cur:
+            return 404, {"error": "That parlay is not on your account any more."}
+        elif op == "delete":
+            mine.remove(cur)
+        elif op == "edit":   # the name, the odds you got and your stake can be changed; the picks can't
+            if "name" in body:
+                cur["name"] = re.sub(r"\s+", " ", str(body.get("name") or "")).strip()[:80]
+            for k, lo, hi in (("odds", -100000, 1000000), ("stake", 0, 1e6)):
+                if k in body:
+                    v = _num(body.get(k), lo, hi)
+                    if v is None or (k == "odds" and -100 < v < 100):
+                        cur.pop(k, None)
+                    else:
+                        cur[k] = v
+        elif op == "result":   # a leg's result, sent by the page once its game says so
+            by = {l["id"]: l for l in cur["legs"]}
+            for r in (body.get("legs") if isinstance(body.get("legs"), list) else [])[:PARLAY_LEGS]:
+                leg = by.get(str(r.get("id") or "")) if isinstance(r, dict) else None
+                if not leg or leg.get("res") or r.get("res") not in LEG_RESULTS or leg["start"] / 1000 > now:   # nothing settles before its game starts, or twice
+                    continue
+                leg["res"] = r["res"]
+                v = r.get("final")
+                if _num(v) is not None:
+                    leg["final"] = v
+                elif isinstance(v, str):
+                    leg["final"] = v[:40]
+            was = cur.get("status")
+            cur["status"] = _parlay_status(cur["legs"])
+            if cur["status"] != "open" and was == "open":
+                cur["settled"] = int(now * 1000)
+        else:
+            return 400, {"error": "Unknown action."}
+        storage.save(PARLAYS_FILE, _parlays)
+        return 200, {"ok": True, "parlay": None if op == "delete" else cur, "parlays": mine}
 
 
 def add_feedback(body, user):
@@ -1504,7 +1614,7 @@ def clean_prefs(raw, old):
         if k in raw and isinstance(raw[k], typ):
             v = raw[k]
             if typ is list:
-                v = [x for x in v if isinstance(x, dict) or (k == "favSports" and isinstance(x, str) and len(x) <= 24)][:200]
+                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes") and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
                 if k == "color":
@@ -1736,6 +1846,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not has(user, "predictions"):
                 return self.send_auth(403, {"error": "Your account doesn't include Predictions. Ask your admin for access.", "service": "predictions"})
             return self.send_auth(*cast_vote(user, body))
+        if u.path == "/api/parlays":
+            if not can_view(user):
+                return self.send_auth(403, {"error": "Your account is paused or waiting for an admin to switch it on."})
+            if not has(user, "predictions"):
+                return self.send_auth(403, {"error": "Your account doesn't include Predictions. Ask your admin for access.", "service": "predictions"})
+            return self.send_auth(*parlays_action(body, user))
         if u.path == "/api/me/prefs":
             if "follows" in body and not has(user, "alerts"):
                 return self.send_auth(403, {"error": "Your account doesn't include Alerts. Ask your admin for access.", "service": "alerts"})
@@ -1759,6 +1875,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(401, {"error": "That password isn't right."})
             with _acct_lock:
                 _users.pop(user["username"].lower(), None)
+                if _parlays.pop(user["username"].lower(), None) is not None:
+                    storage.save(PARLAYS_FILE, _parlays)
                 for t in [t for t, v in _sessions.items() if v["user"] == user["username"].lower()]:
                     _sessions.pop(t, None)
                 _save_accounts()
@@ -1847,6 +1965,9 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path == "/api/me":
                 _, user = session_user(self.headers.get("Cookie"))
                 return self.send_auth(200, {"user": public_user(user) if user else None, "gated": GATED})
+            if u.path == "/api/parlays":   # the member's own tracked parlays
+                _, user = session_user(self.headers.get("Cookie"))
+                return self.send_auth(200, {"parlays": parlays_of(user) if user else [], "signedIn": bool(user)})
             if u.path == "/api/admin/users":
                 _, user = session_user(self.headers.get("Cookie"))
                 if role_of(user) != "admin":
