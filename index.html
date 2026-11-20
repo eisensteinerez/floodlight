@@ -1814,10 +1814,10 @@ function flowPane(e, s){
   const max = Math.max(1, ...hs.map(x=>x[1]), ...as.map(x=>x[1]));
   const sy = v => v / max * (mid - 14);
   const path = (arr, dir) => `M0 ${mid} ` + arr.map(([m,v]) => `L${sx(m).toFixed(1)} ${(mid - dir*sy(v)).toFixed(1)}`).join(' ') + ` L${Wd} ${mid}Z`;
-  let ticks = ''; for (let m=0; m<=maxM; m+=15) ticks += `<line x1="${sx(m)}" x2="${sx(m)}" y1="6" y2="${Hh-6}" stroke="var(--line)" stroke-width="1"/><text x="${sx(m)}" y="${Hh+14}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Inter,sans-serif">${m}'</text>`;
+  let ticks = ''; for (let m=0; m<=maxM; m+=15) ticks += `<line x1="${sx(m)}" x2="${sx(m)}" y1="6" y2="${Hh-6}" stroke="var(--line)" stroke-width="1"/><text x="${sx(m)}" y="${Hh+14}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Sofia Sans,sans-serif">${m}'</text>`;
   const goals = (s.keyEvents||[]).filter(k=>k.scoringPlay).map(k => { const side = teamSide(k.team); const x = sx((k.clock?.value||0)/60); const y = side==='home' ? 10 : Hh-10;
-    return `<g><line x1="${x}" x2="${x}" y1="${mid}" y2="${y}" stroke="var(--fg)" stroke-width="1" stroke-dasharray="2 2"/><circle cx="${x}" cy="${y}" r="7" fill="var(--surface)" stroke="var(--fg)" stroke-width="1.2"/><text x="${x}" y="${y+3.5}" text-anchor="middle" font-size="9">⚽</text></g>` }).join('');
-  const now = e.state === 'in' ? (()=>{ const m = parseInt(e.clock)||0; const x = sx(m); return `<line x1="${x}" x2="${x}" y1="0" y2="${Hh}" stroke="var(--live)" stroke-width="1.5"/><text x="${x+4}" y="12" font-size="10" fill="var(--live)" font-family="Inter,sans-serif">NOW</text>` })() : '';
+    return `<g><line x1="${x}" x2="${x}" y1="${mid}" y2="${y}" stroke="var(--fg)" stroke-width="1" stroke-dasharray="2 2"/><circle cx="${x}" cy="${y}" r="7" fill="var(--surface)" stroke="var(--fg)" stroke-width="1.2"/><circle cx="${x}" cy="${y}" r="2.6" fill="var(--fg)"/></g>` }).join('');
+  const now = e.state === 'in' ? (()=>{ const m = parseInt(e.clock)||0; const x = sx(m); return `<line x1="${x}" x2="${x}" y1="0" y2="${Hh}" stroke="var(--live)" stroke-width="1.5"/><text x="${x+4}" y="12" font-size="10" fill="var(--live)" font-family="Sofia Sans,sans-serif">NOW</text>` })() : '';
   const ht = `<line x1="${sx(45)}" x2="${sx(45)}" y1="0" y2="${Hh}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>`;
   return `<div class="flow"><h5>Attacking pressure · shots, corners and goals</h5>
     <svg viewBox="0 -4 ${Wd} ${Hh+24}" role="img" aria-label="Momentum chart">${ticks}${ht}
@@ -1828,7 +1828,7 @@ function flowPane(e, s){
 }
 function icon(t){
   t = t || '';
-  if (/goal/.test(t)) return '⚽';
+  if (/goal/.test(t)) return '<svg class="ic" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="7" cy="7" r="2.3" fill="currentColor"/></svg>';
   if (/red/.test(t)) return '<svg class="ic" width="10" height="14"><rect width="10" height="14" rx="2" fill="#E5383B"/></svg>';
   if (/yellow/.test(t)) return '<svg class="ic" width="10" height="14"><rect width="10" height="14" rx="2" fill="#F4C542"/></svg>';
   if (/substitution/.test(t)) return '<svg class="ic" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 2v9M1.5 8.5 4 11l2.5-2.5" stroke="var(--loss)"/><path d="M10 12V3M7.5 5.5 10 3l2.5 2.5" stroke="var(--win)"/></svg>';
@@ -1864,7 +1864,7 @@ function lineupsPane(e, s){
     const club = r.team?.displayName || '';
     const row = p => { const nm = p.athlete?.displayName || '', g = stat(p,'totalGoals');
       return luRow({ name: nm, number: p.jersey, club, photo: ESPN_SHOT(p.athlete?.id), inn: p.subbedIn, sub: [p.position?.abbreviation, p.subbedIn ? 'came on' : p.subbedOut ? 'subbed off' : ''].filter(Boolean).join(' · '),
-        ev: `${g ? '⚽'.repeat(g) : ''}${stat(p,'redCards') ? icon('red') : stat(p,'yellowCards') ? icon('yellow') : ''}${p.subbedIn ? '<span class="lu-in" aria-label="came on">↑</span>' : ''}${p.subbedOut ? '<span class="lu-out" aria-label="subbed off">↓</span>' : ''}`,
+        ev: `${g ? icon('goal').repeat(g) : ''}${stat(p,'redCards') ? icon('red') : stat(p,'yellowCards') ? icon('yellow') : ''}${p.subbedIn ? '<span class="lu-in" aria-label="came on">↑</span>' : ''}${p.subbedOut ? '<span class="lu-out" aria-label="subbed off">↓</span>' : ''}`,
         rating: e.pstats && findMatchPlayer(e.pstats, { name: nm, number: p.jersey, side: r.homeAway })?.rating, attrs: `data-player="${esc(p.athlete?.id||'')}"` }) };
     const subs = r.roster.filter(p=>!p.starter).sort((a, b) => (b.subbedIn ? 1 : 0) - (a.subbedIn ? 1 : 0));
     return `<div><div class="head"><i style="background:${col(r.homeAway)}"></i>${esc(r.team?.displayName||'')}<small>${esc(r.formation||'')}</small></div>
@@ -2277,9 +2277,9 @@ function valueChart(hist, col){
   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ');
   const area = `${line} L${x(t1)} ${H - pb} L${x(t0)} ${H - pb}Z`;
   const step = vmax > 1e8 ? 5e7 : vmax > 4e7 ? 2e7 : vmax > 1e7 ? 5e6 : vmax > 2e6 ? 1e6 : 2.5e5;
-  let grid = ''; for (let v = 0; v <= vmax; v += step) grid += `<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(v)+3.5}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="Inter,sans-serif">${eur(v)}</text>`;
+  let grid = ''; for (let v = 0; v <= vmax; v += step) grid += `<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(v)+3.5}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="Sofia Sans,sans-serif">${eur(v)}</text>`;
   const y0 = new Date(t0).getFullYear(), y1 = new Date(t1).getFullYear(); let years = '';
-  for (let yr = y0 + 1; yr <= y1; yr++) { const tx = x(+new Date(yr, 0, 1)); years += `<text x="${tx}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Inter,sans-serif">${yr}</text>` }
+  for (let yr = y0 + 1; yr <= y1; yr++) { const tx = x(+new Date(yr, 0, 1)); years += `<text x="${tx}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Sofia Sans,sans-serif">${yr}</text>` }
   const peak = pts.reduce((a, b) => b.v > a.v ? b : a), last = pts[pts.length - 1];
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Market value history, from ${eur(pts[0].v)} to ${eur(last.v)}, peak ${eur(peak.v)}">${grid}${years}
     <path d="${area}" fill="${col}" fill-opacity=".14"/><path d="${line}" fill="none" stroke="${col}" stroke-width="2.2" stroke-linejoin="round"/>
@@ -3150,8 +3150,8 @@ function posPitch(ps, col){
   ps = (ps || []).filter(p => p.x != null && p.y != null); if (!ps.length) return '';
   let stripes = ''; for (let i = 0; i < 7; i++) stripes += `<rect x="0" y="${i * 15}" width="68" height="15" fill="${i % 2 ? 'var(--pitch)' : 'var(--pitch-2)'}"/>`;
   const dots = [...ps].sort((a, b) => a.main - b.main).map(p => { const x = p.x * 68, y = p.y * 105;
-    return p.main ? `<circle cx="${x}" cy="${y}" r="6.4" fill="${col}" stroke="#fff" stroke-width=".8"/><text x="${x}" y="${y + 1.6}" text-anchor="middle" font-size="4.4" font-weight="700" fill="${lum(col.startsWith('#') ? col : '#3D6FD9') > .45 ? '#111' : '#fff'}" font-family="Inter,sans-serif">${esc(p.short || '')}</text>`
-      : `<circle cx="${x}" cy="${y}" r="5" fill="#fff" fill-opacity=".88"/><text x="${x}" y="${y + 1.4}" text-anchor="middle" font-size="3.8" font-weight="700" fill="#111" font-family="Inter,sans-serif">${esc(p.short || '')}</text>` }).join('');
+    return p.main ? `<circle cx="${x}" cy="${y}" r="6.4" fill="${col}" stroke="#fff" stroke-width=".8"/><text x="${x}" y="${y + 1.6}" text-anchor="middle" font-size="4.4" font-weight="700" fill="${lum(col.startsWith('#') ? col : '#3D6FD9') > .45 ? '#111' : '#fff'}" font-family="Sofia Sans,sans-serif">${esc(p.short || '')}</text>`
+      : `<circle cx="${x}" cy="${y}" r="5" fill="#fff" fill-opacity=".88"/><text x="${x}" y="${y + 1.4}" text-anchor="middle" font-size="3.8" font-weight="700" fill="#111" font-family="Sofia Sans,sans-serif">${esc(p.short || '')}</text>` }).join('');
   return `<svg viewBox="0 0 68 105" role="img" aria-label="${esc('Positions played: ' + ps.map(p => `${p.label}${p.main ? ' (main)' : ''}`).join(', '))}">${stripes}
     <g fill="none" stroke="var(--chalk)" stroke-width=".45"><rect x="1" y="1" width="66" height="103"/><path d="M1 52.5h66"/><circle cx="34" cy="52.5" r="9.15"/>
     <rect x="13.85" y="1" width="40.3" height="16.5"/><rect x="13.85" y="87.5" width="40.3" height="16.5"/><rect x="24.84" y="1" width="18.32" height="5.5"/><rect x="24.84" y="98.5" width="18.32" height="5.5"/></g>${dots}</svg>`;
@@ -3167,7 +3167,7 @@ function radarSVG(tr, col){
   const labels = it.map((x, i) => { const [lx, ly] = pt(i, R + 14), c = Math.cos(-Math.PI / 2 + 2 * Math.PI * i / n);
     const anchor = c > .3 ? 'start' : c < -.3 ? 'end' : 'middle', dy = ly < cy - R * .5 ? -4 : ly > cy + R * .5 ? 12 : 4;
     const top = ly + dy - (dy < 0 ? 12 : dy > 4 ? 0 : 6);
-    return `<text x="${lx}" y="${top}" text-anchor="${anchor}" font-size="12" fill="var(--fg)" font-weight="600">${esc(x.title)}<tspan x="${lx}" dy="14" fill="var(--muted)" font-family="Inter,sans-serif" font-weight="500">${Math.round((+x.value || 0) * 100)}</tspan></text>` }).join('');
+    return `<text x="${lx}" y="${top}" text-anchor="${anchor}" font-size="12" fill="var(--fg)" font-weight="600">${esc(x.title)}<tspan x="${lx}" dy="14" fill="var(--muted)" font-family="Sofia Sans,sans-serif" font-weight="500">${Math.round((+x.value || 0) * 100)}</tspan></text>` }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc((tr.title || 'Player traits') + ': ' + it.map(x => `${x.title} ${Math.round((+x.value || 0) * 100)} out of 100`).join(', '))}">${rings}${axes}
     <polygon points="${shape}" fill="${col}" fill-opacity=".28" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>${labels}</svg>`;
 }
@@ -3259,7 +3259,7 @@ function zoneLayer(sh){
   const max = Math.max(...sh, .01);
   return sh.map((s, k) => { const x = (k % 6) * 17.5, y = Math.floor(k / 6) * 17, p = Math.round(s * 100);
     return `<rect x="${x + .3}" y="${y + .3}" width="16.9" height="16.4" rx="1" fill="var(--accent)" fill-opacity="${(s / max * .78).toFixed(2)}"/>
-      <text x="${x + 8.75}" y="${y + 10.2}" text-anchor="middle" font-size="4.6" font-weight="700" font-family="Inter,sans-serif" fill="#fff" style="paint-order:stroke" stroke="rgba(0,0,0,.4)" stroke-width=".5">${p}%</text>` }).join('');
+      <text x="${x + 8.75}" y="${y + 10.2}" text-anchor="middle" font-size="4.6" font-weight="700" font-family="Sofia Sans,sans-serif" fill="#fff" style="paint-order:stroke" stroke="rgba(0,0,0,.4)" stroke-width=".5">${p}%</text>` }).join('');
 }
 function pZonesPane(v){
   const f = v.fm;
@@ -3301,7 +3301,7 @@ function pMatchesPane(v){
     const info = played ? `${m.minutes}'${ga2 ? ' · ' + ga2 : ''}` : m.bench ? 'On the bench' : 'Did not play';
     const label = `${d ? d.toLocaleDateString() : ''}, ${m.league || ''}, ${m.home ? 'home to' : 'away at'} ${m.opponent}, ${has ? `${res === 'W' ? 'won' : res === 'L' ? 'lost' : 'drew'} ${gf}–${ga}` : ''}, ${info}${m.rating ? ', rating ' + m.rating : ''}`;
     const inner = `<span class="d">${d ? esc(fmtDate(d)) : ''}<small>${esc(m.league || '')}</small></span>
-      <span class="op"><img src="${esc(FM_IMGS)}/logo/teamlogo/${esc(m.opponentId)}.png" alt="" onerror="this.style.visibility='hidden'"><span><span class="nm">${m.home ? 'vs' : 'at'} ${esc(m.opponent)}</span><small>${esc(info)}${m.motm ? ' · ★ Player of the match' : ''}</small></span></span>
+      <span class="op"><img src="${esc(FM_IMGS)}/logo/teamlogo/${esc(m.opponentId)}.png" alt="" onerror="this.style.visibility='hidden'"><span><span class="nm">${m.home ? 'vs' : 'at'} ${esc(m.opponent)}</span><small>${esc(info).replace('🟨', icon('yellow')).replace('🟥', icon('red'))}${m.motm ? ' · ★ Player of the match' : ''}</small></span></span>
       <span class="sc">${res ? `<span class="res ${res}">${res}</span>` : ''} <span class="num">${has ? `${gf}–${ga}` : ''}</span></span>
       <span class="rtc">${played ? rtChip(m.rating) : ''}</span>`;
     return played ? `<button class="pm-m" data-act="pmopen" data-to="${esc(m.id)}" aria-label="${esc(label + '. Open match stats')}">${inner}</button>` : `<div class="pm-m off" aria-label="${esc(label)}" role="group">${inner}</div>`;

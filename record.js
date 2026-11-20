@@ -155,7 +155,7 @@ function recTabs(count){
 function recCard(){
   const R = S.rec, rows = recRows(), s = recStats(rows);
   const c = document.createElement('canvas'); c.width = 1200; c.height = 675;
-  const x = c.getContext('2d'), F = '"FL Wide", Geist, system-ui, sans-serif', B = 'Geist, system-ui, sans-serif';
+  const x = c.getContext('2d'), F = '"Sofia Sans Extra Condensed", "Arial Narrow", sans-serif', B = '"Sofia Sans", system-ui, sans-serif';
   const g = x.createLinearGradient(0, 0, 1200, 675); g.addColorStop(0, '#0B111C'); g.addColorStop(1, '#16233A');
   x.fillStyle = g; x.fillRect(0, 0, 1200, 675);
   x.fillStyle = '#F4C542'; x.fillRect(0, 0, 1200, 8);
