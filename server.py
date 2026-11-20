@@ -1286,6 +1286,19 @@ def migrate_members():
         _save_members()
 
 
+RETIRED_COLORS = {"#8e5cf6": "#A0522D"}   # avatar colours the picker no longer offers, and what replaces each
+
+
+def retire_colors():
+    """Move anyone still on a retired avatar colour to its replacement."""
+    with _acct_lock:
+        hit = [u for u in _users.values() if str((u.get("prefs") or {}).get("color") or "").lower() in RETIRED_COLORS]
+        for u in hit:
+            u["prefs"]["color"] = RETIRED_COLORS[u["prefs"]["color"].lower()]
+        if hit:
+            _save_accounts()
+
+
 def ensure_admin():
     """Recreate the admin account from FLOODLIGHT_ADMIN_PASSWORD if it's missing, so you can always log in."""
     if not (ADMIN and ADMIN_PASSWORD) or ADMIN in _users or not re.fullmatch(r"[a-z0-9_.]{3,20}", ADMIN):
@@ -1494,6 +1507,8 @@ def clean_prefs(raw, old):
                 v = [x for x in v if isinstance(x, dict) or (k == "favSports" and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
+                if k == "color":
+                    v = RETIRED_COLORS.get(v.lower(), v)
             prefs[k] = v
     return prefs
 
@@ -2041,6 +2056,7 @@ if __name__ == "__main__":
     odds.setup(fetch=fetch, similar=similar)
     ensure_admin()
     migrate_members()
+    retire_colors()
     if MEM_LIMIT_MB:
         threading.Thread(target=_memory_guard, daemon=True, name="memory-guard").start()
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
