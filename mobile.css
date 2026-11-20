@@ -52,6 +52,28 @@
   html:root[data-theme] .m.mx{padding:16px 14px}
   html:root[data-theme] .m.mx .mx-n{overflow-wrap:break-word;text-wrap:balance}
 
+  /* ---------- match page ---------- */
+  html:root[data-theme] .sheet .form i{width:22px;height:22px;line-height:22px;font-size:10.5px}
+  html:root[data-theme] .sheet .form{gap:3px}
+  /* prediction card: verdict on top, the three picks in a row under it */
+  html:root[data-theme] .pr-verdict{grid-template-columns:minmax(0,1fr);gap:14px;padding:16px}
+  html:root[data-theme] .pr-picks,html:root[data-theme] .pr-picks.three{grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:6px}
+  html:root[data-theme] .pr-picks.three{--n:3}
+  html:root[data-theme] .pr-pick{min-width:0;padding-inline:6px}
+  html:root[data-theme] .pr-pick span{overflow-wrap:anywhere}
+  /* match stats: possession, the four key numbers and the bar list all stay inside the card */
+  html:root[data-theme] .sx{grid-template-columns:minmax(0,1fr)}
+  html:root[data-theme] .sx-poss{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;padding:14px 10px}
+  html:root[data-theme] .sx-side{min-width:0}
+  html:root[data-theme] .sx-side b{font-size:36px}
+  html:root[data-theme] .sx-ring{width:88px;height:88px}
+  html:root[data-theme] .sx-keys{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  html:root[data-theme] .sx-key{min-width:0;padding:12px}
+  html:root[data-theme] .sx-kn{gap:8px}
+  html:root[data-theme] .sx-kn b{font-size:22px;white-space:nowrap}
+  html:root[data-theme] .sx-row{grid-template-columns:28px minmax(0,1fr) 84px minmax(0,1fr) 28px;gap:6px}
+  html:root[data-theme] .sx-row em{font-size:12px;line-height:1.2}
+
 }
 
 /* the smallest phones (iPhone SE and mini) */
