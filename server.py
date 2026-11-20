@@ -47,6 +47,7 @@ import boxing
 import forecaster
 import dfs
 import odds
+import ufcdata
 import storage
 import discord_bot
 import lab
@@ -1998,6 +1999,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
             if u.path == "/api/forecast/list":   # every tracked match with its latest forecast (read-only)
                 return self.send_auth(200, {"matches": forecaster.upcoming(), "now": int(time.time())})
+            if u.path == "/api/ufc/rankings":   # the official UFC rankings, read from ufc.com (ufcdata.py)
+                return self.send_json(ufcdata.rankings(), max_age=900)
+            if u.path == "/api/ufc/events":   # the UFC's own list of upcoming events
+                return self.send_json(ufcdata.events(), max_age=600)
             if u.path == "/api/odds/board":
                 if q.get("sport") not in ("soccer", "football", "basketball", "baseball") or not re.fullmatch(r"[A-Za-z0-9_.]{1,20}", q.get("lg", "")):
                     return self.send_json({"error": "bad request"}, 400)
@@ -2175,6 +2180,7 @@ if __name__ == "__main__":
     import atexit
     atexit.register(save_photos)
     odds.setup(fetch=fetch, similar=similar)
+    ufcdata.setup(fetch=fetch, cache_dir=CACHE_DIR)
     ensure_admin()
     migrate_members()
     retire_colors()
