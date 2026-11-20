@@ -56,6 +56,7 @@
       text: `Floodlight comes in five looks: Night Match, Team Colors, Members’ Club, Aurora Glass and Chrono. Choose one here or in Settings; it applies at once and follows your account. Text size, brightness, reduced motion and high contrast live in Settings too.` },
   ];
   const NEWS = [
+    ['UFC: official rankings and champion gold', 'Ranks and champions now come from the UFC’s own list. Champions wear a gold belt beside their name, upcoming events reach further ahead, and every fighter profile shows their prime and how close they are to it now.'],
     ['Parlays you can follow live', 'Lock in your picks before the games start. During the games, see how each one is doing, our live read on the whole parlay and the books’ live price.'],
     ['Your record on your profile', 'Wins, losses, hit rate, units and a chart, counted from your own finished parlays. Plus favorite themes you can switch between from the menu.'],
     ['Five themes', 'Night Match, Team Colors, Members’ Club, Aurora Glass and Chrono. Choose yours in Settings. The old light and dark switch is now part of the themes.'],
