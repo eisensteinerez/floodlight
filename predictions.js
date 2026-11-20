@@ -256,7 +256,7 @@
   });
   document.addEventListener('change', e => { if (e.target.id === 'pdSort') { P.sort = e.target.value; draw() } });
   // saved slips follow the account
-  addEventListener('fl:me', () => { const mine = window.S?.me?.prefs?.slips; if (!Array.isArray(mine)) return;
+  document.addEventListener('fl:me', () => { const mine = window.S?.me?.prefs?.slips; if (!Array.isArray(mine)) return;
     const have = new Set(P.slips.map(s => s.id)); const merged = [...P.slips, ...mine.filter(s => s && s.id && Array.isArray(s.legs) && !have.has(s.id))].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 30);
     if (merged.length !== P.slips.length) { P.slips = merged; saveSlips(); draw() } });
 

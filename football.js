@@ -391,7 +391,7 @@ function fbPredPane(e){
 
 /* ---------- team & player pages ---------- */
 function openFbTeam(id, lgKey){
-  pushView({ type: 'fbteam', id: String(id), lg: lgKey || 'nfl', tab: 'sched' });
+  if (viewBlocked({ type: 'fbteam' })) return; pushView({ type: 'fbteam', id: String(id), lg: lgKey || 'nfl', tab: 'sched' });
   const v = S.stack[S.stack.length - 1], l = FBL[v.lg];
   if (l.tsdb) { v.err = true; return renderSheet() }
   Promise.allSettled([cj(`${FBB}/${l.path}/teams/${id}/schedule`), cj(`${FBB}/${l.path}/teams/${id}/roster`), fbStandings(v.lg)]).then(([s, r]) => {
@@ -554,7 +554,7 @@ function fbRankIn(v, key, val){
 
 function openFbPlayer(id, lgKey){
   if (!id) return;
-  pushView({ type: 'fbplayer', id: String(id), lg: lgKey || 'nfl', tab: 'stats' });
+  if (viewBlocked({ type: 'fbplayer' })) return; pushView({ type: 'fbplayer', id: String(id), lg: lgKey || 'nfl', tab: 'stats' });
   const v = S.stack[S.stack.length - 1], l = FBL[v.lg] || FBL.nfl;
   Promise.allSettled([cj(`${FBW}/${l.path}/athletes/${id}`), cj(`${FBW}/${l.path}/athletes/${id}/overview`), cj(`${FBW}/${l.path}/athletes/${id}/stats`)]).then(([b, o, c]) => {
     v.bio = val(b)?.athlete; v.ov = val(o); v.car = val(c); if (!v.bio) v.err = true;

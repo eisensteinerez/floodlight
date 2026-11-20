@@ -589,7 +589,7 @@ function hkPredPane(v){
 function openHkTeam(id, lgKey, slug){
   if (!id) return;
   const l = HKL[lgKey] || HKL.nhl;
-  pushView({ type: 'hkteam', id: String(id), lg: l.key, slug: slug || '', tab: 'roster' });
+  if (viewBlocked({ type: 'hkteam' })) return; pushView({ type: 'hkteam', id: String(id), lg: l.key, slug: slug || '', tab: 'roster' });
   const v = S.stack[S.stack.length - 1], re = () => S.stack.includes(v) && renderSheet();
   hkStandings(l.key).then(re);
   if (l.src === 'espn') {
@@ -660,7 +660,7 @@ function hkTeamPane(v){
 // ESPN (NHL, college): bio, every stat ESPN keeps by season, game log and splits
 function openHkPlayer(id, lgKey){
   const l = HKL[lgKey] || HKL.nhl; if (!id) return;
-  pushView({ type: 'hkplayer', id: String(id), lg: l.key, tab: 'stats' });
+  if (viewBlocked({ type: 'hkplayer' })) return; pushView({ type: 'hkplayer', id: String(id), lg: l.key, tab: 'stats' });
   const v = S.stack[S.stack.length - 1], re = () => S.stack.includes(v) && renderSheet();
   Promise.allSettled([cj(`${HKW}/${l.path}/athletes/${id}`), cj(`${HKW}/${l.path}/athletes/${id}/stats`), cj(`${HKW}/${l.path}/athletes/${id}/gamelog`), cj(`${HKW}/${l.path}/athletes/${id}/splits`)]).then(([b, s, g, sp]) => {
     v.bio = val(b)?.athlete; v.stats = val(s); v.log = val(g); v.splits = val(sp); if (!v.bio) v.err = true; re() });
@@ -721,7 +721,7 @@ function hkPlayerPane(v){
 // the NHL's official player page: featured season, career totals by league, last 5 games and the full game log
 function openHkNhlPlayer(id){
   if (!id) return;
-  pushView({ type: 'hknhlp', id: String(id), lg: 'nhl', tab: 'stats' });
+  if (viewBlocked({ type: 'hknhlp' })) return; pushView({ type: 'hknhlp', id: String(id), lg: 'nhl', tab: 'stats' });
   const v = S.stack[S.stack.length - 1], re = () => S.stack.includes(v) && renderSheet();
   Promise.allSettled([getJSON(hkNhl(`web/v1/player/${id}/landing`)), getJSON(hkNhl(`web/v1/player/${id}/game-log/now`))]).then(([a, g]) => { v.p = val(a); v.log = val(g); if (!v.p) v.err = true; re() });
 }
@@ -772,7 +772,7 @@ function hkNhlPane(v){
 // Flashscore player page (other leagues)
 function openHkFsPlayer(id, slug, lgKey){
   if (!id || !slug) return;
-  pushView({ type: 'hkfsplayer', id: String(id), slug, lg: lgKey || 'khl', tab: 'stats' });
+  if (viewBlocked({ type: 'hkfsplayer' })) return; pushView({ type: 'hkfsplayer', id: String(id), slug, lg: lgKey || 'khl', tab: 'stats' });
   const v = S.stack[S.stack.length - 1];
   getJSON(`/api/hk/player?id=${id}&slug=${encodeURIComponent(slug)}`).then(d => { v.p = d; S.stack.includes(v) && renderSheet() }).catch(() => { v.err = true; S.stack.includes(v) && renderSheet() });
 }

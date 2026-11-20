@@ -1543,6 +1543,7 @@ async function select(id){
     if (m === 'fm') return;
     if (!m) { $('announce').textContent = "Couldn't load that match."; $('sheet').innerHTML = `<div class="sheet-body">${flErrorState("Couldn't load that match", 'It may have been removed, or the connection dropped.', 'closesheet')}</div>`; return }
   }
+  if (viewBlocked({ type: 'match' })) return;
   S.sel = id; S.summary = null; S.stack = [{type:'match', id}]; S.tblSeason = null;
   document.querySelectorAll('.m.sel,.ftr.sel').forEach(x=>x.classList.remove('sel'));
   document.querySelectorAll(`[data-ev="${id}"]`).forEach(x=>x.classList.add('sel'));
@@ -2394,7 +2395,11 @@ async function searchAll(q){
 function hideResults(){ const b = $('sres'); if (b) { b.hidden = true; $('q').setAttribute('aria-expanded','false') } }
 
 /* navigation */
+/* which service a sheet belongs to: a player or fighter is a profile, everything else (match, team, bout) is live scores */
+const viewService = t => t === 'tc' ? 'transfers' : /player$|fighter$|^hknhlp$/.test(t || '') ? 'profiles' : 'live';
+function viewBlocked(v){ const svc = viewService(v?.type); if (!window.flAccess || flAccess.has(svc)) return false; flAccess.block(svc); return true }
 function pushView(v){
+  if (viewBlocked(v)) return;
   if (!S.stack.length && S.sel) S.stack = [{type:'match', id:S.sel}];
   const top = S.stack[S.stack.length-1];
   if (top && top.type === v.type && top.id === v.id) return renderSheet();
@@ -2404,8 +2409,8 @@ function pushView(v){
 function openTeam(id, lg){
   if (String(id).startsWith('fm')) return openFMTeam({ id: String(id).slice(2) });
   if (FM_SOURCE[lg]) return openFMTeam({ espn: id });
-  pushView({type:'team', id, lg: lg && lg !== 'all' ? lg : null, tab:'overview'}); loadTeam(S.stack[S.stack.length-1]) }
-function openPlayer(id, o = {}){ if (!id) return; pushView({type:'player', id, tab:'overview', fmId: o.fmId || null}); const v = S.stack[S.stack.length-1]; if (!v.data) loadPlayer(v) }
+  if (viewBlocked({ type: 'team' })) return; pushView({type:'team', id, lg: lg && lg !== 'all' ? lg : null, tab:'overview'}); loadTeam(S.stack[S.stack.length-1]) }
+function openPlayer(id, o = {}){ if (!id) return; if (viewBlocked({ type: 'player' })) return; pushView({type:'player', id, tab:'overview', fmId: o.fmId || null}); const v = S.stack[S.stack.length-1]; if (!v.data) loadPlayer(v) }
 function goBack(){
   S.stack.pop();
   if (!S.stack.length) { syncStage(); $('sheet').classList.remove('open'); $('sheet').innerHTML = S.page === 'transfers' ? marketSummary(marketFiltered()) : emptySheet(); return }
@@ -3065,7 +3070,7 @@ async function openMatchPlayer(e, ref){
   openPlayerCard(d, p, { espn: ref.espn, color: p.side === 'away' ? e.ac : e.hc });
 }
 function openPlayerCard(d, p, o = {}){
-  pushView({ type: 'pmatch', id: `${d.id}:${p.id}`, d, p, espn: o.espn || null, color: o.color || '#' + fmColor(p.team || ''), tab: 'card' });
+  if (viewBlocked({ type: 'pmatch' })) return; pushView({ type: 'pmatch', id: `${d.id}:${p.id}`, d, p, espn: o.espn || null, color: o.color || '#' + fmColor(p.team || ''), tab: 'card' });
   $('announce').textContent = `${p.name}, match stats`;
 }
 async function openCardFromProfile(v, mid){
@@ -3375,7 +3380,7 @@ function goToDate(d){
 }
 
 /* transfer centre */
-function openTransfers(){ pushView({ type: 'tc', id: 'tc', tab: 'top', season: seasonOf(new Date(), 'eng.1'), page: 1 }); loadTC(S.stack[S.stack.length-1]) }
+function openTransfers(){ if (viewBlocked({ type: 'tc' })) return; pushView({ type: 'tc', id: 'tc', tab: 'top', season: seasonOf(new Date(), 'eng.1'), page: 1 }); loadTC(S.stack[S.stack.length-1]) }
 async function loadTC(v){
   v.data = null; renderSheet();
   try { v.data = await cjT(`/api/tm/transfers/top?season=${v.season}&page=${v.page}`, 3600e3); S.serverOK = true }
@@ -3891,7 +3896,7 @@ async function api(path, body){
   return d;
 }
 function adoptUser(user){
-  S.me = user;
+  S.me = user; window.flAccess?.set(user);
   if (user) {
     const p = user.prefs || {};
     S.fav = p.favTeams || []; S.favPlayers = p.favPlayers || []; S.favLeagues = p.favLeagues || [];
@@ -4194,7 +4199,7 @@ function fmMatchPane(e){
 
 /* FotMob team pages */
 async function openFMTeam(ref){
-  pushView({ type: 'fmteam', id: ref.id || ref.espn, tab: 'calendar' });
+  if (viewBlocked({ type: 'fmteam' })) return; pushView({ type: 'fmteam', id: ref.id || ref.espn, tab: 'calendar' });
   const v = S.stack[S.stack.length-1];
   try {
     let name = ref.name;
@@ -4981,6 +4986,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="labpage.js"></script>
 <script src="predictions.js"></script>
 <script src="transfers.js"></script>
+<script src="members.js"></script>
 <script src="palette.js"></script>
 <script src="settings.js"></script>
 <script src="guide.js"></script>

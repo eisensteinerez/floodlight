@@ -61,7 +61,9 @@
       place: [v.fullName, v.address?.city, v.address?.country].filter(Boolean).join(' · '), main, bouts, live: bouts.find(b => b.state === 'in') };
   }
 
+  const noLive = () => !!window.flAccess && !window.flAccess.has('live');
   async function load(force) {
+    if (noLive()) { H.games = []; H.ufc = []; H.box = []; H.at = Date.now(); H.shown = ymd(H.day); return paint() }   // live scores are switched off for this member
     if (H.loading || (!force && Date.now() - H.at < 25000 && H.shown === ymd(H.day))) return;
     H.loading = true;
     const want = H.day, day = ymd(want), today = sameLocalDay(want);
@@ -253,11 +255,12 @@
     sec.innerHTML = `
       <header class="pg-head hm-head"><div><h1 class="pg-title">${title}</h1><p class="pg-sub">${H.day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>${days()}</header>
       <div class="g2 hm-top">
-        ${!ready ? '<div class="skl hm-ftr-skl"></div>' : ftr ? featureHTML(ftr, list)
+        ${noLive() ? `<div class="card feature emp hm-empty">${ico('members', 30)}<b>Live scores are switched off for you</b><p>Ask your admin for access to see games, scores and lineups here.</p></div>`
+          : !ready ? '<div class="skl hm-ftr-skl"></div>' : ftr ? featureHTML(ftr, list)
           : `<div class="card feature emp hm-empty">${ico('live', 30)}<b>No games ${today ? 'today' : 'on this day'}</b><p>${H.err && !list.length ? 'The scoreboards did not answer. This page tries again every 30 seconds.' : 'Pick another day above, or choose a sport to see its schedule.'}</p></div>`}
         ${heatCard()}
       </div>
-      <section class="hm-live" aria-label="${rowTitle}"><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
+      <section class="hm-live" aria-label="${rowTitle}"${noLive() ? ' hidden' : ''}><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
         ${!ready ? `<div class="g4 hm-cards">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>` : four.length ? `<div class="g4 hm-cards">${four.map(card).join('')}</div>`
           : `<p class="hm-none"><b>Nothing else ${today ? 'today' : 'on this day'}</b><span>The featured game is the only one on the board.</span></p>`}</section>
       <div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>

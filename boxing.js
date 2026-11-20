@@ -160,9 +160,9 @@ function bxRail(){
 }
 
 /* ---------- fight pages ---------- */
-function bxOpenFight(id){ const e = (S.bx.cards || []).find(x => x.id === id) || [...S.bx.past.values()].flatMap(p => p.events || []).find(x => x.id === id); if (!e) return; pushView({ type: 'bxfight', id, e, tab: 'tape' }) }
-function bxOpenBout(id){ const b = (S.bx.ufc?.events || []).flatMap(e => e.bouts).find(x => x.id === id); if (!b) return; pushView({ type: 'bxbout', id, b, tab: 'tape' }) }
-function bxOpenFighter(name){ if (name) pushView({ type: 'bxfighter', id: name.toLowerCase(), name, tab: 'overview' }) }
+function bxOpenFight(id){ const e = (S.bx.cards || []).find(x => x.id === id) || [...S.bx.past.values()].flatMap(p => p.events || []).find(x => x.id === id); if (!e) return; if (viewBlocked({ type: 'bxfight' })) return; pushView({ type: 'bxfight', id, e, tab: 'tape' }) }
+function bxOpenBout(id){ const b = (S.bx.ufc?.events || []).flatMap(e => e.bouts).find(x => x.id === id); if (!b) return; if (viewBlocked({ type: 'bxbout' })) return; pushView({ type: 'bxbout', id, b, tab: 'tape' }) }
+function bxOpenFighter(name){ if (!name) return; if (viewBlocked({ type: 'bxfighter' })) return; pushView({ type: 'bxfighter', id: name.toLowerCase(), name, tab: 'overview' }) }
 
 // the two corners in one shape, whichever sport they come from
 function bxCorners(v){

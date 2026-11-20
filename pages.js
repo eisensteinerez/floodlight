@@ -11,7 +11,10 @@
     const s = document.createElement('section'); s.className = 'flpage'; s.id = 'pg-' + name; s.hidden = true; s.tabIndex = -1;
     s.setAttribute('aria-label', defs.get(name)?.title || name); shell()?.prepend(s); els.set(name, s); return s;
   }
+  // a page that belongs to a service a member does not have opens the "Ask your admin" page in its place
+  const NEEDS = { lab: 'lab', predictions: 'predictions', transfers: 'transfers', live: 'live' };
   function show(name, arg, opts = {}) {
+    if (NEEDS[name] && window.flAccess && !window.flAccess.has(NEEDS[name]) && defs.has('noaccess')) { arg = NEEDS[name]; name = 'noaccess' }
     const d = defs.get(name); if (!d) return false;
     if (d.guard && d.guard(arg) === false) return false;
     if (cur && cur !== name) leave(cur);
@@ -35,6 +38,7 @@
     leave(cur); cur = null; root.classList.remove('page-on'); delete root.dataset.page; document.title = 'Floodlight';
     if (!opts.fromHash && location.hash.startsWith('#/')) history.pushState({}, '', location.pathname + location.search);
     window.flShell?.sync?.(); document.dispatchEvent(new CustomEvent('fl:page', { detail: { name: null } }));
+    if (window.flAccess && !window.flAccess.has('live') && window.flHub && !window.flHub.on()) window.flHub.show();   // no scores to fall back to
   }
   function fromHash() {
     const m = /^#\/([a-z-]+)(?:\/(.+))?$/.exec(location.hash);
@@ -60,5 +64,13 @@
     ev.preventDefault(); const sel = all[j].getAttributeNames().filter(a => a.startsWith('data-')).map(a => `[${a}="${CSS.escape(all[j].getAttribute(a))}"]`).join('');
     all[j].click(); setTimeout(() => (sel && document.querySelector(`[role="radiogroup"] > [role="radio"]${sel}`) || all[j]).focus(), 0);
   });
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  defs.set('noaccess', { title: 'Ask your admin for access', fresh: true, render(el, svc) {
+    const A = window.flAccess, name = A?.name(svc) || 'This part of Floodlight', mine = Object.entries(A?.services() || {}).filter(([k, on]) => on && A.name(k)).map(([k]) => A.name(k));
+    el.innerHTML = `<div class="card emp na-card">${window.flShell?.ic?.('members', 32) || ''}<h1 class="na-h">Ask your admin for access</h1>
+      <p>${esc(name)} is switched off for your account. Nothing is broken: an admin chooses which parts of Floodlight each member can open, and they can switch this on for you.</p>
+      ${mine.length ? `<p class="na-have">You can open: ${mine.map(esc).join(', ')}.</p>` : ''}
+      <div class="cx-row na-go"><button type="button" class="bt" data-shell="home">Go to Home</button><button type="button" class="bt ghost" data-shell="profile">Open my profile</button></div></div>`;
+  } });
   window.flPages = { add(name, def) { defs.set(name, def); if (location.hash.startsWith('#/' + name)) setTimeout(fromHash, 0) }, show, hide, current: () => cur, redraw(name) { const el = els.get(name), d = defs.get(name); if (el && d && !el.hidden) d.render(el) } };
 })();

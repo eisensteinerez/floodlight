@@ -430,7 +430,7 @@ function tnPredPane(v){
 function openTnPlayer(id, slug, name){
   if (!id && !name) return;
   if (!slug) return tnFindPlayer(name, null, id);
-  pushView({ type: 'tnplayer', id: String(id), slug, tab: 'overview', mfilter: 'S' });
+  if (viewBlocked({ type: 'tnplayer' })) return; pushView({ type: 'tnplayer', id: String(id), slug, tab: 'overview', mfilter: 'S' });
   const v = S.stack[S.stack.length - 1]; if (v.p) return;
   getJSON(`/api/tn/player?id=${id}&slug=${encodeURIComponent(slug)}`).then(d => { v.p = d; tnPlayerEspn(v).then(() => S.stack.includes(v) && renderSheet()); S.stack.includes(v) && renderSheet() })
     .catch(() => { v.err = true; S.stack.includes(v) && renderSheet() });
@@ -544,7 +544,7 @@ function tnLogRow(m, pid){
 function tnOpenLogMatch(v, id){
   const m = [...(v.p?.matches || []), ...(v.p?.upcoming || [])].find(x => x.id === id); if (!m) return;
   if (!S.tn.matches.has(m.id)) { S.tn.matches.set(m.id, { ...m, date: new Date(m.ts * 1000) }); if (!S.tn.tours[m.tn]) S.tn.tours[m.tn] = { id: m.tn, name: m.tnName, level: m.level, disc: m.disc, surface: m.surface, indoor: m.indoor, tour: m.levelName, path: m.tnPath, qual: m.qual } }
-  const e = S.tn.matches.get(m.id); pushView({ type: 'tngame', id: e.id, e, tab: e.state === 'pre' ? 'pred' : 'summary' }); tnLoadGame(S.stack[S.stack.length - 1]);
+  const e = S.tn.matches.get(m.id); if (viewBlocked({ type: 'tngame' })) return; pushView({ type: 'tngame', id: e.id, e, tab: e.state === 'pre' ? 'pred' : 'summary' }); tnLoadGame(S.stack[S.stack.length - 1]);
 }
 
 /* ---------- tournament sheet ---------- */

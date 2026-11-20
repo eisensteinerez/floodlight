@@ -588,7 +588,7 @@ function bsGamePane(v){
 const bsSlug = s => normName(s || '').replace(/\s+/g, '-');
 function openBsTeam(id, lg, slug){
   if (!id || !BSL[lg]) return;
-  pushView({ type: 'bsbteam', id: String(id), lg, slug: slug || '', tab: 'sched' });
+  if (viewBlocked({ type: 'bsbteam' })) return; pushView({ type: 'bsbteam', id: String(id), lg, slug: slug || '', tab: 'sched' });
   const v = S.stack[S.stack.length - 1], l = BSL[lg], rr = () => S.stack.includes(v) && renderSheet();
   if (l.src === 'bb') return openBsBbTeam(v);
   bsStandings(lg).then(rr);
@@ -774,7 +774,7 @@ function openBsPlayer(id, lg, group){
   if (!id) return;
   if (lg === 'bbcl') return openBsBbPlayer(id, group);
   if (BSL[lg]?.x) return openBsXPlayer(id, lg, group);
-  pushView({ type: 'bsbplayer', id: String(id), lg: BSL[lg] ? lg : 'mlb', tab: 'stats' });
+  if (viewBlocked({ type: 'bsbplayer' })) return; pushView({ type: 'bsbplayer', id: String(id), lg: BSL[lg] ? lg : 'mlb', tab: 'stats' });
   const v = S.stack[S.stack.length - 1], rr = () => S.stack.includes(v) && renderSheet();
   cj(`${SA}/people/${id}?hydrate=currentTeam,team`).then(d => {
     v.bio = d.people?.[0]; if (!v.bio) { v.err = true; return rr() }
@@ -933,7 +933,7 @@ function bsXPool(lg, group){
 }
 function openBsXPlayer(id, lg, group){
   const from = S.stack[S.stack.length - 1]?.team?.name || '';
-  pushView({ type: 'bsbplayer', x: true, id: String(id), lg, tab: 'stats', grp: group || 'hitting', teamName: from });
+  if (viewBlocked({ type: 'bsbplayer' })) return; pushView({ type: 'bsbplayer', x: true, id: String(id), lg, tab: 'stats', grp: group || 'hitting', teamName: from });
   const v = S.stack[S.stack.length - 1], rr = () => S.stack.includes(v) && renderSheet();
   getJSON(`/api/bsb/x/player?lg=${lg}&id=${encodeURIComponent(id)}${group ? '&group=' + group : ''}`).then(async d => {
     if (!d?.bio) { v.err = true; return rr() }
@@ -1051,7 +1051,7 @@ function openBsBbTeam(v){
   Promise.all([bsBbPlayers('hitting'), bsBbPlayers('pitching')]).then(([h, p]) => { v.bbRoster = { hit: h.filter(x => x.teamId === v.id && x.s.plateAppearances).sort((a, b) => b.s.gamesPlayed - a.s.gamesPlayed), pit: p.filter(x => x.teamId === v.id).sort((a, b) => b.s.gamesPlayed - a.s.gamesPlayed) }; rr() });
 }
 async function openBsBbPlayer(id, group){
-  pushView({ type: 'bsbplayer', x: true, id: String(id), lg: 'bbcl', tab: 'stats', grp: group || 'hitting' });
+  if (viewBlocked({ type: 'bsbplayer' })) return; pushView({ type: 'bsbplayer', x: true, id: String(id), lg: 'bbcl', tab: 'stats', grp: group || 'hitting' });
   const v = S.stack[S.stack.length - 1], rr = () => S.stack.includes(v) && renderSheet();
   const [hp, pp] = await Promise.all([bsBbPlayers('hitting'), bsBbPlayers('pitching')]);
   const h = hp.find(x => x.id === v.id), p = pp.find(x => x.id === v.id), me = h || p;

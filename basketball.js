@@ -528,7 +528,7 @@ function bbGameTabs(v){
 function openBbTeam(id, lgKey, slug){
   if (!id) return;
   const l = BBL[lgKey] || BBL.nba;
-  pushView({ type: 'bbteam', id: String(id), lg: l.key, slug: slug || '', tab: 'roster' });
+  if (viewBlocked({ type: 'bbteam' })) return; pushView({ type: 'bbteam', id: String(id), lg: l.key, slug: slug || '', tab: 'roster' });
   const v = S.stack[S.stack.length - 1], re = () => S.stack.includes(v) && renderSheet();
   bbStandings(l.key).then(re);
   if (l.src === 'espn') {
@@ -640,7 +640,7 @@ function bbRankIn(pool, id, key, low){
 }
 function openBbPlayer(id, lgKey){
   const l = BBL[lgKey] || BBL.nba; if (!id) return;
-  pushView({ type: 'bbplayer', id: String(id), lg: l.key, tab: 'stats' });
+  if (viewBlocked({ type: 'bbplayer' })) return; pushView({ type: 'bbplayer', id: String(id), lg: l.key, tab: 'stats' });
   const v = S.stack[S.stack.length - 1], re = () => S.stack.includes(v) && renderSheet();
   Promise.allSettled([cj(`${BBW}/${l.path}/athletes/${id}`), cj(`${BBW}/${l.path}/athletes/${id}/stats`), cj(`${BBW}/${l.path}/athletes/${id}/gamelog`), cj(`${BBW}/${l.path}/athletes/${id}/splits`)]).then(([b, s, g, sp]) => {
     v.bio = val(b)?.athlete; v.stats = val(s); v.log = val(g); v.splits = val(sp); if (!v.bio) v.err = true;
@@ -717,7 +717,7 @@ function bbPlayerPane(v){
 // Flashscore player page
 function openBbFsPlayer(id, slug, lgKey){
   if (!id || !slug) return;
-  pushView({ type: 'bbfsplayer', id: String(id), slug, lg: lgKey || 'euroleague', tab: 'stats' });
+  if (viewBlocked({ type: 'bbfsplayer' })) return; pushView({ type: 'bbfsplayer', id: String(id), slug, lg: lgKey || 'euroleague', tab: 'stats' });
   const v = S.stack[S.stack.length - 1];
   getJSON(`/api/bb/player?id=${id}&slug=${encodeURIComponent(slug)}`).then(d => { v.p = d; if (d.photo) (S.bb.faces ||= {})[id] = d.photo; S.stack.includes(v) && renderSheet(); bbFsPlayerLeagues(v) }).catch(() => { v.err = true; S.stack.includes(v) && renderSheet() });
 }

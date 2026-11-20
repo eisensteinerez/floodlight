@@ -138,12 +138,13 @@
   const followKey = f => `${f.k}:${f.lg}:${f.id || ''}`;
   const follows = f => T.follows.some(x => followKey(x) === followKey(f));
   function toggleFollow(f) {
+    if (window.flAccess && !window.flAccess.has('alerts')) { T.msg = 'Alerts are switched off for your account. Ask your admin for access.'; return }
     T.follows = follows(f) ? T.follows.filter(x => followKey(x) !== followKey(f)) : [...T.follows, f].slice(-200);
     store.set('fl.follows', T.follows);
     try { if (window.S?.me && typeof api === 'function') api('/api/me/prefs', { follows: T.follows }).then(d => { if (d.user) S.me = d.user }).catch(() => {}) } catch (e) {}
     T.msg = follows(f) ? `Saved. You follow ${f.name}. Floodlight cannot send alerts yet, so you will see these moves here until a way to notify you is added.` : `You no longer follow ${f.name}.`;
   }
-  addEventListener('fl:me', () => { const mine = window.S?.me?.prefs?.follows; if (Array.isArray(mine) && mine.length) { T.follows = mine; store.set('fl.follows', mine) } });
+  document.addEventListener('fl:me', () => { const mine = window.S?.me?.prefs?.follows; if (Array.isArray(mine) && mine.length) { T.follows = mine; store.set('fl.follows', mine) } });
 
   /* ---------- pieces ---------- */
   const admin = () => window.S?.me?.role === 'admin';

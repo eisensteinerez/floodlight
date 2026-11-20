@@ -365,11 +365,13 @@ async function ufcOpenFight(id, ev){
   ev = ev || [...S.ufc.fc.values()].find(c => c.fights?.some(f => f.id === id))?.id || ufcAll().find(e => e.bouts.some(b => b.id === id))?.id;
   if (!ev) return;
   const v = { type: 'ufcfight', id: String(id), ev: String(ev), tab: '' };
+  if (typeof viewBlocked === 'function' && viewBlocked(v)) return;
   if (S.stack[S.stack.length - 1]?.type?.startsWith('ufc')) pushView(v); else { S.sel = null; S.stack = [v]; renderSheet(); $('sheet').classList.add('open') }
   if (!S.ufc.fc.has(String(ev))) { await ufcLoadCard(String(ev)); if (S.stack.includes(v)) renderSheet() }
 }
 async function ufcOpenFighter(id){
   const v = { type: 'ufcfighter', id: String(id) };
+  if (typeof viewBlocked === 'function' && viewBlocked(v)) return;
   if (S.stack[S.stack.length - 1]?.type?.startsWith('ufc')) pushView(v); else { S.sel = null; S.stack = [v]; renderSheet(); $('sheet').classList.add('open') }
   ufcAthlete(String(id));
   // the fight history comes from the yearly schedules: make sure the last few years are loaded
