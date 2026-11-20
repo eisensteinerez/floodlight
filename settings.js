@@ -92,5 +92,7 @@
   document.addEventListener('change', ev => { if (/^pref(Motion|Contrast|Alerts)$/.test(ev.target.id) && ev.target.closest('#pg-settings')) saved() });
 
   window.flTheme = { list: THEMES, get: current, name: () => nameOf(current()), set: setTheme, scheme: () => root.dataset.scheme };
-  window.flPages?.add('settings', { title: 'Settings', render, fresh: true });
+  // the menu's Theme item lands on the picker itself
+  function onShow(el, arg) { if (arg !== 'theme') return; setTimeout(() => { el.querySelector('#stThemeH')?.scrollIntoView({ block: 'center' }); el.querySelector('[data-theme-pick][aria-checked="true"]')?.focus({ preventScroll: true }) }, 40) }
+  window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true });
 })();
