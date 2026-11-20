@@ -2665,14 +2665,14 @@ function xiPane(v){
     const sq = v.data.roster?.athletes || [];
     const find = n => { const k = normName(n); return sq.find(a => normName(a.displayName) === k) || sq.find(a => k && (normName(a.lastName) === k.split(' ').slice(-1)[0])) };
     const players = (pred.xi||[]).map(p => { const a = find(p.name); return { id: a?.id, jersey: p.number || a?.jersey, name: p.name, short: a?.lastName || p.name, pos: p.position, confidence: p.confidence, note: p.note } });
-    html += `<div class="sub-h"><h5>Predicted XI · ${esc(pred.formation||'')}</h5><small>Researched ${esc(new Date(pred.at).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</small></div>
+    html += `<div class="sub-h"><h5>Predicted XI · ${esc(pred.formation||'')}</h5><small>Checked ${esc(new Date(pred.at).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</small></div>
       ${teamXIPitch(v, players, `Predicted XI, ${pred.formation || ''}`)}
       ${pred.summary ? `<div class="callout">${esc(pred.summary)}</div>` : ''}
       <ul class="xi-list">${players.map(p=>`<li><b>${esc(p.jersey||'')}</b><span class="pos">${esc(p.pos||'')}</span><span>${p.id?`<button class="linkbtn" data-player="${esc(p.id)}">${esc(p.name)}</button>`:esc(p.name)}${p.note?`<small>${esc(p.note)}</small>`:''}</span><span class="conf ${esc(p.confidence||'medium')}">${esc(p.confidence||'medium')}</span></li>`).join('')}</ul>
       ${(pred.out||[]).length ? `<div class="sub-h"><h5>Out</h5></div><ul class="xi-list">${pred.out.map(o=>`<li style="grid-template-columns:1fr auto"><span>${esc(o.name)}<small>${esc(o.reason||'')}</small></span><span class="conf low">out</span></li>`).join('')}</ul>` : ''}
       ${(pred.doubts||[]).length ? `<div class="sub-h"><h5>Doubtful</h5></div><ul class="xi-list">${pred.doubts.map(o=>`<li style="grid-template-columns:1fr auto"><span>${esc(o.name)}<small>${esc(o.reason||'')}</small></span><span class="conf medium">doubt</span></li>`).join('')}</ul>` : ''}
       ${(pred.sources||[]).length ? `<div class="sub-h"><h5>Sources</h5><small>${pred.sources.length} reports</small></div><ul class="srcs">${pred.sources.map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title||s.url)}</a> <small>${esc([s.publisher || (()=>{try{return new URL(s.url).hostname.replace('www.','')}catch{return ''}})(), s.date].filter(Boolean).join(' · '))}</small></li>`).join('')}</ul>` : ''}
-      <div style="margin-top:14px"><button class="btn ghost" data-act="predict">Research again</button></div>`;
+      <div style="margin-top:14px"><button class="btn ghost" data-act="predict">Check again</button></div>`;
   } else {
     const L = v.lastXI;
     html += `<div class="sub-h"><h5>Last starting lineup</h5><small>${L?.event ? esc(fmtDate(L.event.date)) : ''}</small></div>`;
@@ -2687,7 +2687,7 @@ function xiPane(v){
   const key = store.get('fl.key', '');
   html += `<div class="ai"><h4>${pred ? 'Update from the latest news' : 'Predict from the latest news'}</h4>
     <p>Claude searches recent reports from credible outlets (club sites, BBC Sport, ESPN, The Athletic, Sky Sports and trusted beat reporters) for injuries, suspensions and press-conference hints, then predicts the starting XI and cites its sources.</p>
-    ${key ? `<div class="keyrow"><button class="btn" data-act="predict" id="predBtn" ${next?'':'disabled'}>Research team news</button><button class="btn ghost" data-act="forget-key">Remove API key</button></div>`
+    ${key ? `<div class="keyrow"><button class="btn" data-act="predict" id="predBtn" ${next?'':'disabled'}>Read the team news</button><button class="btn ghost" data-act="forget-key">Remove API key</button></div>`
       : `<form class="keyrow" id="keyForm"><input id="apiKey" type="password" placeholder="Anthropic API key (sk-ant-…)" autocomplete="off" aria-label="Anthropic API key"><button class="btn" type="submit">Save key</button></form>
          <p style="margin-top:10px;font-size:12px">Uses your own Anthropic API key, typically a few cents per prediction. The key is saved only in this browser and sent only to Anthropic.</p>`}
     <div id="predStatus" role="status" aria-live="polite"></div></div>`;
@@ -4732,21 +4732,21 @@ function insightPane(e, lite){
 /* deep research with Claude (uses the same saved API key as predicted lineups) */
 function deepResearchBlock(e, P){
   const saved = store.get(`fl.res.${e.id}`, null), key = store.get('fl.key', '');
-  if (saved) return `<div class="ai"><h4>Research report</h4><p class="pf-hint">Written ${esc(new Date(saved.at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} from news at the time.</p>
+  if (saved) return `<div class="ai"><h4>Match report</h4><p class="pf-hint">Written ${esc(new Date(saved.at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} from news at the time.</p>
       <p style="color:var(--fg)">${esc(saved.summary || '')}</p>
       ${saved.prediction ? `<p><strong style="color:var(--fg)">Verdict: ${esc(saved.prediction.outcome)}${saved.prediction.score ? `, ${esc(saved.prediction.score)}` : ''}</strong> <span class="conf ${/high/i.test(saved.prediction.confidence) ? 'high' : /low/i.test(saved.prediction.confidence) ? 'low' : 'medium'}">${esc(saved.prediction.confidence || '')}</span></p>` : ''}
       ${saved.factors?.length ? `<h5>Key factors</h5><ul class="why">${saved.factors.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
       ${saved.risks?.length ? `<h5>What could go differently</h5><ul class="why">${saved.risks.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
       ${saved.sources?.length ? `<h5>Sources</h5><ul class="srcs">${saved.sources.slice(0, 8).map(s => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join('')}</ul>` : ''}
-      <div style="margin-top:10px"><button class="btn ghost" data-act="research">Research again</button></div><div id="resStatus" role="status" aria-live="polite"></div></div>`;
-  return `<div class="ai"><h4>Detailed research</h4><p>Claude reads the latest team news, injuries, press conferences and tactical previews from credible outlets, then writes a full preview with a verdict and its sources.</p>
-    ${key ? `<button class="btn" data-act="research" id="resBtn">Research this match</button>` : `<p class="pf-hint">Add an Anthropic API key on any team's Predicted XI tab to turn this on. Each report costs a few cents on your own key.</p>`}
+      <div style="margin-top:10px"><button class="btn ghost" data-act="research">Write it again</button></div><div id="resStatus" role="status" aria-live="polite"></div></div>`;
+  return `<div class="ai"><h4>Detailed preview</h4><p>Claude reads the latest team news, injuries, press conferences and tactical previews from credible outlets, then writes a full preview with a verdict and its sources.</p>
+    ${key ? `<button class="btn" data-act="research" id="resBtn">Write the preview</button>` : `<p class="pf-hint">Add an Anthropic API key on any team's Predicted XI tab to turn this on. Each report costs a few cents on your own key.</p>`}
     <div id="resStatus" role="status" aria-live="polite"></div></div>`;
 }
 async function runResearch(e){
   const st = $('resStatus'), btn = $('resBtn'); if (btn) btn.disabled = true;
   if (!window.claudePredict) { st.innerHTML = `<div class="err">The Claude client didn't load. Reload the page and try again.</div>`; return }
-  st.innerHTML = `<p class="note" style="text-align:left;padding:10px 0 0">Researching… usually 30–90 seconds.</p>`;
+  st.innerHTML = `<p class="note" style="text-align:left;padding:10px 0 0">Reading the news… usually 30–90 seconds.</p>`;
   const P = predict(e);
   const prompt = `Today is ${new Date().toISOString().slice(0, 10)}. Write a preview of ${e.home.full} vs ${e.away.full} (${e.league.name}), kick-off ${e.date.toUTCString()}, ${e.home.full} at home.
 Search for recent credible coverage (club sites, BBC Sport, ESPN, The Athletic, Sky Sports, Reuters, AP, reputable national outlets): team news, injuries and suspensions, likely lineups, manager comments, form, head-to-head and tactical match-ups.
@@ -4976,6 +4976,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="shell.js"></script>
 <script src="home.js"></script>
 <script src="live.js"></script>
+<script src="labpage.js"></script>
 <script src="palette.js"></script>
 <script src="settings.js"></script>
 <script src="guide.js"></script>

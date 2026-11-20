@@ -1,6 +1,6 @@
 /* Floodlight · the command palette (Cmd/Ctrl + K) and a few site-wide touches.
    The palette jumps anywhere: any page or sport, any game on today's Live Hub, any team playing today, UFC events and
-   fighters, and "research <name>" in the Lab. Arrow keys move, Enter opens, Esc closes.
+   fighters, and looking a name up in the Lab. Arrow keys move, Enter opens, Esc closes.
    Also here: live toasts when a followed team scores or a game ends. */
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -25,7 +25,7 @@
     const go = sel => () => document.querySelector(sel)?.click();
     return [
       { g: 'Pages', t: 'Home · Live Hub', s: 'Everything happening right now', i: 'home', run: go('[data-shell="home"]') },
-      { g: 'Pages', t: 'Research', s: 'Players, teams and props in the Lab', i: 'research', run: go('[data-rs="open"]') },
+      { g: 'Pages', t: 'The Lab', s: 'Players, teams and props', i: 'research', run: () => window.flPages?.show('lab') },
       { g: 'Pages', t: 'Predictions', s: "Today's picks for the current sport", i: 'pred', run: go('[data-shell="pred"]') },
       { g: 'Pages', t: 'Favorites', s: 'Your teams and players', i: 'fav', run: go('[data-shell="fav"]') },
       { g: 'Pages', t: 'Profile', s: 'Account, picks and settings', i: 'profile', run: go('[data-shell="profile"]') },
@@ -54,11 +54,10 @@
     return out;
   }
   function research(q) {
-    return q.length < 2 ? [] : [{ g: 'Research', t: `Research “${q}”`, s: 'Look up this player or team in the Lab', i: 'research', run: () => {
-      document.querySelector('[data-rs="open"]')?.click();
-      let n = 0; const fill = () => { const rs = document.getElementById('rs'), fr = rs?.querySelector('iframe'); let inp = rs?.querySelector('#rsQ, #rsBq');
-        try { inp = inp || fr?.contentDocument?.getElementById('q') } catch {}
-        if (inp) { inp.value = q; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.form?.requestSubmit?.(); inp.focus(); return }
+    return q.length < 2 ? [] : [{ g: 'The Lab', t: `Look up “${q}” in the Lab`, s: 'Players, teams and props', i: 'research', run: () => {
+      window.flPages?.show('lab');
+      let n = 0; const fill = () => { const inp = document.getElementById('labAsk');
+        if (inp) { inp.value = q; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.focus(); return }
         if (n++ < 20) setTimeout(fill, 150) }; fill() } }];
   }
 

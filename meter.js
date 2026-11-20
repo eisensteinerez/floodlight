@@ -1,12 +1,15 @@
 /* Floodlight · the heat reading, for pages outside the Lab.
    This is the Lab's own estimate (judge() in lab.html), copied line for line so Home and Predictions show the same
    number the Lab shows for the same player, stat and line. If the Lab's version changes, change this one with it.
-   games: newest first, each { v, home, min }. opts: { line, side: 'over'|'under', yes (a yes/no stat), team (a team, not a player), stat }. */
+   games: newest first, each { v, home, min, opp, oppAbbr }. opts: { line, side: 'over'|'under', yes (a yes/no stat), team (a team, not a
+   player), stat, opp (the next opponent, as the posted line names it), nextHome }. */
 (() => {
   const erf = x => { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + .3275911 * x); return s * (1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x)) };
   const Phi = z => .5 * (1 + erf(z / Math.SQRT2));
   const poisCdf = (k, lam) => { if (k < 0) return 0; let s = 0, t = Math.exp(-lam); for (let i = 0; i <= k; i++) { s += t; t *= lam / (i + 1) } return Math.min(1, s) };
   const avg = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  const norm = s => String(s || '').normalize('NFKD').replace(/[^\w ]/g, '').toLowerCase().trim();
+  const sameOpp = (g, key) => { const k = norm(key); if (!k) return false; const o = norm(g.opp), a = norm(g.oppAbbr); return o === k || a === k || (k.length > 3 && (o.includes(k) || k.includes(o))) };
   function judge(games, o = {}) {
     const line = o.line, over = (o.side || 'over') === 'over', use = games.filter(g => g.v != null).slice(0, 60), vs = use.map(g => g.v), n = vs.length; if (n < 3) return null;
     const w = vs.map((_, i) => Math.pow(.5, i / 10)), W = w.reduce((a, b) => a + b, 0), neff = W * W / w.reduce((a, b) => a + b * b, 0);
@@ -17,6 +20,9 @@
     const base = wm(vs, w); let mu = base;
     const nh = o.nextHome == null ? null : o.nextHome;
     if (nh != null) { const ix = use.map((g, i) => g.home === nh ? i : -1).filter(i => i >= 0); if (ix.length >= 5) { const m = wm(ix.map(i => vs[i]), ix.map(i => w[i])); mu += .35 * (m - base) } }
+    // the next opponent, read the way the Lab reads it: matched against every game loaded, then against the 60 in use
+    const opp = o.opp ? (games.find(g => sameOpp(g, o.opp))?.opp || o.opp) : '';
+    if (opp) { const ix = use.map((g, i) => sameOpp(g, opp) ? i : -1).filter(i => i >= 0); if (ix.length >= 2) { const m = avg(ix.map(i => vs[i])); mu += Math.min(.3, ix.length * .08) * (m - base) } }
     const mins = use.map(g => g.min), haveMin = o.stat !== 'min' && !o.team && mins.filter(m => m != null).length >= 10;
     if (haveMin) { const m5 = avg(mins.slice(0, 5).filter(m => m != null)), mAll = wm(mins.map(m => m ?? 0), w.map((x, i) => mins[i] == null ? 0 : x)); if (m5 && mAll) { const d = .5 * (m5 / mAll - 1) * base; if (Math.abs(m5 / mAll - 1) >= .06) mu += d } }
     const varr = wm(vs.map(v => (v - base) ** 2), w) * (neff > 1.5 ? neff / (neff - 1) : 1), sd = Math.sqrt(varr * (1 + 1 / neff)) || .5;

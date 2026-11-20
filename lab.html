@@ -429,10 +429,14 @@ function labTheme(t) { if (!THEME_SCHEME[t]) return; const r = document.document
   const href = '/api/lab/fonts.css?theme=' + t; if (l.getAttribute('href') !== href) l.setAttribute('href', href) }
 labTheme(document.documentElement.dataset.theme);
 // inside the site the Lab follows the theme picker and Reduce motion without a reload
-addEventListener('message', e => { if (e.origin !== location.origin || !e.data) return; if (e.data.flTheme) labTheme(e.data.flTheme); if ('flMotion' in e.data) document.documentElement.dataset.motion = e.data.flMotion || '' });
+addEventListener('message', e => { if (e.origin !== location.origin || !e.data) return; if (e.data.flTheme) labTheme(e.data.flTheme); if ('flMotion' in e.data) document.documentElement.dataset.motion = e.data.flMotion || '';
+  if (e.data.flLab && typeof openFromPage === 'function') openFromPage(e.data.flLab) });
 addEventListener('storage', e => { if (e.key === 'floodlight-theme' && !QS.get('theme')) labTheme(e.newValue) });
 try { if ((JSON.parse(localStorage.getItem('fl.look') || '{}') || {}).motion === 'reduce') document.documentElement.dataset.motion = 'reduce' } catch (e) {}
 if (QS.get('embed')) document.body.classList.add('embed');
+const IN_PAGE = QS.get('embed') === 'page' && window.parent !== window;   // inside the site's Lab page, which has its own search bar
+if (IN_PAGE) document.body.classList.add('inpage');
+const tellPage = o => { if (!IN_PAGE) return; try { window.parent.postMessage({ lab: 'state', ...o }, location.origin) } catch (e) {} };
 const SPORTS = [['nba','NBA'],['wnba','WNBA'],['nfl','NFL'],['nhl','NHL'],['mlb','MLB'],['soccer','Soccer'],['ufc','UFC'],['boxing','Boxing']];
 const FIGHT = new Set(['ufc','boxing']);   // fighters: one fight is one game, no teams, no prop board
 const HERO = { nba:['pts','reb','ast','3pm','pra'], wnba:['pts','reb','ast','3pm','pra'], nfl:['pyd','ryd','reyd','rec','td'], nhl:['goals','ast','pts','sog','toi'],
@@ -493,9 +497,12 @@ async function start() {
   S.sport = SPORTS.some(x => x[0] === want.sport) ? want.sport : store.get('lab.sport', 'nba');
   if (['board', 'team'].includes(QS.get('tab'))) S.tab = QS.get('tab');
   drawSports(); drawRecent(); tabs();
+  if (QS.get('side') === 'under') S.wantSide = 'under';
+  if (['bars', 'trend', 'table'].includes(QS.get('mode'))) S.mode = QS.get('mode');
   if (want.team) load(want.team, 'team');
   else if (want.player) load(want.player, 'player', { stat: QS.get('stat') || '', line: QS.get('line') });
   else render();
+  if (IN_PAGE) try { window.parent.postMessage({ lab: 'ready' }, location.origin) } catch (e) {}
 }
 function gate(m) {
   $('#view').innerHTML = `<div class="empty"><div class="beam"></div><h2>The Lab is locked</h2><p>${esc(m)}</p></div>`;
@@ -513,6 +520,7 @@ const EXT = { nba: ['Boston Celtics', 'Denver Nuggets'], wnba: ['Las Vegas Aces'
 const chipsFor = (sp, team) => ((team ? EXT : EX)[sp] || []).map(n => `<button class="ex" data-ex="${esc(n)}" data-exs="${sp}">${esc(n)}</button>`).join('');
 // the Lab's front page: what it does in three steps, examples to start from, recent searches, and today's hot props
 function home() {
+  tellPage({ view: 'home', sport: S.sport, tab: S.tab });
   const team = S.tab === 'team', sp = S.sport, fight = FIGHT.has(sp), rec = store.get('lab.recent', []).slice(0, 6);
   $('#q').placeholder = PH[sp] || (team ? 'Search a team, e.g. Celtics or Arsenal' : 'Search a player, e.g. Jayson Tatum');
   $('#view').innerHTML = `<section class="lh">
@@ -548,6 +556,15 @@ document.addEventListener('click', e => {
   if (b.dataset.exs && b.dataset.exs !== S.sport) { S.sport = b.dataset.exs; store.set('lab.sport', S.sport); drawSports() }
   load(b.dataset.ex, b.dataset.ext || (S.tab === 'team' ? 'team' : 'player'), b.dataset.exk ? { stat: b.dataset.exk, line: b.dataset.exl } : {});
 });
+// the site's Lab page asks for a player, a team or the board: { sport, name, kind, stat, line, side, tab, mode }
+function openFromPage(o) {
+  if (o.sport && SPORTS.some(x => x[0] === o.sport)) { S.sport = o.sport; store.set('lab.sport', S.sport) }
+  if (o.mode && ['bars', 'trend', 'table'].includes(o.mode)) { S.mode = o.mode; store.set('lab.mode', S.mode) }
+  S.wantSide = o.side === 'under' ? 'under' : null;
+  drawSports();
+  if (o.name) return load(o.name, o.kind === 'team' ? 'team' : 'player', { stat: o.stat || '', line: o.line });
+  S.tab = ['board', 'team', 'player'].includes(o.tab) ? o.tab : 'player'; S.p = null; tabs(); $('#msg').innerHTML = ''; render();
+}
 let loadSeq = 0;
 async function load(name, kind, o = {}) {
   kind = kind || (S.tab === 'team' ? 'team' : 'player');
@@ -570,6 +587,7 @@ async function load(name, kind, o = {}) {
     rec.unshift({ n: p.name, s: p.sport, t: kind }); store.set('lab.recent', rec.slice(0, 8)); drawRecent();
     const want = p.want && p.stats.some(s => s.k === p.want) ? p.want : p.stats.some(s => s.k === o.stat) ? o.stat : defaultStat();
     pickStat(want, o.line != null && o.line !== '' && !isNaN(+o.line) ? +o.line : null);
+    if (S.wantSide) { S.side = S.wantSide; S.wantSide = null; render() }
     try { window.parent !== window && window.parent.postMessage({ lab: 'loaded', name: p.name, sport: p.sport, kind }, location.origin) } catch {}
   } catch (e) { if (seq !== loadSeq) return; S.p = null; $('#msg').innerHTML = ''; notFound(name, kind, e.message) }
 }
@@ -674,6 +692,7 @@ function render() {
     ${p.kind === 'team' ? teamExtras() : ''}
     ${sec(8, 'Game log', 's-log')}<div class="card">${gameLog(shown)}</div>`;
   mini(meter); after();
+  tellPage({ view: p.kind, sport: p.sport, name: p.name, k, label: label(k), line: S.line, side: S.side, yes, heat: meter == null ? null : Math.round(meter * 100), photo: p.photo || '', team: p.team || '' });
   const on = document.querySelector('.stats .qf.on'); if (on) { const box = on.parentElement; if (on.offsetLeft + on.offsetWidth > box.scrollLeft + box.clientWidth || on.offsetLeft < box.scrollLeft) box.scrollLeft = Math.max(0, on.offsetLeft - 40) }
 }
 const sec = (n, t, id) => `<div class="sec" id="${id}"><i>${String(n).padStart(2, '0')}</i><b>${esc(t)}</b></div>`;
@@ -960,6 +979,7 @@ function teamExtras() {
 /* ---------- hot props ---------- */
 async function renderBoard() {
   $('#mini').classList.remove('on');
+  tellPage({ view: 'board', sport: S.sport });
   const sp = S.sport, b = S.board[sp];
   if (!b) {
     $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Today's ${esc(sportName())} props by hit rate</b></div>${'<div class="skel" style="height:46px;margin:8px 0;border-radius:var(--r-ctl)"></div>'.repeat(8)}</div>`;

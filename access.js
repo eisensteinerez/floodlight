@@ -117,19 +117,19 @@ html.fl-noresearch .rs-open{display:none!important}
   const ico = k => `<span class="flg-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg></span>`;
   // the example on the front page: ten real games against a 35.5 line (under = green)
   const DEMO = [33, 24, 32, 18, 31, 31, 37, 28, 25, 32].reverse(), LINE = 35.5, TOP = 42;
-  const demo = `<div class="flg-demo" aria-label="Example research card">
+  const demo = `<div class="flg-demo" aria-label="Example Lab card">
       <div class="flg-demo-top"><b>LeBron James · Pts + Reb + Ast</b><small>Example</small></div>
       <p>Under 35.5 · last 10 games, oldest to newest</p>
       <div class="flg-bars" style="--line-at:${(LINE / TOP * 100).toFixed(1)}%">${DEMO.map(v => `<i class="${v > LINE ? 'miss' : ''}" style="--h:${(v / TOP * 100).toFixed(1)}%" title="${v}"></i>`).join('')}</div>
       <div class="flg-rates"><div><b>100%</b><span>Last 5</span></div><div><b>90%</b><span>Last 10</span></div><div><b>70%</b><span>Last 20</span></div><div><b>91%</b><span>This season</span></div></div>
     </div>`;
   const FEATURES = [
-    ['research', 'Prop research', 'Any player, any stat, any line. See every game against the line, with hit rates over the last 5, 10 and 20 games, this season, home or away and against tonight\'s opponent.'],
+    ['research', 'The Lab', 'Any player, any stat, any line. See every game against the line, with hit rates over the last 5, 10 and 20 games, this season, home or away and against tonight\'s opponent.'],
     ['props', "Today's props, ranked", 'Every PrizePicks, Sleeper and sportsbook line on the board, sorted by how often the player has actually cleared it.'],
     ['predict', 'Predictions', 'Win chances for every game from a model that blends form, goals and absences with the betting market, plus value spots where one book is out of line.'],
     ['lineups', 'Lineups and injuries', 'Predicted and confirmed lineups, probable pitchers and injury news, so a line never catches you off guard.'],
     ['live', 'Live scores', 'Soccer, NFL, NBA, MLB, NHL and tennis in one place, with box scores, play-by-play and stats.'],
-    ['discord', 'In your Discord', 'The same research as slash commands in The Prop Room: /research, /props, /predict, /scores and /lineup.']].map(([k, ...r]) => [k === 'lineups' ? 'lineup' : k, ...r]);
+    ['discord', 'In your Discord', 'The same numbers as slash commands in The Prop Room: /lab, /props, /predict, /scores and /lineup.']].map(([k, ...r]) => [k === 'lineups' ? 'lineup' : k, ...r]);
   function card(user, err) {
     const pending = user && user.role === 'pending';
     if (pending) return `<div class="flg-card" id="flgCard"><h2 class="flg-h">Almost there</h2><p>Signed in as <strong>${esc(user.username)}</strong>.</p>
@@ -159,7 +159,7 @@ html.fl-noresearch .rs-open{display:none!important}
         <nav class="flg-nav"><div class="flg-brand">${LOGO}Floodlight</div><a href="#flgCard" data-g="login">Log in</a></nav>
         <section class="flg-hero">
           <div>
-            <div class="flg-kick"><i></i>Members-only sports research</div>
+            <div class="flg-kick"><i></i>Members-only sports numbers</div>
             <h1>Know the hit rate <em>before</em> you lock it in.</h1>
             <p class="flg-lead">Floodlight checks every player prop against what actually happened: last 5, 10 and 20 games, this season and head to head. Live scores, predictions and lineups sit alongside, for every major sport.</p>
             <div class="flg-sports">${['Soccer', 'NFL', 'NBA', 'WNBA', 'MLB', 'NHL', 'Tennis'].map(x => `<span>${x}</span>`).join('')}</div>
@@ -172,9 +172,9 @@ html.fl-noresearch .rs-open{display:none!important}
           <div class="flg-grid">${FEATURES.map(([k, t, d]) => `<article>${ico(k)}<h3>${t}</h3><p>${d}</p></article>`).join('')}</div>
           <div class="flg-steps"><div><b>Create your account</b><span>Pick a username and password. It takes ten seconds and needs no email.</span></div>
             <div><b>Get straight in</b><span>Live scores, lineups and predictions open up right away.</span></div>
-            <div><b>Do your research</b><span>On the site, on your phone (add it to your home screen) or in Discord.</span></div></div>
+            <div><b>Open the Lab</b><span>On the site, on your phone (add it to your home screen) or in Discord.</span></div></div>
         </section>
-        <footer class="flg-foot"><span>Floodlight · sports research</span><span>Hit rates show past results, not guarantees. 21+. Bet responsibly.</span></footer>
+        <footer class="flg-foot"><span>Floodlight · scores, props and predictions</span><span>Hit rates show past results, not guarantees. 21+. Bet responsibly.</span></footer>
       </div>`;
       if (focus || err) g.querySelector('#flgUser')?.focus();
     });

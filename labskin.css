@@ -280,3 +280,7 @@
 :root[data-theme="chrono"] .strip b,:root[data-theme="chrono"] .kpis b{font-weight:200;font-size:38px}
 :root[data-theme="chrono"] .ring b{font-weight:500}
 :root[data-theme="chrono"] .sec{padding-top:18px;border-top:1px solid var(--text)}
+
+/* inside the site's Lab page: the page has the search bar, so the Lab keeps only its mode and sport controls */
+:root[data-theme] body.inpage #sf,:root[data-theme] body.inpage .recent{display:none}
+:root[data-theme] body.inpage .top{position:static}

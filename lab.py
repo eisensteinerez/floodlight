@@ -272,7 +272,7 @@ def board(sport, count=24):
              "books": sorted({x["book"] for x in r["offers"]}),
              # what the site's own pages need to show the same heat reading the Lab shows for this player and line:
              # the games behind the hit rates (value, home or away, minutes), newest first, and every posted price
-             "games": [[_r(v), None if h is None else int(bool(h)), _r(m, 1)] for v, h, m in r.get("recent") or []],
+             "games": [[_r(v), None if h is None else int(bool(h)), _r(m, 1), o, oa] for v, h, m, o, oa in r.get("recent") or []],
              "offers": [{"book": x.get("book"), "line": x.get("line"), "kind": x.get("kind") or "standard", "pOver": x.get("pOver")} for x in r["offers"]],
              "start": next((x.get("start") for x in r["offers"] if x.get("start")), None), "photo": img_url(r.get("photo")),
              "n": r["l10"].get("n"), "hit": r["l10"].get("hit")} for r in b["rows"]]

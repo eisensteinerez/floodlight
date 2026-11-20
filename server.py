@@ -87,7 +87,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js"}
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -983,7 +983,8 @@ USERS_FILE = CACHE_DIR / "users.json"
 SESSIONS_FILE = CACHE_DIR / "sessions.json"
 _acct_lock = threading.Lock()
 SESSION_DAYS = 30
-PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str}
+PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
+             "boards": list, "slips": list, "favSports": list, "tz": str}   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -1351,7 +1352,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(*forecaster.update_settings(body))
         if u.path == "/api/forecast/run":
             if not can_research(user):
-                return self.send_auth(403, {"error": "Your account doesn't include research."})
+                return self.send_auth(403, {"error": "Your account doesn't include the Lab."})
             key = str(body.get("key") or "")
             if not forecaster.request_now(key):
                 return self.send_auth(404, {"error": "That match isn't tracked yet."})
@@ -1394,7 +1395,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not can_view(user):
                 return self.send_json({"error": "Your account is waiting for the admin to approve it."}, 403)
             if u.path.startswith(("/api/dfs/", "/api/forecast/")) and not can_research(user):
-                return self.send_json({"error": "Your account doesn't include research."}, 403)
+                return self.send_json({"error": "Your account doesn't include the Lab."}, 403)
         if u.path == "/api/picks/split":
             keys = [k for k in (q.get("keys") or "").split(",") if VOTE_KEY.fullmatch(k)][:60]
             with _acct_lock:

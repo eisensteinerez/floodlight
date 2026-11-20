@@ -49,7 +49,7 @@
   const NEWS = [
     ['Five themes', 'Night Match, Team Colors, Members’ Club, Aurora Glass and Chrono. Choose yours in Settings. The old light and dark switch is now part of the themes.'],
     ['One menu for your account', 'The round button at the top right holds your profile, Settings, the theme, this guide and Sign out.'],
-    ['Research is now the Lab', 'One place for every player, team and prop, with a command bar you can open from anywhere and boards you can save.'],
+    ['One Lab for players, teams and props', 'The player, team and prop screens are now one place, with a command bar you can open from anywhere and boards you can save.'],
     ['The heat meter', 'A single ice-to-fire reading for how a player is running against a line.'],
     ['A new Home', 'The featured game, who is hot and who is cold, and everything live across sports.'],
     ['Predictions as an edge board', 'Picks ranked by how far our number is from the market, with an honest track record.'],

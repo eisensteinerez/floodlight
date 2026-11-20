@@ -824,45 +824,25 @@ function rsBookPct(offers, line){
 /* ---------- opening ---------- */
 function rsEl(){
   let el = $('rs');
-  if (!el) { el = document.createElement('section'); el.id = 'rs'; el.className = 'rs'; el.hidden = true; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Prop research'); document.body.appendChild(el) }
+  if (!el) { el = document.createElement('section'); el.id = 'rs'; el.className = 'rs'; el.hidden = true; el.setAttribute('aria-label', 'Lab tools'); document.body.appendChild(el) }
   return el;
 }
-// Research opens the Floodlight Lab (lab.html, the same page the Discord /lab command opens) inside this overlay.
-// The classic screen below stays one tap away, and is what tennis uses, since the Lab has no tennis.
+// The Lab page (labpage.js) is the one research area. Sports the Lab's own workspace covers open there; this file is
+// the engine for everything else (tennis, college and minor leagues, two-player combos, the sportsbook prop board,
+// teams by league, career totals) and draws inside the same page.
 const RS_LAB = new Set(['nba', 'wnba', 'nfl', 'nhl', 'mlb', 'soccer']);
-// The light switch between the classic Research screen and the Lab.
-function rsSwitch(lab){
-  return `<button data-rs="${lab ? 'classic' : 'lab'}" role="switch" aria-checked="${lab}" aria-label="Switch between Research and the Lab" title="${lab ? 'Switch to classic Research' : 'Switch to the Lab'}" style="margin-left:auto;display:inline-flex;align-items:center;gap:9px;border:0;background:none;padding:4px;cursor:pointer;color:inherit;font:600 12.5px/1 var(--f-body,inherit)">
-    <span style="opacity:${lab ? .5 : 1};transition:opacity .2s">Research</span>
-    <span style="position:relative;width:54px;height:30px;border-radius:var(--r-pill);border:1px solid ${lab ? 'var(--fg)' : 'var(--line-2,var(--line))'};background:${lab ? 'var(--accent-fill,var(--accent))' : 'var(--surface-2,var(--surface))'};box-shadow:none;transition:background-color .2s,border-color .2s">
-      <span style="position:absolute;top:2px;left:${lab ? 26 : 2}px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:${lab ? 'var(--fg)' : 'var(--muted)'};box-shadow:none;transition:left .2s cubic-bezier(.2,.8,.2,1)"></span></span>
-    <span style="opacity:${lab ? 1 : .5};transition:opacity .2s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-2px"><path d="M9 3h6M10 3v6L5 18a2 2 0 0 0 1.700 3h10.600a2 2 0 0 0 1.700-3L14 9V3"/></svg> Lab</span></button>`;
-}
-function rsLab(o = {}){
-  const r = S.rs, el = rsEl(), th = document.documentElement.dataset.theme || 'night-match';
-  const q = new URLSearchParams({ embed: '1', sport: r.sport, theme: th });
-  if (o.name) q.set(o.team ? 'team' : 'player', o.name);
-  if (o.stat) q.set('stat', o.stat);
-  if (o.line != null && !isNaN(o.line)) q.set('line', o.line);
-  if (!o.name && (r.tab === 'board' || r.tab === 'team')) q.set('tab', r.tab);
-  r.lab = true;
-  el.innerHTML = `<div style="display:flex;flex-direction:column;height:100%"><div class="rs-top" style="flex:none;margin:0;padding:10px 16px"><button class="rs-x" data-rs="close" aria-label="Close research">‹ Back</button><h2>Research</h2>
-    ${rsSwitch(true)}</div>
-    <iframe src="/lab?${q}" title="Floodlight Lab" style="flex:1;width:100%;min-height:0;border:0;background:var(--bg)"></iframe></div>`;
-  el.style.overflow = 'hidden';
-}
 function openResearch(o = {}){
   if (document.documentElement.classList.contains('fl-noresearch')) return;
+  if (window.flLab && !o._in) return window.flLab.open(o);
   const r = S.rs; r.open = true; if (o.sport) { r.sport = o.sport; store.set('fl.rsSport', r.sport) }
   if (o.tab) r.tab = o.tab;
-  const el = rsEl(); el.hidden = false; document.documentElement.classList.add('rs-lock');
+  const el = rsEl(); el.hidden = false; if (!o._in) document.documentElement.classList.add('rs-lock');
   r.lab = false; el.style.overflow = '';
-  if (!o.classic && !store.get('fl.rsClassic', false) && RS_LAB.has(r.sport) && (o.name || !(o.id || o.fmId))) { hideResults?.(); return rsLab(o) }
   hideResults?.(); rsDfsLoad(r.sport);
-  if (o.id || o.fmId || o.name) rsPick(o); else rsRender();
-  el.scrollTop = 0; setTimeout(() => (el.querySelector('#rsQ') || el.querySelector('.rs-x'))?.focus(), 30);
+  if (o.id || o.fmId || o.name || o.tnId || o.fsId || o.fsTeam) rsPick(o).then(() => { if (o.compare && S.rs.p && !S.rs.loading) { S.rs.comboAdd = true; rsRender(); setTimeout(() => $('rsCq')?.focus(), 30) } }); else rsRender();
+  if (!o._in) { el.scrollTop = 0; setTimeout(() => (el.querySelector('#rsQ') || el.querySelector('.rs-x'))?.focus(), 30) }
 }
-function closeResearch(){ S.rs.open = false; const el = $('rs'); if (el) el.hidden = true; document.documentElement.classList.remove('rs-lock'); $('rsBtn')?.focus() }
+function closeResearch(){ S.rs.open = false; const el = $('rs'); if (el) el.hidden = true; document.documentElement.classList.remove('rs-lock') }
 window.openResearch = openResearch;
 
 let rsPickSeq = 0, rsRT = 0, rsRQ = null;
@@ -986,10 +966,8 @@ function rsRender(){
   const el = rsEl(); if (!S.rs.open || S.rs.lab) return;
   const r = S.rs, keepY = el.scrollTop, act = document.activeElement?.id;
   el.innerHTML = `<div class="rs-in">
-    <div class="rs-top"><button class="rs-x" data-rs="close" aria-label="Close research">‹ Back</button><h2>Research</h2>
-      ${RS_LAB.has(r.sport) ? rsSwitch(false) : ''}
-      <div class="seg rs-sp" role="tablist" aria-label="Sport">${RS_SPORTS.map(([k, l]) => `<button role="tab" data-rs="sport" data-to="${k}" aria-selected="${r.sport === k}" class="${r.sport === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-    <div class="rs-tabs" role="tablist">${[['player', 'Player research'], ['board', "Today's player props"], ['team', 'Team props']].map(([k, l]) => `<button role="tab" data-rs="tab" data-to="${k}" aria-selected="${r.tab === k}">${l}</button>`).join('')}</div>
+    <div class="rs-top"><div class="seg rs-sp" role="tablist" aria-label="Sport">${RS_SPORTS.map(([k, l]) => `<button role="tab" data-rs="sport" data-to="${k}" aria-selected="${r.sport === k}" class="${r.sport === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="rs-tabs" role="tablist">${[['player', 'Players and teams'], ['board', "Today's player props"], ['team', 'Team props']].map(([k, l]) => `<button role="tab" data-rs="tab" data-to="${k}" aria-selected="${r.tab === k}">${l}</button>`).join('')}</div>
     ${r.tab === 'board' ? rsBoardHTML() : r.tab === 'team' ? rsTeamHTML() : rsPlayerHTML()}
     <p class="srcnote rs-rg">Hit rates describe the past, not the next game. Bet only what you can afford to lose.</p></div>`;
   el.scrollTop = keepY;
@@ -1007,7 +985,7 @@ function rsSearchHTML(){
 function rsPlayerHTML(){
   const r = S.rs; let p = r.p;
   let h = rsSearchHTML();
-  if (!p || p.sport !== r.sport) return h + `<div class="rs-empty"><strong>Research any player prop</strong>Search a player, pick a stat and a line, and see how often they have gone over it: the last 5, 10 and 20 games, this season, their whole career, at home or away and against the next opponent. PrizePicks, Sleeper and sportsbook lines show up next to the line box when they're posted. Search a team to research its points, totals, spreads and yards the same way, or use Combo to add two players together (say two running backs' rushing yards). Or open <button class="linkbtn" data-rs="tab" data-to="board">Today's player props</button> to rank every line by hit rate.</div>`;
+  if (!p || p.sport !== r.sport) return h + `<div class="rs-empty"><strong>Look up any player prop</strong>Search a player, pick a stat and a line, and see how often they have gone over it: the last 5, 10 and 20 games, this season, their whole career, at home or away and against the next opponent. PrizePicks, Sleeper and sportsbook lines show up next to the line box when they're posted. Search a team to see its points, totals, spreads and yards the same way, or use Combo to add two players together (say two running backs' rushing yards). Or open <button class="linkbtn" data-rs="tab" data-to="board">Today's player props</button> to rank every line by hit rate.</div>`;
   if (r.err) return h + `<div class="note">${esc(r.err)}</div>`;
   // the player card: the crest, blurred right out, lights the card in the team's colours
   const glow = p.crest || (p.kind === 'team' ? p.photo : ''), last = String(p.name || '').trim().split(/\s+/).slice(p.kind === 'team' ? 0 : -1).join(' ');
@@ -1382,7 +1360,7 @@ function rsTeamHTML(){
     const d = S.books.get(rsBkKey(r.sport, e)), R = t.res[e.id] || { h: [], a: [] };
     const sp = nearEven(d?.spreads, 'home'), to = nearEven(d?.totals, 'over'), ml = d?.ml?.offers || [];
     const team = (side, res) => { const hl = sp ? (side === 'home' ? sp.homeLine : -sp.homeLine) : null;
-      return `<div class="rs-tm"><img src="${esc(e[side].logo || '')}" alt="" onerror="this.remove()"><b><button class="linkbtn" data-rs="tpick" data-e="${esc(e.id)}" data-side="${side}" title="Research ${esc(e[side].full || e[side].name)}">${esc(e[side].name)}</button></b>
+      return `<div class="rs-tm"><img src="${esc(e[side].logo || '')}" alt="" onerror="this.remove()"><b><button class="linkbtn" data-rs="tpick" data-e="${esc(e.id)}" data-side="${side}" title="Open ${esc(e[side].full || e[side].name)}">${esc(e[side].name)}</button></b>
       <span>Moneyline ${pr(best(ml, side), side)}</span><span>Won L10 ${rate(res, x => x.for > x.against)}</span>
       ${sp ? `<span>${r.sport === 'soccer' ? 'Handicap' : 'Spread'} ${sgn(hl)} ${pr(best(sp.offers, side), side)} · covered L10 ${rate(res, x => x.for - x.against + hl > 0)}</span>` : ''}
       ${to ? `<span>Their games over ${to.line} L10 ${rate(res, x => x.for + x.against > to.line)}</span>` : ''}</div>` };
@@ -1402,8 +1380,6 @@ document.addEventListener('click', ev => {
   if (a === 'open') return openResearch();
   if (a === 'pp') return openResearch({ sport: t.dataset.sport, name: t.dataset.name, stat: t.dataset.stat, line: t.dataset.line != null ? +t.dataset.line : undefined });
   if (a === 'close') return closeResearch();
-  if (a === 'classic') { store.set('fl.rsClassic', true); return openResearch({ classic: true }) }
-  if (a === 'lab') { store.set('fl.rsClassic', false); return openResearch(r.p && r.p.sport === r.sport && r.p.name ? { name: r.p.name } : {}) }
   if (a === 'sport') { r.sport = to; store.set('fl.rsSport', to); r.hits = []; r.q = ''; r.bmk = 'all'; rsDfsLoad(to); return rsRender() }
   if (a === 'tab') { r.tab = to; return rsRender() }
   if (a === 'pick') { const x = r.hits[+t.dataset.i]; r.hits = []; return x && rsPick({ ...x, sport: r.sport }) }
@@ -1503,12 +1479,6 @@ document.addEventListener('change', ev => {
   if (f === 'opp' && t.value) S.rs.range = 'h2h';
   rsRender();
 });
-
-/* ---------- entry point in the header ---------- */
-(function rsMount(){
-  const host = document.querySelector('.top-in .prefwrap'); if (!host || $('rsBtn')) return;
-  host.insertAdjacentHTML('beforebegin', `<button class="rs-open" id="rsBtn" data-rs="open" aria-label="Prop research: hit rates for any player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Research</span></button>`);
-})();
 
 document.head.insertAdjacentHTML('beforeend', `<style>
 .rs-open{display:flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--surface);font:700 13px/1 var(--f-body);color:var(--fg);flex:none}

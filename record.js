@@ -97,7 +97,7 @@ function recHistory(rows){
     const badge = e.result === 'won' ? '<em class="rc-b won">Won</em>' : e.result === 'lost' ? '<em class="rc-b lost">Lost</em>' : e.result === 'push' ? '<em class="rc-b">Push</em>' : e.result === 'void' ? '<em class="rc-b">Void</em>' : '<em class="rc-b open">Pending</em>';
     return head + `<div class="rc-item ${e.result || 'open'}">
       <div class="rc-teams"><span>${esc(e.home)} <span class="rc-v">v</span> ${esc(e.away)}</span>
-        <small>${esc(recLeague(e))} · ${esc(d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}${e.research ? ' · with research' : ''}</small></div>
+        <small>${esc(recLeague(e))} · ${esc(d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}${e.research ? ' · with news check' : ''}</small></div>
       <div class="rc-call"><small>Floodlight</small><b>${esc(recSide(e, e.pick))}</b><span class="num">${Math.round((e.top || 0) * 100)}%${e.conf ? ' · ' + esc(e.conf) : ''}</span>
         ${my ? `<small class="rc-mine ${my.result || ''}">You: ${esc(recSide(e, my.pick))}</small>` : ''}</div>
       <div class="rc-res">${e.final ? `<b class="num">${e.final[0]}–${e.final[1]}</b>` : '<b class="num">–</b>'}${e.exact ? '<small class="rc-exact">Exact score</small>' : e.score && e.sport === 'soccer' ? `<small class="num">called ${e.score[0]}–${e.score[1]}</small>` : ''}${badge}</div></div>` }).join('');

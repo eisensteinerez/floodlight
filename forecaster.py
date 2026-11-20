@@ -1019,7 +1019,7 @@ def research(m, d, M, stage, prev):
                 break
             messages.append({"role": "assistant", "content": msg.content})
     except anthropic.AuthenticationError:
-        CONFIG["keyError"] = "Anthropic rejected the saved API key. Save a new key to turn research back on."
+        CONFIG["keyError"] = "Anthropic rejected the saved API key. Save a new key to turn the news check back on."
         _save_config()
         return {"error": CONFIG["keyError"]}
     except anthropic.PermissionDeniedError:
