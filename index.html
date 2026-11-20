@@ -3881,7 +3881,7 @@ S.me = null;
 S.favPlayers = store.get('fl.favPlayers', []);
 S.favLeagues = store.get('fl.favLeagues', []);
 S.prof = { mode: 'login', edit: false, err: '', busy: false, addT: '', addP: '', resT: [], resP: [], del: false };
-const COLORS = ['#E5383B', '#F4A62A', '#2BB673', '#2F6FED', '#8E5CF6', '#E2559B', '#14A3B8', '#5C677D'];
+const COLORS = ['#E5383B', '#F4A62A', '#2BB673', '#2F6FED', '#A0522D', '#E2559B', '#14A3B8', '#5C677D'];
 const initials = s => (s || '?').split(/[\s._]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
 function avatarHTML(size = 'sm'){
   const me = S.me, col = me?.prefs?.color || COLORS[3];
