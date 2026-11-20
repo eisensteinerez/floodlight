@@ -233,7 +233,7 @@
 
 /* ---------- Predictions: the edge board ---------- */
 .pd-filters{display:grid;gap:14px}
-.pd-n{margin-left:2px;opacity:.75;font-weight:600}
+.pd-n{margin-left:2px;font-weight:600}
 .pd-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
 .pd-min{display:flex;align-items:center;gap:10px}
 .pd-sort{margin-left:auto}.pd-sort select{width:auto;min-width:210px;padding-right:36px}
@@ -570,7 +570,7 @@ html:root[data-theme] .tw-busy th[scope="row"]{padding:6px 12px 6px 0;border-bot
 .mb-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,380px);gap:var(--gap);align-items:start}
 .mb-bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin-bottom:16px}
 .mb-search{flex:1 1 100%;max-width:460px}
-.mb-n{margin-left:2px;color:inherit;opacity:.75;font-weight:600}
+.mb-n{margin-left:2px;color:inherit;font-weight:600}
 .mb-bulk{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-bottom:14px}
 .mb-bulk .lk{margin:0}
 :root[data-theme] .mb-tbl th{padding:6px 12px}

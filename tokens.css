@@ -28,7 +28,7 @@
 :root[data-theme="team-colors"],[data-theme-preview="team-colors"]{
   --bg:#EEF0F4; --surface:#FFFFFF; --surface-2:#EEF0F4; --border:#E1E5EC; --border-2:#C3CAD6;
   --text:#0E1116; --text-2:#4B5565; --muted:#4B5565;
-  --accent:#2B59FF; --accent-fill:#2B59FF; --on-accent:#FFFFFF; --live:#D92D1C; --live-fill:#E0321F; --on-live:#FFFFFF; --win:#1E3FCC; --loss:#4B5565;
+  --accent:#2B59FF; --accent-fill:#2B59FF; --on-accent:#FFFFFF; --live:#C7291A; --live-fill:#E0321F; --on-live:#FFFFFF; --win:#1E3FCC; --loss:#4B5565;
   --radius-card:44px; --radius-tile:28px; --radius-pill:999px;
   --font-display:"Outfit",sans-serif; --display-weight:900; --font-body:"Outfit",system-ui,sans-serif; --display-track:-.03em; --score-weight:900;
   --shadow-card:0 30px 70px rgba(16,24,40,.10); --shadow-pop:0 30px 70px rgba(16,24,40,.22);
@@ -60,7 +60,7 @@
   --panel:linear-gradient(180deg,#16271F,#101C17); --inset:rgba(0,0,0,.22); --pill-bg:#D9BD86; --pill-fg:#14100A; --cta-bg:#D9BD86; --cta-fg:#14100A;
   --page:radial-gradient(ellipse 70% 380px at 50% -120px,rgba(217,189,134,.16),transparent 70%),#0B1411;
   --good:#D9BD86; --bad:#E08AA0; --gold-1:#2A2008; --gold-2:#F5C451; --gold-text:#FFF6DD;
-  --heat-panel:transparent; --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
+  --heat-panel:transparent; --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:14%; --heat-knob:#FFFFFF;
   --ring-w:3.5px; --ring-track-w:1.5px; --chart-under-border:1.5px solid rgba(217,189,134,.7);
   --score-ink:var(--text); --score-glow:none; --stripe:transparent; --pop:#12211B; --ftr-score:clamp(72px,8vw,112px); --title-size:clamp(56px,8.4vw,112px);
   --theme-color:#0B1411; color-scheme:dark;
@@ -91,7 +91,7 @@
 :root[data-theme="chrono"],[data-theme-preview="chrono"]{
   --bg:#F5F5F3; --surface:#FFFFFF; --surface-2:#F5F5F3; --border:#E3E3DE; --border-2:#BDBDB6;
   --text:#111111; --text-2:#3F3F3B; --muted:#5B5B57;
-  --accent:#C2351F; --accent-fill:#E5432A; --on-accent:#FFFFFF; --live:#C2351F; --live-fill:#C2351F; --on-live:#FFFFFF; --win:#111111; --loss:#5B5B57;
+  --accent:#C2351F; --accent-fill:#D63C24; --on-accent:#FFFFFF; --live:#C2351F; --live-fill:#C2351F; --on-live:#FFFFFF; --win:#111111; --loss:#5B5B57;
   --radius-card:32px; --radius-tile:20px; --radius-pill:999px;
   --font-display:"Jost",sans-serif; --display-weight:200; --font-body:"Jost",system-ui,sans-serif; --display-track:-.02em; --score-weight:200;
   --shadow-card:0 24px 60px rgba(17,17,17,.06); --shadow-pop:0 30px 70px rgba(17,17,17,.2);
@@ -142,3 +142,6 @@
   --pill-bg:#7A5200; --pill-fg:#FFF9E8; --cta-bg:#7A5200; --cta-fg:#FFF9E8; --win:#7A5200; --loss:#6B5514;
   --belt-strap:#4A3413; --belt-stitch:#E9D9A6; --belt-plate-1:#F7D774; --belt-plate-2:#B8860B; --belt-ink:#3A2A05; --gold-glow:rgba(184,134,11,.14);
 }
+
+/* the two sample team colours on the Team Colors card in the theme picker */
+:root{--thp-a:#1F5A20;--thp-b:#A80F3A}

@@ -260,7 +260,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 .thp-m em{width:14px;height:14px;border-radius:50%;border:1px solid var(--border-2);background:var(--surface-2)}
 .thp-m strong{font:var(--score-weight) 20px/1 var(--font-display);color:var(--text);display:flex;align-items:center;gap:2px}.thp-m small{opacity:.5;font-size:14px}
 .thp-r{display:flex;gap:3px}.thp-r i{flex:1;height:10px;border-radius:calc(var(--radius-tile)/5);background:var(--surface);border:1px solid var(--border)}
-[data-theme-preview="team-colors"] .thp-m{background:linear-gradient(105deg,#1F5A20 0 50%,#A80F3A 50% 100%);border-color:transparent}
+[data-theme-preview="team-colors"] .thp-m{background:linear-gradient(105deg,var(--thp-a) 0 50%,var(--thp-b) 50% 100%);border-color:transparent}
 [data-theme-preview="team-colors"] .thp-m strong{background:var(--text);color:var(--surface);border-radius:6px;padding:2px 6px;font-size:16px}
 [data-theme-preview="team-colors"] .thp-m em{background:var(--surface);border-radius:4px;border-color:transparent}
 [data-theme-preview="members-club"] .thp-m strong,[data-theme-preview="chrono"] .thp-m strong,[data-theme-preview="aurora-glass"] .thp-m strong{font-size:22px}
@@ -315,7 +315,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 :root[data-theme] .livebar h2{font:var(--display-weight) clamp(44px,6.6vw,76px)/.95 var(--font-display)}
 :root[data-theme] .livebar .count{padding-bottom:8px;font:500 15px/1 var(--font-body);color:var(--text-2)}
 :root[data-theme] .pill{border-radius:var(--radius-pill);font:700 13px/1 var(--font-body)}
-:root[data-theme] .pill.live{background:color-mix(in oklab,var(--live) 16%,transparent);color:var(--live)}
+:root[data-theme] .pill.live{background:var(--live-fill);color:var(--on-live)}
 
 /* the lead match and the cards beside it */
 :root[data-theme] .bento{gap:var(--gap);margin-bottom:var(--gap)}
@@ -385,7 +385,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 /* ---------- the match centre and every page that opens beside or over the list ---------- */
 :root[data-theme] .sheet{top:16px;max-height:calc(100vh - 32px);border-radius:var(--radius-card);border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow-card)}
 :root[data-theme] .tabs,:root[data-theme] .shell.stage .tabs{gap:6px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
-:root[data-theme] .tab,:root[data-theme] .shell.stage .tab,:root[data-theme] .shell:not(.sheet-wide) .tab{min-height:40px;padding:0 16px;border:1px solid transparent;border-radius:var(--radius-pill);font:600 14px/1 var(--font-body);color:var(--text-2);display:inline-flex;align-items:center;gap:8px}
+:root[data-theme] .tab,:root[data-theme] .shell.stage .tab,:root[data-theme] .shell:not(.sheet-wide) .tab{min-height:44px;padding:0 16px;border:1px solid transparent;border-radius:var(--radius-pill);font:600 14px/1 var(--font-body);color:var(--text-2);display:inline-flex;align-items:center;gap:8px}
 :root[data-theme] .tab:hover{color:var(--text);background:var(--surface-2)}
 :root[data-theme] .tab.on,:root[data-theme] .shell.stage .tab.on,:root[data-theme] .shell:not(.sheet-wide) .tab.on{background:var(--pill-bg);color:var(--pill-fg);border-color:transparent}
 :root[data-theme] .tab.on .tab-i{color:inherit}
@@ -549,3 +549,5 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
   :root[data-theme="members-club"] .ftr .mx-sc b{font-size:clamp(64px,6.4vw,96px)}
 }
 :root[data-theme="night-match"] .ftr .mx-n{font-weight:700;font-size:clamp(16px,1.45vw,21px)}
+/* a league with nothing on today is quieter, but still readable */
+:root[data-theme] .lg.empty{opacity:1;color:var(--muted)}:root[data-theme] .lg.empty img,:root[data-theme] .lg.empty svg{opacity:.55}

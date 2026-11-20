@@ -16,7 +16,6 @@
     ['tennis', 'tennis/atp', 'ATP', 'all', 4], ['tennis', 'tennis/wta', 'WTA', 'all', 4], ['ufc', 'mma/ufc', 'UFC', null, 8],
   ];
   const SPORTS = [['all', 'All'], ['soccer', 'Soccer'], ['football', 'Football'], ['basketball', 'Basketball'], ['baseball', 'Baseball'], ['hockey', 'Hockey'], ['tennis', 'Tennis'], ['ufc', 'UFC'], ['boxing', 'Boxing']];
-  const TINT = { soccer: '#3DDC84', football: '#C9A15A', basketball: '#FF8A3D', baseball: '#FF5C6C', hockey: '#7CC8FF', tennis: '#D4F54A', ufc: '#E2263C', boxing: '#B3122E' };
   const H = { games: [], ufc: [], box: [], at: 0, loading: false, filter: 'all', err: 0, day: (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })(), shown: '', live: 0 };
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
 
@@ -85,7 +84,7 @@
   const liveGames = () => H.games.filter(g => g.state === 'in');
 
   /* ---------- pieces ---------- */
-  const facts = g => ({ id: g.key, hc: g.a.color || TINT[g.sport], ac: g.b.color || TINT[g.sport],
+  const facts = g => ({ id: g.key, hc: g.a.color || '', ac: g.b.color || '',   // no colour in the feed: the card falls back to the theme's own pair
     label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
     a: { name: g.a.name, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date });

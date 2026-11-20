@@ -263,5 +263,5 @@
   window.flPages.add('predictions', { title: 'Predictions', render,
     onShow() { load(); clearInterval(P.timer); P.timer = setInterval(() => { if (window.flPages.current() !== 'predictions') return; if (Date.now() - P.at > 5 * 60000) load(true); else if (!document.activeElement?.closest?.('#pg-predictions select')) draw() }, 60000) },
     onHide() { clearInterval(P.timer) } });
-  window.flPred = { combine, results, state: P };
+  window.flPredictions = { combine, results, state: P };   // not flPred: that is the match prediction card in predict.js
 })();
