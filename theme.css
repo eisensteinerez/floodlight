@@ -215,7 +215,7 @@ tbody tr{transition:background .15s}
 .rs-key{margin-left:auto;display:flex;align-items:center;gap:6px;font:500 12px/1 var(--f-body)}
 .rs-key i{width:9px;height:9px;border-radius:3px;margin-left:8px;background:var(--loss)}
 .rs-key i.hit{background:var(--win)}.rs-key i.avg{width:16px;height:2px;border-radius:2px;background:var(--accent-fill)}
-.rs-bars{height:240px;margin-top:30px;margin-bottom:40px;padding:0 50px 0 30px;gap:clamp(2px,.8vw,10px)}
+.rs-bars{height:240px;margin-top:30px;margin-bottom:40px;padding:0 50px 0 30px;gap:min(10px,max(1px,calc(28% / var(--n,10))))}
 .rs-gl{position:absolute;left:0;right:0;border-top:1px solid color-mix(in oklab,var(--line) 70%,transparent);pointer-events:none}
 .rs-gl span{position:absolute;left:0;bottom:3px;font:500 12px/1 var(--f-mono);color:var(--muted)}
 .rs-b{outline:0;cursor:default}

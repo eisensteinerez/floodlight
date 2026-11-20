@@ -1094,8 +1094,8 @@ function rsChart(games, def, line, side){
     <div class="rs-bars" style="--n:${n}" data-max="${max}" data-side="${side}">
       <div class="rs-zn ${side === 'over' ? 'hit' : 'miss'}" style="bottom:${pct(line)}%"></div><div class="rs-zn lo ${side === 'over' ? 'miss' : 'hit'}" style="height:${pct(line)}%"></div>
       ${ticks.map(t => `<div class="rs-gl" style="bottom:${pct(t)}%"><span class="num">${rsFmt(t, { dec: tick < 1 ? 1 : 0 })}</span></div>`).join('')}
-      ${gs.map((g, i) => { const v = vals[i], cls = rsHitCls(v, line, side), d = Math.round((v - line) * 100) / 100, edge = i < n * .22 ? ' tl' : i > n * .78 - 1 ? ' tr' : '';
-      return `<div class="rs-b ${cls}${edge}" style="--i:${i}" data-v="${v}" tabindex="0"><em class="num">${rsFmt(v, def)}</em><i style="height:${Math.max(v ? 3 : 1.5, pct(v))}%"></i>
+      ${gs.map((g, i) => { const v = vals[i], cls = rsHitCls(v, line, side), d = Math.round((v - line) * 100) / 100, edge = i < n * .22 ? ' tl' : i > n * .78 - 1 ? ' tr' : '', back = n - 1 - i, lbk = back % Math.max(1, Math.ceil(n / 16)) === 0 ? ' lbk' : '', lbs = back % Math.max(1, Math.ceil(n / 7)) === 0 ? ' lbs' : '';
+      return `<div class="rs-b ${cls}${edge}${lbk}${lbs}" style="--i:${i}" data-v="${v}" tabindex="0"><em class="num">${rsFmt(v, def)}</em><i style="height:${Math.max(v ? 3 : 1.5, pct(v))}%"></i>
         <span class="rs-bl">${g.oppLogo ? `<img src="${esc(g.oppLogo)}" alt="" onerror="this.remove()">` : ''}${g.home === false ? '@' : ''}${esc((g.oppAbbr || g.opp || '').slice(0, 3))}<small>${esc(fmtDate(g.date, { day: 'numeric', month: 'numeric' }))}</small>${g.res ? `<b class="rs-wl ${esc(g.res)}">${esc(g.res)}</b>` : ''}</span>
         <span class="rs-tt"><small>${esc(fmtDate(g.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</small><strong>${g.home === false ? '@ ' : g.home ? 'vs ' : ''}${esc(g.opp || '')}</strong>
           <span class="rs-tv"><b class="num">${rsFmt(v, def)}</b> ${esc(def.l.toLowerCase())}</span>
@@ -1543,7 +1543,7 @@ button.rs-lchip:hover{border-color:var(--fg)}
 .rs-pc{font-weight:800}
 .rs-wait{color:var(--muted);font-size:12.5px;margin:10px 0}
 .rs-chart{margin:14px 0 6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:26px 12px 8px}
-.rs-bars{position:relative;height:210px;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:clamp(2px,1vw,8px);align-items:end;margin-bottom:38px}
+.rs-bars{position:relative;height:210px;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:min(8px,max(1px,calc(28% / var(--n,10))));align-items:end;margin-bottom:38px}
 .rs-b{position:relative;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
 .rs-b i{display:block;width:100%;max-width:38px;border-radius:var(--r-ctl) var(--r-ctl) 2px 2px;background:var(--loss)}
 .rs-b.hit i{background:var(--win)}.rs-b.push i{background:var(--draw)}
@@ -1551,6 +1551,9 @@ button.rs-lchip:hover{border-color:var(--fg)}
 .rs-bl{position:absolute;top:100%;margin-top:5px;display:flex;flex-direction:column;align-items:center;gap:2px;font:600 12px/1 var(--f-mono);color:var(--muted);white-space:nowrap}
 .rs-bl img{width:16px;height:16px;object-fit:contain}.rs-bl small{font-size:12px}
 .rs-bars[style*="--n:2"] .rs-bl small,.rs-bars[style*="--n:3"] .rs-bl small{display:none}
+.rs-b:not(.lbk) .rs-bl{display:none}
+.rs-chart.dense .rs-b em{display:none}
+@media (max-width:640px){.rs-b:not(.lbs) .rs-bl{display:none}}
 .rs-ln{position:absolute;left:0;right:0;border-top:2px dashed var(--fg);opacity:.75;pointer-events:none}
 .rs-ln span{position:absolute;right:0;top:-20px;background:var(--fg);color:var(--bg);font:800 12px/1 var(--f-body);padding:3px 6px;border-radius:var(--r-ctl)}
 .rs-filters{display:flex;flex-wrap:wrap;gap:8px 14px;margin:14px 0 4px}

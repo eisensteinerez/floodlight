@@ -141,7 +141,7 @@ body.embed .brand{display:none}
 
 /* chart */
 .chart{margin-top:14px}
-.bars{position:relative;display:flex;gap:clamp(2px,.8vw,10px);height:240px;margin:30px 0 44px;padding:0 50px 0 30px}
+.bars{position:relative;display:flex;gap:min(10px,max(1px,calc(28% / var(--n,10))));height:240px;margin:30px 0 44px;padding:0 50px 0 30px}
 .zn{position:absolute;left:0;right:0;pointer-events:none}
 .zn.hit{background:none}
 .zn.miss{background:none}
@@ -173,6 +173,9 @@ body.embed .brand{display:none}
 .ln:not(.fixed):hover span,html.dragging .ln span{transform:scale(1.1);background:var(--accent-fill);color:var(--accent-ink)}
 html.dragging,html.dragging *{cursor:ns-resize!important;user-select:none;-webkit-user-select:none}
 .chart.dense .b em,.chart.dense .bl small{display:none}
+/* with many games the opponent labels would sit on top of each other: keep every few, newest first */
+.b:not(.lbk) .bl{display:none}
+@media (max-width:640px){.b:not(.lbs) .bl{display:none}}
 @media (max-width:640px){.bars{height:190px;padding:0 44px 0 22px}.roll{left:22px;width:calc(100% - 66px)}.key{margin-left:0;flex-basis:100%}.key i:first-child{margin-left:0}.chart.mid .b em{display:none}}
 
 .back{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:12px}
@@ -799,7 +802,7 @@ function chart(games) {
       <span class="key"><i class="ov"></i>${over}<i class="un"></i>${under}${n > 2 && !yes ? '<i class="avg"></i>5-game average' : ''}</span></div>
     ${backBar(n)}
     ${S.mode === 'table' && !yes ? `<div class="scroll" style="max-height:340px"><table class="tbl num"><thead><tr><th>Date</th><th style="text-align:left">Opponent</th><th>Result</th><th>${esc(lab)}</th><th>vs line ${lineTxt(S.line)}</th><th>5-game avg</th></tr></thead><tbody>${[...gs].reverse().map((g, j) => { const i = n - 1 - j, v = vals[i], c = hitCls(v, S.line, S.side), d = Math.round((v - S.line) * 100) / 100; return `<tr><td>${esc(day(g.date))}</td><td style="text-align:left">${g.home === false ? '@ ' : 'vs '}${esc(g.opp)}</td><td>${esc(g.res)} ${esc(g.score)}</td><td class="${c === 'hit' ? 'cell-h' : c === 'miss' ? 'cell-m' : ''}"><b>${fmt(v)}</b></td><td>${c === 'push' ? 'push' : (c === 'hit' ? '✓ ' : '✕ ') + (d > 0 ? '+' : '−') + fmt(Math.abs(d))}</td><td>${f1(roll[i])}</td></tr>` }).join('')}</tbody></table></div>` : ''}
-    <div class="bars" data-max="${max}" data-min="${min}"${S.mode === 'table' && !yes ? ' hidden' : ''}>
+    <div class="bars" style="--n:${n}" data-max="${max}" data-min="${min}"${S.mode === 'table' && !yes ? ' hidden' : ''}>
       <div class="zn ${S.side === 'over' ? 'hit' : 'miss'}" style="bottom:${y(S.line)}%;top:0"></div><div class="zn ${S.side === 'over' ? 'miss' : 'hit'}" style="bottom:0;height:${y(S.line)}%;transform:scaleY(-1)"></div>
       ${ticks.map(t => `<div class="gl" style="bottom:${y(t)}%"><span class="num">${fmt(t)}</span></div>`).join('')}${min < 0 ? `<div class="gl zero" style="bottom:${y0}%"><span class="num">0</span></div>` : ''}
       ${gs.map((g, i) => { const v = vals[i], cls = hitCls(v, S.line, S.side), d = Math.round((v - S.line) * 100) / 100, neg = v < 0, b = neg ? y(v) : y0, h = Math.max(v ? 1.4 : .8, Math.abs(y(v) - y0));
@@ -807,7 +810,8 @@ function chart(games) {
           <span class="${cls}">${yes ? '' : cls === 'push' ? 'Push, right on the line' : `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))} ${d > 0 ? 'over' : 'under'} the line`}</span>
           <small>${esc([g.res === 'W' ? 'Won' : g.res === 'L' ? 'Lost' : g.res === 'D' ? 'Drew' : '', g.score, g.min != null && k !== 'min' ? Math.round(g.min) + ' min' : '', g.comp].filter(Boolean).join(' · '))}</small>`;
         const pos = v > S.line ? 'ov' : v < S.line ? 'un' : 'eq', big = !yes && Math.abs(d) >= 5 ? flHeat.icon(d > 0 ? 'fire' : 'ice', 12) : '';
-        return `<div class="b ${cls} ${pos}${neg ? ' neg' : ''}" style="--i:${i}"${tipAttr(tip)}><i style="bottom:${b}%;height:${h}%"></i><u style="bottom:${y(v)}%"></u><em class="num" style="${neg ? `top:${100 - b + 1.5}%` : `bottom:${b + h + 1.5}%`}">${big}${yes ? (v ? 'Yes' : 'No') : fmt(v)}</em>
+        const back = n - 1 - i, lbk = back % Math.max(1, Math.ceil(n / 16)) === 0 ? ' lbk' : '', lbs = back % Math.max(1, Math.ceil(n / 7)) === 0 ? ' lbs' : '';   // which bars keep their label: always the newest game, then evenly spaced
+        return `<div class="b ${cls} ${pos}${neg ? ' neg' : ''}${lbk}${lbs}" style="--i:${i}"${tipAttr(tip)}><i style="bottom:${b}%;height:${h}%"></i><u style="bottom:${y(v)}%"></u><em class="num" style="${neg ? `top:${100 - b + 1.5}%` : `bottom:${b + h + 1.5}%`}">${big}${yes ? (v ? 'Yes' : 'No') : fmt(v)}</em>
           <span class="bl">${g.home === false ? '@' : ''}${esc(short(g))}<small>${esc(new Date(g.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }))}</small>${g.res ? `<b class="${esc(g.res)}">${esc(g.res)}</b>` : ''}</span></div>` }).join('')}
       ${!yes && n > 2 ? `<div class="avgl" style="bottom:${y(avg(vals))}%"><span class="num">avg ${f1(avg(vals))}</span></div>` : ''}
       ${S.mode === 'trend' && !yes ? `<svg class="roll tl" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".14"/><stop offset="1" stop-color="var(--accent)" stop-opacity=".14"/></linearGradient></defs><path d="M.5,${100 - y0} ${vals.map((v, i) => `L${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')} L${n - .5},${100 - y0}Z" fill="url(#tg)"/><polyline class="raw" points="${vals.map((v, i) => `${i + .5},${(100 - y(v)).toFixed(2)}`).join(' ')}"/></svg>` : ''}
