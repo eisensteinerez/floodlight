@@ -119,7 +119,8 @@
 :root[data-theme] .key i{width:12px;height:12px;border-radius:4px;background:var(--chart-under);border:var(--chart-under-border)}
 :root[data-theme] .key i.ov{background:var(--chart-over);border:0}
 :root[data-theme] .key i.avg{width:18px;height:2px;border-radius:2px;background:var(--chart-avg);border:0}
-:root[data-theme] .bars{height:260px;margin:34px 0 52px;padding:0 84px 0 30px;gap:clamp(3px,1vw,14px)}
+:root[data-theme] .bars{height:260px;margin:34px 0 52px;padding:0 84px 0 30px;gap:min(14px,max(1px,calc(28% / var(--n,10))))}
+:root[data-theme] .chart.dense .b i{border-radius:3px 3px 1px 1px}:root[data-theme] .chart.dense .b.neg i{border-radius:1px 1px 3px 3px}
 :root[data-theme] .gl{border-top:1px solid var(--border)}
 :root[data-theme] .gl span,:root[data-theme] .bl,:root[data-theme] .bl small,:root[data-theme] .ladx{font-family:var(--font-body);color:var(--muted)}
 :root[data-theme] .b::before{border-radius:12px;background:color-mix(in srgb,var(--text) 6%,transparent)}
@@ -130,6 +131,8 @@
 :root[data-theme][data-cb] .b.miss i{background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--bg) 35%,transparent) 0 4px,transparent 4px 8px)}
 :root[data-theme] .b em{display:flex;align-items:center;gap:2px;font:700 13px/1 var(--font-body);color:var(--text-2)}
 :root[data-theme] .b.ov em{color:var(--text)}
+:root[data-theme] .chart.dense .b em{font-size:0;gap:0}   /* many games: no numbers over the bars, the fire and ice markers stay */
+@media (max-width:640px){:root[data-theme] .chart.mid .b em,:root[data-theme] .chart.dense .b em{display:none}}
 :root[data-theme] .bl{gap:3px;font-weight:600;color:var(--text-2)}
 :root[data-theme] .bl b{font-weight:800;color:var(--muted)}:root[data-theme] .bl b.W{color:var(--text)}:root[data-theme] .bl b.L{color:var(--muted)}
 :root[data-theme] .roll{width:calc(100% - 114px)}

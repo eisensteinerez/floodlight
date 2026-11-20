@@ -73,7 +73,7 @@
 
 /* ---------- the shared game chart ---------- */
 .hc{min-width:0}
-.hc-plot{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:clamp(3px,1vw,14px);height:234px;padding:0 78px 0 0;margin:30px 0 58px}
+.hc-plot{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:min(14px,max(1px,calc(28% / var(--n,10))));height:234px;padding:0 78px 0 0;margin:30px 0 58px}
 .hc-b{position:relative;display:flex;flex-direction:column;justify-content:flex-end;min-width:0;height:100%;border-radius:8px;outline-offset:4px}
 .hc-col{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%}
 .hc-col i{width:100%;max-width:46px;border-radius:10px 10px 3px 3px;background:var(--chart-under);border:var(--chart-under-border,0)}
@@ -93,11 +93,13 @@
 .hc-key i{width:12px;height:12px;border-radius:4px;background:var(--chart-under);border:var(--chart-under-border,0)}
 .hc-key i.ov{background:var(--chart-over);border:0}.hc-key i.av{height:2px;width:18px;border-radius:2px;background:var(--chart-avg);border:0}
 .hc.dense .hc-col em,.hc.dense .hc-x small{display:none}
+.hc-b:not(.lbk) .hc-x{display:none}   /* many games: keep every few labels, newest first */
+@media (max-width:640px){.hc-b:not(.lbs) .hc-x{display:none}}
 .hc.fresh .hc-col i{transform-origin:50% 100%;animation:hcGrow .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i)*30ms)}
 @keyframes hcGrow{from{transform:scaleY(0)}}
 .hc-tip{position:fixed;z-index:400;max-width:280px;padding:9px 12px;border-radius:14px;background:var(--pill-bg);color:var(--pill-fg);font:600 12.5px/1.4 var(--font-body);box-shadow:var(--shadow-pop);pointer-events:none}
 .hc-tip[hidden]{display:none}
-@media (max-width:640px){.hc-plot{height:180px;padding-right:64px;gap:3px}.hc-avg{width:calc(100% - 64px)}.hc-x small{display:none}.hc-col em{font-size:12px}}
+@media (max-width:640px){.hc-plot{height:180px;padding-right:64px;gap:min(3px,max(1px,calc(28% / var(--n,10))))}.hc-avg{width:calc(100% - 64px)}.hc-x small{display:none}.hc-col em{font-size:12px}}
 
 /* ---------- motion off ---------- */
 :root[data-motion="reduce"] .hi,:root[data-motion="reduce"] .hc.fresh .hc-col i{animation:none!important}
