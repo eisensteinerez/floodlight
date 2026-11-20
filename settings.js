@@ -55,6 +55,7 @@
       <div class="card feature st-card">
         <p class="st-crumb">Settings › Appearance</p>
         <div class="st-h"><h2 id="stThemeH">Theme</h2><span class="st-saved" id="stSaved" role="status" aria-live="polite"></span></div>
+        <p class="lb st-favnote"><span>Have more than one you like? Star them on your profile and switch between them from the menu.</span> <button type="button" class="lk" data-page="profile" data-arg="themes">Star favorite themes</button></p>
         <div class="st-themes" role="radiogroup" aria-labelledby="stThemeH">
           ${THEMES.map(([id, name, desc]) => `<button type="button" class="st-theme${id === cur ? ' on' : ''}" role="radio" aria-checked="${id === cur}" tabindex="${id === cur ? 0 : -1}" data-theme-pick="${id}">
             ${preview(id)}<span class="st-tn">${esc(name)}<svg class="st-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="st-td">${esc(desc)}</span></button>`).join('')}
@@ -91,7 +92,19 @@
     if (typeof S !== 'undefined') { S.prefs.size = SIZES[i][0]; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } saved() });
   document.addEventListener('change', ev => { if (/^pref(Motion|Contrast|Alerts)$/.test(ev.target.id) && ev.target.closest('#pg-settings')) saved() });
 
-  window.flTheme = { list: THEMES, get: current, name: () => nameOf(current()), set: setTheme, scheme: () => root.dataset.scheme };
+  /* ---------- favorite themes: starred on the profile page, then one press away in the three-dot menu ---------- */
+  const localFavs = () => { try { const a = JSON.parse(ls.get('fl.favThemes', '[]')); return Array.isArray(a) ? a : [] } catch { return [] } };
+  const favs = () => { const mine = typeof S !== 'undefined' && S.me?.prefs?.favThemes; return (Array.isArray(mine) ? mine : localFavs()).filter(id => Object.prototype.hasOwnProperty.call(T, id)) };
+  function fav(id, on) {
+    if (!Object.prototype.hasOwnProperty.call(T, id)) return favs();
+    const next = favs().filter(x => x !== id); if (on) next.push(id);
+    ls.set('fl.favThemes', JSON.stringify(next));
+    if (typeof S !== 'undefined' && S.me && typeof api === 'function') { S.me.prefs = { ...S.me.prefs, favThemes: next }; api('/api/me/prefs', { favThemes: next }).then(d => { if (d.user) S.me = d.user }).catch(() => {}) }
+    document.dispatchEvent(new CustomEvent('fl:theme', { detail: { id: current(), favs: next } }));
+    return next;
+  }
+  document.addEventListener('click', ev => { const t = ev.target.closest?.('[data-theme-use]'); if (t) setTheme(t.dataset.themeUse) });
+  window.flTheme = { list: THEMES, get: current, name: () => nameOf(current()), set: setTheme, scheme: () => root.dataset.scheme, favs, fav, preview };
   // the menu's Theme item lands on the picker itself
   function onShow(el, arg) { if (arg !== 'theme') return; setTimeout(() => { el.querySelector('#stThemeH')?.scrollIntoView({ block: 'center' }); el.querySelector('[data-theme-pick][aria-checked="true"]')?.focus({ preventScroll: true }) }, 40) }
   window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true });
