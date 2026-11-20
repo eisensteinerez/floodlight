@@ -555,3 +555,9 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 @media (pointer:coarse){:root[data-theme] .bt.sm,:root[data-theme] .btn.sm{min-height:44px}}
 /* captions under an older profile header were fixed white: they follow the theme now */
 :root[data-theme] .hero.solo > p,:root[data-theme] .hero.solo .hcap{color:var(--muted)!important}
+/* the small gold title belt beside a champion's name (fighter.js miniBelt). A glint crosses the gold every few seconds */
+.fl-belt-mini{width:34px;height:15px;flex:none;display:inline-block;vertical-align:-3px;overflow:visible;filter:drop-shadow(0 1px 1.500px rgba(0,0,0,.35))}
+.fl-belt-shine{transform-box:view-box;animation:fl-glint 4.2s cubic-bezier(.45,0,.2,1) infinite}
+.fgt-belt .fl-belt-shine{animation-duration:5.6s}
+@keyframes fl-glint{0%,60%{transform:translateX(0) skewX(-18deg)}100%{transform:translateX(150%) skewX(-18deg)}}
+@media (prefers-reduced-motion:reduce){.fl-belt-shine{animation:none!important;opacity:0}}

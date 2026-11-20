@@ -867,3 +867,71 @@ html.fl-no-live #tbLive,html.fl-no-live #flBarLive{display:none}
   .me-splits{grid-template-columns:minmax(0,1fr)}
   .me-th{flex-wrap:wrap}.me-th .thp{width:64px}.me-th .rw-t{flex-basis:calc(100% - 140px)}
 }
+
+/* ---------- UFC champions, ranks and the prime view: ufc.js and fighter.js ---------- */
+/* a champion's line above their name: the belt and the word, in gold */
+:root[data-theme] .ufc-ch{display:inline-flex;align-items:center;gap:7px;margin:0 0 4px;font:800 11px/1 var(--font-body);font-style:normal;letter-spacing:.12em;text-transform:uppercase;color:var(--champ-text)}
+:root[data-theme] .ufc-fs.r .ufc-ch{flex-direction:row-reverse}
+:root[data-theme] .ufc-fs.champ .ufc-fs-img{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--champ-2),0 0 22px var(--champ-glow)}
+:root[data-theme] .ufc-bout:has(> .ufc-fs.champ:not(.r)){background-image:radial-gradient(55% 140% at 0% 50%,var(--champ-glow),transparent 70%)}
+:root[data-theme] .ufc-bout:has(> .ufc-fs.r.champ){background-image:radial-gradient(55% 140% at 100% 50%,var(--champ-glow),transparent 70%)}
+:root[data-theme] .ufc-bout:has(> .ufc-fs.champ:not(.r)):has(> .ufc-fs.r.champ){background-image:radial-gradient(40% 140% at 0% 50%,var(--champ-glow),transparent 70%),radial-gradient(40% 140% at 100% 50%,var(--champ-glow),transparent 70%)}
+:root[data-theme] .ufc-bout.title{border-color:var(--champ-edge)}
+:root[data-theme] .ufc-rk{display:inline-block;margin-right:7px;padding:2px 6px;border:1px solid var(--border-2);border-radius:var(--radius-pill);font:700 11px/1.2 var(--font-body);font-style:normal;color:var(--text-2);vertical-align:2px}
+:root[data-theme] .ufc-belt{display:inline-flex;align-items:center;gap:6px;background:var(--champ-strap);color:var(--champ-1);border:1px solid var(--champ-edge)}
+:root[data-theme] .ufc-belt .fl-belt-mini{width:28px;height:12px}
+:root[data-theme] .ufc-fh-img.champ .ufc-fh-face{box-shadow:0 0 0 3px var(--surface),0 0 0 6px var(--champ-2),0 0 34px var(--champ-glow)}
+:root[data-theme] .ufc-fh-s .ufc-ch{margin-top:10px}
+:root[data-theme] .ufc-ev.off .ufc-ev-out{display:inline-flex;align-items:center;gap:6px;font:600 13px/1.2 var(--font-body);color:var(--accent);white-space:nowrap}
+/* the champion's profile: the photo wears a gold ring, the ladder's champion row a belt */
+html:root[data-theme] .fgt-gold .fgt-champ-photo .fgt-photo{border:0;box-shadow:0 0 0 3px var(--surface),0 0 0 6px var(--champ-2),0 0 40px var(--champ-glow)}
+html:root[data-theme] .fgt-rung.ch b{display:inline-flex;align-items:center}
+html:root[data-theme] .fgt-rung.ch{border-color:var(--champ-edge)}
+.fgt-mv{font:600 12px/1 var(--font-body);color:inherit;opacity:.85}
+/* prime and shape */
+.fgt-prime-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:14px}
+.fgt-prime-say{margin:0;flex:1 1 280px;font:500 15px/1.45 var(--font-body);color:var(--text)}
+.fgt-prime-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+html:root[data-theme] .fgt-prime-tiles .tile b{display:block;margin:4px 0 2px;font:var(--display-weight,800) clamp(18px,2.4cqi,24px)/1.15 var(--font-display);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html:root[data-theme] .fgt-gold .fgt-champ-photo{margin-bottom:-4px}
+.fgt-prime-tiles .tile small{display:block;overflow-wrap:anywhere}
+@container sheet (max-width:760px){.fgt-prime-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fgt-prime-plot{position:relative}
+.fgt-prime-svg{width:100%;height:auto;display:block;overflow:visible}
+.fgt-prime-svg .band{fill:color-mix(in oklab,var(--accent) 13%,transparent)}
+.fgt-prime-svg .band-l{fill:var(--text-2);font:700 12px/1 var(--font-body);letter-spacing:.06em;text-transform:uppercase}
+.fgt-prime-svg .gl{stroke:var(--border);stroke-width:1}
+.fgt-prime-svg .ax{fill:var(--muted);font:500 12px/1 var(--font-body);font-variant-numeric:tabular-nums}
+.fgt-prime-svg .ln{fill:none;stroke:var(--accent);stroke-width:2.500;stroke-linejoin:round;stroke-linecap:round}
+.fgt-prime-svg .pm.w{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.fgt-prime-svg .pm.l,.fgt-prime-svg .pm.d{fill:var(--surface);stroke:var(--text);stroke-width:2}
+.fgt-prime-svg .pt-hit{fill:transparent}
+.fgt-pt{cursor:default;outline:none}
+.fgt-pt:hover .pm,.fgt-pt:focus-visible .pm{stroke:var(--text);stroke-width:3}
+.fgt-pt:focus-visible .pt-hit{fill:color-mix(in oklab,var(--text) 8%,transparent);stroke:var(--text);stroke-width:1.500}
+.fgt-tip{position:absolute;z-index:3;max-width:300px;padding:8px 11px;border-radius:12px;background:var(--text);color:var(--bg);font:600 13px/1.35 var(--font-body);pointer-events:none;box-shadow:var(--shadow-pop)}
+.fgt-prime-key{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin:10px 0 6px}
+.fgt-prime-key span{display:inline-flex;align-items:center;gap:7px}
+.fgt-prime-key .k{display:inline-block;width:10px;height:10px;box-sizing:border-box}
+.fgt-prime-key .k.w{border-radius:50%;background:var(--accent)}
+.fgt-prime-key .k.l{border:2px solid var(--text);background:var(--surface)}
+.fgt-prime-key .k.d{width:9px;height:9px;transform:rotate(45deg);border:2px solid var(--text);background:var(--surface)}
+.fgt-prime-key .k.band{width:18px;border-radius:3px;background:color-mix(in oklab,var(--accent) 26%,transparent)}
+.fgt-numbers{margin:4px 0 10px}
+.fgt-numbers summary{display:inline-flex;align-items:center;min-height:44px;font:600 14px/1 var(--font-body);color:var(--accent);cursor:pointer}
+.fgt-numbers summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+:root[data-theme] a.ufc-ev,:root[data-theme] a.ufc-ev:hover{color:var(--text);text-decoration:none}
+:root[data-theme] a.ufc-ev .ufc-ev-when{color:var(--muted)}
+/* the UFC red marks read in every theme: they take the theme's live colour, checked for text contrast */
+:root[data-theme] .ufc-hero-vs i,:root[data-theme] .ufc-ev-m i{color:var(--live)}
+:root[data-theme] .ufc-me{background:color-mix(in oklab,var(--live) 14%,transparent);color:var(--text);border:1px solid color-mix(in oklab,var(--live) 55%,transparent)}
+:root[data-theme] .ufc-fs.champ .ufc-fs-n small,:root[data-theme] .ufc-bout:has(> .ufc-fs.champ) .ufc-mid small{color:var(--text-2)}
+@media (max-width:640px){:root[data-theme] .ufc-fs.r .ufc-ch{flex-direction:row}}
+/* the next-event poster is dark in every theme, so its text uses the poster's own light ink */
+:root[data-theme] .ufc-hero{--text:var(--poster-text);--fg:var(--poster-text);--text-2:var(--poster-text-2);--muted:var(--poster-muted);--faint:var(--poster-muted);--live:var(--poster-red);color:var(--poster-text)}
+:root[data-theme] .ufc-hero .ufc-hero-sub{color:var(--poster-text-2)}
+:root[data-theme] .ufc-hero .bx-cd span{color:var(--poster-text)}
+:root[data-theme] .ufc-eh-t .ufc-hero-sub{color:var(--text-2)}
+:root[data-theme] .ufc-k,:root[data-theme] .ufc-seg h4 span{color:var(--live)}
+:root[data-theme] .ufc-sil b{color:var(--text)}
+html:root[data-theme] .fgt-b .fgt-mv{opacity:1}
