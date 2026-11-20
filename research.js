@@ -839,7 +839,7 @@ function rsSwitch(lab){
     <span style="opacity:${lab ? 1 : .5};transition:opacity .2s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-2px"><path d="M9 3h6M10 3v6L5 18a2 2 0 0 0 1.700 3h10.600a2 2 0 0 0 1.700-3L14 9V3"/></svg> Lab</span></button>`;
 }
 function rsLab(o = {}){
-  const r = S.rs, el = rsEl(), th = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const r = S.rs, el = rsEl(), th = document.documentElement.dataset.theme || 'night-match';
   const q = new URLSearchParams({ embed: '1', sport: r.sport, theme: th });
   if (o.name) q.set(o.team ? 'team' : 'player', o.name);
   if (o.stat) q.set('stat', o.stat);
