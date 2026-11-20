@@ -662,7 +662,7 @@ function bbPlayerHero(v, back){
     ${a ? `<p>${a.displayJersey ? `<span class="num">${esc(a.displayJersey)}</span>` : ''}<span>${esc(a.position?.displayName || '')}</span>${t ? `<span><img src="${esc(t.logos?.[0]?.href || '')}" alt=""> <button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : ''}</p>
       <p class="bb-bio">${[a.age ? a.age + ' yrs' : '', a.displayHeight, a.displayWeight, a.displayBirthPlace, a.displayDraft ? 'Draft: ' + a.displayDraft : '', a.displayExperience, a.college?.name].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>
       ${a.injuries?.length ? `<p><span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span></p>` : ''}` : ''}</div></div>
-    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(last.season?.displayName || '')} per game${v.pool ? ` · ranked among ${esc(l.name)} players with enough games` : ''}</p>` : ''}</div>`;
+    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(last.season?.displayName || '')} per game${v.pool ? ` · ranked among ${esc(l.name)} players with enough games` : ''}</p>` : ''}</div>`;
 }
 function bbPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
@@ -723,12 +723,12 @@ function bbFsPlayerHero(v, back){
   const d = v.rk && S.bb.leaders?.[v.rk], me = d?.players.find(x => x.id === v.id);
   const rkTiles = me ? `<div class="tiles">${[['PTS', 'Points a game'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['EFF', 'Efficiency']].map(([k, l]) => { const r = bbFsRank(d, v.id, k);
     return `<div class="tile"><b class="num">${bbFix(me.avg[k])}</b><span>${l}</span>${r ? `<em class="bb-rk">${bbOrd(r.rank)} of ${r.n}</em>` : ''}</div>` }).join('')}</div>
-    <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(bbName(v.rk))} ${esc(d.season || '')} · ${me.gp} games · ranked among the league's regulars</p>` : '';
+    <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(bbName(v.rk))} ${esc(d.season || '')} · ${me.gp} games · ranked among the league's regulars</p>` : '';
   return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(p?.photo || SIL)}" alt="" onerror="this.onerror=null;this.src=SIL"><div><h3>${esc(p?.name || 'Loading…')}</h3>
     ${p ? `<p>${p.position ? `<span>${esc(p.position)}</span>` : ''}${p.teamId ? `<span><button class="linkbtn" data-bbteam="${esc(p.teamId)}" data-bbslug="${esc(p.teamSlug)}" data-bbl="${esc(v.lg)}">${esc(p.teamName || p.teamSlug)}</button></span>` : ''}</p>
       <p class="bb-bio">${[p.age ? p.age + ' yrs' : '', p.born ? 'Born ' + p.born : '', p.height, p.weight, p.flag ? p.flag.toUpperCase() : ''].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div></div>
     ${rkTiles || (cur ? `<div class="tiles"><div class="tile"><b class="num">${esc(cur.pts ?? '–')}</b><span>Points a game</span></div><div class="tile"><b class="num">${esc(cur.reb ?? '–')}</b><span>Rebounds</span></div><div class="tile"><b class="num">${esc(cur.ast ?? '–')}</b><span>Assists</span></div><div class="tile"><b class="num">${esc(cur.gp ?? '–')}</b><span>Games</span></div></div>
-      <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(cur.comp)} ${esc(cur.season)} · ${esc(cur.team)}</p>` : '')}</div>`;
+      <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(cur.comp)} ${esc(cur.season)} · ${esc(cur.team)}</p>` : '')}</div>`;
 }
 function bbFsPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
@@ -939,39 +939,39 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .bb-more{margin-left:auto;font-size:12px;color:var(--muted)}
 .oddrow .bb-ml{font-weight:600}
 .bb-lead{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
-.bb-lead h5{margin:0 0 6px;font:600 11px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.bb-lead h5{margin:0 0 6px;font:600 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .bb-lead ol{margin:0;padding:0 0 0 20px;font-size:13px}.bb-lead li{padding:4px 0;border-top:1px solid var(--line)}
 .bb-lead li{display:list-item}.bb-lead li .linkbtn{display:inline-flex;align-items:center;gap:6px;max-width:calc(100% - 50px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
 .bb-lead li b{float:right}.bb-tl{width:16px;height:16px;object-fit:contain}
 .bb-face{width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:50% 20%;background:var(--surface-2);vertical-align:-6px;margin-right:6px}
-.bb-box td.t small,.bb-car td.t small,.bb-log td.t small{color:var(--muted);font-size:10.5px;margin-left:6px}
+.bb-box td.t small,.bb-car td.t small,.bb-log td.t small{color:var(--muted);font-size:12px;margin-left:6px}
 .bb-box tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .bb-box tr.bench-start td{border-top:2px solid var(--line)}
 .bb-box tr.dnp td{color:var(--muted)}.dnp-r{text-align:left!important;color:var(--muted);font-size:12px}
 .bb-st td.pos{color:var(--win)}.bb-st td.neg{color:var(--loss)}
 .bb-st td.r i{display:inline-block;width:3px;height:14px;border-radius:2px;margin-right:6px;vertical-align:-2px}
-.bb-form{display:inline-flex;gap:2px}.bb-form i{font:700 9.5px/16px var(--f-mono);font-style:normal;width:16px;text-align:center;border-radius:3px;color:#fff}.bb-form i.w{background:var(--win)}.bb-form i.l{background:var(--loss)}
+.bb-form{display:inline-flex;gap:2px}.bb-form i{font:700 12px/16px var(--f-mono);font-style:normal;width:16px;text-align:center;border-radius:3px;color:#fff}.bb-form i.w{background:var(--win)}.bb-form i.l{background:var(--loss)}
 .bb-cmp{display:grid;gap:0}.bb-cmp div{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
 .bb-cmp div span{color:var(--muted);text-align:center;padding:0 10px}.bb-cmp div b:last-child{text-align:right}
 .bb-books{display:grid;font-size:13px}
 .bb-bh,.bb-br{display:grid;grid-template-columns:minmax(80px,1.1fr) 70px 70px minmax(90px,1.2fr) minmax(90px,1.2fr);gap:8px;align-items:center;padding:8px 4px;border-top:1px solid var(--line)}
-.bb-bh{font:600 10.5px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:0}
-.bb-br .best{color:var(--win);font-weight:700}.bb-br small{color:var(--muted);font-size:10.5px}.bb-br small.up{color:var(--win)}.bb-br small.dn{color:var(--loss)}
-.bb-alt{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}.bb-alt h6{margin:0 0 6px;font:600 11px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.bb-bh{font:600 12px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:0}
+.bb-br .best{color:var(--win);font-weight:700}.bb-br small{color:var(--muted);font-size:12px}.bb-br small.up{color:var(--win)}.bb-br small.dn{color:var(--loss)}
+.bb-alt{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}.bb-alt h6{margin:0 0 6px;font:600 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .bb-alt div div{display:grid;grid-template-columns:1fr 1fr 1fr;padding:5px 0;border-top:1px solid var(--line);font-size:12.5px}
 .bb-tstats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.bb-tstats div{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:4px}
-.bb-tstats span{font-size:11.5px;color:var(--muted)}.bb-tstats b{font-size:18px}.bb-tstats small{font:600 10.5px/1 var(--f-mono);color:var(--muted)}
-.bb-rk{display:block;margin-top:5px;font:600 10.5px/1.2 var(--f-mono);color:var(--fg);opacity:.75;font-style:normal}
+.bb-tstats div{border:1px solid var(--line);border-radius:var(--r-ctl);padding:10px;display:flex;flex-direction:column;gap:4px}
+.bb-tstats span{font-size:12px;color:var(--muted)}.bb-tstats b{font-size:18px}.bb-tstats small{font:600 12px/1 var(--f-mono);color:var(--muted)}
+.bb-rk{display:block;margin-top:5px;font:600 12px/1.2 var(--f-mono);color:var(--fg);opacity:.75;font-style:normal}
 .bb-bio{flex-wrap:wrap}.bb-bio span{font-size:12px}
 .bb-viz{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:6px}
-.bb-viz .radar h5,.bb-sw h5{margin:0 0 6px;font:600 11px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.bb-viz .radar small{font-size:11px;color:var(--muted)}
-.bb-chips{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}.bb-chips li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:7px 10px;border-radius:9px;font-size:12.5px}
-.bb-chips.hi li{background:color-mix(in oklab,var(--win) 12%,transparent)}.bb-chips.lo li{background:color-mix(in oklab,var(--loss) 12%,transparent)}.bb-chips small{color:var(--muted);font:600 10.5px/1 var(--f-mono)}
-.bb-q{font-size:11.5px;color:var(--muted)}
+.bb-viz .radar h5,.bb-sw h5{margin:0 0 6px;font:600 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.bb-viz .radar small{font-size:12px;color:var(--muted)}
+.bb-chips{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}.bb-chips li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:7px 10px;border-radius:var(--r-ctl);font-size:12.5px}
+.bb-chips.hi li{background:color-mix(in oklab,var(--win) 12%,transparent)}.bb-chips.lo li{background:color-mix(in oklab,var(--loss) 12%,transparent)}.bb-chips small{color:var(--muted);font:600 12px/1 var(--f-mono)}
+.bb-q{font-size:12px;color:var(--muted)}
 .bb-rh,.bb-rr{display:grid;grid-template-columns:minmax(0,1.4fr) 60px 70px minmax(90px,1.2fr);gap:10px;align-items:center}
-.bb-rh{font:600 10.5px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 0}
+.bb-rh{font:600 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 0}
 .bb-rr{padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}.bb-rr small{color:var(--muted)}
 .bb-pc{display:grid;grid-template-columns:minmax(0,1fr) 28px;gap:8px;align-items:center}.bb-pc .hi{color:var(--win)}.bb-pc .lo{color:var(--loss)}
 button.fx.bb-fx{width:100%;text-align:left}button.fx.bb-fx:hover{background:var(--surface-2)}

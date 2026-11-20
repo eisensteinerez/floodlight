@@ -819,7 +819,7 @@ function bsPlayerHero(v, back){
   let tiles = '';
   if (st) tiles = `<div class="tiles">${BS_KEY[g].tiles.map(k => { if (st[k] == null) return ''; const r = bsRankIn(ss.peers?.[g], g, k, st, v.id);
       return `<div class="tile"><b class="num">${esc(st[k])}</b><span>${BS_TILE[k]}</span>${r ? `<em class="fbt-rk">${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}</em>` : ''}</div>` }).join('')}</div>
-    <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(v.season)} · ${esc(BSL[v.lg].name)} · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}</p>`;
+    <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(v.season)} · ${esc(BSL[v.lg].name)} · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}</p>`;
   return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(a ? bsShot(a.id, mlb) : SIL)}" alt="" ${bsImgErr}><div><h3>${esc(a?.fullName || 'Loading…')}</h3>
     ${a ? `<p>${a.primaryNumber ? `<span class="num">#${esc(a.primaryNumber)}</span>` : ''}<span>${esc(a.primaryPosition?.name || '')}</span>${t ? `<span><img src="${esc(bsLogo(t.id))}" alt="" ${bsLogoErr}> <button class="linkbtn" data-bsteam="${esc(t.id)}" data-bsl="${esc(BS_LEAGUES.find(l => l.src === 'sa' && l.sport === t.sport?.id && (!l.league || l.league === t.league?.id))?.key || v.lg)}">${esc(t.name)}</button></span>` : ''}</p>` : ''}</div></div>${tiles}</div>`;
 }
@@ -948,7 +948,7 @@ function bsXHero(v, back){
   let tiles = '';
   if (st) tiles = `<div class="tiles">${BS_KEY[g].tiles.map(k => { if (st[k] == null) return ''; const r = bsRankIn(ss.peers?.[g], g, k, st, v.id);
       return `<div class="tile"><b class="num">${esc(st[k])}</b><span>${BS_TILE[k]}</span>${r ? `<em class="fbt-rk">${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}</em>` : ''}</div>` }).join('')}</div>
-    <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(v.season)} · ${esc(BSL[v.lg].name)} regular season · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}</p>`;
+    <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(v.season)} · ${esc(BSL[v.lg].name)} regular season · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}</p>`;
   return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead">${b?.photo ? `<img class="face espn-shot" src="${esc(b.photo)}" alt="" ${bsImgErr}>` : `<span class="av" style="--av:${col}">${esc(initials(b?.name || '?'))}</span>`}<div><h3>${esc(b?.name || 'Loading…')}</h3>
     ${b ? `<p>${b.number ? `<span class="num">#${esc(b.number)}</span>` : ''}${b.position ? `<span>${esc(b.position)}</span>` : ''}${team ? `<span>${esc(team)}</span>` : ''}<span>${esc(BSL[v.lg].name)}</span>${b.local && b.local !== b.name ? `<span>${esc(b.local)}</span>` : ''}</p>` : ''}</div></div>${tiles}</div>`;
 }
@@ -1134,7 +1134,7 @@ async function renderBsFutures(){
     el.innerHTML = `<div class="quick">${bsLgSelect()}</div><div class="livebar"><h2>Futures & title odds</h2><span class="count">Live Kalshi prices</span></div>` + ['mlb', 'npb', 'kbo'].map(lg => { const gs = F.groups.filter(g => g.lg === lg); if (!gs.length) return '';
       return `<div class="grp-name" style="font-size:22px">${esc(BSL[lg].name)}</div>` + gs.map(g => { const all = S.bsb.showAll[g.s], rows = all ? g.rows : g.rows.slice(0, 10), top = g.rows[0].p, people = BS_PLAYER_FUT.has(g.series);
         return `<div class="sub-h"><h5>${esc(g.label)}</h5><small>${esc(g.title)}</small></div><div class="futs">${rows.map((x, i) => { const pic = people ? bsFaceFor(x.name) : bsLogoFor(x.name, lg);
-          return `<div class="fut${flashKey(g.s + x.name, x.p)}"><b class="rk num">${i + 1}</b>${pic ? `<img class="${people ? 'fut-face' : ''}" src="${esc(pic)}" alt="" ${bsImgErr}>` : `<span class="av sm" style="width:22px;height:22px;font-size:9px;--av:#5C677D">${esc(initials(x.name))}</span>`}<span class="nm">${esc(x.name)}</span><span class="bar"><i style="width:${Math.max(2, x.p / top * 100)}%"></i></span><span class="pv num">${x.p < .01 ? '<1' : pct(x.p)}% <small>${american(x.p)}</small> ${moveTag(x.p, x.prev)}</span></div>` }).join('')}</div>
+          return `<div class="fut${flashKey(g.s + x.name, x.p)}"><b class="rk num">${i + 1}</b>${pic ? `<img class="${people ? 'fut-face' : ''}" src="${esc(pic)}" alt="" ${bsImgErr}>` : `<span class="av sm" style="width:22px;height:22px;font-size:12px;--av:#5C677D">${esc(initials(x.name))}</span>`}<span class="nm">${esc(x.name)}</span><span class="bar"><i style="width:${Math.max(2, x.p / top * 100)}%"></i></span><span class="pv num">${x.p < .01 ? '<1' : pct(x.p)}% <small>${american(x.p)}</small> ${moveTag(x.p, x.prev)}</span></div>` }).join('')}</div>
           ${g.rows.length > 10 ? `<button class="btn ghost" style="margin-top:8px" data-bsact="futall" data-to="${esc(g.s)}">${all ? 'Show top 10' : `Show all ${g.rows.length}`}</button>` : ''}` }).join('') }).join('')
       + `<p class="srcnote">Prices from Kalshi, refreshed every 30 seconds while this page is open; 25¢ means a 25% chance. Kalshi lists no CPBL markets.</p>${RG}`;
   };
@@ -1265,28 +1265,28 @@ setInterval(() => { if (document.hidden || S.sport !== 'baseball') return;
   if (v?.type === 'bsbgame' && v.e.state !== 'post') { if (v.tab === 'odds' && BSL[v.e.lg].kx) bsGameOdds(v.e).then(() => renderSheet()); if (v.e.state === 'in') bsLoadGame(v) }
 }, 30000);
 document.head.insertAdjacentHTML('beforeend', `<style>
-.bs-off{font:600 9.5px/1 var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-left:4px}
+.bs-off{font:600 12px/1 var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-left:4px}
 .bs-sit{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.bs-sit .bs-ab{color:var(--muted);font-weight:500}
 .hero-sit.bs-sit{justify-content:center;font-size:13px}.hero-sit.bs-sit span b{font-weight:650}
-.bs-outs{display:inline-flex;gap:3px}.bs-outs i{width:7px;height:7px;border-radius:50%;border:1.4px solid var(--muted)}.bs-outs i.on{background:var(--live);border-color:var(--live)}
-.bs-sp,.bs-ser{font:500 11.5px/1.35 var(--f-body);color:var(--muted);margin-top:2px}.bs-sp span{opacity:.7}.bs-ser{color:var(--accent);font-weight:600}
+.bs-outs{display:inline-flex;gap:3px}.bs-outs i{width:7px;height:7px;border-radius:50%;border:1.4px solid var(--muted)}.bs-outs i.on{background:var(--live-fill,var(--live));border-color:var(--live)}
+.bs-sp,.bs-ser{font:500 12px/1.35 var(--f-body);color:var(--muted);margin-top:2px}.bs-sp span{opacity:.7}.bs-ser{color:var(--accent);font-weight:600}
 .hero-sit.bs-ser{margin-top:8px;text-align:center}
 .bs-line th,.bs-line td{padding:4px 6px}.bs-line td.pts{font-weight:700}
 .bs-dec{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}.bs-dec .tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px}.bs-dec .tile img{width:34px;height:34px;border-radius:50%;object-fit:cover}
 .bs-box td.t{white-space:nowrap}.bs-subrow{padding-left:22px!important}
 .bs-notes{font-size:12px;color:var(--muted);margin:6px 0 14px;display:flex;flex-wrap:wrap;gap:4px 12px}.bs-notes b{color:var(--fg);width:100%}.bs-notes i{font-style:normal;color:var(--fg)}
 .bs-pbp li{grid-template-columns:44px minmax(0,1fr) auto}.bs-pbp li.score .ptx{font-weight:600}.bs-pbp li .ptx strong{color:var(--accent);margin-right:4px}
-.bs-sps{display:grid;grid-template-columns:1fr 1fr;gap:12px}.bs-spc{display:flex;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.bs-sps{display:grid;grid-template-columns:1fr 1fr;gap:12px}.bs-spc{display:flex;gap:10px;padding:12px;border:1px solid var(--line);border-radius:var(--r-card);background:var(--surface-2)}
 .bs-spc img.face{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none;background:var(--surface)}.bs-spc strong{display:block}.bs-spc small{display:block;color:var(--muted);font-size:12px}
-.bs-spl{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:8px}.bs-spl span{display:flex;flex-direction:column;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.bs-spl b{font-size:14px;color:var(--fg);letter-spacing:0}
+.bs-spl{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:8px}.bs-spl span{display:flex;flex-direction:column;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.bs-spl b{font-size:14px;color:var(--fg);letter-spacing:0}
 .bs-lu{margin:0;padding:0;list-style:none;counter-reset:lu}.bs-lu li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
-.bs-lu li .num{color:var(--muted);font-size:11.5px}.bs-lu li small{color:var(--muted);font-size:11.5px}.bs-lu li.sub{opacity:.7}.bs-luh{margin:12px 0 4px}
+.bs-lu li .num{color:var(--muted);font-size:12px}.bs-lu li small{color:var(--muted);font-size:12px}.bs-lu li.sub{opacity:.7}.bs-luh{margin:12px 0 4px}
 .bs-fx{width:100%;text-align:left}.bs-fx:hover{background:var(--surface-2)}
-.bs-rl{font:500 11.5px/1.3 var(--f-mono);color:var(--muted);text-align:right;max-width:180px}
+.bs-rl{font:500 12px/1.3 var(--f-mono);color:var(--muted);text-align:right;max-width:180px}
 .bs-ldrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}.bs-ldrs h5{margin:0 0 6px}.bs-ldrs ol{list-style:none;margin:0;padding:0}
-.ldr-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);border-radius:6px}.ldr-row:hover{background:var(--surface-2)}
-.ldr-row img{width:30px;height:30px;border-radius:50%;object-fit:cover}.ldr-row small{display:block;color:var(--muted);font-size:11.5px}
-.bs-lgsel{display:none;margin-left:auto;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 13px/1 var(--f-body)}
+.ldr-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);border-radius:var(--r-ctl)}.ldr-row:hover{background:var(--surface-2)}
+.ldr-row img{width:30px;height:30px;border-radius:50%;object-fit:cover}.ldr-row small{display:block;color:var(--muted);font-size:12px}
+.bs-lgsel{display:none;margin-left:auto;padding:6px 10px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 13px/1 var(--f-body)}
 @media (max-width:1180px){ .bs-lgsel{display:block} }
 .bs-dpick{position:relative}.bs-dpick input{position:absolute;inset:0;opacity:0;cursor:pointer}
 @media (max-width:620px){ .bs-sps{grid-template-columns:1fr} .bs-rl{display:none} }

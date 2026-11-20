@@ -591,8 +591,8 @@ function fbPlayerHero(v, back){
   if (ss?.raw && keys.some(k => ss.raw[k])) {
     tiles = `<div class="tiles">${keys.map(k => { const x = ss.raw[k]; if (!x) return ''; const r = fbRankIn(v, k, fbStatVal(x));
       return `<div class="tile"><b class="num">${esc(x.displayValue)}</b><span>${esc(x.shortDisplayName || x.displayName)}</span>${r ? `<em class="fbt-rk">${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}</em>` : ''}</div>` }).join('')}</div>
-      <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(v.season)} regular season${ss.gp ? ` · ${ss.gp} game${ss.gp === 1 ? '' : 's'}` : ''}${ss.peers ? ` · ranked among ${esc(fbPeerLabel(v))}` : ''}</p>`;
-  } else if (a?.statsSummary?.statistics?.length) tiles = `<div class="tiles">${a.statsSummary.statistics.slice(0, 4).map(s => `<div class="tile"><b class="num">${esc(s.displayValue)}</b><span>${esc(s.shortDisplayName || s.displayName)}</span>${s.rankDisplayValue ? `<em class="fbt-rk">${esc(s.rankDisplayValue)}</em>` : ''}</div>`).join('')}</div><p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(a.statsSummary.displayName || '')}</p>`;
+      <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(v.season)} regular season${ss.gp ? ` · ${ss.gp} game${ss.gp === 1 ? '' : 's'}` : ''}${ss.peers ? ` · ranked among ${esc(fbPeerLabel(v))}` : ''}</p>`;
+  } else if (a?.statsSummary?.statistics?.length) tiles = `<div class="tiles">${a.statsSummary.statistics.slice(0, 4).map(s => `<div class="tile"><b class="num">${esc(s.displayValue)}</b><span>${esc(s.shortDisplayName || s.displayName)}</span>${s.rankDisplayValue ? `<em class="fbt-rk">${esc(s.rankDisplayValue)}</em>` : ''}</div>`).join('')}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(a.statsSummary.displayName || '')}</p>`;
   return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(a ? fbShot(a, v.lg) : SIL)}" alt="" onerror="this.onerror=null;this.src=SIL"><div><h3>${esc(a?.displayName || 'Loading…')}</h3>
     ${a ? `<p>${a.displayJersey ? `<span class="num">${esc(a.displayJersey)}</span>` : ''}<span>${esc(a.position?.displayName || '')}</span>${t ? `<span><img src="${esc(t.logos?.[0]?.href || '')}" alt=""> <button class="linkbtn" data-fbteam="${esc(t.id)}" data-fbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : ''}</p>
       ${a.injuries?.length ? `<p><span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}</span></p>` : ''}` : ''}</div></div>${tiles}</div>`;
@@ -694,22 +694,22 @@ document.addEventListener('change', ev => {
 });
 document.head.insertAdjacentHTML('beforeend', `<style>
 .shell.sheet-wide > #fb{display:none!important}
-.fbt-rk{display:block;margin-top:5px;font:600 10.5px/1.2 var(--f-mono);color:var(--fg);opacity:.75;font-style:normal}
+.fbt-rk{display:block;margin-top:5px;font:600 12px/1.2 var(--f-mono);color:var(--fg);opacity:.75;font-style:normal}
 .fbps-head,.fbps-row{display:grid;grid-template-columns:minmax(0,1fr) 64px 60px 58px minmax(60px,120px) 26px;gap:10px;align-items:center}
-.fbps-head{font:600 9.5px/1.2 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-bottom:4px}
+.fbps-head{font:600 12px/1.2 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-bottom:4px}
 .fbps-row{padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .fbps-row b,.fbps-row .ps-90,.fbps-row .ps-p,.fbps-rk{text-align:right}.fbps-row .ps-90,.fbps-row .ps-p{color:var(--muted);font-size:12px}
 .fbps-row .ps-t{min-width:0;overflow-wrap:anywhere;line-height:1.25}
-.fbps-row.z{opacity:.55}.fbps-pch{display:none;text-align:right}.fbps-rk b{font-size:12.5px}.fbps-rk small{color:var(--muted);font-size:11px}
+.fbps-row.z{opacity:.55}.fbps-pch{display:none;text-align:right}.fbps-rk b{font-size:12.5px}.fbps-rk small{color:var(--muted);font-size:12px}
 .fbps-row .ps-p.hi{color:var(--win);font-weight:700}.fbps-row .ps-p.lo{color:var(--loss);font-weight:700}
 td .ps-bar-c,.ps-bar-c .ps-bar{display:block}
 .ctable tr.fbp-tot td{border-top:2px solid var(--line)}
 details.fbp-zero summary{cursor:pointer;font-size:12.5px;color:var(--muted);padding:8px 0}
 .fbp-viz{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;align-items:start;margin-bottom:8px}
-.fbp-viz h5{margin:0 0 8px}.fbp-viz .radar small{display:block;margin-top:6px;color:var(--muted);font-size:11.5px;text-align:center}
-.fbp-chips{list-style:none;margin:0 0 14px;padding:0}.fbp-chips li{display:grid;grid-template-columns:minmax(0,1fr) auto 64px;gap:8px;align-items:center;padding:7px 10px;border-radius:8px;margin-bottom:4px;font-size:13px}
+.fbp-viz h5{margin:0 0 8px}.fbp-viz .radar small{display:block;margin-top:6px;color:var(--muted);font-size:12px;text-align:center}
+.fbp-chips{list-style:none;margin:0 0 14px;padding:0}.fbp-chips li{display:grid;grid-template-columns:minmax(0,1fr) auto 64px;gap:8px;align-items:center;padding:7px 10px;border-radius:var(--r-ctl);margin-bottom:4px;font-size:13px}
 .fbp-chips.hi li{background:color-mix(in oklab,var(--win) 13%,transparent)}.fbp-chips.lo li{background:color-mix(in oklab,var(--loss) 12%,transparent)}
-.fbp-chips small{color:var(--muted);font-size:11px;text-align:right}.fbp-q{font-size:12px;color:var(--muted);margin:0}
+.fbp-chips small{color:var(--muted);font-size:12px;text-align:right}.fbp-q{font-size:12px;color:var(--muted);margin:0}
 @media (max-width:620px){ .fbp-viz{grid-template-columns:1fr} }
 @media (max-width:520px){ .fbps-head,.fbps-row{grid-template-columns:minmax(0,1fr) 54px 46px 50px 26px;gap:6px}.fbps-row{font-size:13px}.ps-bar-c{display:none}.fbps-pch{display:block} }
 </style>`);
@@ -768,7 +768,7 @@ async function renderFbFutures(){
       return `<div class="grp-name" style="font-size:22px">${lg === 'nfl' ? 'NFL' : lg === 'college' ? 'College football' : 'UFL'}</div>` + gs.map(g => { const all = S.fb.showAll[g.s], rows = all ? g.rows : g.rows.slice(0, 10), top = g.rows[0].p;
         const scope = g.lg === 'college' ? 'college' : g.lg, people = PLAYER_MARKETS.has(g.series), coach = COACH_MARKETS.has(g.series);
         return `<div class="sub-h"><h5>${esc(g.label)}</h5><small>${esc(g.title)}</small></div><div class="futs">${rows.map((x, i) => { const pic = people ? fbFaceFor(x.name, scope) : coach ? '' : fbLogoFor(x.name, scope);
-          return `<div class="fut${flashKey(g.s + x.name, x.p)}"><b class="rk num">${i + 1}</b>${pic ? `<img class="${people ? 'fut-face' : ''}" src="${esc(pic)}" alt="" onerror="this.onerror=null;this.src=SIL">` : `<span class="av sm" style="width:22px;height:22px;font-size:9px;--av:#5C677D">${esc(initials(x.name))}</span>`}<span class="nm">${esc(x.name)}</span><span class="bar"><i style="width:${Math.max(2, x.p / top * 100)}%"></i></span><span class="pv num">${x.p < .01 ? '<1' : pct(x.p)}% <small>${american(x.p)}</small> ${moveTag(x.p, x.prev)}</span></div>` }).join('')}</div>
+          return `<div class="fut${flashKey(g.s + x.name, x.p)}"><b class="rk num">${i + 1}</b>${pic ? `<img class="${people ? 'fut-face' : ''}" src="${esc(pic)}" alt="" onerror="this.onerror=null;this.src=SIL">` : `<span class="av sm" style="width:22px;height:22px;font-size:12px;--av:#5C677D">${esc(initials(x.name))}</span>`}<span class="nm">${esc(x.name)}</span><span class="bar"><i style="width:${Math.max(2, x.p / top * 100)}%"></i></span><span class="pv num">${x.p < .01 ? '<1' : pct(x.p)}% <small>${american(x.p)}</small> ${moveTag(x.p, x.prev)}</span></div>` }).join('')}</div>
           ${g.rows.length > 10 ? `<button class="btn ghost" style="margin-top:8px" data-fbact="futall" data-to="${esc(g.s)}">${all ? 'Show top 10' : `Show all ${g.rows.length}`}</button>` : ''}` }).join('') }).join('')
       + `<p class="srcnote">Prices from Kalshi, refreshed every 30 seconds while this page is open; 25¢ means a 25% chance. ▲▼ show the 24-hour change.</p>${RG}`;
   };

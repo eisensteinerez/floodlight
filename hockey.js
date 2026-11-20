@@ -679,7 +679,7 @@ function hkPlayerHero(v, back){
     ${a ? `<p>${a.displayJersey ? `<span class="num">${esc(a.displayJersey)}</span>` : ''}<span>${esc(a.position?.displayName || '')}</span>${t ? `<span><img src="${esc(t.logos?.[0]?.href || '')}" alt=""> <button class="linkbtn" data-hkteam="${esc(t.id)}" data-hkl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : ''}</p>
       <p class="bb-bio">${[a.age ? a.age + ' yrs' : '', a.displayHeight, a.displayWeight, a.hand?.displayValue ? (goalie ? 'Catches ' : 'Shoots ') + a.hand.displayValue.toLowerCase() : '', a.displayBirthPlace, a.displayDraft ? 'Draft: ' + a.displayDraft : '', a.displayExperience].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>
       ${a.injuries?.length ? `<p><span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span></p>` : ''}` : ''}</div></div>
-    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(season)}</p>` : ''}</div>`;
+    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(season)}</p>` : ''}</div>`;
 }
 function hkPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
@@ -732,7 +732,7 @@ function hkNhlHero(v, back){
   return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(p?.headshot || SIL)}" alt="" ${hkFaceErr}><div><h3>${esc(p ? `${hkTxt(p.firstName)} ${hkTxt(p.lastName)}` : 'Loading…')}</h3>
     ${p ? `<p>${p.sweaterNumber ? `<span class="num">#${esc(p.sweaterNumber)}</span>` : ''}<span>${esc({ C: 'Centre', L: 'Left wing', R: 'Right wing', D: 'Defence', G: 'Goalie' }[p.position] || p.position || '')}</span>${p.teamLogo ? `<span><img src="${esc(p.teamLogo)}" alt=""> ${esc(hkTxt(p.fullTeamName) || p.currentTeamAbbrev || '')}</span>` : ''}</p>
       <p class="bb-bio">${[p.birthDate ? 'Born ' + fmtDate(p.birthDate + 'T12:00:00', { day: 'numeric', month: 'short', year: 'numeric' }) : '', [hkTxt(p.birthCity), p.birthCountry].filter(Boolean).join(', '), ht, p.weightInPounds ? p.weightInPounds + ' lb' : '', p.shootsCatches ? (goalie ? 'Catches ' : 'Shoots ') + p.shootsCatches : '', p.draftDetails ? `Draft ${p.draftDetails.year} · round ${p.draftDetails.round}, ${bbOrd(p.draftDetails.overallPick)} overall (${p.draftDetails.teamAbbrev})` : 'Undrafted'].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div></div>
-    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:11.5px;color:var(--muted)">${esc(String(p.featuredStats.season || '').replace(/^(\d{4})(\d{2})(\d{2})$/, '$1–$3'))} regular season · official NHL stats</p>` : ''}</div>`;
+    ${tiles ? `<div class="tiles">${tiles}</div><p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(String(p.featuredStats.season || '').replace(/^(\d{4})(\d{2})(\d{2})$/, '$1–$3'))} regular season · official NHL stats</p>` : ''}</div>`;
 }
 function hkNhlPane(v){
   if (v.err) return `<div class="note">Couldn't load this player. The NHL's player pages come through the local server.</div>`;
@@ -927,16 +927,16 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .hk-plays{list-style:none;margin:0 0 6px;padding:0}
 .hk-plays li{display:grid;grid-template-columns:62px 20px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
 .hk-plays li img{width:20px;height:20px;object-fit:contain}
-.hk-plays .clk{color:var(--muted);font-size:11.5px}
+.hk-plays .clk{color:var(--muted);font-size:12px}
 .hk-plays .ptx .linkbtn{text-align:left;font-weight:500}
 .hk-plays.pen li{font-size:12.5px;color:var(--muted)}.hk-plays.pen .ptx{color:var(--fg)}
-.hk-str{font:700 9.5px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.04em;color:var(--accent);margin-left:4px}
+.hk-str{font:700 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.04em;color:var(--accent);margin-left:4px}
 .hk-sort{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;white-space:nowrap}
 .hk-sort.on{color:var(--accent)}
 .hk-stats td.hk-on{font-weight:700;color:var(--fg)}
-.hk-stats td.t small{color:var(--muted);font-size:10.5px;margin-left:6px}
+.hk-stats td.t small{color:var(--muted);font-size:12px;margin-left:6px}
 .hk-tlogo{width:20px;height:20px;object-fit:contain;vertical-align:-5px;margin-right:6px}
 tr.hk-minor td{color:var(--muted)}
-td.hk-l{text-align:left!important;white-space:nowrap}td.hk-l small{color:var(--muted);font-size:10.5px;margin-left:4px}
+td.hk-l{text-align:left!important;white-space:nowrap}td.hk-l small{color:var(--muted);font-size:12px;margin-left:4px}
 </style>`);
 if (S.sport === 'hockey') { S.stack = []; const sh = $('sheet'); if (sh && !sh.querySelector('.sheet-empty')) { sh.innerHTML = emptySheet(); sh.classList.remove('open') } setTimeout(render, 0) }
