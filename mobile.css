@@ -52,6 +52,11 @@
   html:root[data-theme] .m.mx{padding:16px 14px}
   html:root[data-theme] .m.mx .mx-n{overflow-wrap:break-word;text-wrap:balance}
 
+  /* ---------- small stat tiles ---------- */
+  html:root[data-theme] .tiles .tile{min-width:0}
+  html:root[data-theme] .tiles .tile b{font-size:28px;overflow:visible;text-overflow:clip;white-space:normal}
+  html:root[data-theme] .tiles .tile span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25}
+
   /* ---------- match page ---------- */
   html:root[data-theme] .sheet .form i{width:22px;height:22px;line-height:22px;font-size:10.5px}
   html:root[data-theme] .sheet .form{gap:3px}
@@ -74,6 +79,14 @@
   html:root[data-theme] .sx-row{grid-template-columns:28px minmax(0,1fr) 84px minmax(0,1fr) 28px;gap:6px}
   html:root[data-theme] .sx-row em{font-size:12px;line-height:1.2}
 
+  /* ---------- player profile header: photo sits beside the name instead of floating halfway down ---------- */
+  html:root[data-theme] .pfh-main{align-items:flex-start}
+  html:root[data-theme] .pfh-main > :is(.face,.tcard){margin-top:4px}
+
+  /* ---------- team page: recent results ---------- */
+  html:root[data-theme] .fx{grid-template-columns:44px minmax(0,1fr) auto;gap:8px;padding:8px 10px}
+  html:root[data-theme] .fx .r{font-size:16px;gap:6px}
+  html:root[data-theme] .fx .vs{min-width:0}
 }
 
 /* the smallest phones (iPhone SE and mini) */
