@@ -275,6 +275,7 @@
   let poll = 0;
   let shownAt = 0;
   function show() {
+    if (window.flPages?.current?.()) window.flPages.hide();   // Home from Live, the Lab, Predictions or any other page: close it, or both stay hidden
     shownAt = Date.now(); root.classList.add('hub-on'); sec.hidden = false;
     window.S && S.stack?.length && typeof closeSheet === 'function' && closeSheet();
     paint(); load(); scrollTo({ top: 0 });
