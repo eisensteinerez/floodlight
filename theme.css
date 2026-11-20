@@ -1,38 +1,31 @@
-/* Floodlight design system: "night match".
-   One sheet for the whole site (and anything else that wants to look like Floodlight): colour and type tokens,
-   then the shared pieces built from them. It is moved to the end of <head> at start-up so it has the last word
-   over the styles each sport file adds.
-   Type: Big Shoulders Display for headlines and scores, Geist for reading, Geist Mono for numbers and small labels. */
+/* Floodlight design system: the shared pieces (cards, tables, charts, panels) built from the theme tokens.
+   The tokens themselves live in the first block of arena.css, which loads last and has the final word. The values
+   here are the same ones, kept as a fallback for the moment before arena.css arrives.
+   Type: Sofia Sans in three widths. Extra Condensed for headlines and scores, Condensed for tight rows, regular for reading. */
 :root{
-  --bg:#F3F1FB; --surface:#FFFFFF; --surface-2:#EFEBFA; --line:#DCD5F0; --fg:#0F0B1E; --muted:#635B80;
-  --accent:#5B2BFF; --accent-2:#B02BFF; --accent-ink:#FFFFFF; --live:#E0204F; --win:#0F8F5E; --draw:#857E9E; --loss:#D43F5C;
+  --bg:#F2F3F5; --surface:#FFFFFF; --surface-2:#E8EAEE; --line:rgba(20,23,28,.13); --fg:#14171C; --muted:#566070;
+  --accent:#8A5700; --accent-2:#8A5700; --accent-fill:#FFC53D; --accent-ink:#14171C; --live:#D4213D; --win:#0E7A4F; --draw:#6B7380; --loss:#C2334F;
   --pitch:#2F7A4C; --pitch-2:#2B7146; --chalk:rgba(255,255,255,.85);
-  --beam:rgba(110,60,255,.13); --beam-2:rgba(0,170,230,.10); --dots:rgba(15,11,30,.07); --hair:rgba(255,255,255,.9); --glass:rgba(255,255,255,.72);
-  --shadow:0 1px 1px rgba(12,14,19,.04),0 8px 28px -8px rgba(12,14,19,.12);
-  --shadow-lg:0 2px 4px rgba(12,14,19,.05),0 24px 60px -18px rgba(12,14,19,.25);
-  --glow:0 0 0 1px color-mix(in oklab,var(--accent) 55%,transparent),0 8px 30px -8px color-mix(in oklab,var(--accent) 45%,transparent);
-  --f-display:"FL Slant","Archivo Narrow","Barlow Condensed","Arial Narrow",Impact,sans-serif;
-  --f-body:"Manrope","Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --f-mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
-  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.3,1.5,.5,1);
-  --r-card:16px; --r-ctl:11px;
+  --beam:transparent; --beam-2:transparent; --dots:transparent; --hair:transparent; --glass:var(--surface);
+  --shadow:none; --shadow-lg:0 14px 36px -18px rgba(20,23,28,.4); --glow:0 0 0 1px rgba(20,23,28,.28);
+  --f-display:"Sofia Sans Extra Condensed","Arial Narrow","Roboto Condensed",Impact,sans-serif;
+  --f-body:"Sofia Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:var(--f-body);
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:var(--ease);
+  --r-card:4px; --r-ctl:3px; --r-pill:3px;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#06050B; --surface:#100E1A; --surface-2:#191628; --line:#2B2642; --fg:#F6F4FF; --muted:#9891B6;
-  --accent:#C6FF2E; --accent-2:#4DFFB4; --accent-ink:#0B1400; --live:#FF2E63; --win:#35E8A2; --draw:#8780A6; --loss:#FF5C7C;
+  --bg:#14171C; --surface:#1B1F26; --surface-2:#262B34; --line:rgba(236,238,241,.12); --fg:#ECEEF1; --muted:#A0A8B4;
+  --accent:#FFC53D; --accent-2:#FFC53D; --accent-fill:#FFC53D; --accent-ink:#14171C; --live:#FF4D5E; --win:#37C97A; --draw:#8E96A3; --loss:#FF6B84;
   --pitch:#0F4A33; --pitch-2:#0D422D; --chalk:rgba(255,255,255,.7);
-  --beam:rgba(150,90,255,.20); --beam-2:rgba(0,214,255,.13); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(13,11,22,.66);
-  --shadow:0 1px 0 rgba(0,0,0,.4),0 12px 34px -12px rgba(0,0,0,.6);
-  --shadow-lg:0 2px 0 rgba(0,0,0,.4),0 30px 80px -20px rgba(0,0,0,.8);
+  --shadow-lg:0 14px 36px -18px rgba(0,0,0,.8); --glow:0 0 0 1px rgba(236,238,241,.26);
   color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#06050B; --surface:#100E1A; --surface-2:#191628; --line:#2B2642; --fg:#F6F4FF; --muted:#9891B6;
-  --accent:#C6FF2E; --accent-2:#4DFFB4; --accent-ink:#0B1400; --live:#FF2E63; --win:#35E8A2; --draw:#8780A6; --loss:#FF5C7C;
+  --bg:#14171C; --surface:#1B1F26; --surface-2:#262B34; --line:rgba(236,238,241,.12); --fg:#ECEEF1; --muted:#A0A8B4;
+  --accent:#FFC53D; --accent-2:#FFC53D; --accent-fill:#FFC53D; --accent-ink:#14171C; --live:#FF4D5E; --win:#37C97A; --draw:#8E96A3; --loss:#FF6B84;
   --pitch:#0F4A33; --pitch-2:#0D422D; --chalk:rgba(255,255,255,.7);
-  --beam:rgba(150,90,255,.20); --beam-2:rgba(0,214,255,.13); --dots:rgba(255,255,255,.045); --hair:rgba(255,255,255,.06); --glass:rgba(13,11,22,.66);
-  --shadow:0 1px 0 rgba(0,0,0,.4),0 12px 34px -12px rgba(0,0,0,.6);
-  --shadow-lg:0 2px 0 rgba(0,0,0,.4),0 30px 80px -20px rgba(0,0,0,.8);
+  --shadow-lg:0 14px 36px -18px rgba(0,0,0,.8); --glow:0 0 0 1px rgba(236,238,241,.26);
   color-scheme:dark}
 
 /* ---------- page ---------- */
