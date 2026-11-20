@@ -171,19 +171,21 @@
     return `<section class="card hm-c3" aria-label="Best edge tonight"><div class="sec-h"><h2>Best edge ${isNight() ? 'tonight' : 'today'}</h2>${top ? window.flHeat.badge(top.heat) : ''}</div>${body}
       <button type="button" class="bt wide" data-shell="pred">See all predictions${ico('arrow', 18)}</button></section>`;
   }
-  const WIRE = { rows: null, at: 0, loading: false, err: '' };
+  const WIRE = { rows: null, at: 0, loading: false, denied: false };
+  // the member's favorite sports decide which leagues feed the wire; with none chosen it reads every league that has a source
+  const WIRE_LG = { basketball: ['nba'], football: ['nfl'], baseball: ['mlb'], soccer: ['soccer'], cbb: ['cbb'], cfb: ['cfb'] };
   function loadWire() {
-    if (WIRE.loading || Date.now() - WIRE.at < 5 * 60000) return; WIRE.loading = true;
-    j('/api/tm/transfers/feed?kind=latest&page=1').then(d => { WIRE.rows = (d.transfers || []).slice(0, 3); WIRE.err = '' }).catch(e => { WIRE.rows = WIRE.rows || []; WIRE.err = String(e.message || e) })
+    if (WIRE.loading || Date.now() - WIRE.at < 5 * 60000 || !window.flTransfers) return; WIRE.loading = true;
+    const fav = (window.S?.me?.prefs?.favSports || []).flatMap(k => WIRE_LG[k] || []);
+    window.flTransfers.latest(fav, 3).then(d => { WIRE.rows = d.rows; WIRE.denied = d.denied }).catch(() => { WIRE.rows = WIRE.rows || [] })
       .finally(() => { WIRE.loading = false; WIRE.at = Date.now(); if (root.classList.contains('hub-on')) paint() });
   }
-  const tmDate = s => { const d = new Date(s + 'T12:00:00'); return isNaN(d) ? '' : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) };
   function wireCard() {
-    const rows = WIRE.rows;
+    const rows = WIRE.rows, day = d => d.toLocaleDateString([], { day: 'numeric', month: 'short' });
     const body = rows == null ? '<div class="skl hm-skl"></div>'.repeat(3)
-      : !rows.length ? `<div class="emp">${ico('transfers', 26)}<b>${WIRE.err === '401' || WIRE.err === '403' ? 'Transfers are switched off for you' : 'No moves to show'}</b><p>${WIRE.err === '401' || WIRE.err === '403' ? 'Ask your admin for access.' : 'The transfer feed did not answer. It will try again shortly.'}</p></div>`
-      : rows.map(t => `<div class="rw"><span class="hm-move" aria-hidden="true">${face('', t.from?.name, 'avx av-sm')}${ico('arrow', 14)}${face('', t.to?.name, 'avx av-sm')}</span>
-          <span class="rw-t"><b>${esc(t.name)}</b><small>${esc([t.from?.name, t.to?.name].filter(Boolean).join(' to '))}${t.date ? ' · ' + esc(tmDate(t.date)) : ''}</small></span>${t.fee ? `<span class="pl">${esc(t.fee)}</span>` : ''}</div>`).join('');
+      : !rows.length ? `<div class="emp">${ico('transfers', 26)}<b>${WIRE.denied ? 'Transfers are switched off for you' : 'No moves to show'}</b><p>${WIRE.denied ? 'Ask your admin for access.' : 'None of your leagues lists a move right now.'}</p></div>`
+      : rows.map(t => `<div class="rw"><span class="hm-move" aria-hidden="true">${face(t.from?.logo, t.from?.short || t.from?.name || '–', 'avx av-sm')}${ico('arrow', 14)}${face(t.to?.logo, t.to?.short || t.to?.name || '–', 'avx av-sm')}</span>
+          <span class="rw-t"><b>${esc(t.player?.name || t.lead?.name || '')}</b><small>${esc([t.league, [t.from?.short || t.from?.name, t.to?.short || t.to?.name].filter(Boolean).join(' to '), day(t.when)].filter(Boolean).join(' · '))}</small></span><span class="pl">${esc(t.label)}</span></div>`).join('');
     return `<section class="card hm-c3" aria-label="Transfer wire"><div class="sec-h"><h2>Transfer wire</h2><button type="button" class="lk" data-shell="transfers">All moves</button></div><div class="hm-rows">${body}</div></section>`;
   }
   function labCard() {

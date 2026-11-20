@@ -22,6 +22,7 @@ if (os.environ.get("PORT") or os.environ.get("RENDER")) and not os.environ.get("
     os.environ["MALLOC_ARENA_MAX"] = "2"
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
+import datetime
 import gzip
 import hashlib
 import hmac
@@ -87,7 +88,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js", "fighter.js"}
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js", "fighter.js", "transfers.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -984,7 +985,7 @@ SESSIONS_FILE = CACHE_DIR / "sessions.json"
 _acct_lock = threading.Lock()
 SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
-             "boards": list, "slips": list, "favSports": list, "tz": str}   # saved Lab boards, saved prediction slips, favorite sports, time zone
+             "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list}   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -1002,6 +1003,85 @@ def _save_accounts():
 VOTES_FILE = CACHE_DIR / "votes.json"
 # Awards and honours. No data provider the site uses carries them, so this file starts empty and only an admin adds to
 # it, one entry at a time, each with the page it was checked against. Nothing is ever filled in by the code.
+# ---------- Transfer window: league moves and key dates ----------
+# Moves come from the leagues' own public transaction lists: ESPN for the NBA and NFL (a team and a sentence per
+# move), MLB's stats API for baseball (player, both teams and a type code). Nothing public lists the college transfer
+# portal, so the college leagues have no moves source yet. Key dates are never guessed: an admin enters them.
+MOVE_SRC = {"nba": ("espn", "basketball/nba"), "nfl": ("espn", "football/nfl"), "mlb": ("mlb", ""), "cbb": ("", ""), "cfb": ("", "")}
+MOVE_LEAGUES = tuple(MOVE_SRC) + ("soccer",)
+
+def _espn_moves(path):
+    out = []
+    for page in (1, 2, 3):
+        d = fetch(f"https://site.api.espn.com/apis/site/v2/sports/{path}/transactions?limit=100&page={page}", 600, as_json=True)
+        for t in d.get("transactions") or []:
+            tm, text = t.get("team") or {}, str(t.get("description") or "").strip()
+            if not text or not t.get("date"):
+                continue
+            logo = tm.get("logo") or next((l.get("href") for l in tm.get("logos") or [] if l.get("href")), "")
+            out.append({"id": f"{tm.get('id', '')}:{t['date']}:{len(out)}", "date": t["date"], "text": text[:600],
+                        "team": {"id": str(tm.get("id") or ""), "name": tm.get("displayName") or tm.get("name") or "", "abbr": tm.get("abbreviation") or "",
+                                 "short": tm.get("shortDisplayName") or tm.get("name") or "", "logo": logo, "color": tm.get("color") or ""}})
+        if page >= int(d.get("pageCount") or 1) or len(out) >= 250:
+            break
+    return out
+
+def _mlb_moves(days=21):
+    end = datetime.date.today()
+    d = fetch(f"https://statsapi.mlb.com/api/v1/transactions?sportId=1&startDate={end - datetime.timedelta(days=days)}&endDate={end}", 600, as_json=True)
+    side = lambda x: {"id": str(x.get("id") or ""), "name": x.get("name") or ""} if x and x.get("id") else None
+    out = []
+    for t in d.get("transactions") or []:
+        text = str(t.get("description") or "").strip()
+        if not text or not (t.get("date") or t.get("effectiveDate")):
+            continue
+        person = t.get("person") or {}
+        out.append({"id": str(t.get("id") or len(out)), "date": t.get("date") or t.get("effectiveDate"), "text": text[:600], "code": t.get("typeCode") or "", "kind": t.get("typeDesc") or "",
+                    "player": {"id": str(person.get("id") or ""), "name": person.get("fullName") or ""} if person.get("id") else None,
+                    "from": side(t.get("fromTeam")), "to": side(t.get("toTeam"))})
+    out.sort(key=lambda m: m["date"], reverse=True)
+    return out[:600]
+
+def league_moves(lg):
+    src, path = MOVE_SRC[lg]
+    if not src:
+        return {"league": lg, "source": "", "moves": []}
+    try:
+        return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": _espn_moves(path) if src == "espn" else _mlb_moves()}
+    except Exception as e:
+        print(f"moves {lg}: {e}", file=sys.stderr)
+        return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": [], "error": "The moves list did not answer. It will be tried again shortly."}
+
+MOVE_DATES_FILE = CACHE_DIR / "transfer_dates.json"
+_move_dates = storage.load(MOVE_DATES_FILE, [])   # [{id, league, label, start, end, by, at}]  (end is empty for a single day such as a trade deadline)
+
+def move_dates_action(body, user):
+    op = body.get("op")
+    with _acct_lock:
+        if op == "remove":
+            before = len(_move_dates)
+            _move_dates[:] = [d for d in _move_dates if d.get("id") != body.get("id")]
+            if len(_move_dates) == before:
+                return 404, {"error": "That date is already gone."}
+            storage.save(MOVE_DATES_FILE, _move_dates)
+            return 200, {"ok": True, "dates": _move_dates}
+        if op != "add":
+            return 400, {"error": "Unknown action."}
+        lg, label = str(body.get("league") or ""), re.sub(r"\s+", " ", str(body.get("label") or "")).strip()[:40]
+        start, end = str(body.get("start") or ""), str(body.get("end") or "")
+        if lg not in MOVE_LEAGUES or not label:
+            return 400, {"error": "Choose the league and say what the date is."}
+        day = r"20\d\d-\d\d-\d\d"
+        if not re.fullmatch(day, start) or (end and not re.fullmatch(day, end)):
+            return 400, {"error": "Pick the date from the calendar."}
+        if end and end < start:
+            return 400, {"error": "The closing date is before the opening date."}
+        if len(_move_dates) >= 400:
+            return 400, {"error": "The dates list is full. Remove old dates first."}
+        _move_dates.append({"id": secrets.token_hex(6), "league": lg, "label": label, "start": start, "end": end, "by": user["username"], "at": int(time.time())})
+        storage.save(MOVE_DATES_FILE, _move_dates)
+        return 200, {"ok": True, "dates": _move_dates}
+
 AWARDS_FILE = CACHE_DIR / "awards.json"
 AWARD_SPORTS = ("nba", "wnba", "cbb", "nfl", "cfb", "mlb", "nhl", "soccer", "tennis", "ufc", "boxing")
 _awards = storage.load(AWARDS_FILE, [])   # [{id, sport, athlete, name, award, season, detail, source, by, at}]
@@ -1178,7 +1258,7 @@ def clean_prefs(raw, old):
         if k in raw and isinstance(raw[k], typ):
             v = raw[k]
             if typ is list:
-                v = [x for x in v if isinstance(x, dict)][:200]
+                v = [x for x in v if isinstance(x, dict) or (k == "favSports" and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
             prefs[k] = v
@@ -1370,6 +1450,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(403, {"error": "Only the admin can manage members."})
             if u.path == "/api/admin/awards":
                 return self.send_auth(*awards_action(body, user))
+            if u.path == "/api/admin/transfers/dates":
+                return self.send_auth(*move_dates_action(body, user))
             return self.send_auth(*admin_action(u.path, body))
         if u.path == "/api/forecast/track":
             if not can_research(user):
@@ -1499,6 +1581,12 @@ class Handler(SimpleHTTPRequestHandler):
                 if role_of(user) != "admin":
                     return self.send_json({"error": "Only the admin can manage members."}, 403)
                 return self.send_auth(200, {"users": admin_list()})
+            if u.path == "/api/transfers/moves":   # one league's latest moves, from the league's own transaction list
+                if q.get("league") not in MOVE_SRC:
+                    return self.send_json({"error": "bad request"}, 400)
+                return self.send_auth(200, league_moves(q["league"]))
+            if u.path == "/api/transfers/dates":   # key dates an admin has entered (trade deadline, free agency, portal and transfer windows)
+                return self.send_auth(200, {"dates": _move_dates})
             if u.path == "/api/awards":   # an athlete's awards, as entered by an admin (empty until then)
                 if q.get("sport") not in AWARD_SPORTS or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,40}", q.get("id", "")):
                     return self.send_json({"error": "bad request"}, 400)
