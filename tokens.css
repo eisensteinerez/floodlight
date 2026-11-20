@@ -18,6 +18,8 @@
   --panel:linear-gradient(180deg,#151B25,#0F141C); --inset:rgba(0,0,0,.3); --pill-bg:#F5C451; --pill-fg:#14110A; --cta-bg:#F5C451; --cta-fg:#14110A;
   --page:radial-gradient(ellipse 55% 420px at 18% -80px,rgba(245,196,81,.22),transparent 70%),radial-gradient(ellipse 55% 420px at 82% -80px,rgba(245,196,81,.16),transparent 70%),#0A0D12;
   --good:#7FCB5A; --bad:#FF8FAB; --gold-1:#2A2008; --gold-2:#F5C451; --gold-text:#FFF6DD;
+  --heat-panel:var(--panel); --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
+  --ring-w:7px; --ring-track-w:7px; --chart-under-border:0;
   --theme-color:#0A0D12; color-scheme:dark;
 }
 
@@ -35,6 +37,8 @@
   --panel:#FFFFFF; --inset:#EEF0F4; --pill-bg:#0E1116; --pill-fg:#FFFFFF; --cta-bg:#2B59FF; --cta-fg:#FFFFFF;
   --page:#EEF0F4;
   --good:#12804A; --bad:#C8211F; --gold-1:#FFF4D1; --gold-2:#8A5A00; --gold-text:#2A1E00;
+  --heat-panel:#0E1116; --heat-panel-fg:#FFFFFF; --heat-panel-muted:#B8C0CC; --heat-panel-border:#0E1116; --heat-darken:0%; --heat-knob:#FFFFFF;
+  --heat-badge-bg:#0E1116; --heat-badge-border:#0E1116; --ring-w:9px; --ring-track-w:9px; --ring-darken:45%; --chart-under-border:0;
   --theme-color:#EEF0F4; color-scheme:light;
 }
 
@@ -52,6 +56,8 @@
   --panel:linear-gradient(180deg,#16271F,#101C17); --inset:rgba(0,0,0,.22); --pill-bg:#D9BD86; --pill-fg:#14100A; --cta-bg:#D9BD86; --cta-fg:#14100A;
   --page:radial-gradient(ellipse 70% 380px at 50% -120px,rgba(217,189,134,.16),transparent 70%),#0B1411;
   --good:#D9BD86; --bad:#E08AA0; --gold-1:#2A2008; --gold-2:#F5C451; --gold-text:#FFF6DD;
+  --heat-panel:transparent; --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
+  --ring-w:3.5px; --ring-track-w:1.5px; --chart-under-border:1.5px solid rgba(217,189,134,.7);
   --theme-color:#0B1411; color-scheme:dark;
 }
 
@@ -69,6 +75,8 @@
   --panel:rgba(255,255,255,.06); --inset:rgba(0,0,0,.28); --pill-bg:#5EEAD4; --pill-fg:#04211D; --cta-bg:#5EEAD4; --cta-fg:#04211D;
   --page:radial-gradient(ellipse 50% 520px at 8% -60px,rgba(45,212,191,.34),transparent 70%),radial-gradient(ellipse 45% 560px at 96% 4%,rgba(244,114,182,.26),transparent 70%),radial-gradient(ellipse 60% 700px at 50% 110%,rgba(59,130,246,.28),transparent 70%),#070A14;
   --good:#6EE7A8; --bad:#FB7185; --gold-1:#2A2008; --gold-2:#F5C451; --gold-text:#FFF6DD;
+  --heat-panel:rgba(8,12,24,.62); --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
+  --ring-w:6px; --ring-track-w:6px; --chart-under-border:0;
   --theme-color:#070A14; color-scheme:dark;
 }
 
@@ -86,6 +94,8 @@
   --panel:#FFFFFF; --inset:#F5F5F3; --pill-bg:#111111; --pill-fg:#FFFFFF; --cta-bg:#111111; --cta-fg:#FFFFFF;
   --page:#F5F5F3;
   --good:#12804A; --bad:#C2351F; --gold-1:#FBF3DC; --gold-2:#7A5200; --gold-text:#2A1E00;
+  --heat-panel:#F5F5F3; --heat-panel-fg:#111111; --heat-panel-muted:#5B5B57; --heat-panel-border:#E3E3DE; --heat-darken:32%; --heat-knob:#FFFFFF;
+  --heat-badge-bg:#FFFFFF; --heat-badge-fg:#111111; --heat-badge-border:#BDBDB6; --ring-w:5px; --ring-track-w:5px; --ring-darken:18%; --ring-ticks:.7 1.3; --ring-track:#BDBDB6; --chart-under-border:0;
   --theme-color:#F5F5F3; color-scheme:light;
 }
 

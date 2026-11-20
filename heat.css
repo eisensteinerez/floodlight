@@ -1,0 +1,111 @@
+/* Floodlight · heat meter, heat badge, hit-rate ring and the shared game chart. Shared by the site and the Lab page.
+   Every colour is a theme token. --heat-c is the ramp colour at the element's value (set inline by heat.js);
+   --heat-ink is that colour made safe to read as text on the theme's heat panel. */
+.hm,.hbadge,.hring,.hm-leg li{--heat-ink:color-mix(in oklab,var(--heat-panel-fg,var(--text)) var(--heat-darken,0%),var(--heat-c))}
+.hi{flex:none;display:inline-block;vertical-align:-.18em}
+.hi-fire .f1{fill:var(--heat-fire)}.hi-fire .f2{fill:var(--heat-warm)}
+.hi-ice{color:var(--heat-ice)}
+@keyframes hmFlick{0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.12) rotate(2deg)}}
+@keyframes hmSpin{to{transform:rotate(360deg)}}
+.hm .hi-fire,.hbadge .hi-fire{transform-origin:50% 90%;animation:hmFlick .5s ease-in-out infinite}
+.hm .hi-ice,.hbadge .hi-ice{animation:hmSpin 9s linear infinite}
+
+/* ---------- the meter ---------- */
+.hm{position:relative;display:grid;gap:14px;padding:24px;border-radius:var(--radius-card);background:var(--heat-panel,var(--panel));color:var(--heat-panel-fg,var(--text));border:1px solid var(--heat-panel-border,var(--border));
+  font-family:var(--font-body);min-width:0;transition:box-shadow .6s}
+.hm[data-kind="ice"]{box-shadow:0 0 50px color-mix(in srgb,var(--heat-ice) 30%,transparent),inset 0 0 50px color-mix(in srgb,var(--heat-ice) 15%,transparent)}
+.hm[data-kind="fire"]{box-shadow:0 0 50px color-mix(in srgb,var(--heat-fire) 35%,transparent),inset 0 0 50px color-mix(in srgb,var(--heat-fire) 18%,transparent)}
+.hm-g{position:relative;width:min(220px,100%);aspect-ratio:120/70}
+.hm-g svg{display:block;width:100%;height:100%;overflow:visible}
+.hm-g path{fill:none;stroke-width:10;stroke-linecap:round}
+.hm-t{opacity:.22}
+.hm-v{transition:stroke-dasharray .6s cubic-bezier(.2,.8,.2,1)}
+.hm .s-ice{stop-color:var(--heat-ice)}.hm .s-mid{stop-color:var(--heat-mid)}.hm .s-warm{stop-color:var(--heat-warm)}.hm .s-fire{stop-color:var(--heat-fire)}
+.hm-arm{position:absolute;left:8.333%;top:88.571%;width:41.667%;height:0;transform-origin:100% 50%;transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+.hm-k{position:absolute;left:0;top:0;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--heat-knob);border:4px solid var(--heat-c);box-shadow:0 0 14px color-mix(in srgb,var(--heat-c) 60%,transparent)}
+.hm-n{position:absolute;left:0;right:0;bottom:-6px;text-align:center;font:var(--display-weight) 48px/1 var(--font-display);letter-spacing:var(--display-track);color:var(--heat-ink);font-variant-numeric:tabular-nums}
+.hm-tx{min-width:0}
+.hm-tx .lb,.hm .lb{display:block;font:500 13px/1.3 var(--font-body);color:var(--heat-panel-muted,var(--muted))}
+.hm-l{display:flex;align-items:center;gap:8px;margin:2px 0 6px;font:var(--display-weight) 26px/1.15 var(--font-display);letter-spacing:var(--display-track);color:var(--heat-ink)}
+.hm-note{margin:0;font-size:14px;line-height:1.4;color:var(--heat-panel-fg,var(--text))}
+.hm-sup{margin:4px 0 0;font-size:13px;line-height:1.4;color:var(--heat-panel-muted,var(--muted));font-variant-numeric:tabular-nums}
+.hm-leg{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.hm-leg li{display:grid;gap:7px;justify-items:center;text-align:center;font:500 12px/1.25 var(--font-body);color:var(--heat-panel-muted,var(--muted))}
+.hm-leg i{width:100%;height:6px;border-radius:3px;background:var(--heat-c);opacity:.55}
+.hm-leg li.on{font-weight:800;color:var(--heat-panel-fg,var(--text))}.hm-leg li.on i{opacity:1}
+.hm-th{display:none}
+/* compact: the gauge beside the words, no scale (cards and lists) */
+.hm-compact{grid-template-columns:minmax(96px,132px) minmax(0,1fr);align-items:center;gap:6px 16px;padding:16px 18px;border-radius:var(--radius-tile)}
+.hm-compact .hm-g{width:100%}.hm-compact .hm-n{font-size:34px;bottom:-4px}
+.hm-compact .hm-k{width:14px;height:14px;margin:-7px 0 0 -7px;border-width:3px}
+.hm-compact .hm-l{font-size:19px}.hm-compact .hm-note,.hm-compact .hm-leg{display:none}
+
+/* Members' Club: a thermometer bar with a diamond marker, the number set large in serif */
+[data-theme="members-club"] .hm{grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px 18px;padding:22px 0;border-radius:0;border-width:1px 0;background:none;box-shadow:none}
+[data-theme="members-club"] .hm-g{width:auto;aspect-ratio:auto}
+[data-theme="members-club"] .hm-g svg,[data-theme="members-club"] .hm-arm{display:none}
+[data-theme="members-club"] .hm-n{position:static;font-size:96px;line-height:.9}
+[data-theme="members-club"] .hm-l{font-style:italic;font-size:32px}
+[data-theme="members-club"] .hm-th{grid-column:1/-1;display:flex;align-items:center;gap:14px;margin:6px 0 2px}
+[data-theme="members-club"] .hm-th .hi{animation:none}
+.hm-bar{position:relative;flex:1;height:8px;border-radius:4px;background:var(--heat-ramp)}
+.hm-d{position:absolute;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;transform:rotate(45deg);background:var(--bg);border:2px solid var(--heat-c);box-shadow:0 0 16px color-mix(in srgb,var(--heat-c) 55%,transparent);transition:left .6s cubic-bezier(.2,.8,.2,1)}
+[data-theme="members-club"] .hm-leg{grid-column:1/-1}
+[data-theme="members-club"] .hm-compact{padding:14px 0}
+[data-theme="members-club"] .hm-compact .hm-n{font-size:64px}[data-theme="members-club"] .hm-compact .hm-l{font-size:24px}
+
+/* ---------- the badge ---------- */
+.hbadge{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 11px;border-radius:var(--radius-pill);font:700 13px/1 var(--font-body);white-space:nowrap;
+  background:var(--heat-badge-bg,color-mix(in srgb,var(--heat-c) 16%,transparent));color:var(--heat-badge-fg,var(--heat-ink));border:1px solid var(--heat-badge-border,color-mix(in srgb,var(--heat-c) 45%,transparent));font-variant-numeric:tabular-nums}
+.hbadge em{font-style:normal;font-weight:600}
+.hbadge b{font-weight:800}
+
+/* ---------- hit-rate ring ---------- */
+.hring{display:inline-grid;justify-items:center;gap:8px;min-width:0}
+.hring-d{position:relative;display:grid;place-items:center;width:86px;height:86px}
+.hring svg{position:absolute;inset:0;width:100%;height:100%}
+.hring circle{fill:none}
+.hring .t{stroke:var(--ring-track,color-mix(in srgb,var(--text) 12%,transparent));stroke-width:var(--ring-track-w,7px);stroke-dasharray:var(--ring-ticks,none)}
+.hring .a{stroke:color-mix(in oklab,var(--text) var(--ring-darken,0%),var(--heat-c));stroke-width:var(--ring-w,7px);stroke-linecap:round}
+.hring b{position:relative;font:800 19px/1 var(--font-body);font-variant-numeric:tabular-nums;color:inherit}
+.hring small{font:500 12.5px/1.2 var(--font-body);color:var(--muted);text-align:center}
+.hring.none b{color:var(--muted)}
+
+/* ---------- the shared game chart ---------- */
+.hc{min-width:0}
+.hc-plot{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:clamp(3px,1vw,14px);height:234px;padding:0 78px 0 0;margin:30px 0 58px}
+.hc-b{position:relative;display:flex;flex-direction:column;justify-content:flex-end;min-width:0;height:100%;border-radius:8px;outline-offset:4px}
+.hc-col{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%}
+.hc-col i{width:100%;max-width:46px;border-radius:10px 10px 3px 3px;background:var(--chart-under);border:var(--chart-under-border,0)}
+.hc-b.ov .hc-col i{background:var(--chart-over);border:0}
+.hc-b.push .hc-col i{background:var(--muted)}
+.hc-col em{display:flex;align-items:center;gap:2px;font:700 13px/1 var(--font-body);font-style:normal;color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.hc-b.ov .hc-col em{color:var(--text)}
+.hc-x{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:8px;display:grid;justify-items:center;gap:3px;font:600 12px/1 var(--font-body);color:var(--text-2);white-space:nowrap}
+.hc-x small{font-size:12px;font-weight:500;color:var(--muted)}
+.hc-x b{font-size:12px;font-weight:800;color:var(--muted)}.hc-x b.W{color:var(--text)}
+.hc-avg{position:absolute;left:0;top:0;width:calc(100% - 78px);height:100%;overflow:visible;pointer-events:none}
+.hc-avg path{fill:none;stroke:var(--chart-avg);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.hc-ln{position:absolute;left:0;right:0;height:0;border-top:2px dashed var(--chart-line);pointer-events:none;margin-bottom:0}
+.hc-ln span{position:absolute;right:0;top:-13px;padding:6px 10px;border-radius:var(--radius-pill);background:var(--pill-bg);color:var(--pill-fg);font:700 12px/1 var(--font-body);white-space:nowrap}
+.hc-key{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0;font:500 12.5px/1.3 var(--font-body);color:var(--muted)}
+.hc-key span{display:inline-flex;align-items:center;gap:7px}
+.hc-key i{width:12px;height:12px;border-radius:4px;background:var(--chart-under);border:var(--chart-under-border,0)}
+.hc-key i.ov{background:var(--chart-over);border:0}.hc-key i.av{height:2px;width:18px;border-radius:2px;background:var(--chart-avg);border:0}
+.hc.dense .hc-col em,.hc.dense .hc-x small{display:none}
+.hc.fresh .hc-col i{transform-origin:50% 100%;animation:hcGrow .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i)*30ms)}
+@keyframes hcGrow{from{transform:scaleY(0)}}
+.hc-tip{position:fixed;z-index:400;max-width:280px;padding:9px 12px;border-radius:14px;background:var(--pill-bg);color:var(--pill-fg);font:600 12.5px/1.4 var(--font-body);box-shadow:var(--shadow-pop);pointer-events:none}
+.hc-tip[hidden]{display:none}
+@media (max-width:640px){.hc-plot{height:180px;padding-right:64px;gap:3px}.hc-avg{width:calc(100% - 64px)}.hc-x small{display:none}.hc-col em{font-size:12px}}
+
+/* ---------- motion off ---------- */
+:root[data-motion="reduce"] .hi,:root[data-motion="reduce"] .hc.fresh .hc-col i{animation:none!important}
+:root[data-motion="reduce"] .hm-v,:root[data-motion="reduce"] .hm-arm,:root[data-motion="reduce"] .hm-d{transition:none!important}
+@media (prefers-reduced-motion:reduce){.hi,.hc.fresh .hc-col i{animation:none!important}.hm-v,.hm-arm,.hm-d{transition:none!important}}
+
+/* ---------- theme details ---------- */
+[data-theme="members-club"] .hc-col i{max-width:22px;border-radius:3px 3px 0 0}
+[data-theme="members-club"] .hring b{font:400 26px/1 var(--font-display)}
+[data-theme="chrono"] .hc-col i{max-width:26px;border-radius:2px 2px 0 0}
+[data-theme="chrono"] .hring b{font-weight:500}
