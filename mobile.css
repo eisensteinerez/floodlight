@@ -1,0 +1,39 @@
+/* Floodlight · phone layout.
+   Loaded last, after pages.css. Every rule sits inside a phone-width media query, so tablets and desktops never see
+   any of it. It changes sizes, spacing and how things stack, never the content, and reads the theme tokens from
+   tokens.css, so it works the same in all five themes. Wider screens keep their own breakpoints in themes.css. */
+
+@media (max-width:640px){
+
+  /* ---------- page ---------- */
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  html,body{overflow-x:clip}
+  html:root[data-theme]{--pad:16px;--gap:12px;--title-size:clamp(30px,9.6vw,42px)}
+  html:root[data-theme] :is(button,a,[role="button"],label,summary){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  html:root[data-theme] :is(.pg-title,.livebar h2){line-height:1;text-wrap:balance}
+  html:root[data-theme] .pg-sub{font-size:15px;line-height:1.45}
+
+  /* rows that scroll sideways fade at the edge, so it is clear there is more to swipe to */
+  html:root[data-theme] :is(.tb-sports,.ticker,#chips,.quick,.tabs,.sheet-tabs,.tw-tabs,.qf-row,.pg-chips){
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+    scroll-padding-inline:16px;overscroll-behavior-x:contain;scrollbar-width:none}
+  html:root[data-theme] :is(.tb-sports,.ticker,#chips,.quick,.tabs,.sheet-tabs,.tw-tabs,.qf-row,.pg-chips)::-webkit-scrollbar{display:none}
+
+  /* ---------- bottom bar: every label fits ---------- */
+  html:root[data-theme] .flbar{left:8px;right:8px;padding:0 2px}
+  html:root[data-theme] .flb{font-size:11px;letter-spacing:-.02em;gap:5px;padding-inline:1px}
+  html:root[data-theme] .flb span{text-overflow:clip}
+  html:root[data-theme] .flb.on::before{top:4px}
+
+  /* ---------- section heads: title and its note share a line when they fit, else the note drops below ---------- */
+  html:root[data-theme] .group-h{flex-wrap:wrap;row-gap:6px;gap:6px 10px}
+  html:root[data-theme] .group-h strong{flex:0 1 auto;max-width:100%;min-width:0;font-size:20px;white-space:normal}
+  html:root[data-theme] .group-h > span:not(.pill){flex:0 1 auto;font-size:13px;line-height:1.3}
+
+}
+
+/* the smallest phones (iPhone SE and mini) */
+@media (max-width:374px){
+  html:root[data-theme]{--title-size:clamp(28px,9.2vw,34px)}
+  html:root[data-theme] .flb{font-size:10.5px}
+}
