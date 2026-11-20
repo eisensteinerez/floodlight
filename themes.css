@@ -551,3 +551,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 :root[data-theme="night-match"] .ftr .mx-n{font-weight:700;font-size:clamp(16px,1.45vw,21px)}
 /* a league with nothing on today is quieter, but still readable */
 :root[data-theme] .lg.empty{opacity:1;color:var(--muted)}:root[data-theme] .lg.empty img,:root[data-theme] .lg.empty svg{opacity:.55}
+/* on touch screens the small buttons and the team link in a profile header are a full 44px to tap */
+@media (pointer:coarse){:root[data-theme] .bt.sm,:root[data-theme] .btn.sm{min-height:44px}}
+/* captions under an older profile header were fixed white: they follow the theme now */
+:root[data-theme] .hero.solo > p,:root[data-theme] .hero.solo .hcap{color:var(--muted)!important}
