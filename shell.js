@@ -44,6 +44,9 @@
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.500 20h7M10 17h4"/>',
     star: '<path d="M12 3l2.800 5.700 6.200.9-4.500 4.400 1.100 6.200L12 17.300l-5.600 2.900 1.100-6.200L3 9.600l6.200-.9z"/>',
     save: '<path d="M6 4h12v16l-6-4-6 4z"/>', compare: '<path d="M8 4v16M16 4v16M4 8h4M16 16h4M4 14h4M16 10h4"/>',
+    ticket: '<path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14.500 6v2M14.500 11v2M14.500 16v2"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', up: '<path d="M12 19V5M6 11l6-6 6 6"/>', down: '<path d="M12 5v14M6 13l6 6 6-6"/>', minus: '<path d="M5 12h14"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
     trend: '<path d="M3 17l6-6 4 4 8-8"/>', bars: '<path d="M5 20V10M10 20V4M15 20v-7M20 20v-11"/>', versus: '<path d="M4 6l4 12 4-12M14 8.500c0-1.400 1.200-2.500 3-2.500s3 1 3 2.300c0 3-6 1.700-6 5 0 1.500 1.300 2.700 3.200 2.700 1.800 0 2.800-1 2.800-2.300"/>',
   };
   const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || ''}</svg>`;
@@ -61,7 +64,7 @@
   topIn.querySelector('.brand')?.remove(); topIn.querySelector('.sport-sw')?.remove();
   const nav = (k, label, attrs, extra = '') => `<button class="tbn" data-k="${k}" ${attrs}>${label}${extra}</button>`;
   topIn.insertAdjacentHTML('afterbegin', `<button class="tb-brand" data-shell="home" aria-label="Floodlight, home"><i class="tb-dot" aria-hidden="true"></i><b>Floodlight</b></button>
-    <nav class="tb-nav" id="tbNav" aria-label="Sections">${nav('home', 'Home', 'data-shell="home"')}${nav('live', 'Live', 'data-shell="live"', '<b class="tb-live num" id="tbLive" hidden></b>')}${nav('lab', 'Lab', 'data-shell="lab"')}${nav('pred', 'Predictions', 'data-shell="pred"')}${nav('transfers', 'Transfers', 'data-shell="transfers"')}</nav>`);
+    <nav class="tb-nav" id="tbNav" aria-label="Sections">${nav('home', 'Home', 'data-shell="home"')}${nav('live', 'Live', 'data-shell="live"', '<b class="tb-live num" id="tbLive" hidden></b>')}${nav('lab', 'Lab', 'data-shell="lab"')}${nav('pred', 'Predictions', 'data-shell="pred"')}${nav('parlays', 'Parlays', 'data-shell="parlays"')}${nav('transfers', 'Transfers', 'data-shell="transfers"')}</nav>`);
   topIn.insertAdjacentHTML('beforeend', `<button class="tb-ic tb-search" id="tbSearch" aria-label="Search" aria-expanded="false">${ic('search')}</button>
     <button class="tb-members" id="tbMembers" data-shell="members">Members</button>
     <button class="tb-ic tb-dots" id="flDots" aria-haspopup="menu" aria-expanded="false" aria-controls="flMenu" aria-label="Menu: profile, settings and help">${ic('dots')}</button>
@@ -89,12 +92,14 @@
   const initials = n => esc(String(n || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase());
   const accessLine = u => u.role === 'admin' || u.role === 'owner' ? 'Owner · all services' : u.role === 'pending' || u.status === 'paused' ? 'Paused' : `${u.role === 'manager' ? 'Admin' : 'Member'} · ${u.off && u.off.length ? 'custom access' : 'all services'}`;
   const mi = (icon, label, attrs, extra = '', cls = '') => `<button class="flm-i${cls}" role="menuitem" tabindex="-1" ${attrs}>${ic(icon, 18)}<span>${label}</span>${extra}</button>`;
+  // starred themes, one press away. The one in use is left out: it is already named beside Theme
+  const favThemes = () => { const T = window.flTheme, cur = T?.get?.(); return (T?.favs?.() || []).filter(id => id !== cur).map(id => { const t = T.list.find(x => x[0] === id); return t ? mi('star', `Switch to ${esc(t[1])}`, `data-theme-use="${id}"`, '', ' flm-fav') : '' }).join('') };
   function drawMenu() {
     const u = me(), theme = window.flTheme?.name?.() || '';
     menu.innerHTML = (u ? `<div class="flm-me"><span class="flm-av" style="--av:${esc(u.prefs?.color || 'var(--accent-fill)')}">${initials(u.display)}</span><span><b>${esc(u.display)}</b><small>${accessLine(u)}</small></span></div>`
         : `<div class="flm-auth">${mi('profile', 'Sign in', 'data-menu="signin"')}${mi('plus', 'Create account', 'data-menu="signup"')}</div>`)
-      + `<div class="flm-g">${u ? mi('profile', 'View profile', 'data-menu="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}
-        ${mi('gear', 'Settings', 'data-page="settings"')}${mi('palette', 'Theme', 'data-page="settings" data-arg="theme"', `<em>${esc(theme)}</em>`)}
+      + `<div class="flm-g">${u ? mi('profile', 'My profile', 'data-page="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}${mi('ticket', 'My parlays', 'data-shell="parlays"')}
+        ${mi('gear', 'Settings', 'data-page="settings"')}${mi('palette', 'Theme', 'data-page="settings" data-arg="theme"', `<em>${esc(theme)}</em>`)}${favThemes()}
         ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help and feedback', 'data-page="guide" data-arg="help"')}</div>`
       + (u ? `<div class="flm-g flm-end">${mi('out', 'Sign out', 'data-act="logout"', '', ' danger')}</div>` : '');
   }
@@ -147,6 +152,7 @@
     if (a === 'lab') return openLab();
     if (a === 'pred') return pages()?.show('predictions');
     if (a === 'transfers') return pages()?.show('transfers');
+    if (a === 'parlays') return pages()?.show('parlays');
     if (a === 'home') { if (window.flHub) return window.flHub.show(); if (soccer) { clickAttr('data-f', 'all'); if (typeof goToDate === 'function' && typeof sameDay === 'function' && !sameDay(S.date, new Date())) goToDate(new Date()) } else firstRail(); return scrollTo({ top: 0 }) }
     if (a === 'live') { if (pages()?.show('live')) return; if (soccer) clickAttr('data-f', 'live'); else firstRail(); return scrollTo({ top: 0 }) }
     if (a === 'fav') { if (soccer) clickAttr('data-f', 'fav'); else typeof openProfile === 'function' && openProfile(); return }
@@ -164,7 +170,7 @@
   const sheet = document.createElement('div'); sheet.id = 'flSheet'; sheet.className = 'flsheet-bg'; sheet.hidden = true;
   sheet.innerHTML = `<div class="flsheet" role="dialog" aria-modal="true" aria-label="More"><h4>Sports</h4>
     <div class="flsheet-grid">${CHIPS.map(([k, l, sp, lg]) => `<button class="flsheet-i" data-k="${k}" data-sport="${sp}"${lg ? ` data-lg="${lg}"` : ''}>${ic(k)}<span>${l}</span></button>`).join('')}</div>
-    <h4>More</h4><div class="flsheet-grid"><button class="flsheet-i" data-shell="transfers">${ic('transfers')}<span>Transfers</span></button><button class="flsheet-i" data-shell="members">${ic('members')}<span>Members</span></button>
+    <h4>More</h4><div class="flsheet-grid"><button class="flsheet-i" data-shell="parlays">${ic('ticket')}<span>Parlays</span></button><button class="flsheet-i" data-page="profile">${ic('profile')}<span>My profile</span></button><button class="flsheet-i" data-shell="transfers">${ic('transfers')}<span>Transfers</span></button><button class="flsheet-i" data-shell="members">${ic('members')}<span>Members</span></button>
       <button class="flsheet-i" data-shell="fav">${ic('fav')}<span>Favorites</span></button><button class="flsheet-i" data-page="settings">${ic('gear')}<span>Settings</span></button>
       <button class="flsheet-i" data-page="guide">${ic('book')}<span>How to use</span></button></div></div>`;
   document.body.appendChild(sheet);
@@ -174,7 +180,7 @@
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeSheetUI() });
 
   /* ---------- keep the highlight on what is showing ---------- */
-  const PAGE_KEY = { lab: 'lab', predictions: 'pred', transfers: 'transfers', live: 'live', members: 'members' };
+  const PAGE_KEY = { lab: 'lab', predictions: 'pred', transfers: 'transfers', live: 'live', members: 'members', parlays: 'parlays' };
   function chipKey() { try { if (S.sport === 'football' && S.fb?.lg === 'fbs') return 'cfb'; if (S.sport === 'basketball' && S.bb?.lg === 'cbb') return 'cbb' } catch (e) {} return S.sport || 'soccer' }
   function current() {
     const pg = pages()?.current(); if (pg) return PAGE_KEY[pg] || pg;
