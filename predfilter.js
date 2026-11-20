@@ -77,20 +77,20 @@ document.addEventListener('change', ev => {
   PFX.set(t.dataset.pfxsel, t.dataset.k, t.value); PFX.hooks[t.dataset.pfxsel]?.();
 });
 document.head.insertAdjacentHTML('beforeend', `<style>
-.pfx{border:1px solid var(--line);border-radius:14px;padding:10px 12px 8px;margin:0 0 14px;background:var(--surface)}
+.pfx{border:1px solid var(--line);border-radius:var(--r-card);padding:10px 12px 8px;margin:0 0 14px;background:var(--surface)}
 .pfx .pfx-row{margin:0 0 8px}
 .pfx .qf{min-height:30px;padding:0 11px;font-size:12.5px}
-.pfx-n{font:600 10.5px/1 var(--f-mono);opacity:.65;margin-left:2px}
+.pfx-n{font:600 12px/1 var(--f-mono);opacity:.65;margin-left:2px}
 .pfx-grid{display:flex;flex-direction:column;gap:6px}
 .pfx-seg{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.pfx-lab{font:600 10.5px/1 var(--f-body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-right:2px}
+.pfx-lab{font:600 12px/1 var(--f-body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-right:2px}
 .pfx-sel{display:inline-flex;align-items:center;gap:6px}
-.pfx-sel select{min-height:30px;padding:0 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 12.5px/1 var(--f-body);max-width:220px}
+.pfx-sel select{min-height:30px;padding:0 8px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 12.5px/1 var(--f-body);max-width:220px}
 .pfx-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px;font-size:12px;color:var(--muted)}
 .pfx-foot b{color:var(--fg)}
 .pfx-hint{width:100%}
-.pred-card .pfx-lg{display:block;font:600 10px/1.2 var(--f-body);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pfx-edge{font:600 10.5px/1 var(--f-mono);color:var(--accent);margin-top:3px}
+.pred-card .pfx-lg{display:block;font:600 12px/1.2 var(--f-body);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pfx-edge{font:600 12px/1 var(--f-mono);color:var(--accent);margin-top:3px}
 @media (max-width:620px){ .pfx{padding:8px 10px} .pfx-seg{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none} .pfx-seg::-webkit-scrollbar{display:none} .pfx .qf,.pfx-sel{flex:none} }
 </style>`);
 PFX.on('soccer', () => { if (typeof renderPicks === 'function') renderPicks() });

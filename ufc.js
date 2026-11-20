@@ -149,7 +149,7 @@ async function renderUfc(){
     const past = (S.ufc.years.get(S.ufc.year)?.events || []).filter(e => e.state === 'post' || e.date < now - 12 * 36e5).filter(kindOk).filter(e => !q || e.name.toLowerCase().includes(q) || e.bouts.some(b => `${b.a.name} ${b.b.name}`.toLowerCase().includes(q))).reverse();
     const years = Array.from({ length: y - UFC_FIRST_YEAR + 1 }, (_, i) => y - i);
     el.innerHTML = `<div class="livebar"><h2>UFC</h2><span class="count">Events and fight nights</span></div>
-      ${next ? ufcHero(next) : S.ufc.years.has(y) ? `<div class="hub-empty"><b>No UFC event scheduled yet</b><span>${S.ufc.err ? 'Could not reach the schedule. It retries shortly.' : 'Check back soon.'}</span></div>` : '<div class="skel" style="height:360px;border-radius:22px"></div>'}
+      ${next ? ufcHero(next) : S.ufc.years.has(y) ? `<div class="hub-empty"><b>No UFC event scheduled yet</b><span>${S.ufc.err ? 'Could not reach the schedule. It retries shortly.' : 'Check back soon.'}</span></div>` : '<div class="skel" style="height:360px;border-radius:var(--r-card)"></div>'}
       <div class="ufc-kind seg" role="toolbar" aria-label="Kind of event">${[['all', 'All events'], ['num', 'Numbered UFC'], ['fn', 'Fight Nights']].map(([k, l]) => `<button data-ufckind="${k}" aria-pressed="${S.ufc.kind === k}" class="${S.ufc.kind === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${upcoming.length ? `<div class="group"><div class="group-h"><strong>Upcoming events</strong><span>· ${upcoming.length}</span></div><div class="ufc-evs">${upcoming.slice(0, 12).map(ufcEventCard).join('')}</div></div>` : ''}
       <div class="group ufc-past"><div class="group-h"><strong>Past events</strong><span>· browse every card back to ${UFC_FIRST_YEAR}</span></div>

@@ -145,24 +145,24 @@
     const W = 1080, Hh = 1080, c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
     await document.fonts?.ready;
     const grad = g.createRadialGradient(W / 2, -200, 50, W / 2, -200, 1200); grad.addColorStop(0, '#24242e'); grad.addColorStop(1, bg); g.fillStyle = grad; g.fillRect(0, 0, W, Hh);
-    g.fillStyle = acc; g.font = '700 30px "FL Wide", Geist, sans-serif'; g.fillText('FLOODLIGHT', 70, 100);
+    g.fillStyle = acc; g.font = '700 30px "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif'; g.fillText('FLOODLIGHT', 70, 100);
     let data = null; try { data = JSON.parse(card.dataset.share || 'null') } catch {}
     if (data?.kind === 'story') {
-      g.fillStyle = fg; g.font = '700 300px "Barlow Condensed", Impact, sans-serif'; g.fillText(data.value, 70, 520);
-      const w = g.measureText(data.value).width; g.fillStyle = acc; g.font = '700 80px "Barlow Condensed", sans-serif'; g.fillText(data.unit, 90 + w, 520);
-      g.fillStyle = fg; g.font = '700 72px "Barlow Condensed", sans-serif'; g.fillText(data.title.toUpperCase(), 70, 640);
-      g.fillStyle = muted; g.font = '500 36px Inter, sans-serif'; wrap(g, data.text, 70, 710, W - 140, 48); g.fillText(data.sub || '', 70, Hh - 80);
+      g.fillStyle = fg; g.font = '700 300px "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif'; g.fillText(data.value, 70, 520);
+      const w = g.measureText(data.value).width; g.fillStyle = acc; g.font = '700 80px "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif'; g.fillText(data.unit, 90 + w, 520);
+      g.fillStyle = fg; g.font = '700 72px "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif'; g.fillText(data.title.toUpperCase(), 70, 640);
+      g.fillStyle = muted; g.font = '500 36px "Sofia Sans", sans-serif'; wrap(g, data.text, 70, 710, W - 140, 48); g.fillText(data.sub || '', 70, Hh - 80);
     } else {
       // a chart or stat block: draw a snapshot of its rows as clean bars
       const title = card.querySelector('h5,h4,.lbl')?.textContent || 'Floodlight stats';
-      g.fillStyle = fg; g.font = '700 70px "Barlow Condensed", sans-serif'; g.fillText(title.toUpperCase(), 70, 200);
+      g.fillStyle = fg; g.font = '700 70px "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif'; g.fillText(title.toUpperCase(), 70, 200);
       const rows = [...card.querySelectorAll('.stat')].slice(0, 9);
       if (rows.length) rows.forEach((r, i) => { const vs = r.querySelectorAll(':scope > .v'), l = r.querySelector('.lbl')?.textContent || '', a = num(vs[0]?.textContent) || 0, b = num(vs[vs.length - 1]?.textContent) || 0, m = Math.max(a, b, 1), Y = 290 + i * 84;
-        g.fillStyle = muted; g.font = '500 28px Inter, sans-serif'; g.textAlign = 'center'; g.fillText(l, W / 2, Y);
-        g.fillStyle = fg; g.font = '700 40px "Barlow Condensed", sans-serif'; g.textAlign = 'left'; g.fillText(vs[0]?.textContent.trim() || '', 70, Y + 34); g.textAlign = 'right'; g.fillText(vs[vs.length - 1]?.textContent.trim() || '', W - 70, Y + 34); g.textAlign = 'left';
+        g.fillStyle = muted; g.font = '500 28px "Sofia Sans", sans-serif'; g.textAlign = 'center'; g.fillText(l, W / 2, Y);
+        g.fillStyle = fg; g.font = '700 40px "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif'; g.textAlign = 'left'; g.fillText(vs[0]?.textContent.trim() || '', 70, Y + 34); g.textAlign = 'right'; g.fillText(vs[vs.length - 1]?.textContent.trim() || '', W - 70, Y + 34); g.textAlign = 'left';
         g.fillStyle = a >= b ? acc : '#3a3a46'; g.fillRect(W / 2 - 330 * a / m - 6, Y + 14, 330 * a / m, 14); g.fillStyle = b > a ? acc : '#3a3a46'; g.fillRect(W / 2 + 6, Y + 14, 330 * b / m, 14) });
       else { const svg = card.querySelector('svg'); if (svg) await drawSvg(g, svg, 70, 260, W - 140, 600) }
-      g.fillStyle = muted; g.font = '500 30px Inter, sans-serif'; g.fillText(card.querySelector('.sfx-h small')?.textContent || '', 70, Hh - 80);
+      g.fillStyle = muted; g.font = '500 30px "Sofia Sans", sans-serif'; g.fillText(card.querySelector('.sfx-h small')?.textContent || '', 70, Hh - 80);
     }
     return new Promise(r => c.toBlob(r, 'image/png'));
   }
