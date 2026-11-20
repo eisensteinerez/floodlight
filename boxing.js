@@ -234,23 +234,30 @@ function bxCardPane(v){
 function bxFighterSheet(v, back){
   const f = bxFighter(v.name);
   if (f === null) return { hero: `<div class="hero solo">${topBar(back)}<div class="skel" style="height:160px"></div></div>`, body: '' };
-  if (!f.found) return { hero: `<div class="hero solo">${topBar(back)}<div class="thead"><div><h3>${esc(v.name)}</h3></div></div></div>`, body: `<div class="note">No Wikipedia profile could be matched to this name.</div>` };
-  const n = (f.wins || 0) + (f.losses || 0) + (f.draws || 0), dec = Math.max(0, (f.wins || 0) - (f.ko || 0));
-  const hero = `<div class="hero bx-stage bx-prof">${topBar(back)}<div class="bx-prof-in"><span class="bx-ph big">${f.photo ? `<img src="${esc(f.photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${bxSil(f.name)}</span>
-      <div><small class="pr-k">${esc([f.nationality, f.stance].filter(Boolean).join(' · '))}</small><h3>${esc(f.name)}</h3>${f.nickname ? `<p>“${esc(f.nickname)}”</p>` : ''}<b class="bx-rec num big">${esc(bxRec(f))}</b><small>${f.ko != null ? `${f.ko} by knockout` : ''}</small></div></div></div>`;
-  const tiles = [['Fights', n || '–'], ['Wins', f.wins ?? '–'], ['By KO', f.ko ?? '–'], ['KO rate', bxKoPct(f) != null ? bxKoPct(f) + '%' : '–'], ['Losses', f.losses ?? '–'], ['Draws', f.draws ?? 0]];
-  const body = `<div class="tiles">${tiles.map(([l, x]) => `<div class="tile"><b class="num">${esc(x)}</b><span>${l}</span></div>`).join('')}</div>
-    ${n ? `<div class="sub-h"><h5>How the fights ended</h5></div><div class="h2h-bar bx-split" role="img" aria-label="${f.ko || 0} knockout wins, ${dec} decision wins, ${f.losses || 0} losses, ${f.draws || 0} draws">${[[f.ko, 'var(--tint)'], [dec, 'var(--fg)'], [f.draws, 'var(--line-2)'], [f.losses, 'var(--muted)']].map(([x, c]) => x ? `<i style="flex:${x};background:${c}"></i>` : '').join('')}</div>
-      <div class="sfx-legend">${[[f.ko, 'var(--tint)', 'KO wins'], [dec, 'var(--fg)', 'Decision wins'], [f.draws, 'var(--line-2)', 'Draws'], [f.losses, 'var(--muted)', 'Losses']].filter(x => x[0]).map(([x, c, l]) => `<span><i style="background:${c}"></i>${x} ${l}</span>`).join('')}</div>` : ''}
-    <div class="sub-h"><h5>Tale of the tape</h5></div><div class="bx-facts">${[['Age', f.age], ['Born', f.born ? new Date(f.born + 'T12:00:00').toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }) : ''], ['From', f.birthplace], ['Height', bxLen(f.height)], ['Reach', bxReach(f.reach)], ['Stance', f.stance], ['Divisions', f.division]]
-      .filter(x => x[1]).map(([k, x]) => `<div><span>${k}</span><b>${esc(x)}</b></div>`).join('')}</div>
-    <p class="srcnote">From <a href="${esc(f.url)}" target="_blank" rel="noopener">Wikipedia</a>.</p>`;
-  return { hero, body };
+  if (!f.found || !window.flFighter) return { hero: `<div class="hero solo">${topBar(back)}<div class="thead"><div><h3>${esc(v.name)}</h3></div></div></div>`, body: `<div class="note">No Wikipedia profile could be matched to this name.</div>` };
+  // the same page as a UFC fighter (fighter.js), filled with what Wikipedia and the fight nights on file can say
+  const n = (f.wins || 0) + (f.losses || 0) + (f.draws || 0), dec = f.ko != null && f.wins != null ? Math.max(0, f.wins - f.ko) : null;
+  const names = [v.name, f.name].filter(Boolean).map(x => x.toLowerCase()), isMe = x => !!x && names.includes(String(x).toLowerCase());
+  const nights = (S.bx.cards || []).filter(e => isMe(e.a) || isMe(e.b)).map(e => ({ e, st: bxState(e), op: isMe(e.a) ? e.b : e.a })).sort((x, y) => bxWhen(y.e) - bxWhen(x.e));
+  const up = nights.filter(x => x.st === 'pre' || x.st === 'in').sort((x, y) => bxWhen(x.e) - bxWhen(y.e))[0];
+  const photo = `<span class="bx-ph fgt-photo">${f.photo ? `<img src="${esc(f.photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${bxSil(f.name)}</span>`;
+  return flFighter.page({ sport: 'boxing', id: f.title || f.name, awardId: String(f.title || f.name).replace(/[^A-Za-z0-9_.:-]+/g, '_').slice(0, 40), back, name: f.name, nick: f.nickname, photo, division: f.division, stance: f.stance, country: f.nationality,
+    status: { champs: [], known: false, note: 'No ranking source for boxing yet' }, record: f.wins != null ? { w: f.wins, l: f.losses ?? 0, d: f.draws ?? 0, nc: 0 } : null,
+    fighterAttr: x => `data-bxfighter="${esc(x.name)}"`, actAttr: k => `data-bxact="${k}"`,
+    wins: f.wins != null && f.ko != null ? { ko: f.ko, dec } : null, winsSub: 'from the pro record',
+    nums: [['Fights', n ? String(n) : '–'], ['Knockout rate', bxKoPct(f) != null ? bxKoPct(f) + '%' : '–', 'of the wins'], ['Losses', String(f.losses ?? '–')], ['Draws', String(f.draws ?? 0)]],
+    rates: [], ratesNote: 'Punch numbers (landed, accuracy, absorbed) are not in any source Floodlight reads for boxing.',
+    tape: [['Height', bxLen(f.height)], ['Reach', bxReach(f.reach)], ['Age', f.age], ['Born', f.born ? new Date(f.born + 'T12:00:00').toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }) : ''], ['Stance', f.stance], ['From', f.birthplace], ['Divisions', f.division]],
+    next: up ? { op: { name: up.op || 'Opponent to be announced' }, event: up.e.series || up.e.name, date: bxWhen(up.e), title: false, h2h: `data-bxfight="${esc(up.e.id)}"` } : null,
+    nextNote: 'No fight night on file for this boxer.', labArgs: { sport: 'boxing', name: f.name },
+    history: nights.filter(x => x.st === 'post').map(x => ({ res: 'f', op: { name: x.op }, method: (x.e.result || '').split('\n')[0].slice(0, 90), date: bxWhen(x.e), event: x.e.series || x.e.name, fightAttr: `data-bxfight="${esc(x.e.id)}"` })),
+    historySub: 'fight nights on file', historyNote: 'Floodlight has no fight-by-fight record for boxers, only the fight nights it has listed. None of those include this boxer yet.',
+    source: `Profile from <a class="lk" href="${esc(f.url)}" target="_blank" rel="noopener">Wikipedia</a>. Rankings, titles and a full fight list are not in that source.` });
 }
 function bxRenderSheet(v){
   const sheet = $('sheet'), back = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
-  if (v.type === 'bxfighter') { const { hero, body } = bxFighterSheet(v, back); S.curTabs = []; sheet.innerHTML = `<div class="sheet-body">${hero}<div class="pane" id="pane">${body}</div></div>` }
+  if (v.type === 'bxfighter') { const { hero, body } = bxFighterSheet(v, back); S.curTabs = []; sheet.innerHTML = `<div class="sheet-body bx-fighter">${hero}<div class="pane" id="pane">${body}</div></div>` }
   else { const tabs = [['tape', 'Tale of the tape'], ['card', 'Fight card'], ['pred', 'Prediction']]; if (!tabs.some(t => t[0] === v.tab)) v.tab = 'tape'; S.curTabs = tabs;
     sheet.innerHTML = `<div class="sheet-body">${bxFightHero(v, back)}${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel">${v.tab === 'pred' ? bxPredPane(v) : v.tab === 'card' ? bxCardPane(v) : bxTape(v)}</div></div>` }
   sheet.querySelector('.sheet-body').scrollTop = scroll;

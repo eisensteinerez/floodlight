@@ -126,3 +126,19 @@
 @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
   :root[data-theme="aurora-glass"],[data-theme-preview="aurora-glass"]{--surface:rgba(255,255,255,.06); --panel:rgba(255,255,255,.06)}
 }
+
+/* ---------- The champion's gold page ----------
+   A fighter who holds a title turns their whole profile gold, in every theme: dark gold in the dark themes, light
+   gold in the light ones. The class re-points the ordinary tokens, so every shared component inside it follows. */
+:root[data-scheme="dark"] .fgt-gold{
+  --bg:#141006; --surface:#221A08; --panel:#221A08; --surface-2:rgba(245,196,81,.08); --inset:#1A1406; --border:rgba(245,196,81,.28); --border-2:rgba(245,196,81,.5);
+  --text:#FFF6DD; --text-2:#EBDDB4; --muted:#C9B67E; --accent:#F5C451; --accent-fill:#F5C451; --on-accent:#1A1405;
+  --pill-bg:#F5C451; --pill-fg:#1A1405; --cta-bg:#F5C451; --cta-fg:#1A1405; --win:#F5C451; --loss:#C9B67E;
+  --belt-strap:#2B2010; --belt-stitch:#C9B67E; --belt-plate-1:#FFE08A; --belt-plate-2:#C98F1B; --belt-ink:#3A2A05; --gold-glow:rgba(245,196,81,.16);
+}
+:root[data-scheme="light"] .fgt-gold{
+  --bg:#FBF3DC; --surface:#FFF9E8; --panel:#FFF9E8; --surface-2:#F6EBC8; --inset:#F1E3B6; --border:rgba(122,82,0,.3); --border-2:rgba(122,82,0,.55);
+  --text:#2A1E00; --text-2:#4A3A0E; --muted:#6B5514; --accent:#7A5200; --accent-fill:#7A5200; --on-accent:#FFF9E8;
+  --pill-bg:#7A5200; --pill-fg:#FFF9E8; --cta-bg:#7A5200; --cta-fg:#FFF9E8; --win:#7A5200; --loss:#6B5514;
+  --belt-strap:#4A3413; --belt-stitch:#E9D9A6; --belt-plate-1:#F7D774; --belt-plate-2:#B8860B; --belt-ink:#3A2A05; --gold-glow:rgba(184,134,11,.14);
+}

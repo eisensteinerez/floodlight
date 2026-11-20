@@ -16,13 +16,20 @@ const UFC_BELT = '<svg class="ufc-belt-i" viewBox="0 0 32 20" aria-hidden="true"
 // who is ranked where: one request, kept for the visit. Champions come from ESPN's "-champions" lists, contenders from each division list.
 function ufcLoadRanks(){
   if (S.ufc.ranks) return S.ufc.ranks;
-  const m = new Map(); S.ufc.ranks = m;
+  const m = new Map(); S.ufc.ranks = m; m.div = new Map();   // m.div: one ladder per weight class, champion(s) and the ranked list
   getJSON(UFC_RANK).then(d => {
     for (const L of d.rankings || []) { const type = String(L.type || ''), cls = L.weightClass?.text || String(L.name || '').replace(/\s*(champions?|rankings?)\s*$/i, '');
-      for (const r of L.ranks || []) { const id = String(r.athlete?.id || ''); if (!id) continue; const x = m.get(id) || {}; m.set(id, x);
-        if (/champion/i.test(type) || /champion/i.test(L.name || '')) { x.champ = true; x.champCls = cls; x.defenses = r.defenses ?? x.defenses }
-        else if (/pound/i.test(type + (L.name || ''))) x.p4p = r.current;
-        else if (x.rank == null || r.current < x.rank) { x.rank = r.current; x.cls = cls; x.trend = r.trend } } }
+      const isChamp = /champion/i.test(type) || /champion/i.test(L.name || ''), isP4p = !isChamp && /pound/i.test(type + (L.name || ''));
+      for (const r of L.ranks || []) { const id = String(r.athlete?.id || ''); if (!id) continue; const x = m.get(id) || {}; m.set(id, x); const name = r.athlete?.displayName || r.athlete?.fullName || '';
+        // a champions list covers every division, so the class comes from the row; "interim" only when the feed says so
+        const rc = r.weightClass?.text || r.athlete?.weightClass?.text || cls, interim = /interim/i.test([type, L.name, r.note, r.title, r.description, r.record].filter(Boolean).join(' '));
+        const ladder = c => { if (!m.div.has(c)) m.div.set(c, { cls: c, champ: [], list: [] }); return m.div.get(c) };
+        if (isChamp) { x.champ = true; x.champCls = x.champCls || rc; x.defenses = r.defenses ?? x.defenses; (x.champs = x.champs || []).push({ cls: rc, interim, defenses: r.defenses ?? null });
+          const D = ladder(rc); if (!D.champ.some(f => f.id === id)) D.champ.push({ id, name, interim }) }
+        else if (isP4p) x.p4p = r.current;
+        else { if (x.rank == null || r.current < x.rank) { x.rank = r.current; x.cls = cls; x.trend = r.trend }
+          const D = ladder(cls); if (r.current > 0 && !D.list.some(f => f.id === id)) D.list.push({ id, name, rank: r.current }) } } }
+    for (const D of m.div.values()) { D.list.sort((a, b) => a.rank - b.rank); D.champ.sort((a, b) => a.interim - b.interim) }
     m.ready = true; const v = S.stack[S.stack.length - 1]; if (v?.type?.startsWith('ufc')) renderSheet();
   }).catch(() => { m.failed = true });
   return m;
@@ -51,8 +58,9 @@ function ufcNormEvent(ev){
   const bouts = (ev.competitions || []).map(c => {
     const cs = [...(c.competitors || [])].sort((a, b) => (a.order || 0) - (b.order || 0)), st = c.status?.type || {};
     const f = x => ({ id: String(x?.athlete?.id || x?.id || ''), name: x?.athlete?.displayName || '', flag: x?.athlete?.flag?.href || '', country: x?.athlete?.flag?.alt || '', rec: x?.records?.[0]?.summary || '', win: !!x?.winner });
+    const kind = [c.type?.abbreviation, c.type?.text, c.note, ...(c.types || []).map(t => t.text)].filter(Boolean).join(' '), res = c.status?.result;
     return { id: String(c.id), a: f(cs[0]), b: f(cs[1]), cls: c.type?.abbreviation || c.type?.text || '', rounds: c.format?.regulation?.periods || 3, state: st.state || 'pre', detail: st.shortDetail || '',
-      round: c.status?.period || 0, clock: c.status?.displayClock || '', date: new Date(c.date || ev.date) };
+      round: c.status?.period || 0, clock: c.status?.displayClock || '', date: new Date(c.date || ev.date), title: /title/i.test(kind), interim: /interim/i.test(kind), method: res?.displayName || res?.shortDisplayName || '' };
   }).reverse();
   const v = ev.competitions?.[0]?.venue || {}, state = bouts.some(b => b.state === 'in') ? 'in' : bouts.length && bouts.every(b => b.state === 'post') ? 'post' : 'pre';
   return { id: String(ev.id), name: ev.name || 'UFC', short: ev.shortName || '', date: new Date(ev.date), end: new Date(ev.endDate || ev.date), state, bouts, main: bouts[0],
@@ -276,33 +284,63 @@ function ufcFightSheet(v, back){
 }
 
 /* ---------- fighter page ---------- */
+/* The layout is fighter.js (shared with boxing). This gathers the facts: the profile and record from ESPN's athlete
+   feed, the rank and division ladder from its rankings, the fights from the yearly schedules, and the striking and
+   grappling numbers from the fight cards on file. Champion since, days as champion and former champion are worked out
+   from the title fights in that history, so they appear only when the history reaches back far enough to be sure. */
+const ufcMins = f => { const c = String(f.clock || '').match(/(\d+):(\d+)/); return f.round ? (f.round - 1) * 5 + (c ? +c[1] + +c[2] / 60 : 5) : 0 };
+const ufcWeightCls = s => String(s || '').replace(/\s*(interim\s+)?title.*$/i, '').replace(/\s*bout\s*$/i, '').trim();
+function ufcTitleRun(v, champCls){
+  // finished fights newest first; the run is the unbroken string of title-fight wins in this class
+  const mine = ufcAll().flatMap(e => e.bouts.filter(b => b.state === 'post' && (b.a.id === v.id || b.b.id === v.id)).map(b => ({ e, b, me: b.a.id === v.id ? b.a : b.b }))).sort((x, y) => y.e.date - x.e.date);
+  const same = b => !champCls || ufcWeightCls(b.cls).toLowerCase() === String(champCls).toLowerCase();
+  let since = null, wins = 0, closed = false;
+  for (const h of mine) { if (!h.b.title || !same(h.b)) { if (since && same(h.b)) { closed = true; break } continue } if (h.me.win) { since = h.e.date; wins++ } else { closed = true; break } }
+  const oldest = Math.min(...S.ufc.years.keys());
+  return { since, wins, sure: !!since && (closed || oldest <= UFC_FIRST_YEAR) };
+}
 function ufcFighterSheet(v, back){
-  const a = ufcAthlete(v.id), name = a?.name || v.name || 'Fighter', rk = ufcRank(v.id), champ = !!rk?.champ;
+  const a = ufcAthlete(v.id), name = a?.name || v.name || 'Fighter', rk = ufcRank(v.id), R = S.ufc.ranks, champs = rk?.champs || [];
   const hist = ufcAll().flatMap(e => e.bouts.filter(b => b.a.id === v.id || b.b.id === v.id).map(b => ({ e, b, me: b.a.id === v.id ? b.a : b.b, op: b.a.id === v.id ? b.b : b.a }))).sort((x, y) => y.e.date - x.e.date);
   const r = ufcRec(a?.rec), [ko, koL] = ufcSplit(a?.ko), [sbRaw, sbL] = ufcSplit(a?.sub), sb = sbRaw ?? (r && ko != null ? 0 : null), dec = r && ko != null ? Math.max(0, r.w - ko - (sb || 0)) : null;
-  const done = hist.filter(h => h.b.state === 'post' && (h.me.win || h.op.win));
+  if (r) { const nc = String(a?.rec || '').match(/(\d+)\s*NC/i); r.nc = nc ? +nc[1] : 0 }
+  const isNc = h => /no contest/i.test(h.b.method + ' ' + h.b.detail), fin = hist.filter(h => h.b.state === 'post'), done = fin.filter(h => h.me.win || h.op.win);
   let streak = 0; for (const h of done) { if (h.me.win === done[0].me.win) streak++; else break }
-  const badges = [champ ? `<span class="ufc-fp-b gold">${UFC_BELT}${esc(rk.champCls)} champion${rk.defenses ? ` · ${rk.defenses} title defence${rk.defenses === 1 ? '' : 's'}` : ''}</span>` : rk?.rank != null ? `<span class="ufc-fp-b rank"><b class="num">#${rk.rank}</b>${esc(rk.cls)}</span>` : S.ufc.ranks?.ready ? '<span class="ufc-fp-b">Unranked</span>' : '',
-    rk?.p4p != null ? `<span class="ufc-fp-b"><b class="num">#${rk.p4p}</b>Pound for pound</span>` : '', a && a.active === false ? '<span class="ufc-fp-b">Not active</span>' : ''].join('');
-  const rec = r ? `<div class="ufc-fp-rec" aria-label="Record: ${r.w} wins, ${r.l} losses, ${r.d} draws">${[['Wins', r.w, 'w'], ['Losses', r.l, 'l'], ['Draws', r.d, 'd']].map(([l, n, c]) => `<span class="${c}"><b class="num">${n}</b><small>${l}</small></span>`).join('')}</div>` : `<div class="ufc-fp-rec"><span><b class="num">${esc(a?.rec || '–')}</b><small>Record</small></span></div>`;
-  const hero = `<div class="hero solo ufc-fp${champ ? ' champ' : ''}">${topBar(back)}<div class="ufc-fp-in"><div class="ufc-fp-photo">${ufcFace({ id: v.id, name, photo: a?.photo }, 'ufc-fp-img', true)}${champ ? `<span class="ufc-fp-crest">${UFC_BELT}</span>` : rk?.rank != null ? `<span class="ufc-fp-crest n num">#${rk.rank}</span>` : ''}</div>
-    <div class="ufc-fp-t"><div class="ufc-fp-bs">${badges}</div>${a?.nick ? `<span class="ufc-fp-nick">“${esc(a.nick)}”</span>` : ''}<h3>${esc(name)}</h3><p>${[a?.cls, a?.country, a?.camp].filter(Boolean).map(esc).join(' · ')}</p>${rec}</div></div></div>`;
-  // career numbers, all worked out from the record and the fights on file
   const pct = (n, d) => d ? Math.round(n / d * 100) + '%' : '–', tot = r ? r.w + r.l + r.d : 0;
-  const meth = r && ko != null ? `<div class="ufc-wins"><div class="ufc-wins-bar" role="img" aria-label="How the ${r.w} wins came: ${ko} by knockout, ${sb} by submission, ${dec} by decision">${[['ko', ko], ['sub', sb], ['dec', dec]].filter(x => x[1]).map(([c, n]) => `<i class="${c}" style="flex:${n}"></i>`).join('')}</div>
-      <div class="ufc-wins-k">${[['ko', 'Knockout', ko], ['sub', 'Submission', sb], ['dec', 'Decision', dec]].map(([c, l, n]) => `<span class="${c}"><b class="num">${n}</b><small>${l}<em class="num">${pct(n, r.w)}</em></small></span>`).join('')}</div></div>` : '';
-  const tiles = r ? [['Win rate', pct(r.w, tot), `${tot} pro fights`], ['Finish rate', ko != null ? pct(ko + (sb || 0), r.w) : '–', 'wins inside the distance'],
-    ['Stopped', koL != null ? String(koL + (sbL || 0)) : '–', koL != null ? `${koL} KO · ${sbL || 0} sub` : 'times finished'],
-    [done.length ? (done[0].me.win ? 'Win streak' : 'Losing run') : 'UFC streak', done.length ? String(streak) : '–', done.length ? `last ${done.length} UFC fights on file: ${done.filter(h => h.me.win).length}-${done.filter(h => !h.me.win).length}` : 'no UFC results loaded'],
-    ...(champ ? [['Title defences', String(rk.defenses ?? 0), rk.champCls]] : rk?.rank != null ? [['Ranking', '#' + rk.rank, rk.cls]] : [])] : [];
-  const stats = r ? `<section class="ufc-card"><header><h5>Career numbers</h5><small>from the pro record</small></header>${meth}<div class="ufc-nums">${tiles.map(([l, n, sub]) => `<div><small>${l}</small><b class="num">${esc(n)}</b><span>${esc(sub)}</span></div>`).join('')}</div></section>` : a === null ? '<div class="skel" style="height:220px"></div>' : '';
-  const facts = a?.found ? `<section class="ufc-card"><header><h5>Tale of the tape</h5></header><dl class="ufc-spec">${[['Age', a.age], ['Born', a.dob], ['Height', a.height], ['Reach', a.reach], ['Weight', a.weight], ['Stance', a.stance], ['Style', a.style], ['Team', a.camp]].filter(x => x[1]).map(([l, x]) => `<div><dt>${l}</dt><dd>${esc(x)}</dd></div>`).join('')}</dl></section>` : '';
+  // champion facts, from the title fights on file
+  const run = champs.length ? ufcTitleRun(v, champs[0].cls) : null;
+  const former = !champs.length && fin.some(h => h.b.title && !h.b.interim && h.me.win);
+  const cls = champs[0]?.cls || rk?.cls || a?.cls || '', ladder = R?.div?.get(cls) || [...(R?.div?.values() || [])].find(D => D.cls.toLowerCase() === String(cls).toLowerCase()) || null;
+  // recent form as a heat reading: the Lab's own estimate that the next one is a win, from the results on file
+  const heat = done.length >= 3 && window.flMeter ? window.flMeter.heat(done.map(h => ({ v: h.me.win ? 1 : 0, home: null, min: null })), { line: .5, side: 'over', yes: true, stat: 'win' }) : null;
+  // striking and grappling, summed over the fight cards on file
+  const T = { n: 0, min: 0, sl: 0, sa: 0, osl: 0, tl: 0, ta: 0, otl: 0, ota: 0, sub: 0 }, pair = s => { const m = String(s || '').match(/(\d+)\s*(?:\/|of)\s*(\d+)/); return m ? [+m[1], +m[2]] : [parseFloat(s) || 0, 0] };
+  for (const h of fin.slice(0, 12)) { const f = S.ufc.fc.get(h.e.id)?.fights?.find(x => x.id === h.b.id); if (!f) continue; const me = f.a.id === v.id ? f.a : f.b, op = f.a.id === v.id ? f.b : f.a, mins = ufcMins(f);
+    if (!mins || !me.stats || me.stats.sigStrikes == null) continue; const [sl, sa] = pair(me.stats.sigStrikes), [osl] = pair(op.stats.sigStrikes), [tl, ta] = pair(me.stats.takedowns), [otl, ota] = pair(op.stats.takedowns);
+    T.n++; T.min += mins; T.sl += sl; T.sa += sa; T.osl += osl; T.tl += tl; T.ta += ta; T.otl += otl; T.ota += ota; T.sub += parseFloat(me.stats.submissions) || 0 }
+  const per = (n, k = 1) => T.min ? n / T.min * k : 0, one = x => x.toFixed(1), share = (n, d) => d ? Math.round(n / d * 100) : null;
+  const rates = T.n ? [['Strikes landed per minute', one(per(T.sl)), per(T.sl) / 8 * 100], ['Striking accuracy', share(T.sl, T.sa) == null ? '–' : share(T.sl, T.sa) + '%', share(T.sl, T.sa) || 0], ['Strikes absorbed per minute', one(per(T.osl)), per(T.osl) / 8 * 100],
+    ['Takedowns per 15 minutes', one(per(T.tl, 15)), per(T.tl, 15) / 6 * 100], ['Takedown accuracy', share(T.tl, T.ta) == null ? 'none tried' : share(T.tl, T.ta) + '%', share(T.tl, T.ta) || 0],
+    ['Takedown defense', T.ota ? 100 - share(T.otl, T.ota) + '%' : 'none faced', T.ota ? 100 - share(T.otl, T.ota) : 0], ['Submission attempts per 15 minutes', one(per(T.sub, 15)), per(T.sub, 15) / 3 * 100]].map(([label, value, p]) => ({ label, value, pct: p })) : [];
+  const up = hist.filter(h => h.b.state !== 'post' && +h.e.date > Date.now() - 6 * 36e5).sort((x, y) => x.e.date - y.e.date)[0];
+  const tagOf = id => { const x = ufcRank(id); return !x ? '' : x.champ ? (x.champs?.every(c => c.interim) ? 'interim champion' : 'champion') : x.rank != null ? '#' + x.rank : '' };
   const years = [...S.ufc.years.keys()], oldest = Math.min(...years);
-  const tl = hist.length ? `<ol class="ufc-tl">${hist.map(({ e, b, me, op }, i) => { const res = b.state !== 'post' ? 'next' : me.win ? 'w' : op.win ? 'l' : 'd';
-      return `<li class="${res}" style="--i:${Math.min(i, 14)}"><button data-ufcfightev="${esc(e.id)}" data-ufcfight="${esc(b.id)}"><span class="ufc-tl-r">${res === 'w' ? 'Win' : res === 'l' ? 'Loss' : res === 'next' ? 'Next' : 'Draw'}</span>${ufcFace(op, 'ufc-tl-face')}<span class="ufc-tl-b"><b>${res === 'next' ? 'vs ' : ''}${esc(op.name)}</b><small>${esc(e.name.replace(/:.*/, ''))} · ${esc(b.cls)}</small></span><span class="ufc-tl-d"><b class="num">${b.state === 'post' && b.round ? `R${b.round} ${esc(b.clock)}` : esc(ufcTime(e.date))}</b><small>${esc(ufcDay(e.date))}</small></span></button></li>` }).join('')}</ol>`
-    : '<div class="note">No UFC fights found in the years loaded.</div>';
-  const body = `<div class="ufc-fp-grid">${stats}${facts}</div><section class="ufc-card"><header><h5>Fight history</h5><small>UFC, ${oldest}–now</small></header>${tl}${oldest > UFC_FIRST_YEAR ? `<button class="btn ghost" data-ufcact="older" style="margin-top:12px">Load fights before ${oldest}</button>` : ''}</section>`;
-  return { hero, body };
+  if (!window.flFighter) return { hero: `<div class="hero solo">${topBar(back)}<div class="thead"><div><h3>${esc(name)}</h3></div></div></div>`, body: '' };
+  return flFighter.page({ sport: 'ufc', id: v.id, back, name, nick: a?.nick, photo: ufcFace({ id: v.id, name, photo: a?.photo }, 'fgt-photo', true), division: cls || a?.cls, weight: a?.weight, stance: a?.stance, country: a?.country, active: a?.active,
+    status: { champs, rank: rk?.rank ?? null, cls: rk?.cls, p4p: rk?.p4p ?? null, known: !!R?.ready, note: R?.failed ? 'Rankings did not load' : '', former }, heat,
+    record: r, recordText: r ? '' : a?.rec || '', defenses: champs.length ? (champs[0].defenses ?? rk?.defenses ?? (run?.sure ? Math.max(0, run.wins - 1) : null)) : null, since: run?.sure ? run.since : null,
+    streak: done.length ? { win: done[0].me.win, n: streak, note: `Last ${done.length} UFC fights on file: ${done.filter(h => h.me.win).length} won, ${done.filter(h => !h.me.win).length} lost` } : null,
+    ladder, ladderAll: !!v.ladderAll, fighterAttr: f => `data-ufcfighter="${esc(f.id)}"`, actAttr: k => `data-ufcact="${k}"`,
+    wins: r && ko != null ? { ko, sub: sb, dec } : null, winsSub: r ? 'from the pro record' : '',
+    nums: r ? [['Win rate', pct(r.w, tot), `${tot} pro fight${tot === 1 ? '' : 's'}`], ['Finish rate', ko != null ? pct(ko + (sb || 0), r.w) : '–', 'wins inside the distance'], ['Stopped', koL != null ? String(koL + (sbL || 0)) : '–', koL != null ? `${koL} by knockout, ${sbL || 0} by submission` : 'times finished']] : [],
+    rates, ratesNote: T.n ? `From the last ${T.n} UFC fight${T.n === 1 ? '' : 's'} with stats on file.` : a === null ? 'Loading…' : fin.length ? 'Fight-by-fight strike and takedown numbers have not loaded for this fighter.' : 'No finished UFC fights on file, so there are no strike or takedown numbers yet.',
+    tape: [['Height', a?.height], ['Reach', a?.reach], ['Weight', a?.weight], ['Age', a?.age], ['Born', a?.dob], ['Stance', a?.stance], ['Style', a?.style], ['Gym', a?.camp], ['Country', a?.country]],
+    next: up ? { op: { name: up.op.name || 'Opponent to be announced', tag: tagOf(up.op.id), face: ufcFace(up.op, 'avx') }, event: up.e.name, date: up.e.date, title: up.b.title, h2h: `data-ufcfightev="${esc(up.e.id)}" data-ufcfight="${esc(up.b.id)}"` } : null,
+    nextNote: 'No fight booked on the UFC schedule.', labArgs: { sport: 'ufc', name },
+    history: fin.map(h => ({ res: isNc(h) ? 'nc' : h.me.win ? 'w' : h.op.win ? 'l' : 'd', op: { id: h.op.id, name: h.op.name }, method: h.b.method, round: h.b.round, clock: h.b.clock, date: h.e.date, event: h.e.name.replace(/:.*/, ''), title: h.b.title,
+      fightAttr: `data-ufcfightev="${esc(h.e.id)}" data-ufcfight="${esc(h.b.id)}"` })),
+    historySub: `UFC, ${oldest} to now`, historyNote: 'No finished UFC fights in the years loaded.', historyMore: oldest > UFC_FIRST_YEAR ? `<button type="button" class="bt sm ghost fgt-older" data-ufcact="older">Load fights before ${oldest}</button>` : '',
+    source: 'Profile, rankings and results from ESPN. Leg reach and “fighting out of” are not in that feed.' });
 }
 
 /* ---------- sheet routing and opening ---------- */
@@ -314,7 +352,7 @@ function ufcRenderSheet(v){
   else if (v.type === 'ufcfight') { out = ufcFightSheet(v, back); tabs = out.tabs }
   else out = ufcFighterSheet(v, back);
   S.curTabs = tabs;
-  sheet.innerHTML = `<div class="sheet-body ufc-sheet ufc-${v.type.slice(3)}">${out.hero}${tabs.length ? tabsHTML(tabs, v.tab) : ''}<div class="pane" id="pane"${tabs.length ? ' role="tabpanel"' : ''}>${out.body}</div></div>`;
+  sheet.innerHTML = `<div class="sheet-body ufc-sheet ufc-${v.type.slice(3)}${out.gold ? ' fgt-gold tok-scope' : ''}">${out.hero}${tabs.length ? tabsHTML(tabs, v.tab) : ''}<div class="pane" id="pane"${tabs.length ? ' role="tabpanel"' : ''}>${out.body}</div></div>`;
   sheet.querySelector('.sheet-body').scrollTop = scroll;
   if (typeof fxEnter === 'function') fxEnter(sheet, v.type + v.id, v.tab || '');
 }
@@ -336,6 +374,12 @@ async function ufcOpenFighter(id){
   ufcAthlete(String(id));
   // the fight history comes from the yearly schedules: make sure the last few years are loaded
   const y = new Date().getFullYear(); await Promise.all([y, y - 1, y - 2, y - 3].map(k => ufcLoadYear(k))); if (S.stack.includes(v)) renderSheet();
+  // the strike and takedown numbers come from the fight cards: fetch the cards of the latest finished fights not yet on file
+  const cards = [...new Set(ufcAll().filter(e => e.state === 'post' && e.bouts.some(b => b.a.id === v.id || b.b.id === v.id)).sort((p, q) => q.date - p.date).slice(0, 8).map(e => e.id))].filter(id => !S.ufc.fc.has(id));
+  if (cards.length) Promise.all(cards.map(id => ufcLoadCard(id))).then(() => S.stack[S.stack.length - 1] === v && renderSheet());
+  // a champion's "since" date needs the fight where the belt was won: reach further back until it is found
+  for (let i = 0; i < 4 && S.stack.includes(v); i++) { const ch = ufcRank(v.id)?.champs?.[0]; if (!ch || ufcTitleRun(v, ch.cls).sure) break;
+    const old = Math.min(...S.ufc.years.keys()); if (old <= UFC_FIRST_YEAR) break; await Promise.all([old - 1, old - 2, old - 3].filter(k => k >= UFC_FIRST_YEAR).map(k => ufcLoadYear(k))); if (S.stack[S.stack.length - 1] === v) renderSheet() }
 }
 
 /* ---------- hooks into the main app ---------- */
@@ -374,6 +418,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.ufcfight) return ufcOpenFight(t.dataset.ufcfight, t.dataset.ufcfightev);
   if (t.dataset.ufcev) { if (S.sport !== 'ufc' && typeof setSport === 'function') setSport('ufc'); return ufcOpenEvent(t.dataset.ufcev) }
   const a = t.dataset.ufcact, v = S.stack[S.stack.length - 1];
+  if (a === 'ladder' && v) { v.ladderAll = !v.ladderAll; renderSheet(); document.querySelector('#sheet [data-ufcact="ladder"]')?.focus(); return }
   if (a === 'ufcretry' && v) { S.ufc.fc.delete(v.id); return ufcOpenEvent(v.id) }
   if (a === 'older') { const oldest = Math.min(...S.ufc.years.keys()); Promise.all([oldest - 1, oldest - 2, oldest - 3].filter(y => y >= UFC_FIRST_YEAR).map(y => ufcLoadYear(y))).then(() => S.stack.includes(v) && renderSheet()); t.disabled = true; t.textContent = 'Loading…' }
 }, true);
