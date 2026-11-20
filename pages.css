@@ -38,7 +38,7 @@
 .gd-line em{position:absolute;right:0;top:-26px;padding:3px 9px;border-radius:var(--radius-pill);background:var(--pill-bg);color:var(--pill-fg);font:700 12px/1.2 var(--font-body);font-style:normal}
 .gd-heat{display:grid;gap:14px;width:min(100%,360px);text-align:left}
 .gd-range input{width:100%;min-height:44px;accent-color:var(--accent-fill)}
-.gd-edge{display:grid;gap:10px;width:min(100%,320px);text-align:left}
+.gd-edge{display:grid;gap:10px;width:min(100%,320px);text-align:left}.gd-edge .py-strip{margin:0}.gd-edge .py-trak{margin:4px 0 8px}
 .gd-edge-r{display:grid;grid-template-columns:92px minmax(0,1fr) 44px;align-items:center;gap:10px}
 .gd-edge-r b{text-align:right;font:700 15px/1 var(--font-body)}
 .gd-edge .trak.mk > i{background:var(--text-2)}
