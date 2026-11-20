@@ -87,7 +87,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js"}
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -1457,6 +1457,8 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path == "/api/forecast/get":
                 keys = [k for k in q.get("keys", "").split(",") if re.fullmatch(r"(soccer|football):[A-Za-z0-9_-]{1,24}", k)][:40]
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
+            if u.path == "/api/forecast/list":   # every tracked match with its latest forecast (read-only)
+                return self.send_auth(200, {"matches": forecaster.upcoming(), "now": int(time.time())})
             if u.path == "/api/odds/board":
                 if q.get("sport") not in ("soccer", "football", "basketball", "baseball") or not re.fullmatch(r"[A-Za-z0-9_.]{1,20}", q.get("lg", "")):
                     return self.send_json({"error": "bad request"}, 400)

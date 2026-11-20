@@ -15,24 +15,29 @@
 
   function propPick(r, sport) {
     const games = (r.games || []).map(g => ({ v: g[0], home: g[1] == null ? null : !!g[1], min: g[2], opp: g[3] || '', oppAbbr: g[4] || '' }));
-    const yes = YES.has(r.k), J = window.flMeter?.judge(games, { line: r.line, side: r.side, yes, stat: r.k, opp: r.opp });
-    if (!J) return null;
+    const yes = YES.has(r.k), pct = x => Math.round(x * 100);
+    const read = side => window.flMeter?.judge(games, { line: r.line, side, yes, stat: r.k, opp: r.opp });
     // the market: a two-sided price at this exact line, averaged when more than one book posts it
     const priced = (r.offers || []).filter(o => o.pOver != null && o.line === r.line);
     const mOver = priced.length ? priced.reduce((a, o) => a + o.pOver, 0) / priced.length : null;
-    const market = mOver == null ? null : r.side === 'over' ? mOver : 1 - mOver;
-    const ours = J.p, pct = x => Math.round(x * 100);
-    const reasons = [];
-    if (r.n && r.hit != null) reasons.push(`Hit in ${r.hit} of last ${r.n}`);
+    // the side: the one the board ranked (its better last-10 record), unless a market price says our edge is on the other
+    let side = r.side, J = read(side); if (!J) return null;
+    let market = mOver == null ? null : side === 'over' ? mOver : 1 - mOver;
+    if (market != null && J.p < market) { side = side === 'over' ? 'under' : 'over'; J = read(side); market = 1 - market }
+    const ours = J.p, over = side === 'over';
+    // reasons, counted from the same games the reading uses
+    const hits = n => { const gs = games.filter(g => g.v != null).slice(0, n).filter(g => g.v !== r.line); return gs.length ? { n: gs.length, hit: gs.filter(g => over ? g.v > r.line : g.v < r.line).length } : null };
+    const h5 = hits(5), h10 = hits(10), h20 = hits(20), rate = h => h ? h.hit / h.n : null, reasons = [];
+    if (h10) reasons.push(`${yes ? (over ? 'Yes' : 'No') : over ? 'Over' : 'Under'} in ${h10.hit} of last ${h10.n}`);
     if (r.avg != null && !yes) reasons.push(`Averaging ${fmt(r.avg)} over the last 10`);
-    if (r.l5 != null && (r.l5 >= .8 || r.l5 <= .2)) reasons.push(`${pct(r.l5)}% over the last 5`);
-    else if (r.l20 != null) reasons.push(`${pct(r.l20)}% over the last 20`);
+    if (h5 && h5.n >= 4 && (rate(h5) >= .8 || rate(h5) <= .2)) reasons.push(`${h5.hit} of the last ${h5.n}`);
+    else if (h20 && h20.n >= 15) reasons.push(`${pct(rate(h20))}% over the last ${h20.n}`);
     const start = r.start ? new Date(r.start) : null;
-    return { id: `prop:${sport}:${r.player}:${r.k}:${r.line}:${r.side}`, type: 'prop', sport, name: r.player, team: r.team || '', opp: r.opp || '', photo: r.photo || '',
-      k: r.k, label: r.label, line: r.line, side: r.side, text: yes ? `${r.label}: ${r.side === 'over' ? 'Yes' : 'No'}` : `${r.side === 'over' ? 'Over' : 'Under'} ${fmt(r.line)} ${String(r.label).toLowerCase()}`,
+    return { id: `prop:${sport}:${r.player}:${r.k}:${r.line}`, type: 'prop', sport, name: r.player, team: r.team || '', opp: r.opp || '', photo: r.photo || '',
+      k: r.k, label: r.label, line: r.line, side, yes, text: yes ? `${r.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(r.line)} ${String(r.label).toLowerCase()}`,
       ours, market, edge: market == null ? null : pct(ours) - pct(market), heat: pct(ours), conf: J.conf, n: J.n, reasons: reasons.slice(0, 3),
       start: start && !isNaN(start) ? start : null, game: [r.team, r.opp].filter(Boolean).join(' v '), gameKey: `${sport}:${[r.team, r.opp].filter(Boolean).sort().join('|') || r.player}`,
-      books: r.books || [], l5: r.l5, l10: r.l10, l20: r.l20, avg: r.avg };
+      books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), avg: r.avg };
   }
   function board(sport, force) {
     const c = cache.get(sport);
