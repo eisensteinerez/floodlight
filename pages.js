@@ -52,5 +52,13 @@
     if (!cur || ev.target.closest?.('.flpage,[data-page],.flmenu,#flDots')) return;
     if (ev.target.closest?.('button[data-sport],[data-shell="home"],[data-rs="open"],.rail button,.ticker [data-ev],.ticker button,.sresults button,[data-leave]')) hide();
   }, true);
+  // radio groups drawn as segmented controls: arrow keys move and choose, as a native radio group would
+  document.addEventListener('keydown', ev => {
+    const t = ev.target.closest?.('[role="radiogroup"] > [role="radio"]'); if (!t || t.dataset.themePick != null || t.dataset.brightPick != null || !/^Arrow|^Home$|^End$/.test(ev.key)) return;
+    const all = [...t.parentElement.querySelectorAll(':scope > [role="radio"]')], i = all.indexOf(t), n = all.length;
+    const j = ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : /Right|Down/.test(ev.key) ? (i + 1) % n : (i - 1 + n) % n;
+    ev.preventDefault(); const sel = all[j].getAttributeNames().filter(a => a.startsWith('data-')).map(a => `[${a}="${CSS.escape(all[j].getAttribute(a))}"]`).join('');
+    all[j].click(); setTimeout(() => (sel && document.querySelector(`[role="radiogroup"] > [role="radio"]${sel}`) || all[j]).focus(), 0);
+  });
   window.flPages = { add(name, def) { defs.set(name, def); if (location.hash.startsWith('#/' + name)) setTimeout(fromHash, 0) }, show, hide, current: () => cur, redraw(name) { const el = els.get(name), d = defs.get(name); if (el && d && !el.hidden) d.render(el) } };
 })();

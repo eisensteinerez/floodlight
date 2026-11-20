@@ -23,7 +23,7 @@
         <div class="gd-edge-t"><span class="lb">Edge</span><b class="fig num">+6</b></div><span class="lb">A worked example, not a pick</span></div>`,
     transfers: () => `<div class="gd-move"><span class="avx crest" aria-hidden="true">${ic('profile', 20)}</span><span class="gd-move-a">${ic('arrow', 22)}</span><span class="avx crest" aria-hidden="true">${ic('profile', 20)}</span>
         <div class="gd-move-t"><span class="pl">Confirmed</span><span class="pl">Fee, when it is reported</span></div></div>`,
-    profiles: () => `<div class="gd-prof"><span class="avx lg" aria-hidden="true">${ic('profile', 30)}</span><div><div class="gd-prof-l"><i></i><i></i></div>
+    profiles: () => `<div class="gd-prof"><span class="avx av-lg" aria-hidden="true">${ic('profile', 30)}</span><div><div class="gd-prof-l"><i></i><i></i></div>
         <div class="gd-prof-a">${ic('trophy', 22)}${ic('star', 22)}${ic('trophy', 22)}</div></div></div><span class="lb">Awards show only when we have a record of them</span>`,
     themes: () => `<div class="gd-themes" role="group" aria-label="Themes">${themes().map(([id, name]) => `<button type="button" class="gd-th" data-theme-pick="${id}" aria-pressed="${window.flTheme.get() === id}">
         <span class="gd-sw" data-theme-preview="${id}" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(name)}</span></button>`).join('')}</div>`,

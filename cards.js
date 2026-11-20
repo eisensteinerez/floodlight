@@ -58,10 +58,12 @@
 
   /* the featured card at the top of a day: the same facts, larger, with room for a playing-surface graphic or other panel */
   window.flFeature = function (o) {
-    return `<button class="ftr ${o.state === 'in' ? 'is-live' : o.state === 'post' ? 'is-final' : 'is-pre'}${o.panel ? ' has-panel' : ''}${o.cls ? ' ' + o.cls : ''}" ${o.attrs || ''} style="${colours(o)}" aria-label="${esc(o.label || '')}">
+    // as: 'article' when the card holds its own buttons (Home); a card that is one big button otherwise
+    const tag = o.as || 'button';
+    return `<${tag} class="ftr ${o.state === 'in' ? 'is-live' : o.state === 'post' ? 'is-final' : 'is-pre'}${o.panel ? ' has-panel' : ''}${o.cls ? ' ' + o.cls : ''}" ${o.attrs || ''} style="${colours(o)}" aria-label="${esc(o.label || '')}">
       <span class="ftr-body"><span class="mx-top">${badge(o)}${o.lg ? `<span class="mx-lg">${o.lgLogo ? `<img src="${esc(o.lgLogo)}" alt="">` : ''}${esc(o.lg)}</span>` : ''}${o.venue ? `<span class="mx-lg ftr-venue">${esc(o.venue)}</span>` : ''}${o.tv ? `<span class="mx-tv">${TV}${esc(o.tv)}</span>` : ''}</span>
-        <span class="mx-main">${side(o.a, o.a.under || '')}${middle(o, true)}${side(o.b, o.b.under || '')}</span>${o.below || ''}${o.foot ? `<span class="ftr-foot">${esc(o.foot)}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>` : ''}</span>
-      ${o.panel ? `<span class="ftr-panel">${o.panel}</span>` : ''}</button>`;
+        <span class="mx-main">${side(o.a, o.a.under || '')}${middle(o, true)}${side(o.b, o.b.under || '')}</span>${o.below || ''}${o.foot ? `<span class="ftr-foot">${esc(o.foot)}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>` : ''}${o.acts ? `<span class="ftr-acts">${o.acts}</span>` : ''}</span>
+      ${o.panel ? `<span class="ftr-panel">${o.panel}</span>` : ''}</${tag}>`;
   };
   window.flCard.untilText = untilText;
 

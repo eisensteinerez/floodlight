@@ -194,7 +194,7 @@ select.inp{appearance:none;padding-right:38px;background-image:linear-gradient(4
 .avx{flex:none;width:44px;height:44px;border-radius:50%;display:inline-grid;place-items:center;overflow:hidden;border:1px solid var(--border-2);background:var(--surface-2);color:var(--accent);font:700 14px/1 var(--font-body)}
 .avx img{width:100%;height:100%;object-fit:cover}
 .avx.crest{background:var(--surface-2);border-color:var(--border)}.avx.crest img{width:66%;height:66%;object-fit:contain}
-.avx.sm{width:32px;height:32px;font-size:11px}.avx.lg{width:72px;height:72px;font-size:22px}.avx.xl{width:120px;height:120px;font-size:34px}
+.avx.av-sm{width:32px;height:32px;font-size:11px}.avx.av-lg{width:72px;height:72px;font-size:22px}.avx.av-xl{width:120px;height:120px;font-size:34px}
 /* rows: a list of things inside a card, separated by hairlines */
 .rw{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 0;border-top:1px solid var(--border);color:var(--text);text-align:left;width:100%}
 .rw:first-child{border-top:0}
