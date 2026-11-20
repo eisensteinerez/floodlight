@@ -1485,11 +1485,228 @@ svg text{font-family:var(--f-body)}
 .hb-cd b,.bx-cd b,.ufc-cd b{font-family:var(--f-display)!important;font-weight:900;color:inherit}
 .hb-fight{background:var(--strip-bg)!important;color:var(--strip-fg)}
 
-/* ---------- checks from the design pass ---------- */
-:root{--board-fg:#FFF6DC;--board-bg:#05070A}
-.mx-badge.live,.pill.live{background:#D92643}                      /* white on this red reads at 4.6 to 1 */
-.group .m.mx.is-pre .mx-badge{display:none}                         /* the start time already says it is upcoming */
-.group .m.mx.is-final .mx-mid small{display:none}                   /* "Final" is on the left; no need to say FT again */
+/* ---------- prediction: the verdict in words, then one bar per result, filled to its chance ---------- */
+.pr{max-width:1080px}
+.pr-card{border-radius:var(--r-card)}
+.pr-verdict{display:block;padding:26px 26px 20px;background:var(--surface)}
+.pr-vh{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.pr-k{font:600 15px/1.2 var(--f-body);color:var(--muted)}
+.pr-v h4{margin:12px 0 8px;font:900 clamp(48px,5.6vw,76px)/.92 var(--f-display)}
+.pr-v p{font:400 18px/1.45 var(--f-body);color:var(--fg);max-width:62ch}
+.pr-conf{flex:none;padding:7px 10px;border-radius:2px;font:700 14px/1 var(--f-cond);background:var(--surface-2);color:var(--fg)}
+.pr-conf.hi{background:var(--accent-fill);color:var(--accent-ink)}
+.pr-conf.lo{background:none;box-shadow:inset 0 0 0 1px var(--loss);color:var(--loss)}
+.pr-picks,.pr-picks.three{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:22px}
+.pr-picks.three{grid-template-columns:1fr .78fr 1fr}
+.pr-pick{all:unset;box-sizing:border-box;position:relative;isolation:isolate;overflow:hidden;display:grid;justify-items:center;align-content:start;gap:6px;min-height:236px;padding:44px 10px 22px;
+  border-radius:var(--r-card);border:1px solid var(--line-2);background:var(--surface);text-align:center;min-width:0;transition:border-color .15s}
+button.pr-pick{cursor:pointer}
+button.pr-pick:hover{border-color:var(--fg)}
+button.pr-pick:active{transform:scale(.99)}
+button.pr-pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pr-fill{position:absolute;left:0;right:0;bottom:0;z-index:-1;border-top:4px solid var(--c);background:color-mix(in oklab,var(--c) 22%,var(--surface))}
+.pr.fresh .pr-fill{animation:prRise .6s var(--ease) both}
+@keyframes prRise{from{transform:translateY(100%)}}
+.pr-pick img{width:56px;height:56px;object-fit:contain}
+.pr-pick > u{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;border:2px dashed var(--draw);text-decoration:none;font:700 22px/1 var(--f-body);color:var(--muted)}
+.pr-pick > span{font:700 17px/1.2 var(--f-cond);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pr-pick > b{display:flex;align-items:baseline;font:900 clamp(60px,7vw,100px)/.9 var(--f-display);color:var(--fg)}
+.pr-pick > b i{font-style:normal}.pr-pick > b s{text-decoration:none;font-size:.4em;opacity:.7;margin-left:2px}
+.pr-odds{font:600 15px/1 var(--f-body);color:var(--muted)}
+.pr-tag{position:absolute;top:12px;left:50%;translate:-50% 0;white-space:nowrap;padding:5px 10px;border-radius:2px;background:var(--accent-fill);color:var(--accent-ink);font:700 13.5px/1 var(--f-cond)}
+.pr-pick.ours{border-color:var(--fg);box-shadow:inset 0 0 0 1px var(--fg)}
+.pr-pick.mine{border-color:var(--win);box-shadow:inset 0 0 0 1px var(--win)}
+.pr-pick.hit{border-color:var(--win)}
+.pr-ck{top:10px;right:10px;background:var(--win);color:#fff}
+.pr-hint{text-align:center;margin-top:16px;font-size:14px}
+.pr-sb b{font-family:var(--f-display);font-weight:900;color:var(--fg)}
+.pr-sb b u{font-family:var(--f-display);font-weight:400}
+@media (max-width:640px){
+  .pr-verdict{padding:18px 14px 16px}.pr-picks,.pr-picks.three{gap:8px}
+  .pr-pick{min-height:176px;padding:38px 6px 14px}.pr-pick img{width:40px;height:40px}.pr-pick > u{width:38px;height:38px}
+  .pr-pick > span{font-size:14px}.pr-odds{font-size:12.5px}.pr-tag{font-size:12px;padding:4px 7px;top:9px}.pr-v p{font-size:16px}
+}
+.oddrow b,.bk b,.rs-lchip,.sfx-dr b,.mx-cd,.mx-x b{font-family:var(--f-body);font-variant-numeric:tabular-nums}
+
+/* ---------- foot of the page: the name, once, at a sensible size ---------- */
+.fl-foot{background:none!important;padding-top:36px;border-top:2px solid var(--rule)}
+.fl-foot::before,.fl-foot::after{display:none!important}
+.fl-foot-mark{font:900 clamp(40px,6vw,72px)/1 var(--f-display)!important;color:var(--fg)!important;background:none!important;-webkit-text-fill-color:currentColor!important;-webkit-text-stroke:0!important;text-transform:uppercase!important;opacity:1!important}
+
+/* ---------- decoration that is gone: ghost lettering, scan lines, cursor spotlights, radar pings ---------- */
+.spot-ghost,.rs-hero-ghost,.mh-fx,.hero.solo[data-ghost]::after,.flg-land::after,#flLight,.tcard-shine,.hero.mh::after,.group-h::after,
+.card::after,.rs-tile::after,.tile::after,.ml::after,.rs-game::after,.fx-card::after,.flg-grid article::after{display:none!important}
+.pod-n,.mk-hn{color:var(--faint);-webkit-text-stroke:0}
+.pod-c.p1 .pod-n,.mk-head.h1 .mk-hn{color:var(--fg)}
+.mx-badge.live i::after,.fsn-live i::after{animation:none;display:none}
+@keyframes hubPulse{50%{opacity:.35}}                               /* the live dot blinks; nothing else moves on its own */
+.skel,.hub-sk{background:var(--surface-2)}
+.tcard-n{background:rgba(11,13,17,.72)}
+.drawer{background:var(--surface)}
+.rs-zn,.rs-zn.lo.hit{background:color-mix(in oklab,var(--win) 9%,transparent)}
+.rs-zn.miss,.rs-zn.lo{background:color-mix(in oklab,var(--loss) 8%,transparent)}
+.rs-face::before,.rs-face::after{display:none}
+
+/* ---------- match centre ---------- */
+.sheet{box-shadow:none!important;border-radius:0}
+.mc-c{border-radius:var(--r-card);border:1px solid var(--line);background:var(--surface);transition:none}
+.mc-c:hover{border-color:var(--line)}
+.mc-pred,.vd,.nx,.pf-card,.pf-head,.wi,.cmp-h,.vz-story,.edge.up,.lgd.lead,.rs-open{background:var(--surface)}
+.mc-go,.nx-go{border-radius:var(--r-ctl);font:600 14px/1 var(--f-body)}
+.mc-go:hover,.nx-go:hover{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.mc-go:hover span{transform:none}
+.sx-poss{background:var(--surface);border:1px solid var(--line)}
+.fd-i.goal .fd-b{background:var(--surface);border-color:var(--line);box-shadow:inset 4px 0 0 var(--c)}
+.fd-b small{font:600 13px/1.2 var(--f-body);color:var(--muted)}
+.fd-b p{font-size:15px}
+.fd-i.goal .fd-b p{font:700 17px/1.35 var(--f-body)}
+.mt-r.hl{background:var(--surface-2);border-color:transparent;box-shadow:inset 4px 0 0 var(--c)}
+.mt-pts{background:none;border-radius:0}
+.mt-pts::before{display:none}
+.mt-pts b,.lt-pts b{font:800 20px/1 var(--f-display)}
+.fx.W{background:none;box-shadow:inset 3px 0 0 var(--win)}
+.fx.L{background:none;box-shadow:inset 3px 0 0 var(--loss)}
+
+/* ---------- no boxes inside boxes: a panel on a page is a ruled section, and only the thing inside it keeps a frame ---------- */
+.mc-c,.mc-c.mc-pred,.pcard{background:none!important;border:0!important;border-top:2px solid var(--rule)!important;border-radius:0!important;padding:14px 0 0!important;box-shadow:none!important}
+.mc{gap:34px 28px}
+.pane.pgrid{gap:34px 28px}
+.pr-sb{background:none;border:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0}
+.pr-x span,.pr-x b{border-radius:2px}
+
+/* key factors: a list on rules, the icon carries the side's colour and nothing sits in a tile */
+.pr-fh{border-top:2px solid var(--rule);padding-top:14px;margin-top:8px}
+.pr-factors{gap:0 28px}
+.pr-f{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:14px 0;box-shadow:none}
+.pr-f:hover{background:none;transform:none}
+.pr-fi{background:none;border-radius:0;color:var(--muted)}
+.pr-f b{font:700 16px/1.25 var(--f-body)}
+.pr-f p{font-size:14px;line-height:1.45;color:var(--muted)}
+
+/* match stats: numbers and bars on rules */
+.sx-poss{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0}
+.sx-keys{gap:0 24px}
+.sx-key{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:14px 0}
+.sx-key:hover{transform:none;border-color:var(--line)}
+.sx-rows{background:none;border:0;border-radius:0;padding:0}
+.sx-b,.sx-b i,.sx-split,.sx-split i,.sx-b::before,.sx-b::after{border-radius:0}
+.sx-row em{font:600 14px/1.2 var(--f-body);color:var(--fg)}
+.sx-row b{font:800 17px/1 var(--f-cond)}
+
+/* league table: flat rows, a heavy rule under the head, the two teams in this match on a tint */
+.mt{gap:0}
+.mt-h{border-bottom:2px solid var(--rule);padding-bottom:6px;height:auto}
+.mt-r{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;font:500 14px/1 var(--f-body)}
+.mt-r:hover{background:var(--surface-2)}
+.mt-r.hl{background:var(--surface-2);box-shadow:none}
+.mt-r::before{top:0;bottom:0;width:4px;border-radius:0}
+.mt-rk{font:800 17px/1 var(--f-cond)}
+.mt-t .linkbtn{font:600 15px/1.2 var(--f-body)}
+.mt-rec i{border-radius:0}
+
+/* results lists: the W, D or L badge says it once */
+.fx,.fx.W,.fx.L,.fx.D{box-shadow:none;border-radius:0}
+.nx{background:none}
+.run i,.run s{border-radius:0}
+
+/* number tiles on a page: one ruled strip, not four boxes */
+.shell > section > .tiles{gap:0;border-top:2px solid var(--rule);border-bottom:1px solid var(--line)}
+.shell > section > .tiles .tile{background:none;border:0;border-left:1px solid var(--line);border-radius:0;box-shadow:none;padding:14px 16px}
+.shell > section > .tiles .tile:first-child{border-left:0;padding-left:0}
+.shell > section > .tiles .tile b{font:900 40px/1 var(--f-display)}
+.shell > section > .tiles .tile span{font:500 14px/1.3 var(--f-body);color:var(--muted)}
+@media (max-width:520px){.shell > section > .tiles .tile:nth-child(odd){border-left:0;padding-left:0}.shell > section > .tiles .tile:nth-child(n+3){border-top:1px solid var(--line)}}
+
+/* predictions page: the filters sit on the page, and the picks are a list you read down */
+.pfx{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:4px 0 14px}
+.pred-card::before{display:none!important}
+.shell .cards:has(> .pred-card),.shell.no-sheet .cards:has(> .pred-card){display:block;gap:0;border-top:2px solid var(--rule)}
+.m.pred-card{width:100%;background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;padding:14px 4px}
+.m.pred-card:hover{background:var(--surface);transform:none}
+.pred-card .ko{font:800 20px/1 var(--f-cond);color:var(--fg)}
+.pred-card .tm span{font:600 16px/1.3 var(--f-body)}
+.pred-card .pc-side b{font:800 20px/1.05 var(--f-display)}
+.pred-card .pbar,.pbar,.pbar i{border-radius:0}
+.pc-chips span,.pc-chips b{border-radius:2px}
+@media (min-width:900px){
+  .m.pred-card{display:grid;width:100%;grid-template-columns:96px minmax(0,1fr) minmax(190px,auto);column-gap:20px;align-items:center}
+  .pred-card .tms{display:grid;grid-template-columns:minmax(170px,250px) minmax(160px,1fr) auto;column-gap:24px;align-items:center}
+  .pred-card .tms .tm{grid-column:1}
+  .pred-card .tms .pbar{grid-column:2;grid-row:1/3;margin:0}
+  .pred-card .tms .pc-chips{grid-column:3;grid-row:1/3;margin:0;justify-content:flex-end}
+}
+
+/* ---------- the members gate: front page and log in ---------- */
+.flg-land::before,.flg::before,.flg-demo::before,.flg-card::before,.flg-kick i{display:none!important}
+.flg-kick{border:0;background:none;padding:0;border-radius:0;font:800 16px/1 var(--f-cond);color:var(--accent);text-transform:uppercase!important}
+.flg-hero{align-items:start}
+.flg-hero h1{font:900 clamp(54px,8.4vw,118px)/.86 var(--f-display)}
+.flg-sports{gap:2px 16px}
+.flg-sports span{border:0;background:none;padding:0;border-radius:0;font:700 16px/1.5 var(--f-cond);color:var(--muted);text-transform:uppercase!important}
+.flg-demo,.flg-demo:hover{transform:none!important;box-shadow:none;border:0;border-top:8px solid var(--accent-fill);border-radius:var(--r-card);background:var(--strip-bg)}
+.flg-demo-top b{font:800 26px/1 var(--f-display)}
+.flg-demo-top small{border:0;padding:0;font:600 13px/1 var(--f-body)}
+.flg-bars i{border-radius:0;animation:none}
+.flg-rates{gap:0}
+.flg-rates div{background:none;border:0;border-left:1px solid var(--line);border-radius:0;padding:4px 12px}
+.flg-rates div:first-child{border-left:0;padding-left:0}
+.flg-rates span{font:500 13px/1.3 var(--f-body)}
+.flg-card{background:var(--surface);border:1px solid var(--line-2);border-top:4px solid var(--rule);border-radius:var(--r-card);box-shadow:none}
+.flg-h{font:900 40px/1 var(--f-display)}
+.flg-tabs{background:none;border:1px solid var(--line-2);border-radius:var(--r-ctl);padding:2px}
+.flg-tabs button{border-radius:2px;font:700 14px/1 var(--f-cond);text-transform:uppercase!important}
+.flg-tabs button.on{background:var(--fg);color:var(--bg);box-shadow:none}
+.flg-card label{font:600 13px/1 var(--f-body);color:var(--muted)}
+.flg-card input{background:var(--surface);border-color:var(--line-2)}
+.flg-card input:focus{border-color:var(--fg);box-shadow:inset 0 0 0 1px var(--fg)}
+.flg-card .btn{background:var(--accent-fill);color:var(--accent-ink);border:0;box-shadow:none;border-radius:var(--r-ctl);font:800 18px/1 var(--f-cond);text-transform:uppercase!important}
+.flg-card .btn:hover{background:var(--fg);color:var(--bg)}
+.flg-card .btn.ghost{background:none;color:var(--fg);border:1px solid var(--line-2)}
+.flg-nav a{border-radius:var(--r-ctl);background:none;border-color:var(--line-2)}
+.flg-nav a:hover{transform:none;border-color:var(--fg)}
+.flg-feat h2{border-top:2px solid var(--rule);padding-top:16px}
+.flg-grid{gap:0 36px}
+.flg-grid article,.flg-grid article:hover{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:12px;align-items:start;background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;padding:18px 0;transform:none}
+.flg-ico{grid-row:1/3;width:auto;height:auto;margin-top:2px;background:none;box-shadow:none;border-radius:0;color:var(--fg);place-items:start}
+.flg-ico svg{width:22px;height:22px}
+.flg-grid h3{margin:0 0 6px;font:800 24px/1.05 var(--f-display)}
+.flg-grid p{grid-column:2;font-size:15px;line-height:1.5}
+.flg-steps{gap:0 36px;margin-top:28px}
+.flg-steps div{background:none;border:0;border-top:2px solid var(--rule);border-radius:0;padding:16px 0}
+.flg-steps div::before{color:var(--fg)}
+.flg-steps b{font:800 24px/1.05 var(--f-display)}
+.flg-steps span{font-size:15px}
+.flg-foot{padding-bottom:36px;font:500 13px/1.5 var(--f-body)}
+.flg-brand{text-transform:uppercase!important}
+.flm-in{box-shadow:none;border:1px solid var(--line-2)}
+
+.ufc-hero-bg{background:none!important}
+.rs-face::before,.face::before{animation:none}
+.pred-card .st .ko{font:800 17px/1.1 var(--f-cond);color:var(--fg)}
+@media (min-width:900px){.pred-card .st .ko{font-size:20px;white-space:nowrap}}
+
+.top .brand{text-transform:uppercase!important;font-family:var(--f-display);font-weight:900}
+@media (max-width:600px){.ufc-eh-f{opacity:.28}}
+
+/* ---------- touch: every control is at least 44px tall under a finger ---------- */
+@media (pointer:coarse){
+  .icon-btn,.top .search input,.search input,.fld-cal input,.mc-go,.pv-nav button,.season select,.hero-top .back,.favbtn,.prow,.qf,.pfx-sel select,.mk-q input,.pf-head .x,.ufc-kind button,.seg button,.chip,.skip{min-height:44px!important}
+  .icon-btn,.pf-head .x,.fld-cal input{min-width:44px!important}
+}
+
+/* ---------- motion: content is simply there. What still moves is a drawer sliding in, a menu opening, a chart filling and the LIVE dot. ---------- */
+@keyframes paneIn{from{opacity:1}}
+@keyframes hbUp{from{opacity:1}}
+@keyframes flEnter{from{opacity:1}}
+@keyframes fl-rise{from{opacity:1}}
+@keyframes ltIn{from{opacity:1}}
+@keyframes sideL{from{opacity:1}}
+@keyframes sideR{from{opacity:1}}
+@keyframes scoreIn{from{opacity:1}}
+@keyframes tabPop{from{transform:none}}
+@keyframes prPop{from{transform:none}}
+
+/* ---------- keyboard focus and wrapping ---------- */
 .livebar h2,.hub-head h1,.group-h strong,.pr-v h4,.hb-k{text-wrap:balance}
 .fsn:focus-visible,.group .m.mx:focus-visible,.flside .rail .lg:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 @media (min-width:1100px){
