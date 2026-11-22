@@ -1315,3 +1315,36 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
 .lv-t em{font-style:normal;color:var(--muted);font-size:12px}.lv-t b{font:700 16px/1 var(--font-body);min-width:28px;text-align:right}.lv-t.lose{color:var(--muted)}
 .mx-mid.spoil small{color:var(--text-2)}
 .gx-lines{width:auto;max-width:100%}.gx-lines th,.gx-lines td{border:0;background:none}
+
+/* ---------- Predictions: the evidence panel on a pick (evidence.js) ---------- */
+.pd-evbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:-4px}
+.pd-evb{margin:0}.pd-chev{transition:transform var(--t-fast,.18s)}.pd-evb[aria-expanded="true"] .pd-chev{transform:rotate(180deg)}
+.pd-ev{cursor:auto;display:grid;gap:22px;padding-top:18px;border-top:1px solid var(--border)}
+.ev-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.ev-tile{padding:14px;display:grid;gap:5px;align-content:start}.ev-tile .fig{font-size:clamp(22px,2vw,30px)}.ev-tile small{font-size:12px}
+.ev-sec{display:grid;gap:10px;min-width:0}.ev-sec h4{margin:0;font:700 15px/1.2 var(--font-body);letter-spacing:0;text-transform:none;color:var(--text)}.ev-sec p{margin:0}
+.ev-log{position:relative;display:flex;align-items:flex-end;gap:clamp(2px,.6vw,6px);height:170px;padding:18px 0 20px}
+.ev-bar{position:relative;flex:1 1 0;min-width:0;height:100%;display:flex;align-items:flex-end;justify-content:center}
+.ev-bar i{position:relative;display:block;width:100%;max-width:30px;border-radius:5px 5px 0 0;background:var(--chart-under-flat);border:var(--chart-under-border,0);border-bottom:0}
+.ev-bar.hit i{background:var(--chart-over);border:0}.ev-bar.push i{background:var(--muted)}
+.ev-bar b{position:absolute;left:50%;bottom:calc(100% + 3px);transform:translateX(-50%);font:700 11px/1 var(--font-body);color:var(--text)}
+.ev-bar small{position:absolute;left:50%;top:calc(100% + 5px);transform:translateX(-50%);font:500 10px/1 var(--font-body);color:var(--muted);white-space:nowrap}
+.ev-line{position:absolute;left:0;right:0;margin-bottom:20px;border-top:2px dashed var(--chart-line);z-index:1;pointer-events:none}
+.ev-line i{position:absolute;right:0;bottom:3px;padding:2px 6px;border-radius:6px;background:var(--surface);border:1px solid var(--border-2);font:700 11px/1 var(--font-body);font-style:normal;color:var(--text)}
+.ev-dist{display:flex;align-items:flex-end;gap:4px;height:110px;padding:16px 0 18px}
+.ev-bin{position:relative;flex:1 1 0;height:100%;display:flex;align-items:flex-end}
+.ev-bin i{position:relative;display:block;width:100%;min-height:2px;border-radius:4px 4px 0 0;background:var(--chart-under-flat);border:var(--chart-under-border,0);border-bottom:0}
+.ev-bin.hit i{background:var(--chart-over-flat);border:0}.ev-bin.push i{background:var(--muted)}
+.ev-bin b{position:absolute;left:50%;bottom:calc(100% + 3px);transform:translateX(-50%);font:700 11px/1 var(--font-body);color:var(--text)}
+.ev-bin small{position:absolute;left:50%;top:calc(100% + 5px);transform:translateX(-50%);font:500 10px/1 var(--font-body);color:var(--muted);white-space:nowrap}
+.ev-tbl th,.ev-tbl td{text-align:left}.ev-tbl .r{text-align:right}
+.ev-tbl th[scope="row"]{color:var(--text);font-weight:600;border-bottom:1px solid var(--border);padding:12px;white-space:nowrap}.ev-tbl tr:last-child th{border-bottom:0}
+.ev-list{margin:0;padding:0 0 0 18px;display:grid;gap:8px;font:500 14px/1.5 var(--font-body);color:var(--text-2)}
+.ev-how{margin:0;max-width:80ch}
+.ev-outs{margin:0;display:grid;gap:10px}
+.ev-outs > div{display:grid;grid-template-columns:minmax(90px,180px) minmax(0,1fr);align-items:center;gap:12px}
+.ev-outs dt{font:500 14px/1.2 var(--font-body);color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ev-outs .on dt{color:var(--text);font-weight:700}
+.ev-outs dd{margin:0;display:flex;align-items:center;gap:12px}.ev-outs .trak{flex:1}.ev-outs dd b{min-width:42px;text-align:right;font:700 15px/1 var(--font-body)}.ev-outs dd small{min-width:86px}
+.ev-outs > div:not(.on) .trak > i{background:var(--text-2)}
+.ev-wait{display:flex;flex-wrap:wrap;align-items:center;gap:10px;min-height:44px}
+@media (max-width:640px){.ev-bar b{font-size:9px}.ev-bar small{display:none}.ev-outs dd small{display:none}.pd-rng{display:none}}

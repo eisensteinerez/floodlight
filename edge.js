@@ -37,7 +37,8 @@
       k: r.k, label: r.label, line: r.line, side, yes, text: yes ? `${r.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(r.line)} ${String(r.label).toLowerCase()}`,
       ours, market, edge: market == null ? null : pct(ours) - pct(market), heat: pct(ours), conf: J.conf, n: J.n, reasons: reasons.slice(0, 3),
       start: start && !isNaN(start) ? start : null, game: [r.team, r.opp].filter(Boolean).join(' v '), gameKey: `${sport}:${[r.team, r.opp].filter(Boolean).sort().join('|') || r.player}`,
-      books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), avg: r.avg, mu: J.mu, sd: J.sd };   // mu and sd: what the reading expects, used to follow the pick live
+      books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), avg: r.avg, mu: J.mu, sd: J.sd,
+      games: games.slice(0, 60), offers: r.offers || [], neff: J.neff };   // the games and prices behind the reading, for the evidence panel   // mu and sd: what the reading expects, used to follow the pick live
   }
   /* A board that answered is also kept in this browser for a few hours, so the next visit can show the last reading at
      once (marked with its age) while a fresh one loads, and a failed check falls back to it instead of an empty page. */

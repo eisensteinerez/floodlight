@@ -24,7 +24,7 @@
   const LIVE_FOR = 5 * 3600e3;   // a started prop stays in "Live" this long; nothing tells us when its game ends
   const STALE = 30 * 60000;      // a reading of the books older than this is marked stale (the server re-reads them every 15 minutes)
   const P = { sport: 'all', when: 'tonight', min: 0, sort: 'edge', props: null, matches: null, record: null, loading: false, at: 0, denied: false, all: false,
-    pending: new Set(), fcAt: 0, recAt: 0, fcError: '', recError: '', fcStatus: 0, srcOpen: false, retries: 0, retryT: 0,
+    open: new Set(), ev: new Map(), pending: new Set(), fcAt: 0, recAt: 0, fcError: '', recError: '', fcStatus: 0, srcOpen: false, retries: 0, retryT: 0,
     slip: store.get('fl.slip', []), slips: store.get('fl.slips', []), confirm: null, saved: 0, timer: 0 };
 
   /* ---------- data ---------- */
@@ -158,9 +158,25 @@
         <div class="pd-edge"><span class="lb">Edge</span><b class="num">${edgeTxt(p.edge)}</b>${p.edge == null ? '<span class="sr-only">no market price</span>' : ''}</div>
         <button type="button" class="ib solid pd-add" data-pdadd="${esc(p.id)}" data-fk="add-${esc(p.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove' : 'Add'} ${esc(p.name)}, ${esc(p.text)}, ${on ? 'from' : 'to'} your slip">${ic(on ? 'check' : 'plus', 20)}</button></div>
       <dl class="pd-bars">${bar('Our number', p.ours, 'ours')}${bar('Market', p.market, 'mkt')}</dl>
-      ${p.reasons.length ? `<ul class="cx-row pd-why" aria-label="Why">${p.reasons.map(r => `<li class="pl">${esc(r)}</li>`).join('')}</ul>` : ''}</article>`;
+      ${p.reasons.length ? `<ul class="cx-row pd-why" aria-label="Why">${p.reasons.map(r => `<li class="pl">${esc(r)}</li>`).join('')}</ul>` : ''}
+      ${evidence(p)}</article>`;
   }
   // the skeleton is the pick card's own layout: photo, three lines of text, the edge number, the two bars
+  /* the evidence panel: closed by default, opened per pick; a match's saved forecasts are fetched the first time */
+  function rangeOf(p) { const E = window.flEvidence; if (!E) return null; if (p.type === 'prop') return E.propRange(p); const v = P.ev.get(p.id); return v && !v.error ? E.matchRange(p, (v.snaps || []).filter(s => s.pick && s.final).slice(-1)[0]) : null }
+  function evidence(p) {
+    if (!window.flEvidence) return '';
+    const on = P.open.has(p.id), R = rangeOf(p);
+    return `<div class="pd-evbar"><button type="button" class="lk pd-evb" data-pdev="${esc(p.id)}" data-fk="ev-${esc(p.id)}" aria-expanded="${on}" aria-controls="ev-${esc(p.id)}">${on ? 'Hide the evidence' : 'See the evidence'}<svg class="pd-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+        ${R ? `<span class="lb num pd-rng" title="${p.type === 'prop' ? 'One standard error either side, from the games behind the reading' : 'The span between our model alone and the market'}">Likely ${pct(R.lo)}–${pct(R.hi)}%</span>` : ''}</div>
+      ${on ? `<div class="pd-ev" id="ev-${esc(p.id)}" role="region" aria-label="Evidence for ${esc(p.name)}, ${esc(p.text)}">${p.type === 'prop' ? window.flEvidence.prop(p) : window.flEvidence.match(p, P.ev.get(p.id))}</div>` : ''}`;
+  }
+  function loadEvidence(p, force) {
+    if (p.type !== 'match' || (P.ev.has(p.id) && !force)) return;
+    if (force) P.ev.delete(p.id);
+    get('/api/forecast/get?keys=' + encodeURIComponent(p.m.key)).then(d => P.ev.set(p.id, d.forecasts?.[p.m.key] || { error: 'nothing saved' }), e => P.ev.set(p.id, { error: e.message || 'it did not answer' })).then(draw);
+  }
+  function toggleEvidence(id) { const p = allPicks().find(x => x.id === id); if (!p) return; if (P.open.has(id)) P.open.delete(id); else { P.open.add(id); loadEvidence(p) } draw() }
   const skel = n => Array.from({ length: n }, () => `<div class="card pd-pk pd-skl" aria-hidden="true"><div class="pd-top"><span class="skl pd-sk-av"></span><span class="pd-sk-t"><i class="skl" style="width:46%"></i><i class="skl" style="width:64%"></i><i class="skl" style="width:38%"></i></span><span class="skl pd-sk-e"></span><span class="skl pd-sk-b"></span></div>
     <div class="pd-bars"><i class="skl"></i><i class="skl"></i></div></div>`).join('');
   function drawBoard(L) {
@@ -294,6 +310,8 @@
     if (d.pdsport) { P.sport = d.pdsport; P.all = false; return draw() }
     if (d.pdwhen) { P.when = d.pdwhen; P.all = false; return draw() }
     if (d.pdmin != null) { P.min = +d.pdmin; P.all = false; return draw() }
+    if (d.pdev) return toggleEvidence(d.pdev);
+    if (d.pdevretry) { const p = allPicks().find(x => x.id === d.pdevretry); if (p) { loadEvidence(p, true); draw() } return }
     if (d.pdadd) return toggle(d.pdadd);
     if (d.pdopen) return openPick(d.pdopen);
     if (d.pdlab) { try { window.flLab?.open(JSON.parse(d.pdlab)) } catch (x) {} return }
@@ -309,7 +327,7 @@
     if (d.pd === 'reload') { P.retries = 0; return load(true) }
     if (d.pd === 'soccer') return oldPicks('today');
     if (d.pd === 'record') return oldPicks('record');
-    if (t.matches('article[data-pk]') && !e.target.closest('button, a') && !String(getSelection?.() || '')) return openPick(d.pk);   // anywhere on the card
+    if (t.matches('article[data-pk]') && !e.target.closest('button, a, .pd-ev, .pd-evbar') && !String(getSelection?.() || '')) return openPick(d.pk);   // anywhere on the card
   });
   document.addEventListener('change', e => { if (e.target.id === 'pdSort') { P.sort = e.target.value; draw() } });
   document.addEventListener('toggle', e => { if (e.target.matches?.('#pg-predictions .pd-src')) P.srcOpen = e.target.open }, true);
