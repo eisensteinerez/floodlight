@@ -98,21 +98,34 @@ screenshots). It's built to run with nobody checking it:
 - **Counting.** In the props channels a card is one play, like a parlay: every pick hits = a win, one miss = a loss,
   and a push or a player who didn't play doesn't break it (4-0-1 is a win). In the soccer channels every pick is its
   own play (four picks that all hit = 4-0).
-- **Reading cards** (`pick_parse.py`). Posts split over several messages are joined. TRACK lines win; otherwise the
-  FINAL CARD; otherwise the picks under a card heading (NBA PARLAY, PLAY #2, LADDER BET, TODAY'S PICK, QUICK CARD).
-  Breakdowns, add-ons, backups, tout notes and change logs are skipped, the parlay math line trims "insurance" legs,
-  and practice posts and format previews are ignored. A later card for the same day and play replaces the earlier one
-  (the 6 PM update replaces the 11:30 card); separate plays (Play #1 and Play #2, a best bet and a ladder) both count.
-- **Grading** (`pick_grade.py`). NBA/NFL props from the player's ESPN game log for the card's date; NBA/NFL team bets
+- **Reading cards** (`pick_parse.py`). Posts split over several messages are joined and the whole post is read.
+  TRACK lines win; otherwise the FINAL CARD; otherwise every play under a card heading (NBA PARLAY, PLAY #2, LADDER
+  BET, TODAY'S PICK, QUICK CARD, "3-Leg TD Parlay", a staked single like "Bears 1Q -2.5 • 0.5u"). A heading that
+  says how many legs ("4-leg parlay") ends the card at that many; picks listed after it, and under EXTRA LEGS, ADD-ONS,
+  BACKUPS or "legs considered", are graded and shown as extras but never counted. Each leg keeps its own day
+  ("(BAL @ CAR, Sun)"), a Sunday menu posted Saturday is Sunday's, and a surname-only leg ("Warren 60+ rush yds") is
+  matched with the teams the card names. Breakdowns, tout notes and change logs are skipped, the parlay math line
+  trims "insurance" legs, and practice posts are ignored. A later card for the same day and play replaces the
+  earlier one; separate plays (Play #1 and Play #2, a best bet and a ladder) all count.
+- **Grading** (`pick_grade.py`). NBA/NFL props from the player's ESPN game log for that leg's game (an NFL card
+  posted Saturday grades Sunday's or Monday's game); team bets, including quarter and half bets ("1Q -2.5", "1H ML"),
   from ESPN's scoreboard; soccer from FotMob's results (ESPN as backup) on the 90-minute score. Team names match
   strictly: "Ireland" is never "Northern Ireland" or "Ireland U21", and a pick two games could fit isn't graded.
+- **Why it hit or missed** (`pick_story.py`). For every miss, push and DNP it reads ESPN's box score, play-by-play,
+  injury report and recap: how far off it was ("1 short"), minutes against his last ten games, whether he was seen
+  after halftime, the 1st-half/2nd-half split, and whether he got hurt (and came back). A player who left hurt gets 🚑
+  and a card's "Lost on:" line names the leg that sank it.
 - **Never guessing.** A pick that can't be verified for certain is shown as "couldn't verify" and its card stays out
-  of the record. A player is called a DNP only after the day is over.
+  of the record. A player is called a DNP only when his team's game is final and he isn't in the box score, and the
+  reason is given ("didn't play: left hamstring"). No game for his team isn't a DNP. "Rec" that could be catches or
+  yards, or a surname two players fit, is "couldn't verify".
 
 At 12:30 AM Eastern it reads the last two days of posts, grades them and posts in #verified-records: one post per
-channel (every card with each pick's result, today's record, all-time record, win rate, streak and picks hit) and a
-leaderboard. At 8:00 AM it grades everything again from fresh numbers: it posts what finished since, and if a result
-changed it posts the correction. No AI, no paid APIs. Tests on real posts: `python3 tests/test_picks.py`.
+channel (every card with each pick's result and the reason for each miss, the extras, today's record, all-time record,
+win rate, streak and picks hit; a long night is split over several posts so nothing is cut) and a leaderboard. A card
+that finishes a day or two late (an NFL card posted Saturday, a Monday night leg) is posted the night it finishes. At 8:00 AM it grades everything again from fresh numbers: it posts what finished since, and if a result
+changed it posts the correction. When the reader or grader changes, the first run reads the last ten days again
+and posts a "re-checked" list of the results that changed. No AI, no paid APIs. Tests on real posts: `python3 tests/test_picks.py`.
 
 Discord often blocks requests from Render's shared address (Cloudflare "error 1015"), so the grading runs first on
 GitHub Actions (`.github/workflows/grade-picks.yml`, free), with one repository secret under **Settings > Secrets and
