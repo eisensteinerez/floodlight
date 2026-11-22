@@ -39,21 +39,32 @@
       start: start && !isNaN(start) ? start : null, game: [r.team, r.opp].filter(Boolean).join(' v '), gameKey: `${sport}:${[r.team, r.opp].filter(Boolean).sort().join('|') || r.player}`,
       books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), avg: r.avg, mu: J.mu, sd: J.sd };   // mu and sd: what the reading expects, used to follow the pick live
   }
+  /* A board that answered is also kept in this browser for a few hours, so the next visit can show the last reading at
+     once (marked with its age) while a fresh one loads, and a failed check falls back to it instead of an empty page. */
+  const KEEP = 3 * 3600e3;
+  const disk = { get(sport) { try { const v = JSON.parse(localStorage.getItem('fl.board.' + sport)); return v && v.d && Date.now() - v.got < KEEP ? v : null } catch { return null } },
+    set(sport, d, got) { try { localStorage.setItem('fl.board.' + sport, JSON.stringify({ got, d })) } catch {} } };
+  // at: when the server read the books (it re-reads them at most every 15 minutes). got: when this browser asked.
+  const shape = (d, sport, got) => { const at = d.at ? d.at * 1000 : got; return { sport, picks: (d.rows || []).map(r => propPick(r, sport)).filter(Boolean).map(p => ({ ...p, at })), checked: d.checked || 0, note: d.note || '', errors: d.errors || {}, at, got } };
+  function kept(sport) { const v = disk.get(sport); if (!v) return null; try { return { ...shape(v.d, sport, v.got), kept: true } } catch { return null } }
   function board(sport, force) {
     const c = cache.get(sport);
     if (c && !force && (c.promise || Date.now() - c.at < TTL)) return c.promise || Promise.resolve(c.data);
-    const promise = get('/api/lab/board?sport=' + encodeURIComponent(sport)).then(d => ({ sport, picks: (d.rows || []).map(r => propPick(r, sport)).filter(Boolean), checked: d.checked || 0, note: d.note || '', errors: d.errors || {} }))
-      .catch(e => ({ sport, picks: [], checked: 0, error: e.message || 'It did not load.', status: e.status || 0 }))
+    const promise = get('/api/lab/board?sport=' + encodeURIComponent(sport), 45000).then(d => { const got = Date.now(); disk.set(sport, d, got); return shape(d, sport, got) })
+      .catch(e => { const old = (c?.data?.picks ? c.data : null) || kept(sport), err = { error: e.message || 'It did not load.', status: e.status || 0, failedAt: Date.now() };
+        return old && old.at ? { ...old, ...err, stale: true } : { sport, picks: [], checked: 0, at: 0, ...err } })
       .then(data => { cache.set(sport, { at: Date.now(), data }); return data });
     cache.set(sport, { at: c?.at || 0, data: c?.data, promise });
     return promise;
   }
-  /* every sport asked for, together. -> { picks, by: {sport: result}, denied (the member has no Lab access) } */
-  async function props(sports, force) {
-    const res = await Promise.all((sports || SPORTS.map(s => s[0])).map(s => board(s, force)));
+  /* every sport asked for, together. -> { picks, by: {sport: result}, denied (the member has no Lab access) }
+     onPart is called with each sport's result as it arrives, so a page can draw what it has instead of waiting for the slowest. */
+  async function props(sports, force, onPart) {
+    const res = await Promise.all((sports || SPORTS.map(s => s[0])).map(s => board(s, force).then(r => { try { onPart?.(r) } catch (e) {} return r })));
     return { picks: res.flatMap(r => r.picks), by: Object.fromEntries(res.map(r => [r.sport, r])), denied: res.length > 0 && res.every(r => r.status === 401 || r.status === 403) };
   }
-  const have = sport => cache.get(sport)?.data || null;
+  // what is in hand for a sport right now: this visit's answer, or the reading kept from the last visit
+  const have = sport => { const c = cache.get(sport); if (c?.data) return c.data; const k = kept(sport); if (k) cache.set(sport, { at: 0, data: k, promise: c?.promise }); return k };
   const all = () => [...cache.values()].flatMap(c => c.data?.picks || []);
   // one reading per player for the hot and cold lists: their strongest line either way
   function players(picks) {

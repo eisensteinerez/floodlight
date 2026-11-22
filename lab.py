@@ -267,7 +267,8 @@ def player(sport, name, stat=""):
 def board(sport, count=24):
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
-    b = bot.memo(("labboard", sport), 900, lambda: bot.props_board(sport, None, count, None if sport == "soccer" else _deeper))
+    # "at" is when the books were actually read; the board is kept for 15 minutes, and the pages show its age
+    b = bot.memo(("labboard", sport), 900, lambda: dict(bot.props_board(sport, None, count, None if sport == "soccer" else _deeper), at=int(time.time())))
     rows = [{"player": r["player"], "team": r.get("team") or "", "opp": r.get("opp") or "", "k": r["k"], "label": r["label"], "line": r["line"],
              "side": r["side"], "l5": r["l5"]["pct"], "l10": r["l10"]["pct"], "l20": r["l20"]["pct"], "avg": _r(r["avg"]),
              "books": sorted({x["book"] for x in r["offers"]}),
@@ -277,7 +278,7 @@ def board(sport, count=24):
              "offers": [{"book": x.get("book"), "line": x.get("line"), "kind": x.get("kind") or "standard", "pOver": x.get("pOver")} for x in r["offers"]],
              "start": next((x.get("start") for x in r["offers"] if x.get("start")), None), "photo": img_url(r.get("photo")),
              "n": r["l10"].get("n"), "hit": r["l10"].get("hit")} for r in b["rows"]]
-    return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"]}
+    return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"], "at": b.get("at"), "ttl": 900}
 
 
 # ---------- teams ----------

@@ -22,11 +22,14 @@
   const MIN = [[0, 'Any edge'], [3, '3+'], [5, '5+'], [10, '10+']];
   const SORT = [['edge', 'Biggest edge'], ['conf', 'Most confident'], ['soon', 'Starting soonest']];
   const LIVE_FOR = 5 * 3600e3;   // a started prop stays in "Live" this long; nothing tells us when its game ends
+  const STALE = 30 * 60000;      // a reading of the books older than this is marked stale (the server re-reads them every 15 minutes)
   const P = { sport: 'all', when: 'tonight', min: 0, sort: 'edge', props: null, matches: null, record: null, loading: false, at: 0, denied: false, all: false,
+    pending: new Set(), fcAt: 0, recAt: 0, fcError: '', recError: '', fcStatus: 0, srcOpen: false, retries: 0, retryT: 0,
     slip: store.get('fl.slip', []), slips: store.get('fl.slips', []), confirm: null, saved: 0, timer: 0 };
 
   /* ---------- data ---------- */
-  const get = url => fetch(url, { credentials: 'same-origin' }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(d.error || String(r.status)); e.status = r.status; throw e } return d });
+  const get = (url, ms = 20000) => Promise.race([fetch(url, { credentials: 'same-origin' }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(d.error || String(r.status)); e.status = r.status; throw e } return d }),
+    new Promise((_, no) => setTimeout(() => no(new Error('It took too long to answer.')), ms))]);
   function matchPick(m) {
     const sport = m.sport === 'soccer' ? 'soccer' : m.lg === 'nfl' ? 'nfl' : 'cfb', draw = m.pick === 'draw', team = draw ? '' : m[m.pick] || '';
     const ours = m.probs?.[m.pick] ?? m.top, market = m.market?.[m.pick] ?? null, why = [];
@@ -38,17 +41,59 @@
       ours, market, edge: market == null ? null : pct(ours) - pct(market), heat: null, conf: m.conf || '', reasons: why.slice(0, 3), start: new Date(m.ko * 1000),
       game: `${m.home} v ${m.away}`, gameKey: 'match:' + m.key, m };
   }
+  const LAB_SPORTS = () => (window.flEdge?.SPORTS || []).map(x => x[0]);
+  // everything in hand right now: each sport that has answered, or the reading kept from the last visit
+  function gather() { const by = {}; for (const k of LAB_SPORTS()) { const r = window.flEdge.have(k); if (r) by[k] = r } P.props = { picks: Object.values(by).flatMap(r => r.picks), by } }
+  /* Every source loads on its own and the page draws what it has as each one answers: match forecasts and the record
+     take under a second, a sport's player lines can take twenty. A source that fails keeps its last reading (marked
+     stale) and is tried again; nothing waits for the slowest one. */
   async function load(force) {
     if (P.loading) return; if (!force && P.at && Date.now() - P.at < 5 * 60000) return;
-    P.loading = true; draw();
-    const [props, fc, rec] = await Promise.all([
-      window.flEdge ? window.flEdge.props(null, force) : Promise.resolve({ picks: [], by: {}, denied: false }),
-      get('/api/forecast/list').catch(e => ({ matches: [], error: e.message, status: e.status })),
-      get('/api/record').catch(e => ({ entries: [], error: e.message })),
+    clearTimeout(P.retryT); P.loading = true; P.pending = new Set([...LAB_SPORTS(), 'fc', 'rec']);
+    const done = k => { P.pending.delete(k); if (window.flEdge) gather(); syncSlip(); draw() };
+    if (window.flEdge) gather(); draw();
+    const [props] = await Promise.all([
+      window.flEdge ? window.flEdge.props(null, force, r => done(r.sport)) : Promise.resolve({ denied: false }),
+      get('/api/forecast/list').then(d => { P.matches = (d.matches || []).map(matchPick); P.fcError = ''; P.fcStatus = 0; P.fcAt = Date.now() }, e => { P.matches = P.matches || []; P.fcError = e.message || 'It did not load.'; P.fcStatus = e.status || 0 }).then(() => done('fc')),
+      get('/api/record').then(d => { P.record = d.entries || []; P.recError = ''; P.recAt = Date.now() }, e => { P.record = P.record || []; P.recError = e.message || 'It did not load.' }).then(() => done('rec')),
     ]);
-    P.props = props; P.denied = !!props.denied && (fc.status === 401 || fc.status === 403);
-    P.matches = (fc.matches || []).map(matchPick); P.fcError = fc.error || ''; P.record = rec.entries || []; P.recError = rec.error || '';
-    P.loading = false; P.at = Date.now(); syncSlip(); draw();
+    P.denied = !!props.denied && (P.fcStatus === 401 || P.fcStatus === 403);
+    P.loading = false; P.pending.clear(); P.at = Date.now(); draw();
+    // something did not answer: try again by itself, twice, then leave it to the Retry button
+    if (failed().length && !P.denied && P.retries < 2) { P.retries++; P.retryT = setTimeout(() => { if (window.flPages.current() === 'predictions' && !document.hidden) load(true) }, 20000 * P.retries) } else if (!failed().length) P.retries = 0;
+  }
+  /* ---------- freshness: what was read, when, and what did not answer ---------- */
+  const BOOK = { prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' };
+  const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 10 ? 'just now' : s < 60 ? `${s} seconds ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago` };
+  const agoTag = t => t ? `<time data-pdago="${+t}" datetime="${new Date(t).toISOString()}" title="${esc(new Date(t).toLocaleString())}">${ago(t)}</time>` : '–';
+  function sources() {   // one row per source: { key, name, from, at, state: 'ok' | 'loading' | 'stale' | 'failed' | 'off', note }
+    const now = Date.now(), rows = LAB_SPORTS().map(k => { const r = P.props?.by?.[k], wait = P.pending.has(k), down = Object.keys(r?.errors || {}).map(b => BOOK[b] || b);
+      const off = r && (r.status === 401 || r.status === 403);
+      const state = off ? 'off' : r?.error ? (r.at ? 'stale' : 'failed') : !r ? (wait ? 'loading' : 'failed') : r.kept && wait ? 'loading' : now - r.at > STALE ? 'stale' : 'ok';
+      const books = [...new Set((r?.picks || []).flatMap(p => p.books || []))].map(b => BOOK[b] || b);
+      return { key: k, name: `${SPORT_NAME[k] || k} player lines`, from: books.join(', ') || (down.length ? '' : 'PrizePicks, Sleeper'), at: r?.at || 0, state, n: r?.picks?.length || 0, checked: r?.checked || 0,
+        note: [r?.error && !off ? `Did not answer${r.at ? ', so this is the last reading' : ''}: ${r.error}` : '', down.length ? `${down.join(' and ')} did not answer` : '', r && !r.error && !r.picks.length && !down.length ? 'No lines posted today' : ''].filter(Boolean).join('. ') } });
+    rows.push({ key: 'fc', name: 'Match forecasts', from: 'Floodlight forecast model, with book prices', at: P.fcAt, state: P.fcError ? (P.fcAt ? 'stale' : 'failed') : P.pending.has('fc') && !P.fcAt ? 'loading' : 'ok', n: (P.matches || []).length, note: P.fcError ? `Did not answer: ${P.fcError}` : '' });
+    rows.push({ key: 'rec', name: 'Graded results', from: 'Floodlight record of finished matches', at: P.recAt, state: P.recError ? (P.recAt ? 'stale' : 'failed') : P.pending.has('rec') && !P.recAt ? 'loading' : 'ok', n: (P.record || []).length, note: P.recError ? `Did not answer: ${P.recError}` : '' });
+    return rows;
+  }
+  const failed = () => sources().filter(x => x.state === 'failed' || (x.state === 'stale' && x.note));
+  const STATE_TXT = { ok: 'Up to date', loading: 'Checking…', stale: 'Stale', failed: 'Did not load', off: 'Not in your access' };
+  function drawFresh() {
+    const el = $('pdFresh'); if (!el) return;
+    if (P.denied) { el.innerHTML = ''; return }
+    const src = sources(), wait = src.filter(x => x.state === 'loading'), bad = src.filter(x => x.state === 'failed'), old = src.filter(x => x.state === 'stale');
+    const partial = src.filter(x => x.state === 'ok' && /did not answer/.test(x.note)), last = Math.max(0, ...src.filter(x => x.state === 'ok').map(x => x.at || 0));
+    const head = P.loading ? `<span class="pd-spin" aria-hidden="true"></span><b>Checking ${wait.length ? esc(wait.map(x => x.key.length <= 5 && SPORT_NAME[x.key] ? SPORT_NAME[x.key] : x.name.toLowerCase()).slice(0, 4).join(', ')) + (wait.length > 4 ? ' and more' : '') : 'the books'}…</b><span class="lb">${src.some(x => x.state === 'loading' && x.at) ? 'Showing the last reading meanwhile' : 'Picks appear as each source answers'}</span>`
+      : last ? `<span class="pd-dot${bad.length || old.length ? ' warn' : ''}" aria-hidden="true"></span><b>Updated ${agoTag(P.at)}</b><span class="lb">Player lines can be up to 15 minutes behind the books</span>`
+      : `<span class="pd-dot warn" aria-hidden="true"></span><b>Nothing has loaded yet</b>`;
+    const flags = [bad.length ? `<span class="pl pd-flag bad">${ic('x', 14)}${bad.length} did not load</span>` : '', old.length ? `<span class="pl pd-flag">${old.length} stale</span>` : '', partial.length && !bad.length ? `<span class="pl pd-flag">${partial.length === 1 ? 'A book' : 'Some books'} did not answer</span>` : ''].join('');
+    el.innerHTML = `<div class="pd-fresh-top" role="status"><span class="pd-fresh-l">${head}</span><span class="pd-fresh-r">${flags}
+        <button type="button" class="bt ghost sm" data-pd="reload" data-fk="reload-top"${P.loading ? ' disabled' : ''}>${bad.length || old.length ? 'Retry' : 'Refresh'}</button></span></div>
+      <details class="pd-src"${P.srcOpen ? ' open' : ''}><summary data-fk="src">Sources and delays</summary>
+        <div class="tbx-wrap"><table class="tbx"><thead><tr><th scope="col">Source</th><th scope="col">Read from</th><th scope="col" class="r">Picks</th><th scope="col">Last read</th><th scope="col">Status</th></tr></thead>
+          <tbody>${src.map(x => `<tr class="pd-s-${x.state}"><th scope="row">${esc(x.name)}</th><td>${esc(x.from || '–')}${x.note ? `<small class="pd-s-note">${esc(x.note)}</small>` : ''}</td><td class="r num">${x.state === 'loading' && !x.at ? '–' : x.n}</td><td>${x.at ? agoTag(x.at) : '–'}</td><td><span class="pd-st ${x.state}">${STATE_TXT[x.state]}</span></td></tr>`).join('')}</tbody></table></div>
+        <p class="lb">Player lines are read from the pick'em apps and re-read at most every 15 minutes, so a line or price here can be up to 15 minutes behind the app. A reading older than 30 minutes is marked stale. Match forecasts say when each one was made when you open the pick. If a source does not answer, the page keeps its last reading, says so here, and tries again by itself.</p></details>`;
   }
   const allPicks = () => [...(P.props?.picks || []).map(p => ({ ...p, short: `${p.name.split(' ').slice(-1)[0]} ${p.text.toLowerCase()}` })), ...(P.matches || [])];
   const stateOf = (p, now) => !p.start || p.start > now ? 'pre' : p.type === 'prop' ? (now - p.start < LIVE_FOR ? 'live' : 'gone') : 'live';
@@ -75,6 +120,7 @@
     el.innerHTML = `<div class="vst pd">
       <header class="pg-head"><div><h1 class="pg-title" tabindex="-1">Predictions</h1><p class="pg-sub">Where our numbers disagree with the market, ranked by edge.</p></div></header>
       <div class="pd-filters" id="pdFilters"></div>
+      <div class="pd-fresh" id="pdFresh"></div>
       <div class="g2 pd-cols"><div class="vst pd-board" id="pdBoard" aria-live="polite"></div><aside class="vst pd-side" id="pdSide" aria-label="Your slip and our results"></aside></div>
       <p class="lb pd-note">These are estimates from past games and posted prices, not guarantees. <a class="lk" href="#/guide/predictions" data-page="guide" data-arg="predictions">How we work out an edge</a></p>
       <section class="card pd-more" aria-label="More prediction tools"><div class="sec-h"><h2>More prediction tools</h2></div>
@@ -86,10 +132,10 @@
     const a = document.activeElement, k = a?.closest?.('[data-fk]')?.dataset.fk; fn();
     if (k) { const b = [...document.querySelectorAll('#pg-predictions [data-fk]')].find(x => x.dataset.fk === k); b?.focus({ preventScroll: true }) }
   }
-  function draw() { if (!$('pdBoard')) return; keep(() => { const L = lists(); drawFilters(L); drawBoard(L); drawSide(L) }) }
+  function draw() { if (!$('pdBoard')) return; keep(() => { const L = lists(); drawFilters(L); drawFresh(); drawBoard(L); drawSide(L) }) }
 
   function drawFilters(L) {
-    const chip = (k, l, n) => `<button type="button" class="cx" role="radio" aria-checked="${P.sport === k}" tabindex="${P.sport === k ? 0 : -1}" data-pdsport="${k}" data-fk="sp-${k}">${esc(l)}${n != null ? `<span class="num pd-n">${n}</span>` : ''}</button>`;
+    const chip = (k, l, n) => `<button type="button" class="cx" role="radio" aria-checked="${P.sport === k}" tabindex="${P.sport === k ? 0 : -1}" data-pdsport="${k}" data-fk="sp-${k}">${esc(l)}${n != null && !(P.loading && !n) ? `<span class="num pd-n">${n}</span>` : ''}</button>`;
     const now = new Date(), count = s => L.every.filter(p => (s === 'all' || p.sport === s) && stateOf(p, now) !== 'gone').length;
     const seg = (name, label, opts, cur) => `<div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([k, l]) => `<button type="button" role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" tabindex="${cur === k ? 0 : -1}" data-pd${name}="${k}" data-fk="${name}-${k}">${esc(l)}</button>`).join('')}</div>`;
     $('pdFilters').innerHTML = `<div class="cx-row scroll" role="radiogroup" aria-label="Sport">${chip('all', 'All sports', count('all'))}${L.sports.map(s => chip(s, SPORT_NAME[s], count(s))).join('')}</div>
@@ -103,23 +149,29 @@
     const st = stateOf(p, now), on = inSlip(p.id);
     const when = st === 'live' ? `<span class="pl live"><i></i>Live</span>` : esc(time(p.start));
     const badge = p.heat != null ? window.flHeat.badge(p.heat) : p.conf ? `<span class="pl">${esc(p.conf)}</span>` : '';
+    const old = p.type === 'prop' && p.at && now - p.at > STALE ? `<span class="pl pd-flag" title="This line was last read ${esc(ago(p.at))}">Read ${esc(ago(p.at))}</span>` : '';
     const bar = (label, v, cls) => `<div class="pd-bar ${cls}"><dt>${label}</dt><dd>${v == null ? `<span class="lb">No two-sided price posted</span>` : `<span class="trak"><i style="width:${pct(v)}%"></i></span><b class="num">${pct(v)}%</b>`}</dd></div>`;
     return `<article class="card pd-pk${p.edge != null && p.edge < 0 ? ' neg' : ''}" data-pk="${esc(p.id)}">
       <div class="pd-top">${rank ? `<span class="pd-rank num" aria-hidden="true">${rank}</span>` : ''}${face(p.photo, p.name, 'avx av-lg' + (p.type === 'match' ? ' crest' : ''))}
         <button type="button" class="pd-open" data-pdopen="${esc(p.id)}" data-fk="open-${esc(p.id)}"><b>${esc(p.name)}</b><span>${esc(p.text)}</span><small>${esc([p.type === 'prop' ? p.game : p.text === 'Draw' ? '' : p.game, SPORT_NAME[p.sport]].filter(Boolean).join(' · '))}${st === 'live' ? '' : ' · ' + when}</small><span class="sr-only">. Open in the Lab</span></button>
-        <span class="pd-tags">${st === 'live' ? when : ''}${badge}</span>
+        <span class="pd-tags">${st === 'live' ? when : ''}${old}${badge}</span>
         <div class="pd-edge"><span class="lb">Edge</span><b class="num">${edgeTxt(p.edge)}</b>${p.edge == null ? '<span class="sr-only">no market price</span>' : ''}</div>
         <button type="button" class="ib solid pd-add" data-pdadd="${esc(p.id)}" data-fk="add-${esc(p.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove' : 'Add'} ${esc(p.name)}, ${esc(p.text)}, ${on ? 'from' : 'to'} your slip">${ic(on ? 'check' : 'plus', 20)}</button></div>
       <dl class="pd-bars">${bar('Our number', p.ours, 'ours')}${bar('Market', p.market, 'mkt')}</dl>
       ${p.reasons.length ? `<ul class="cx-row pd-why" aria-label="Why">${p.reasons.map(r => `<li class="pl">${esc(r)}</li>`).join('')}</ul>` : ''}</article>`;
   }
-  const skel = n => Array.from({ length: n }, () => `<div class="card pd-pk"><div class="skl" style="height:56px"></div><div class="skl" style="height:14px;margin-top:18px"></div><div class="skl" style="height:14px;margin-top:10px"></div></div>`).join('');
+  // the skeleton is the pick card's own layout: photo, three lines of text, the edge number, the two bars
+  const skel = n => Array.from({ length: n }, () => `<div class="card pd-pk pd-skl" aria-hidden="true"><div class="pd-top"><span class="skl pd-sk-av"></span><span class="pd-sk-t"><i class="skl" style="width:46%"></i><i class="skl" style="width:64%"></i><i class="skl" style="width:38%"></i></span><span class="skl pd-sk-e"></span><span class="skl pd-sk-b"></span></div>
+    <div class="pd-bars"><i class="skl"></i><i class="skl"></i></div></div>`).join('');
   function drawBoard(L) {
     const el = $('pdBoard'), now = new Date();
-    if (P.loading && !P.props) { el.innerHTML = `<p class="sr-only">Loading tonight's picks.</p>${skel(4)}`; return }
+    const src = sources(), waiting = src.filter(x => x.state === 'loading' && x.key !== 'rec'), down = src.filter(x => (x.state === 'failed' || x.state === 'stale') && x.note && x.key !== 'rec');
+    if (P.loading && !L.every.length) { el.innerHTML = `<p class="sr-only">Loading the picks.</p>${skel(4)}`; return }
     if (P.denied) { el.innerHTML = `<div class="card emp">${ic('members', 28)}<b>Predictions aren't part of your access yet</b><p>Your admin decides which parts of Floodlight each member can open. Ask them to switch Predictions on for you.</p><button type="button" class="bt" data-page="members">See your access</button></div>`; return }
     const CAP = 12, shown = P.all ? L.ranked : L.ranked.slice(0, CAP);
-    let h = '';
+    // a source that did not answer is said here, above the picks it would have fed, with the way to try again
+    let h = '', alert = !P.loading && down.length ? `<div class="card pd-alert" role="alert">${ic('help', 22)}<span class="rw-t"><b>${down.length === 1 ? esc(down[0].name) + ' did not load' : `${down.length} sources did not load`}</b>
+        <small>${esc(down.map(x => x.name + (x.at ? ` (showing the reading from ${ago(x.at)})` : '')).join(', '))}. The rest of the board is complete.${P.retries && P.retries <= 2 && P.retryT ? ' Trying again by itself.' : ''}</small></span><button type="button" class="bt sm" data-pd="reload" data-fk="reload-alert">Retry now</button></div>` : '';
     if (L.live.length) h += `<section aria-label="Live picks"><div class="sec-h"><h2>Live</h2><span class="lb">The game has started, so the price has moved</span></div><div class="vst pd-list">${L.live.map(p => card(p, 0, now)).join('')}</div></section>`;
     if (shown.length) h += `<section aria-label="The edge board"><div class="sec-h"><h2>${L.live.length ? 'Still to start' : 'The edge board'}</h2><span class="lb">${L.ranked.length} ${L.ranked.length === 1 ? 'pick' : 'picks'} with a market price</span></div><div class="vst pd-list">${shown.map((p, i) => card(p, i + 1, now)).join('')}</div>
       ${L.ranked.length > CAP ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show the top ' + CAP : `Show all ${L.ranked.length}`}</button>` : ''}</section>`;
@@ -127,15 +179,19 @@
       ${L.bare.length > 6 && !L.ranked.length ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show fewer' : `Show all ${L.bare.length}`}</button>` : ''}</section>`;
     if (L.done.length) h += `<section aria-label="Finished in the last day"><div class="sec-h"><h2>Finished</h2><span class="lb">Results stay here for a day</span></div><div class="card pd-done">${L.done.map(e => { const hit = e.result === 'won', pick = e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`;
       return `<div class="rw"><span class="rw-t"><b>${esc(pick)}</b><small>${esc(e.home)} ${Array.isArray(e.final) ? `${e.final[0]}–${e.final[1]}` : 'v'} ${esc(e.away)} · we said ${pct(e.top)}%</small></span><span class="pl pd-res ${hit ? 'hit' : 'miss'}">${ic(hit ? 'check' : 'x', 14)}${hit ? 'Hit' : 'Miss'}</span></div>` }).join('')}</div></section>`;
-    if (!L.live.length && !shown.length && !L.bare.length) {
+    if (P.loading && waiting.length) h += `<section aria-label="Still loading"><div class="sec-h"><h2 class="pd-wait-h">More on the way</h2><span class="lb">${esc(waiting.map(x => x.name).join(', '))}</span></div><div class="vst pd-list">${skel(L.every.length ? 1 : 3)}</div></section>`;
+    if (!L.live.length && !shown.length && !L.bare.length && !(P.loading && waiting.length)) {
       const any = L.every.some(p => stateOf(p, now) !== 'gone'), filtered = P.sport !== 'all' || P.when !== 'tonight' || P.min > 0;
       const checked = Object.values(P.props?.by || {}).filter(r => !r.error).map(r => SPORT_NAME[r.sport]).filter(Boolean);
-      h = `<div class="card emp">${ic('pred', 28)}<b>${any && filtered ? 'No picks match these filters' : 'No picks on the board right now'}</b>
+      const allDown = !any && down.length && !src.some(x => x.key !== 'rec' && x.state === 'ok');
+      h = allDown ? `<div class="card emp">${ic('help', 28)}<b>The picks did not load</b><p>None of the sources answered, so there is nothing to show yet. This is a connection problem, not an empty board.${P.retryT && P.retries <= 2 ? ' The page is trying again by itself.' : ''}</p><button type="button" class="bt" data-pd="reload" data-fk="reload">Try again</button></div>` + h
+        : `<div class="card emp">${ic('pred', 28)}<b>${any && filtered ? 'No picks match these filters' : 'No picks on the board right now'}</b>
         <p>${any && filtered ? `Nothing ${P.sport === 'all' ? '' : 'in ' + esc(SPORT_NAME[P.sport]) + ' '}${P.when === 'tonight' ? 'tonight' : P.when === 'tomorrow' ? 'tomorrow' : 'this week'}${P.min ? ` has an edge of ${P.min} or more` : ''}. Widen the filters to see the rest.`
           : `A pick appears when PrizePicks or Sleeper posts a player line, or when a match you follow gets a forecast. ${checked.length ? `Checked just now: ${esc(checked.join(', '))}.` : ''}`}</p>
         ${any && filtered ? `<button type="button" class="bt" data-pd="clear" data-fk="clear">Clear the filters</button>` : `<button type="button" class="bt ghost" data-pd="reload" data-fk="reload">Check again</button>`}</div>` + h;
+      if (allDown) alert = '';
     }
-    el.innerHTML = h;
+    el.innerHTML = alert + h;
   }
 
   /* ---------- the slip ---------- */
@@ -196,7 +252,7 @@
   function resultsCard() {
     const R = results(), H = 120, col = v => v == null ? 0 : Math.max(3, Math.round(v * H));
     if (!R.n) return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
-      <div class="emp">${ic('bars', 26)}<b>No graded picks in the last 90 days</b><p>${P.recError ? 'The record did not load. ' : ''}A match forecast is graded when the match ends, and its result is counted here, good or bad. Player props are not graded yet.</p></div></section>`;
+      <div class="emp">${ic('bars', 26)}<b>${P.recError ? 'The record did not load' : 'No graded picks in the last 90 days'}</b><p>${P.recError ? 'Press Retry at the top of the page to ask again. ' : ''}A match forecast is graded when the match ends, and its result is counted here, good or bad. Player props are not graded yet.</p></div></section>`;
     const vsTxt = R.vs == null ? '–' : (R.vs > 0 ? '+' : R.vs < 0 ? '−' : '') + Math.abs(R.vs).toFixed(1);
     return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
       <p class="lb">When we said a pick would hit X% of the time, how often did it? Match forecasts, last 90 days.</p>
@@ -216,7 +272,7 @@
       ${cold.length ? cold.map(p => `<button type="button" class="rw" data-pdlab="${esc(JSON.stringify(window.flEdge.labArgs(p)))}" data-fk="fade-${esc(p.id)}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}</b><small>${esc(`${p.label} · line ${window.flEdge.fmt(p.line)}`)}</small></span>${window.flHeat.badge(p.heat)}</button>`).join('')
         : `<p class="lb">${P.loading ? 'Loading…' : 'Nobody with a line posted tonight reads cold. A player lands here when their heat reading is under 40.'}</p>`}</section>`;
   }
-  function drawSide(L) { $('pdSide').innerHTML = slipCard() + (P.loading && !P.record ? `<div class="card"><div class="skl" style="height:220px"></div></div>` : resultsCard()) + fadeCard(L) }
+  function drawSide(L) { $('pdSide').innerHTML = slipCard() + (P.pending.has('rec') && !P.record ? `<div class="card pd-res-card" aria-hidden="true"><div class="skl" style="height:22px;width:60%"></div><div class="skl" style="height:150px"></div><div class="pd-tiles"><i class="skl"></i><i class="skl"></i><i class="skl"></i></div></div>` : resultsCard()) + fadeCard(L) }
 
   /* ---------- actions ---------- */
   function openPick(id) {
@@ -250,12 +306,15 @@
     if (d.pd === 'empty') { P.slip = []; store.set('fl.slip', P.slip); P.saved = 0; return draw() }
     if (d.pd === 'all') { P.all = !P.all; return draw() }
     if (d.pd === 'clear') { P.sport = 'all'; P.when = 'tonight'; P.min = 0; return draw() }
-    if (d.pd === 'reload') return load(true);
+    if (d.pd === 'reload') { P.retries = 0; return load(true) }
     if (d.pd === 'soccer') return oldPicks('today');
     if (d.pd === 'record') return oldPicks('record');
     if (t.matches('article[data-pk]') && !e.target.closest('button, a') && !String(getSelection?.() || '')) return openPick(d.pk);   // anywhere on the card
   });
   document.addEventListener('change', e => { if (e.target.id === 'pdSort') { P.sort = e.target.value; draw() } });
+  document.addEventListener('toggle', e => { if (e.target.matches?.('#pg-predictions .pd-src')) P.srcOpen = e.target.open }, true);
+  setInterval(() => { if (window.flPages.current() !== 'predictions' || document.hidden) return; document.querySelectorAll('#pg-predictions [data-pdago]').forEach(t => { const x = ago(+t.dataset.pdago); if (t.textContent !== x) t.textContent = x }) }, 5000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && window.flPages.current() === 'predictions' && Date.now() - P.at > 5 * 60000) load(true) });
   // saved slips follow the account
   document.addEventListener('fl:me', () => { const mine = window.S?.me?.prefs?.slips; if (!Array.isArray(mine)) return;
     const have = new Set(P.slips.map(s => s.id)); const merged = [...P.slips, ...mine.filter(s => s && s.id && Array.isArray(s.legs) && !have.has(s.id))].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 30);
@@ -263,6 +322,6 @@
 
   window.flPages.add('predictions', { title: 'Predictions', render,
     onShow() { load(); clearInterval(P.timer); P.timer = setInterval(() => { if (window.flPages.current() !== 'predictions') return; if (Date.now() - P.at > 5 * 60000) load(true); else if (!document.activeElement?.closest?.('#pg-predictions select')) draw() }, 60000) },
-    onHide() { clearInterval(P.timer) } });
-  window.flPredictions = { combine, results, state: P, picks: allPicks };   // not flPred: that is the match prediction card in predict.js
+    onHide() { clearInterval(P.timer); clearTimeout(P.retryT) } });
+  window.flPredictions = { combine, results, state: P, picks: allPicks, sources, load };   // not flPred: that is the match prediction card in predict.js
 })();
