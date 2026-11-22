@@ -52,10 +52,11 @@
       text: `The transfer window lists confirmed moves, newest first, with a tab for each league: NBA, NFL, MLB, college basketball, college football and soccer. The banner says whether the window is open and counts down to the next key date. Open a trade to see what each side received, filter by the kind of move, and tap the bell to follow a team. Where a league has no feed yet, the page says so instead of guessing.` },
     { id: 'profiles', title: 'Profiles and awards', go: 'data-guide="search"', goLabel: 'Search for a player', words: 'profile player fighter awards trophies champion career season belt',
       text: `Open any player or fighter to see this season, their career and their recent form on one page. Awards appear on a profile when we have a record of them. A reigning UFC or boxing champion gets a gold page.` },
-    { id: 'themes', title: 'Themes and settings', go: 'data-page="settings" data-arg="theme"', words: 'themes settings night match team colors members club aurora glass chrono text size brightness motion contrast appearance',
-      text: `Floodlight comes in five looks: Night Match, Team Colors, Members’ Club, Aurora Glass and Chrono. Choose one here or in Settings; it applies at once and follows your account. Text size, brightness, reduced motion and high contrast live in Settings too.` },
+    { id: 'themes', title: 'Themes and settings', go: 'data-page="settings" data-arg="theme"', words: 'themes settings night match team colors members club aurora glass chrono stadium gold text size brightness motion contrast appearance',
+      text: `Floodlight comes in six looks: Night Match, Team Colors, Members’ Club, Aurora Glass, Chrono and Stadium Gold. Choose one here or in Settings; it applies at once and follows your account. Text size, brightness, reduced motion and high contrast live in Settings too.` },
   ];
   const NEWS = [
+    ['A sixth theme: Stadium Gold', 'A night stadium behind every page, gold light and broadcast type. Choose it in Settings.'],
     ['UFC: official rankings and champion gold', 'Ranks and champions now come from the UFC’s own list. Champions wear a gold belt beside their name, upcoming events reach further ahead, and every fighter profile shows their prime and how close they are to it now.'],
     ['Parlays you can follow live', 'Lock in your picks before the games start. During the games, see how each one is doing, our live read on the whole parlay and the books’ live price.'],
     ['Your record on your profile', 'Wins, losses, hit rate, units and a chart, counted from your own finished parlays. Plus favorite themes you can switch between from the menu.'],
@@ -146,7 +147,7 @@
     { icon: 'lab', title: 'The Lab answers the question', text: `Look up any player, team or prop and see how often it would have hit. Press ${KEY} from anywhere to start typing.`, go: 'data-shell="lab"', label: 'Open the Lab' },
     { icon: 'bolt', title: 'Read the heat meter', text: 'One number from 0 to 100. Low is ice cold, the middle is a coin flip, high is on fire. It always comes with a label and an icon.', go: 'data-page="guide" data-arg="heat"', label: 'See every level' },
     { icon: 'pred', title: 'Predictions show the edge', text: 'Picks are ranked by how far our number is from the market. Edge is ours minus theirs, and the track record is always on the page.', go: 'data-shell="pred"', label: 'Open Predictions' },
-    { icon: 'palette', title: 'Make it yours', text: 'Five themes, text size, brightness and motion are in Settings. The round menu at the top right holds your profile and this guide.', go: 'data-page="settings" data-arg="theme"', label: 'Choose a theme' },
+    { icon: 'palette', title: 'Make it yours', text: 'Six themes, text size, brightness and motion are in Settings. The round menu at the top right holds your profile and this guide.', go: 'data-page="settings" data-arg="theme"', label: 'Choose a theme' },
   ];
   const tour = (() => {
     let box = null, i = 0, back = null;

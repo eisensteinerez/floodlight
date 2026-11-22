@@ -145,6 +145,7 @@ THEME_FONTS = {
     "members-club": "Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400..800",
     "aurora-glass": "Sora:wght@200..800",
     "chrono": "Jost:wght@200..700",
+    "stadium-gold": "Barlow+Condensed:ital,wght@1,600;1,700;1,800;1,900&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600;1,700&family=Montserrat:ital,wght@0,700;0,800;1,700;1,800;1,900&family=Syne:wght@800",
 }
 _fonts = {}
 

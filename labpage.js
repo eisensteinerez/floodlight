@@ -32,6 +32,7 @@
     if (denied()) { el.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">The Lab</h1></div></header><div class="card emp">${ic('lab', 30)}<b>The Lab is switched off for your account</b><p>Your admin chooses which services each member can use. Ask them to switch the Lab on for you.</p></div>`; return }
     el.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">The Lab</h1><p class="pg-sub">One place for every player, team and prop.</p></div></header>
       <section class="card feature lab-bar" aria-label="Ask the Lab">
+        <div class="lab-cast" id="labCast" aria-hidden="true"></div>
         <div class="lab-ask" id="labBox">${ic('search', 22)}
           <input id="labAsk" type="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" spellcheck="false" placeholder="Ask the Lab: a player, a team, a matchup or a prop" aria-label="Ask the Lab: a player, a team, a matchup or a prop" aria-autocomplete="list" aria-controls="labHits">
           <kbd class="lab-kbd" aria-hidden="true">${mac ? '⌘K' : 'Ctrl K'}</kbd></div>
@@ -62,7 +63,7 @@
     if (!window.flEdge || L.loadingPicks) return; L.loadingPicks = true;
     const games = window.flHub?.games?.() || [];
     const today = [...new Set(games.filter(g => ['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer').sort((a, b) => b.weight - a.weight).map(g => g.sport === 'soccer' ? 'soccer' : g.lg))].slice(0, 3);
-    window.flEdge.props(today.length ? today : ['nba', 'nfl']).then(r => { L.picks = r.picks; L.denied = r.denied }).catch(() => { L.picks = [] }).finally(() => { L.loadingPicks = false; drawTry(); drawStart() });
+    window.flEdge.props(today.length ? today : ['nba', 'nfl']).then(r => { L.picks = r.picks; L.denied = r.denied }).catch(() => { L.picks = [] }).finally(() => { L.loadingPicks = false; drawTry(); drawCast(); drawStart() });
   }
   function drawTry() {
     const box = $('labTry'); if (!box) return;
@@ -72,6 +73,13 @@
     for (const g of games) chips.push([`${g.a.name} v ${g.b.name}`, { sport: g.sport === 'soccer' ? 'soccer' : g.lg, name: g.a.full || g.a.name, team: true }]);
     if (chips.length) chips.push(['Compare two players', { tool: 'compare' }]);
     box.innerHTML = chips.length ? `<span class="lb">Try</span>${chips.slice(0, 5).map(([l, a]) => `<button type="button" class="cx sm" data-labopen="${esc(JSON.stringify(a))}">${esc(l)}</button>`).join('')}` : '';
+  }
+  /* tonight's three hottest players, as a picture behind the bar. Decoration only: pages.css decides whether it shows (Stadium Gold does) */
+  function drawCast() {
+    const box = $('labCast'); if (!box) return;
+    const faces = [...new Set((L.picks ? window.flEdge.hot(L.picks, 8) : []).map(p => p.photo).filter(Boolean))].slice(0, 3), key = faces.join('|');
+    if (box.dataset.k === key) return; box.dataset.k = key;
+    box.innerHTML = faces.map(src => `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`).join('');
   }
   function drawStart() {
     const box = $('labStart'); if (!box) return;
@@ -301,7 +309,7 @@
 
   window.flLab = { open, recent: () => L.recent, boards: () => L.boards };
   window.flPages?.add('lab', { title: 'The Lab', render,
-    onShow(el) { if (denied() !== !$('labAsk')) render(el); if (L.engine === 'classic') { try { const r = $('rs'); if (r) { r.hidden = false; S.rs.open = true } } catch (e) {} } drawTry(); drawBoards(); if (L.picks == null) loadPicks() } });
+    onShow(el) { if (denied() !== !$('labAsk')) render(el); if (L.engine === 'classic') { try { const r = $('rs'); if (r) { r.hidden = false; S.rs.open = true } } catch (e) {} } drawTry(); drawCast(); drawBoards(); if (L.picks == null) loadPicks() } });
   // old addresses: ?rs=1 and #research land on the Lab
   if (/[?&]rs=/.test(location.search) || location.hash === '#research') setTimeout(() => { history.replaceState(null, '', location.pathname); window.flPages.show('lab') }, 0);
 })();
