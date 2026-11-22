@@ -80,7 +80,47 @@ def slate_date(text, posted):
             day = day.replace(year=y + (1 if day < posted else -1))
         if -1 <= (day - posted).days <= 2:
             return day
+    wd = weekday_in(head[:300])
+    if wd is not None:               # "NFL Sunday Day Games Menu" posted on Saturday is for Sunday
+        return next_weekday(posted, wd)
     return posted
+
+
+WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+WEEKDAY = re.compile(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mnf|tnf|snf)\b", re.I)
+
+
+def weekday_in(text):
+    """The first day of the week a heading names (MNF = Monday, TNF = Thursday, SNF = Sunday), or None."""
+    m = WEEKDAY.search(text)
+    if not m:
+        return None
+    w = m[1].lower()
+    return {"mnf": 0, "tnf": 3, "snf": 6}.get(w, WEEKDAYS.get(w[:3]))
+
+
+def next_weekday(posted, wd):
+    """That day of the week, on or after the day of the post (within six days)."""
+    return posted + dt.timedelta(days=(wd - posted.weekday()) % 7)
+
+
+LEG_DAY = re.compile(r"\(([^()]*?),\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?\s*\)", re.I)
+
+
+def leg_day(raw):
+    """"Tee Higgins Anytime TD (CIN @ WAS, Mon)": the day of the week that pick's game is on, or None."""
+    m = LEG_DAY.search(fold(raw))
+    return WEEKDAYS[m[2].lower()[:3]] if m else None
+
+
+def post_sport(text):
+    """The sport a post's heading names, if any: NFL ("NFL", "Week 11", "SNF") or NBA."""
+    head = re.sub(r"\bno (nfl|nba|wnba) (game|games|slate)[^\n.]*|(nfl|nba) [a-z ]{0,20}(picks|slate|menu) (drop|drops|coming)[^\n.]*", " ", fold(text[:400]), flags=re.I)
+    nfl = re.search(r"\b(nfl|tnf|snf|mnf|week \d{1,2}|touchdowns?)\b", head, re.I)
+    nba = re.search(r"\b(nba|wnba)\b", head, re.I)
+    if nfl and (not nba or nfl.start() < nba.start()):
+        return "nfl"
+    return nba[1].lower() if nba else None
 
 
 # ---------- one line -> one pick ----------
@@ -94,7 +134,9 @@ STAT_EXTRA = {"rushyds": "ryd", "rushyd": "ryd", "rushingyds": "ryd", "recyds": 
               "passrushyds": "pryd", "passingandrushing": "pryd", "passingandrushingyards": "pryd", "passingrushingyards": "pryd",
               "passingrushingyard": "pryd", "passrushyard": "pryd", "passingrushyds": "pryd", "rushingreceivingyards": "rryd", "rushingreceiving": "rryd",
               "rushingandreceiving": "rryd", "passtd": "ptd", "stls": "stl", "blks": "blk", "td": "td", "tds": "td",
-              "shotsontarget": "sot", "sot": "sot", "shot": "shots"}
+              "shotsontarget": "sot", "sot": "sot", "shot": "shots",
+              "rushrec": "rryd", "rushrecyd": "rryd", "rushreceivingyd": "rryd", "passrushyd": "pryd", "recyd": "reyd", "rushyd": "ryd",
+              "passyds": "pyd", "receivingyards": "reyd", "rec": "rec"}
 PROP = re.compile(
     r"^(?P<name>[A-Za-z][A-Za-z'’.\- ]{2,40}?)\s*(?:\([^)]{1,24}\))?\s*[:—–-]?\s*"
     r"(?:(?P<side>over|under|more|less|o|u)\s*(?P<line>\d+(?:\.\d+)?)|(?P<plus>\d+(?:\.\d+)?)\+)\s*"
@@ -139,7 +181,7 @@ def strip_price(l):
     return l.strip(" -—–:,")
 
 
-def parse_prop(l, sports):
+def parse_prop(l, sports, loose=False):
     m = ANYTIME.match(l)
     if m:
         name = m["name"].strip(" -—–:")
@@ -152,7 +194,8 @@ def parse_prop(l, sports):
     if not m:
         return None
     name = m["name"].strip(" -—–:").strip()
-    if len(name.split()) < 2 and not (sports == ("soccer",) and len(name) >= 4):
+    single = len(name.split()) < 2
+    if single and not ((sports == ("soccer",) or loose) and len(name) >= 4 and name[0].isupper()):
         return None
     if BAD_NAME.match(name) or re.search(r"\b(vs?|ml|@)\b|\d", name, re.I):
         return None
@@ -171,7 +214,14 @@ def parse_prop(l, sports):
         side = "under" if m["side"].lower() in ("under", "u", "less") else "over"
     if (m["yn"] or "").lower() == "no":
         side = "under" if side == "over" else "over"
-    return prop_leg(sp, tidy(name), k, side, line)
+    if sp == "nfl" and k == "rec" and re.fullmatch(r"rec\.?", stat.strip(), re.I) and line >= 8.5:
+        k = "reyd"                 # "Metcalf 15+ Rec": nobody bets 15 catches, it's receiving yards
+    g = prop_leg(sp, tidy(name), k, side, line)
+    if sp == "nfl" and k == "rec" and re.fullmatch(r"rec\.?", stat.strip(), re.I):
+        g["alt"] = "reyd"          # "Freiermuth 5+ Rec" could be catches or yards: graded both ways, kept only if they agree
+    if single and sp != "soccer":
+        g["loose"] = True          # only a last name ("Freiermuth 5+ Rec"): graded only if exactly one player fits
+    return g
 
 
 def tidy(name):
@@ -189,6 +239,12 @@ def prop_leg(sport, name, k, side, line):
 
 
 TEAM = r"[A-Z][A-Za-z0-9'’.&\- ]{1,30}?"
+PERIOD = r"1q|2q|3q|4q|1h|2h|1st quarter|first quarter|1st half|first half|2nd half|second half"
+
+
+def period_key(s):
+    s = s.lower()
+    return {"1st quarter": "1q", "first quarter": "1q", "1st half": "1h", "first half": "1h", "2nd half": "2h", "second half": "2h"}.get(s, s)
 
 
 def parse_team_bet(l, sport):
@@ -226,6 +282,12 @@ def parse_team_bet(l, sport):
         side = "under" if m["no"] else "over"
         return {"t": "tt", "sport": sport, "team": t, "teams": teams, "side": side, "line": float(m["n"] or 0.5),
                 "label": f"{t} {'not ' if side == 'under' else ''}to score"}
+    m = re.match(rf"^(?P<t>{TEAM})\s+(?P<per>{PERIOD})\s+(?:(?P<ml>ml|moneyline)|(?P<n>[+-]\d+(?:\.\d)?))\s*$", l, re.I)
+    if m:
+        t, per = m["t"].strip(), period_key(m["per"])
+        if m["ml"]:
+            return {"t": "ml", "sport": sport, "team": t, "teams": teams, "period": per, "label": f"{t} {per.upper()} ML"}
+        return {"t": "spread", "sport": sport, "team": t, "teams": teams, "line": float(m["n"]), "period": per, "label": f"{t} {per.upper()} {m['n']}"}
     m = re.match(rf"^(?P<t>{TEAM})\s+(?:ml|moneyline|to win|win)\s*$", l, re.I)
     if m:
         t = tidy(m["t"].strip())
@@ -236,14 +298,28 @@ def parse_team_bet(l, sport):
     return None
 
 
-def parse_leg(raw, kind):
-    """One line -> a pick, or None. kind is "soccer" or "props"."""
-    l = strip_price(clean_line(raw))
+def parse_leg(raw, kind, sport=None, loose=False):
+    """One line -> a pick, or None. kind is "soccer" or "props"; sport is the post's sport when it names one."""
+    day = leg_day(raw)
+    l = strip_price(clean_line(LEG_DAY.sub("", fold(raw))))
     if not l or len(l) > 120:
         return None
     if kind == "soccer":
-        return parse_team_bet(l, "soccer") or parse_prop(l, ("soccer",))
-    return parse_prop(l, ("nba", "nfl")) or parse_team_bet(l, None)
+        g = parse_team_bet(l, "soccer") or parse_prop(l, ("soccer",))
+    else:
+        order = ("nfl", "nba") if sport == "nfl" else ("nba", "nfl")
+        g = parse_prop(l, order, loose) or parse_team_bet(l, sport if sport in ("nba", "nfl", "wnba") else None)
+    if g and day is not None:
+        g["day"] = day
+    return g
+
+
+UNITS = re.compile(r"(?:^|[\s•|·(])(?:\d+(?:\.\d+)?|\d/\d+(?:\s*-\s*\d/\d+)?)\s*u(?:nits?)?\b", re.I)
+
+
+def staked(raw):
+    """A line that carries its own stake ("• 1u", "0.5 unit"): a bet of its own, not a leg of a card."""
+    return bool(UNITS.search(fold(raw)))
 
 
 def parse_track(l):
@@ -267,7 +343,7 @@ def leg_key(g):
     if g["t"] == "prop":
         return f"prop|{B.norm(g['player'])}|{g['stat']}|{g['side']}|{g['line']}"
     return "|".join(str(x) for x in (g["t"], B.norm(g.get("team") or ""), *[B.norm(t) for t in (g.get("teams") or ())],
-                                     g.get("side"), g.get("line"), g.get("yes"), g.get("score")))
+                                     g.get("side"), g.get("line"), g.get("yes"), g.get("score")) + ((g["period"],) if g.get("period") else ()))
 
 
 # ---------- a post -> cards ----------
@@ -304,6 +380,10 @@ def header(l, kind):
         return ("main", m[1])
     if kind != "soccer" and re.search(r"\blongshot\b", low) and s.rstrip().endswith(":"):
         return ("longshot", None)
+    if kind != "soccer" and N_LEG.match(low):
+        # "4-Leg Bears/Saints Parlay — -146", "6-Leg Parlay (4 players)", "2-Leg: Pollard 60+ ...": a card of its own
+        slug = re.split(r"\s+[—–]\s+|:|\(|•|\s-\s", low)[0].strip()
+        return (f"leg:{slug}", None)
     return None
 
 
@@ -319,9 +399,58 @@ def leg_count(l):
     return len(re.findall(r"[+-]\d{2,5}", m[1])) if m else None
 
 
+EXTRA = re.compile(r"^\W*(?:(?:nba|nfl|wnba)\s+)?(?P<what>extra legs?(?:\s+considered)?|add-?ons?|backup legs?|bonus legs?|alt(?:ernate)? legs?|"
+                   r"other legs?(?:\s+considered)?|also considered|legs? considered)\b\s*[:—–-]?\s*(?P<rest>.*)$", re.I)
+LEG_COUNT = re.compile(r"\b(\d{1,2})\s*-?\s*legs?\b", re.I)
+N_LEG = re.compile(r"^(\d{1,2})\s*-?\s*leg\b", re.I)
+SPLIT = re.compile(r"\s+/\s+|\s*&\s*|\s+\+\s+|\s*,\s*(?=[A-Z])|\s+and\s+(?=[A-Z])")
+
+
+def inline_items(text):
+    """"Freiermuth 5+ Rec / Metcalf 15+ Rec / Goedert 10+ Rec" -> the three picks' texts."""
+    text = re.sub(r"\([^()]*\)", " ", text)
+    return [x.strip(" .;") for x in SPLIT.split(text) if x.strip(" .;")]
+
+
+def team_hint(line):
+    """"5-Leg Steelers/Eagles Parlay" -> ["Steelers", "Eagles"]: the teams a card's legs play for."""
+    m = re.search(r"\b([A-Z][A-Za-z.]+(?:/[A-Z][A-Za-z.]+)+)\b", fold(line))
+    return m[1].split("/") if m else []
+
+
+def new_section(play, sport, final=False, title=""):
+    return {"play": play, "sport": sport, "final": final, "legs": [], "extras": [], "n": None, "on": True, "full": False,
+            "mode": "card", "hint": [], "title": title}
+
+
 def sections(text, kind):
-    """The post's card sections: [{"play", "sport", "final", "legs", "n"}]."""
-    out, cur = [], None
+    """The post's card sections: [{"play", "sport", "final", "legs", "extras", "n"}].
+
+    Every play in the post is read: named cards (FINAL CARD, PLAY #2, NBA PARLAY, "4-Leg Bears/Saints Parlay"), the legs
+    a heading lists on its own line ("2-Leg: Pollard 60+ Rush+Rec & Gordon 40+ Rush+Rec"), and bets posted on their own
+    with a stake ("Trey McBride O5.5 Rec — -120 • 1u"). A heading's leg count ("5-leg", "6 legs") is the card: anything
+    listed after it, and every add-on, extra or backup leg, is kept as an extra. Extras are graded and shown, but they
+    are not part of the card's result."""
+    out, cur, last = [], None, None
+    sport_hint = post_sport(text)
+
+    def add_leg(sec, g, raw):
+        if not g:
+            return
+        if sec["hint"] and g["t"] == "prop" and g.get("loose"):
+            g["hint"] = sec["hint"]
+        if sec["mode"] == "extra" or sec["full"]:
+            if sec["mode"] != "extra" and g["t"] != "prop":
+                return                            # chatter after a full card ("His 3 favorite guys to score")
+            if g not in sec["extras"] and leg_key(g) not in {leg_key(x) for x in sec["legs"] + sec["extras"]}:
+                g["extra"] = "add-on" if sec["mode"] == "extra" else f"listed after the {sec['n']}-leg card"
+                sec["extras"].append(g)
+            return
+        if leg_key(g) not in {leg_key(x) for x in sec["legs"]}:
+            sec["legs"].append(g)
+        if sec["n"] and len(sec["legs"]) >= sec["n"] and not sec["final"]:
+            sec["full"] = True
+
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
@@ -331,53 +460,99 @@ def sections(text, kind):
             play, sport = h
             final = play == "final"
             if final or not (cur and cur["final"]):
-                cur = {"play": "main" if final else play, "sport": sport, "final": final, "legs": [], "n": None, "on": True}
+                if play.startswith("leg:") and cur and not cur["legs"] and not cur["final"] and cur["play"] != "main":
+                    play = cur["play"]          # "-150 Ladder Day 1" then "4-Leg Parlay": the ladder's card
+                cur = new_section("main" if final else play, sport, final, fold(line)[:80])
                 out.append(cur)
             elif cur and cur["final"]:          # "PLAY #1 - 6 legs" inside a final card names its play
-                cur["play"] = play if play != "main" else cur["play"]
+                cur["play"] = play if play != "main" and not play.startswith("leg:") else cur["play"]
                 cur["sport"] = sport or cur["sport"]
-            # a heading line can carry the first pick: "Play #2: 5 legs ..." doesn't, "LOCK: X" isn't a heading
-            continue
-        if not cur:
-            continue
-        sp = sport_line(line)
-        if sp:
-            if cur["final"] and cur["legs"]:      # a second sport in the same final card is a second card
-                cur = {"play": cur["play"], "sport": sp, "final": True, "legs": [], "n": None, "on": True}
-                out.append(cur)
-            else:
-                cur["sport"] = sp
-            cur["on"] = True
-            n = leg_count(line)
+            n = LEG_COUNT.search(fold(line))
             if n and kind != "soccer":
-                cur["n"] = n
+                cur["n"] = int(n[1])
+            cur["hint"] = team_hint(line) or cur["hint"]
+            last = cur
+            if play.startswith("leg:"):
+                # the legs can be on the heading itself: "4-Leg ML Parlay: PIT + DET + JAC + SF — +488 (NoVig)"
+                body = fold(line)
+                parts = re.split(r"\s+[—–]\s+", body)
+                cand = parts[0].split(":", 1)[1] if ":" in parts[0] else next((p for p in parts[1:] if re.search(r"\s/\s|\s&\s|\s\+\s", p)), "")
+                cand = re.split(r";", cand)[0]
+                ml = re.search(r"\bml\b|moneyline", parts[0], re.I)
+                for item in inline_items(cand):
+                    if ml and re.fullmatch(r"[A-Z][A-Za-z.]{1,20}(?: [A-Z][A-Za-z.]+)?", item):
+                        add_leg(cur, {"t": "ml", "sport": sport_hint, "team": item, "teams": None, "label": f"{item} ML"}, item)
+                    else:
+                        add_leg(cur, parse_leg(item, kind, sport_hint, loose=True) or
+                                {"t": "raw", "label": item[:80], "result": "unknown"}, item)
+                if cur["legs"] and (cur["n"] is None or len(cur["legs"]) >= cur["n"]):
+                    cur["full"] = True
             continue
+        x = EXTRA.match(fold(line))
+        if x and kind != "soccer":
+            holder = cur or last
+            if not holder:
+                holder = cur = new_section("main", None)
+                out.append(cur)
+            holder["mode"] = "extra"
+            holder["on"] = True
+            cur = holder
+            for item in inline_items(x["rest"]):
+                add_leg(holder, parse_leg(item, kind, sport_hint), item)
+            continue
+        if cur:
+            sp = sport_line(line)
+            if sp:
+                if cur["final"] and cur["legs"]:      # a second sport in the same final card is a second card
+                    cur = new_section(cur["play"], sp, True)
+                    out.append(cur)
+                    last = cur
+                else:
+                    cur["sport"] = sp
+                cur["on"] = True
+                cur["mode"] = "card"
+                n = leg_count(line)
+                if n and kind != "soccer":
+                    cur["n"] = n
+                continue
         n = leg_count(line)
         if n:
             # the parlay's own math says how many legs it has (soccer picks are singles: never cut)
-            if cur["on"] and kind != "soccer" and (not cur["final"] or cur["n"] is None):
+            if cur and cur["on"] and kind != "soccer" and (not cur["final"] or cur["n"] is None):
                 cur["n"] = n
             continue
         if re.match(r"^\W*no (nfl|nba|wnba) (games|slate)", line, re.I):
             continue
-        if cur["final"] and re.match(r"^\W*(lock|best value|safest pick|strongest view)\s*:", line, re.I):
+        if cur and cur["final"] and re.match(r"^\W*(lock|best value|safest pick|strongest view)\s*:", line, re.I):
             continue                              # repeats a pick on the card
         if STOP.match(line):
-            cur["on"] = False
+            if cur:
+                cur["on"] = False
             continue
-        if TITLE.match(line) or not cur["on"]:
+        if TITLE.match(line):
             continue
-        g = parse_leg(line, kind)
+        if kind != "soccer" and (not cur or cur["full"] and cur["mode"] != "extra") and staked(line):
+            g = parse_leg(line, kind, sport_hint)
+            if g:                                 # a bet posted on its own: "Mark Andrews U4.5 Rec — -149 • 1u"
+                single = new_section("single:" + leg_key(g), g.get("sport"), title=fold(line)[:80])
+                single["legs"].append(g)
+                out.append(single)
+                continue
+        if not cur or not cur["on"]:
+            continue
+        g = parse_leg(line, kind, sport_hint)
         if g:
-            if leg_key(g) not in {leg_key(x) for x in cur["legs"]}:
-                cur["legs"].append(g)
+            add_leg(cur, g, line)
         elif cur["final"] and re.match(r"^\W*\d{1,2}[.)]\s+\S", line):
             # a numbered pick on a final card that can't be read: kept, so the card is never called won without it
             cur["legs"].append({"t": "raw", "label": strip_price(clean_line(line))[:80], "result": "unknown"})
     for s in out:
         if s["n"] and 0 < s["n"] < len(s["legs"]):
+            for g in s["legs"][s["n"]:]:          # an "insurance" leg after the parlay math: shown, not counted
+                g["extra"] = f"listed after the {s['n']}-leg card"
+                s["extras"].append(g)
             s["legs"] = s["legs"][:s["n"]]
-    return [s for s in out if s["legs"]]
+    return [s for s in out if s["legs"] or s["extras"]]
 
 
 def borrow_teams(legs, text):
@@ -421,19 +596,37 @@ def cards_in(post, kind, posted_et):
         return list(cards.values())
     slate = slate_date(text, posted_et)
     secs = sections(text, kind)
+    extras = []
+    for s in secs:
+        for g in s["extras"]:
+            if leg_key(g) not in {leg_key(x) for x in extras}:
+                extras.append(g)
     if any(s["final"] for s in secs):
-        plays = {s["play"] for s in secs if not s["final"]} - {"main"}
+        plays = {s["play"] for s in secs if not s["final"] and s["legs"]} - {"main"}
+        plays = {p for p in plays if not p.startswith("single:")}
         secs = [s for s in secs if s["final"]]
         if len(plays) == 1:                       # "TODAY'S PICK" ... FINAL CARD: the final card is that play
             for s in secs:
                 if s["play"] == "main":
                     s["play"] = next(iter(plays))
+    secs = [s for s in secs if s["legs"]]
     out = []
+    hint = post_sport(text)
     for s in secs:
         legs = borrow_teams(s["legs"], text)
-        sport = "soccer" if kind == "soccer" else s["sport"] or next((g["sport"] for g in legs if g.get("sport")), None) or "nba"
+        sport = "soccer" if kind == "soccer" else s["sport"] or next((g["sport"] for g in legs if g.get("sport")), None) or hint or "nba"
         for g in legs:
             if g["t"] != "prop" and g["t"] != "raw" and not g.get("sport"):
                 g["sport"] = sport
-        out.append({"play": s["play"], "sport": sport, "slate": slate, "legs": legs})
+        out.append({"play": s["play"], "sport": sport, "slate": slate, "legs": legs, "extras": [], "title": s.get("title", "")})
+    if out and extras:
+        on_card = {leg_key(g) for c in out for g in c["legs"]}
+        out[0]["extras"] = [g for g in borrow_teams(extras, text) if leg_key(g) not in on_card]
+        for g in out[0]["extras"]:
+            if g["t"] not in ("prop", "raw") and not g.get("sport"):
+                g["sport"] = out[0]["sport"]
+    for c in out:                                 # "(CIN @ WAS, Mon)": that pick's game is on Monday
+        for g in c["legs"] + c["extras"]:
+            if g.get("day") is not None:
+                g["slate"] = next_weekday(posted_et, g["day"]).isoformat()
     return out
