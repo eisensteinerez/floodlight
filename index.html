@@ -16,6 +16,7 @@
 /* The saved theme, applied before anything is drawn so the page never flashes the wrong one. Unknown or missing: Night Match. */
 (function(){var T={'night-match':['dark','#0A0D12','Syne:wght@600..800&family=Manrope:wght@400..800','Night Match'],'team-colors':['light','#EEF0F4','Outfit:wght@400..900','Team Colors'],'members-club':['dark','#0B1411','Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400..800',"Members\u2019 Club"],'aurora-glass':['dark','#070A14','Sora:wght@200..800','Aurora Glass'],'chrono':['light','#F5F5F3','Jost:wght@200..700','Chrono'],'stadium-gold':['dark','#07080A','Barlow+Condensed:ital,wght@1,600;1,700;1,800;1,900&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600;1,700&family=Montserrat:ital,wght@0,700;0,800;1,700;1,800;1,900&family=Syne:wght@800','Stadium Gold']};
 var r=document.documentElement,t=null,p={};try{t=localStorage.getItem('floodlight-theme');p=JSON.parse(localStorage.getItem('fl.look')||'{}')||{}}catch(e){}
+var pv=/[?&]flpreview=([a-z-]+)/.exec(location.search);if(pv&&window.parent!==window){t=pv[1];window.FL_PREVIEW=true;r.classList.add('fl-preview')}   /* the theme preview in Settings: this theme, nothing saved */
 if(!Object.prototype.hasOwnProperty.call(T,t))t='night-match';
 window.FL_THEMES=T;window.flApplyTheme=function(id){if(!Object.prototype.hasOwnProperty.call(T,id))id='night-match';r.dataset.theme=id;r.dataset.scheme=T[id][0];
 var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=T[id][1];

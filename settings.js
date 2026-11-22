@@ -33,9 +33,9 @@
     return id;
   }
   // a member who has never chosen on this device gets the theme saved on their account
-  document.addEventListener('fl:me', () => { const t = typeof S !== 'undefined' && S.me?.prefs?.theme; if (t && T[t] && !ls.get('floodlight-theme', null)) setTheme(t, { quiet: true }) });
+  document.addEventListener('fl:me', () => { if (window.FL_PREVIEW) return; const t = typeof S !== 'undefined' && S.me?.prefs?.theme; if (t && T[t] && !ls.get('floodlight-theme', null)) setTheme(t, { quiet: true }) });
   // another tab changed it
-  addEventListener('storage', ev => { if (ev.key === 'floodlight-theme') { window.flApplyTheme(ev.newValue); document.dispatchEvent(new CustomEvent('fl:theme', { detail: { id: current() } })); sync() } });
+  addEventListener('storage', ev => { if (ev.key === 'floodlight-theme' && !window.FL_PREVIEW) { window.flApplyTheme(ev.newValue); document.dispatchEvent(new CustomEvent('fl:theme', { detail: { id: current() } })); sync() } });
 
   /* ---------- brightness: a film over the page, so the theme's own colours stay as designed ---------- */
   const film = document.createElement('div'); film.id = 'flBright'; film.setAttribute('aria-hidden', 'true'); document.body.appendChild(film);
@@ -47,12 +47,72 @@
   const sizeIndex = () => { const z = +prefs().size || 1; let best = 1; SIZES.forEach(([v], i) => { if (Math.abs(v - z) < Math.abs(SIZES[best][0] - z)) best = i }); return best };
 
   /* ---------- a small picture of each theme, drawn from that theme's own tokens ---------- */
-  const preview = id => `<span class="thp" data-theme-preview="${id}" aria-hidden="true"><span class="thp-h"><i></i><b></b><b></b><b class="on"></b><b></b></span><span class="thp-t"></span>
-    <span class="thp-d"><i></i><i></i><i class="on"></i><i></i><i></i></span><span class="thp-m"><em class="a"></em><strong>1<small>:</small>0</strong><em class="b"></em></span><span class="thp-r"><i></i><i></i><i></i></span></span>`;
+  // The match in the picture is a real one from today's board (the biggest live game, else the next to start), and it is
+  // the same one in every theme, so the six pictures differ only by theme. Before the board has loaded it falls back to 1:0.
+  function sample() { const gs = (window.flHub?.games?.() || []).filter(g => g.a?.name && g.b?.name && g.sport !== 'tennis'); if (!gs.length) return null;
+    const size = g => (g.weight || 0) * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0); return gs.filter(g => g.state === 'in').sort((a, b) => size(b) - size(a))[0] || gs.filter(g => g.state === 'pre').sort((a, b) => a.date - b.date)[0] || gs.sort((a, b) => size(b) - size(a))[0] }
+  const crestBg = t => t?.logo ? ` style="background-image:url(&quot;${esc(t.logo)}&quot;)"` : '';
+  const preview = id => { const g = sample(), sc = g && g.state !== 'pre' && !window.flMC?.spoil(g.key);
+    return `<span class="thp${g ? ' real' : ''}" data-theme-preview="${id}" aria-hidden="true"><span class="thp-h"><i></i><b></b><b></b><b class="on"></b><b></b></span><span class="thp-t"></span>
+    <span class="thp-d"><i></i><i></i><i class="on"></i><i></i><i></i></span><span class="thp-m"><em class="a"${crestBg(g?.a)}></em><strong>${sc ? esc(g.a.score) : g ? '–' : 1}<small>:</small>${sc ? esc(g.b.score) : g ? '–' : 0}</strong><em class="b"${crestBg(g?.b)}></em></span><span class="thp-r"><i></i><i></i><i></i></span></span>` };
+
+  /* ---------- the live preview: the real page, with today's real games, in any theme ----------
+     It is the app itself in a frame, started with ?flpreview=<theme>. A preview frame takes its theme from the address,
+     saves nothing, and ignores clicks, so trying a theme here never changes yours. Changing the theme or the page sends
+     the frame a message instead of reloading it, so the same games stay on screen and only the theme changes. */
+  const PAGES = [['home', 'Home'], ['live', 'Live'], ['lab', 'The Lab'], ['predictions', 'Predictions']];
+  const SIZE = { desktop: [1280, 800], phone: [390, 760] };
+  const PV = { theme: null, page: 'home', device: 'desktop', frame: null, ready: false, ro: null };
+  function pvControls() {
+    const el = document.getElementById('stPvCtl'); if (!el) return; const cur = current(), th = PV.theme || cur;
+    const seg = (name, label, opts, val) => `<div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([k, l]) => `<button type="button" role="radio" aria-checked="${val === k}" class="${val === k ? 'on' : ''}" tabindex="${val === k ? 0 : -1}" data-pv${name}="${k}">${esc(l)}</button>`).join('')}</div>`;
+    el.innerHTML = `<div class="st-h"><h2 id="stPvH">Preview on your real pages</h2></div>
+      <p class="lb">Today’s real games and picks, drawn in any theme. Looking at a theme here does not change yours until you press Use.</p>
+      <div class="cx-row scroll" role="radiogroup" aria-label="Theme to preview">${THEMES.map(([id, name]) => `<button type="button" class="cx" role="radio" aria-checked="${th === id}" tabindex="${th === id ? 0 : -1}" data-pvtheme="${id}">${esc(name)}${id === cur ? '<span class="lb pv-yours">yours</span>' : ''}</button>`).join('')}</div>
+      <div class="pv-row">${seg('page', 'Page', PAGES, PV.page)}${seg('device', 'Screen size', [['desktop', 'Desktop'], ['phone', 'Phone']], PV.device)}
+        <button type="button" class="bt pv-use" data-theme-pick="${th}"${th === cur ? ' disabled' : ''}>${th === cur ? `${esc(nameOf(th))} is your theme` : `Use ${esc(nameOf(th))}`}</button></div>`;
+  }
+  function pvFit() {
+    const box = document.getElementById('stPvBox'), f = PV.frame; if (!box || !f) return;
+    const [w, h] = SIZE[PV.device], k = Math.min(1, ((box.parentElement.clientWidth - 2 * parseFloat(getComputedStyle(box.parentElement).paddingLeft || 0)) - (PV.device === 'phone' ? 12 : 2)) / w);   // measured from the card, not the box, which is sized from this
+    f.width = w; f.height = h; f.style.width = w + 'px'; f.style.height = h + 'px'; f.style.transform = `scale(${k})`;
+    box.dataset.device = PV.device; box.style.height = Math.round(h * k) + 'px'; box.style.setProperty('--pv-w', Math.round(w * k) + 'px');
+  }
+  const pvSay = () => { try { PV.frame?.contentWindow?.postMessage({ flPreview: { theme: PV.theme || current(), page: PV.page } }, location.origin) } catch (e) {} };
+  function pvStart() {
+    const box = document.getElementById('stPvBox'); if (!box || PV.frame) return;
+    const f = document.createElement('iframe'); f.className = 'pv-frame'; f.title = 'Preview of the page in the chosen theme'; f.setAttribute('tabindex', '-1'); f.loading = 'lazy';
+    f.src = `${location.pathname}?flpreview=${encodeURIComponent(PV.theme || current())}&flpage=${PV.page}`;
+    f.addEventListener('load', () => { PV.ready = true; box.classList.add('ready'); pvSay() });
+    box.innerHTML = '<div class="pv-wait"><span class="pd-spin" aria-hidden="true"></span><span class="lb">Drawing the page…</span></div>'; box.appendChild(f); PV.frame = f; PV.ready = false; box.classList.remove('ready'); pvFit();
+    PV.ro?.disconnect(); PV.ro = new ResizeObserver(pvFit); PV.ro.observe(box.parentElement);
+  }
+  function pvStop() { PV.ro?.disconnect(); PV.frame?.remove(); PV.frame = null; PV.ready = false }
+  document.addEventListener('click', ev => {
+    const t = ev.target.closest?.('[data-pvtheme],[data-pvpage],[data-pvdevice]'); if (!t) return;
+    if (t.dataset.pvtheme) PV.theme = t.dataset.pvtheme; else if (t.dataset.pvpage) PV.page = t.dataset.pvpage; else PV.device = t.dataset.pvdevice;
+    const key = ['pvtheme', 'pvpage', 'pvdevice'].find(k => t.dataset[k]), val = t.dataset[key];
+    pvControls(); pvFit(); if (PV.frame) pvSay(); else pvStart();
+    document.querySelector(`[data-${key}="${CSS.escape(val)}"]`)?.focus({ preventScroll: true });
+  });
+  /* inside a preview frame: follow the messages, ignore the pointer and keyboard, save nothing */
+  if (window.FL_PREVIEW) {
+    const go = page => { try { if (page === 'home') window.flHub?.show(); else window.flPages?.show(page, undefined, { fromHash: true }) } catch (e) {} };
+    const first = (/[?&]flpage=([a-z]+)/.exec(location.search) || [])[1] || 'home'; let at = first;
+    addEventListener('load', () => setTimeout(() => go(first), 0));
+    addEventListener('message', ev => { if (ev.origin !== location.origin || ev.source !== window.parent) return; const m = ev.data?.flPreview; if (!m) return;
+      if (m.theme && Object.prototype.hasOwnProperty.call(T, m.theme) && m.theme !== current()) window.flApplyTheme(m.theme);
+      if (m.page && m.page !== at && PAGES.some(p => p[0] === m.page)) { at = m.page; go(m.page) } });
+    for (const type of ['click', 'submit', 'dblclick', 'contextmenu', 'keydown', 'pointerdown', 'mousedown']) addEventListener(type, ev => { if (type === 'keydown' && /^(Arrow|Page|Home|End| )/.test(ev.key)) return; ev.preventDefault(); ev.stopImmediatePropagation() }, true);
+  }
+
 
   function render(el) {
     const cur = current(), p = prefs(), si = sizeIndex(), br = root.dataset.bright || '';
-    el.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks and reads on this device.</p></div></header>
+    if (!el.querySelector('#stMain')) { pvStop(); el.innerHTML = `<div id="stMain" class="vst"></div><section class="card feature st-card pv-card" aria-labelledby="stPvH"><div id="stPvCtl" class="vst"></div><div class="pv-box" id="stPvBox"><button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button></div></section>` }
+    if (PV.theme == null) PV.theme = cur;
+    pvControls();
+    el.querySelector('#stMain').innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks and reads on this device.</p></div></header>
       <div class="card feature st-card">
         <p class="st-crumb">Settings › Appearance</p>
         <div class="st-h"><h2 id="stThemeH">Theme</h2><span class="st-saved" id="stSaved" role="status" aria-live="polite"></span></div>
@@ -107,6 +167,10 @@
   document.addEventListener('click', ev => { const t = ev.target.closest?.('[data-theme-use]'); if (t) setTheme(t.dataset.themeUse) });
   window.flTheme = { list: THEMES, get: current, name: () => nameOf(current()), set: setTheme, scheme: () => root.dataset.scheme, favs, fav, preview };
   // the menu's Theme item lands on the picker itself
-  function onShow(el, arg) { if (arg !== 'theme') return; setTimeout(() => { el.querySelector('#stThemeH')?.scrollIntoView({ block: 'center' }); el.querySelector('[data-theme-pick][aria-checked="true"]')?.focus({ preventScroll: true }) }, 40) }
-  window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true });
+  function onShow(el, arg) {
+    // the preview starts by itself once it scrolls into view, and is taken down when Settings is left
+    if (!PV.frame && 'IntersectionObserver' in window) { const box = el.querySelector('#stPvBox'); if (box) { const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); if (window.flPages.current() === 'settings') pvStart() } }, { rootMargin: '200px' }); io.observe(box) } }
+    if (arg !== 'theme') return; setTimeout(() => { el.querySelector('#stThemeH')?.scrollIntoView({ block: 'center' }); el.querySelector('[data-theme-pick][aria-checked="true"]')?.focus({ preventScroll: true }) }, 40) }
+  window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true, onHide() { pvStop(); const b = document.getElementById('stPvBox'); if (b) { b.classList.remove('ready'); b.style.height = ''; b.innerHTML = `<button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button>` } } });
+  document.addEventListener('fl:hub', () => { const el = document.getElementById('pg-settings'); if (el && !el.hidden && !el.querySelector('.thp.real') && sample() && !el.contains(document.activeElement)) sync() }, { once: false });
 })();

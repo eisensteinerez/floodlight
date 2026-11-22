@@ -1348,3 +1348,20 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
 .ev-outs > div:not(.on) .trak > i{background:var(--text-2)}
 .ev-wait{display:flex;flex-wrap:wrap;align-items:center;gap:10px;min-height:44px}
 @media (max-width:640px){.ev-bar b{font-size:9px}.ev-bar small{display:none}.ev-outs dd small{display:none}.pd-rng{display:none}}
+
+/* ---------- Settings: the live theme preview (settings.js) ---------- */
+.pv-card{display:grid;gap:18px}.pv-card .st-h{margin:0}.pv-card p{margin:0}
+#stPvCtl{gap:14px}
+.pv-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}.pv-use{margin-left:auto}
+.pv-yours{margin-left:4px;font-size:12px;color:inherit;opacity:.8}
+.pv-box{position:relative;width:100%;min-height:120px;display:grid;place-items:center;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--inset);overflow:hidden}
+.pv-box[data-device="phone"]{width:var(--pv-w,390px);max-width:100%;margin-inline:auto;border-radius:34px;border-width:6px;border-color:var(--border-2)}
+.pv-frame{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--bg);opacity:0;transition:opacity .25s}
+.pv-box.ready .pv-frame{opacity:1}.pv-box.ready .pv-wait{display:none}
+.pv-wait{display:flex;align-items:center;gap:10px}
+.thp.real .thp-m em{background-size:contain;background-repeat:no-repeat;background-position:center;border-radius:0;border-color:transparent;background-color:transparent}
+[data-theme-preview="team-colors"].thp.real .thp-m em{background-color:var(--surface);border-radius:4px;background-size:80%}
+/* inside a preview frame: nothing that pops over the page */
+:root.fl-preview #toasts,:root.fl-preview .tour,:root.fl-preview #flBright,:root.fl-preview .flmenu{display:none!important}
+:root.fl-preview{scrollbar-width:none}:root.fl-preview::-webkit-scrollbar{display:none}
+@media (max-width:640px){.pv-use{margin-left:0;width:100%}}

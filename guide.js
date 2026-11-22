@@ -186,7 +186,7 @@
   })();
   // first visit after signing in (or on an open site): show the tour once
   let offered = false;
-  function offer() { if (offered || tour.seen()) return; if (document.querySelector('.flg:not([hidden]),.modal:not([hidden]),[aria-modal="true"]:not([hidden])')) return; offered = true; tour.start(document.getElementById('flDots')) }
+  function offer() { if (offered || tour.seen() || window.FL_PREVIEW) return; if (document.querySelector('.flg:not([hidden]),.modal:not([hidden]),[aria-modal="true"]:not([hidden])')) return; offered = true; tour.start(document.getElementById('flDots')) }
   document.addEventListener('fl:me', () => { try { if (S.me) setTimeout(offer, 900) } catch (e) {} });
 
   window.flTour = tour;
