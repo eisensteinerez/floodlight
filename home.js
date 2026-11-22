@@ -22,6 +22,7 @@
   /* ---------- the page itself ---------- */
   const sec = document.createElement('section'); sec.id = 'hub'; sec.className = 'hub'; sec.setAttribute('aria-label', 'Live Hub'); sec.hidden = true;
   document.querySelector('.shell')?.prepend(sec);
+  document.addEventListener('fl:spoil', () => { if (root.classList.contains('hub-on')) paint() });
 
   const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   const timeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms))]);
@@ -88,8 +89,9 @@
     label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
     a: { name: g.a.name, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date });
+  const noSpoil = f => { if (f.state === 'pre' || !window.flMC?.spoil(f.id)) return f; f.spoil = true; f.label = f.label.replace(/ \S+ to \S+ /, ' v ') + ', score hidden'; for (const t of [f.a, f.b]) { t.lose = false; t.win = false } return f };
   const hubAttr = g => `data-hub="${esc(g.sport)}|${esc(g.lg || '')}|${esc(g.id)}"`;
-  const card = g => window.flCard({ ...facts(g), attrs: hubAttr(g) });
+  const card = g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g) });
   const ico = (k, s = 16) => (window.flShell?.ic ? window.flShell.ic(k, s) : '');
   const ini = n => esc((n || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase());
   const face = (src, name, cls = 'avx') => `<span class="${cls}">${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ''}<span aria-hidden="true">${ini(name)}</span></span>`;
@@ -114,16 +116,16 @@
       || [...list].sort((a, b) => b.date - a.date || size(b) - size(a))[0] || null;
   }
   function featureHTML(g, list) {
-    const f = facts(g), soccer = g.sport === 'soccer', pre = g.state === 'pre', live = g.state === 'in';
+    const f = noSpoil(facts(g)), soccer = g.sport === 'soccer', pre = g.state === 'pre', live = g.state === 'in';
     // under each name: the latest goal for that side (soccer), or that side's leading player tonight
     const under = t => { const goal = soccer ? g.goals.filter(x => x.t === t.id).slice(-1)[0] : null, lead = !soccer ? g.leaders.find(l => String(l.team) === t.id) : null;
       return goal ? `<span class="ftr-g"><span>${esc(goal.who)} <b>${esc(goal.min)}</b>${goal.pen ? ' (pen)' : goal.og ? ' (og)' : ''}</span></span>`
         : lead && !pre ? `<span class="ftr-g"><span>${esc(lead.name)} <b>${esc(lead.show || lead.val)} ${esc(lead.abbr)}</b></span></span>`
         : soccer && live ? '<span class="ftr-g"><span>No goals yet</span></span>' : '' };
-    f.a.under = under(g.a); f.b.under = under(g.b);
+    if (!f.spoil) { f.a.under = under(g.a); f.b.under = under(g.b) }
     // the chance bar: the books' prices, each turned into a chance and scaled so the three add to 100
     const pa = g.a.ml, pb = g.b.ml, pd = soccer ? g.draw : 0; let prob = '';
-    if (pa && pb && (!soccer || pd)) { const t = pa + pb + (pd || 0), A = Math.round(pa / t * 100), D = pd ? Math.round(pd / t * 100) : 0, B = 100 - A - D;
+    if (pa && pb && (!soccer || pd) && !f.spoil) { const t = pa + pb + (pd || 0), A = Math.round(pa / t * 100), D = pd ? Math.round(pd / t * 100) : 0, B = 100 - A - D;
       prob = `<span class="hm-prob" role="img" aria-label="Chance from the betting market: ${esc(g.a.name)} ${A}%${pd ? `, draw ${D}%` : ''}, ${esc(g.b.name)} ${B}%">
         <span class="hm-prob-l"><b>${esc(g.a.name)} ${A}%</b>${pd ? `<span>Draw ${D}%</span>` : '<span>Market chance</span>'}<b>${esc(g.b.name)} ${B}%</b></span>
         <span class="ftr-prob"><i style="flex:${A};background:var(--hc)"></i>${pd ? `<i class="d" style="flex:${D}"></i>` : ''}<i style="flex:${B};background:var(--ac)"></i></span></span>` }
@@ -210,7 +212,7 @@
   }
   function standouts(list) {
     const seen = new Set(), rows = [];
-    for (const g of list.filter(g => g.state !== 'pre').sort((a, b) => b.weight - a.weight)) for (const l of g.leaders) {
+    for (const g of list.filter(g => g.state !== 'pre' && !window.flMC?.spoil(g.key)).sort((a, b) => b.weight - a.weight)) for (const l of g.leaders) {
       if (!l.name || seen.has(l.name)) continue;
       const rank = /point|goal/i.test(l.cat) ? 3 : /rating|passing|yards/i.test(l.cat) ? 2 : 1;
       seen.add(l.name); rows.push({ ...l, g, score: g.weight * 10 + rank * 5 + Math.min(l.val, 60) / 4 });
