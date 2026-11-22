@@ -13,6 +13,7 @@
     ['members-club', 'Members’ Club', 'Deep green, champagne and serif type.'],
     ['aurora-glass', 'Aurora Glass', 'Frosted glass over glowing color.'],
     ['chrono', 'Chrono', 'Clean white, thin numerals, watch-dial details.'],
+    ['stadium-gold', 'Stadium Gold', 'Night stadium, gold light, broadcast type.'],
   ];
   const SIZES = [[0.9, 'Small'], [1, 'Default'], [1.15, 'Large'], [1.3, 'Extra large']];
   const BRIGHT = [['dim', 'Dimmed'], ['', 'Normal'], ['bright', 'Bright']];

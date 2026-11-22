@@ -1,5 +1,5 @@
 /* Floodlight · theme tokens. The one place colours, type, corners and shadows are set.
-   Five themes, picked in Settings: Night Match, Team Colors, Members' Club, Aurora Glass, Chrono.
+   Six themes, picked in Settings: Night Match, Team Colors, Members' Club, Aurora Glass, Chrono, Stadium Gold.
    The active theme is the data-theme attribute on <html> (set before first paint by the script at the top of index.html);
    data-scheme says whether that theme is light or dark. Components read these tokens and nothing else.
    This file is shared with the Lab page (lab.html), so it holds tokens only. The skin is in themes.css. */
@@ -105,6 +105,37 @@
   --heat-badge-bg:#FFFFFF; --heat-badge-fg:#111111; --heat-badge-border:#BDBDB6; --ring-w:5px; --ring-track-w:5px; --ring-darken:18%; --ring-ticks:.7 1.3; --ring-track:#BDBDB6; --chart-under-border:0;
   --score-ink:var(--text); --score-glow:none; --stripe:transparent; --pop:#FFFFFF; --ftr-score:clamp(64px,7.4vw,104px); --title-size:clamp(60px,9.4vw,132px);
   --theme-color:#F5F5F3; color-scheme:light;
+}
+
+/* ---------- Stadium Gold: night stadium photography, gold light and broadcast type ---------- */
+:root[data-theme="stadium-gold"],[data-theme-preview="stadium-gold"]{
+  --bg:#07080A; --surface:#101216; --surface-2:rgba(244,238,223,.055); --border:rgba(233,190,96,.22); --border-2:rgba(233,190,96,.5);
+  --text:#F4EEDF; --text-2:#D9D1BE; --muted:#ADA591;
+  --accent:#EDBE55; --accent-fill:#E9B84B; --on-accent:#150F02; --live:#FF7A66; --live-fill:#F4604C; --on-live:#1A0805; --win:#EDBE55; --loss:#ADA591;
+  --radius-card:22px; --radius-tile:14px; --radius-pill:999px;
+  --font-display:"Montserrat",sans-serif; --display-weight:800; --font-body:"Barlow",system-ui,sans-serif; --display-track:-.02em; --score-weight:900;
+  --shadow-card:0 30px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,236,190,.07); --shadow-pop:0 30px 80px rgba(0,0,0,.75);
+  --chart-over:linear-gradient(180deg,#FFE7A6,#D9A235); --chart-under:linear-gradient(180deg,#8D94A1,#4B515D); --chart-avg:#F4EEDF; --chart-line:rgba(244,238,223,.6);
+  --chart-over-flat:#EDBE55; --chart-under-flat:#727987;
+  --heat-ice:#7CC6FF; --heat-mid:#EDE6D6; --heat-warm:#FFB02E; --heat-fire:#FF4A22;
+  --panel:linear-gradient(180deg,#14161B,#0B0C10); --inset:rgba(0,0,0,.42); --pill-bg:#E9B84B; --pill-fg:#150F02; --cta-bg:linear-gradient(180deg,#FFE9AE 0%,#EDBE55 46%,#C8922B 100%); --cta-fg:#150F02;
+  --page:#07080A;
+  --good:#7FCB5A; --bad:#FF8A7A; --gold-1:#2A2008; --gold-2:#EDBE55; --gold-text:#FFF3D2;
+  --heat-panel:var(--panel); --heat-panel-fg:var(--text); --heat-panel-muted:var(--muted); --heat-panel-border:var(--border); --heat-darken:0%; --heat-knob:#FFFFFF;
+  --ring-w:7px; --ring-track-w:7px; --chart-under-border:0;
+  --score-ink:#FFF3D2; --score-glow:0 0 44px rgba(233,184,75,.45); --stripe:rgba(255,255,255,.02); --pop:#111318; --ftr-score:clamp(72px,9vw,128px); --title-size:clamp(64px,9.6vw,150px);
+  /* this theme's own: the poster face, the metal gradients, the light it throws, the slant and the two stadium pictures */
+  --font-poster:"Barlow Condensed","Arial Narrow",sans-serif; --font-brand:"Syne",sans-serif;
+  --gold-grad:linear-gradient(180deg,#FFE9AE 0%,#EDBE55 46%,#C8922B 100%); --gold-edge:linear-gradient(135deg,rgba(255,226,150,.85),rgba(233,184,75,.28) 30%,rgba(233,184,75,.12) 62%,rgba(255,214,120,.7));
+  --ivory-grad:linear-gradient(180deg,#FFFFFF 0%,#F4EEDF 42%,#C9B88F 100%); --score-grad:linear-gradient(180deg,#FFF8E1 8%,#F3CE73 52%,#B9832A 100%);
+  --gold-glow:0 0 0 1px rgba(255,226,150,.5),0 8px 26px rgba(233,184,75,.38); --gold-haze:rgba(233,184,75,.16);
+  --ice-panel:linear-gradient(160deg,#16222F,#0B1118 70%); --ice-edge:linear-gradient(135deg,rgba(124,198,255,.6),rgba(124,198,255,.12) 40%,rgba(124,198,255,.38));
+  --slate-panel:linear-gradient(160deg,#1B222C,#0E1218 72%); --slate-edge:linear-gradient(135deg,rgba(244,238,223,.5),rgba(244,238,223,.08) 40%,rgba(244,238,223,.3));
+  --chip-bg:rgba(11,12,16,.74); --chip-edge:rgba(244,238,223,.3); --chip-edge-2:rgba(244,238,223,.55);
+  --slip-grad:linear-gradient(120deg,#F7DC92 0%,#E2B047 38%,#F2CD76 62%,#C08D2B 100%);
+  --skew-card:-4deg; --skew-tile:-7deg; --skew-chip:-12deg;
+  --stadium-wide:url("/stadium-wide.webp"); --stadium-pitch:url("/stadium-pitch.webp");
+  --theme-color:#07080A; color-scheme:dark;
 }
 
 /* ---------- names the older sheets use, pointed at the theme ---------- */
