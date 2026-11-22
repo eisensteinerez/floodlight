@@ -19,6 +19,36 @@
   const H = { games: [], ufc: [], box: [], at: 0, loading: false, filter: 'all', err: 0, day: (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })(), shown: '', live: 0 };
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
 
+  /* ---------- what makes Home yours ----------
+     Favorite sports put those sports first. Followed teams and a watchlist of single games fill "Your games". Sections you
+     do not want can be switched off. All of it is kept in this browser and, when you are logged in, with your account. */
+  const SECTIONS = [['hot', 'Hot and cold players'], ['three', 'Best edge, transfer wire and the Lab'], ['fights', 'UFC and boxing nights'], ['standouts', 'Standout lines']];
+  const MY = { sports: store.get('fl.favSports', []), off: store.get('fl.homeOff', []), watch: store.get('fl.watch', []), recent: store.get('fl.recentGames', []), edit: false, skip: store.get('fl.homeSkip', false) };
+  let myT = 0;
+  function saveMine() {
+    MY.watch = MY.watch.filter(w => Date.now() - (w.at || 0) < 4 * 864e5).slice(-40);   // a watched game drops off a few days after it was added
+    store.set('fl.favSports', MY.sports); store.set('fl.homeOff', MY.off); store.set('fl.watch', MY.watch);
+    try { if (window.S?.me && typeof api === 'function') { clearTimeout(myT); myT = setTimeout(() => api('/api/me/prefs', { favSports: MY.sports, homeOff: MY.off, watch: MY.watch }).then(d => { if (d.user) S.me = d.user }).catch(() => {}), 500) } } catch (e) {}
+  }
+  document.addEventListener('fl:me', () => { const p = window.S?.me?.prefs; if (!p) return; let ch = false;
+    if (Array.isArray(p.favSports) && p.favSports.length && !MY.sports.length) { MY.sports = p.favSports; ch = true }
+    if (Array.isArray(p.homeOff) && p.homeOff.length && !MY.off.length) { MY.off = p.homeOff; ch = true }
+    if (Array.isArray(p.watch) && p.watch.length) { const have = new Set(MY.watch.map(w => w.key)), add = p.watch.filter(w => w && w.key && !have.has(w.key)); if (add.length) { MY.watch = [...MY.watch, ...add]; ch = true } }
+    if (ch) { store.set('fl.favSports', MY.sports); store.set('fl.homeOff', MY.off); store.set('fl.watch', MY.watch) }
+    if (root.classList.contains('hub-on')) paint() });
+  const watching = key => MY.watch.some(w => w.key === key);
+  function watch(g, on = !watching(g.key)) { MY.watch = MY.watch.filter(w => w.key !== g.key); if (on) MY.watch.push({ key: g.key, sport: g.sport, id: g.id, a: g.a?.name || '', b: g.b?.name || '', at: Date.now() }); saveMine(); if (root.classList.contains('hub-on')) paint(); return on }
+  function seen(g) { MY.recent = [{ key: g.key, sport: g.sport, id: g.id, a: g.a?.name || '', b: g.b?.name || '', at: Date.now() }, ...MY.recent.filter(r => r.key !== g.key)].slice(0, 8); store.set('fl.recentGames', MY.recent) }
+  const likes = g => MY.sports.includes(g.sport);
+  const PRE = { football: 'fb', basketball: 'bb', hockey: 'hk', baseball: 'bs' };   // the ids the sport pages give a followed team
+  const favId = (g, t) => PRE[g.sport] ? `${PRE[g.sport]}-${g.lg}-${t.id}` : t.id;
+  const favList = () => { try { return S.fav || [] } catch (e) { return [] } };
+  // a followed team matches by name, or by its id within its own sport (ids repeat across sports)
+  const isMine = (g, F = favList()) => [g.a, g.b].some(t => F.some(f => { const n = (f.name || '').toLowerCase(); return (n && (n === (t.full || '').toLowerCase() || n === (t.name || '').toLowerCase())) || ((f.sport || 'soccer') === g.sport && [String(f.tid || ''), f.sport ? '' : String(f.id || '')].includes(t.id) && !!t.id) }));
+  function follow(g, t) { try { const id = favId(g, t), has = S.fav.some(f => f.id === id || (f.tid && String(f.tid) === t.id && f.sport === g.sport));
+      S.fav = has ? S.fav.filter(f => !(f.id === id || (f.tid && String(f.tid) === t.id && f.sport === g.sport))) : [...S.fav, PRE[g.sport] ? { id, tid: t.id, sport: g.sport, lg: g.lg, name: t.full || t.name, logo: t.logo || '' } : { id, name: t.full || t.name, logo: t.logo || '', lg: '' }];
+      typeof savePrefs === 'function' && savePrefs() } catch (e) {} }
+
   /* ---------- the page itself ---------- */
   const sec = document.createElement('section'); sec.id = 'hub'; sec.className = 'hub'; sec.setAttribute('aria-label', 'Live Hub'); sec.hidden = true;
   document.querySelector('.shell')?.prepend(sec);
@@ -107,9 +137,8 @@
 
   /* the featured game: one of your teams first, then the biggest game in play, then the next big one to start */
   function featured(list) {
-    const F = (window.S?.fav || []), names = new Set(F.map(f => (f.name || '').toLowerCase())), ids = new Set(F.flatMap(f => [String(f.tid || ''), String(f.id || '')]).filter(Boolean));
-    const mine = g => [g.a, g.b].some(t => ids.has(t.id) || names.has((t.full || '').toLowerCase()) || names.has((t.name || '').toLowerCase()));
-    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 4 : 0);
+    const mine = g => isMine(g);
+    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 4 : 0) + (likes(g) ? 40 : 0) + (watching(g.key) ? 60 : 0);
     const open = list.filter(g => g.state !== 'post'), live = open.filter(g => g.state === 'in'), pre = open.filter(g => g.state === 'pre');
     const soon = xs => [...xs].sort((a, b) => (size(b) - (b.date - Date.now()) / 36e5 * 3) - (size(a) - (a.date - Date.now()) / 36e5 * 3))[0];
     return live.filter(mine).sort((a, b) => size(b) - size(a))[0] || soon(pre.filter(mine)) || [...live].sort((a, b) => size(b) - size(a))[0] || soon(pre)
@@ -222,15 +251,37 @@
     return `<section class="card" aria-label="Standout players"><div class="sec-h"><h2>Standout lines</h2><span class="lb">From ${isToday() ? 'today’s' : 'this day’s'} games</span></div><div class="hm-rows hm-two">${rows.slice(0, 6).map(r => `
       <button type="button" class="rw" ${hubAttr(r.g)}>${face(r.shot, r.name)}<span class="rw-t"><b>${esc(r.name)}</b><small>${esc(r.g.a.name)} v ${esc(r.g.b.name)}</small></span><span class="hm-val"><b class="num">${esc(r.show || r.val)}</b><small class="lb">${esc(r.abbr || r.cat)}</small></span></button>`).join('')}</div></section>`;
   }
-  function favs(list) {
-    const F = (window.S?.fav || []), names = new Set(F.map(f => (f.name || '').toLowerCase())), ids = new Set(F.flatMap(f => [String(f.tid || ''), String(f.id || '')]).filter(Boolean));
-    if (!F.length) return '';
-    const mine = list.filter(g => [g.a, g.b].some(t => ids.has(t.id) || names.has((t.full || '').toLowerCase()) || names.has((t.name || '').toLowerCase())));
-    return `<section class="card" aria-label="Your teams"><div class="sec-h"><h2>Your teams</h2><span class="lb">${mine.length ? `${mine.length} playing ${isToday() ? 'today' : 'this day'}` : `None of them play ${isToday() ? 'today' : 'this day'}`}</span></div>
-      <div class="cx-row">${F.slice(0, 12).map(f => `<span class="pl">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}</span>`).join('')}</div>
-      ${mine.length ? `<div class="g4 hm-cards">${mine.slice(0, 4).map(card).join('')}</div>` : ''}</section>`;
+  /* Your games: followed teams and watched games, live first. With nothing chosen yet, an invitation to choose. */
+  function mine(list) {
+    const F = favList(), has = F.length || MY.sports.length || MY.watch.length;
+    if (MY.edit) return editor(list);
+    if (!has) return MY.skip ? '' : `<section class="card hm-mine hm-invite" aria-label="Make Home yours"><div class="rw-t"><h2>Make Home yours</h2><p>Pick the sports and teams you care about and they come first here: your games at the top, your sports ahead of the rest.</p></div>
+      <div class="cx-row"><button type="button" class="bt" data-hubmy="edit">Choose sports and teams</button><button type="button" class="bt ghost" data-hubmy="skip">Not now</button></div></section>`;
+    const rank = g => (g.state === 'in' ? 0 : g.state === 'pre' ? 1 : 2), games = list.filter(g => isMine(g, F) || watching(g.key)).sort((a, b) => rank(a) - rank(b) || a.date - b.date);
+    const live = games.filter(g => g.state === 'in').length, gone = MY.watch.filter(w => !list.some(g => g.key === w.key)).length;
+    const sub = games.length ? `${games.length} ${isToday() ? 'today' : 'this day'}${live ? ` · ${live} live` : ''}` : F.length || MY.watch.length ? `None of your teams play ${isToday() ? 'today' : 'this day'}` : 'Follow a team or watch a game to fill this';
+    const tag = g => watching(g.key) && !isMine(g, F) ? '<span class="pl hm-wtag">Watching</span>' : '';
+    const recents = MY.recent.filter(r => list.some(g => g.key === r.key) && !games.some(g => g.key === r.key)).slice(0, 4), lab = (store.get('fl.labRecent', []) || []).slice(0, 3);
+    return `<section class="card hm-mine" aria-label="Your games"><div class="sec-h"><h2>Your games</h2><span class="lb">${sub}</span><button type="button" class="lk" data-hubmy="edit">Edit your Home</button></div>
+      ${games.length ? `<div class="g4 hm-cards">${games.slice(0, 8).map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tag(g) })).join('')}</div>` : ''}
+      ${F.length || MY.sports.length ? `<div class="cx-row hm-chips" aria-label="What you follow">${MY.sports.map(k => `<span class="pl solid">${esc((SPORTS.find(x => x[0] === k) || [k, k])[1])}</span>`).join('')}${F.slice(0, 14).map(f => `<span class="pl">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}</span>`).join('')}${F.length > 14 ? `<span class="pl">+${F.length - 14} more</span>` : ''}</div>` : ''}
+      ${recents.length || lab.length ? `<div class="hm-back"><span class="lb">Pick up where you left off</span><div class="cx-row">${recents.map(r => { const g = list.find(x => x.key === r.key); return `<button type="button" class="cx sm" ${hubAttr(g)}>${esc(g.a.name)} v ${esc(g.b.name)}</button>` }).join('')}${lab.map(r => `<button type="button" class="cx sm" data-hublab="${esc(JSON.stringify(r.args || { q: r.q }))}">${ico('lab', 14)}${esc(r.label || r.q)}</button>`).join('')}</div></div>` : ''}
+      ${gone && !games.length ? `<p class="lb">${gone} watched ${gone === 1 ? 'game is' : 'games are'} on another day.</p>` : ''}</section>`;
   }
-
+  function editor(list) {
+    const F = favList(), pool = [], seenT = new Set();
+    for (const g of [...list].sort((a, b) => likes(b) - likes(a) || b.weight - a.weight)) { if (g.sport === 'tennis' || (MY.sports.length && !likes(g))) continue; for (const t of [g.a, g.b]) { const k = g.sport + t.id; if (!t.id || !t.name || seenT.has(k)) continue; seenT.add(k); pool.push({ g, t }) } }
+    const on = (g, t) => F.some(f => f.id === favId(g, t) || (f.tid && String(f.tid) === t.id && f.sport === g.sport) || (f.name || '').toLowerCase() === (t.full || t.name).toLowerCase());
+    return `<section class="card hm-mine hm-edit" aria-label="Edit your Home"><div class="sec-h"><h2 tabindex="-1" id="hmEditH">Edit your Home</h2><button type="button" class="bt sm" data-hubmy="done">Done</button></div>
+      <div class="hm-ed"><h3 id="hmEdS">Favorite sports</h3><p class="lb">These come first in the featured game and the rows below.</p>
+        <div class="cx-row" role="group" aria-labelledby="hmEdS">${SPORTS.filter(x => !['all', 'boxing', 'ufc'].includes(x[0])).map(([k, l]) => `<button type="button" class="cx" aria-pressed="${MY.sports.includes(k)}" data-hubsport="${k}">${esc(l)}</button>`).join('')}</div></div>
+      <div class="hm-ed"><h3 id="hmEdT">Teams you follow</h3>
+        ${F.length ? `<div class="cx-row" role="group" aria-labelledby="hmEdT">${F.map(f => `<button type="button" class="cx sm" aria-pressed="true" data-hubunfav="${esc(f.id)}" aria-label="Stop following ${esc(f.name)}">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}${ico('x', 14)}</button>`).join('')}</div>` : '<p class="lb">None yet.</p>'}
+        <p class="lb">${pool.length ? `Playing ${isToday() ? 'today' : 'this day'}${MY.sports.length ? ' in your sports' : ''}. Press a team to follow it. Any team’s own page has a follow star too.` : `No teams from ${MY.sports.length ? 'your sports' : 'the board'} play ${isToday() ? 'today' : 'this day'}. Follow a team from its own page, or pick another day above.`}</p>
+        ${pool.length ? `<div class="cx-row hm-pool">${pool.slice(0, 36).map(({ g, t }, i) => `<button type="button" class="cx sm" aria-pressed="${on(g, t)}" data-hubfav="${i}">${t.logo ? `<img class="hm-plimg" src="${esc(t.logo)}" alt="" loading="lazy">` : ''}${esc(t.full || t.name)}</button>`).join('')}</div>` : ''}</div>
+      <div class="hm-ed"><h3>Sections on Home</h3>${SECTIONS.map(([k, l]) => `<label class="hm-sw"><input class="sw" type="checkbox" role="switch" data-hubsec="${k}" ${MY.off.includes(k) ? '' : 'checked'}> ${esc(l)}</label>`).join('')}</div>
+      ${MY.watch.length ? `<div class="hm-ed"><h3>Watchlist</h3><div class="cx-row">${MY.watch.map(w => `<button type="button" class="cx sm" aria-pressed="true" data-hubunwatch="${esc(w.key)}" aria-label="Stop watching ${esc(w.a)} v ${esc(w.b)}">${esc(w.a)} v ${esc(w.b)}${ico('x', 14)}</button>`).join('')}</div><p class="lb">Add a game with the Watch button in its match centre.</p></div>` : '<p class="lb">To watch a single game, open it and press Watch. It then sits in Your games with live updates.</p>'}</section>`;
+  }
   const isNight = () => new Date().getHours() >= 17;
   function days() {
     const t = new Date(); t.setHours(0, 0, 0, 0);
@@ -242,35 +293,35 @@
     const list = H.games, live = list.filter(g => g.state === 'in'), today = isToday(), ready = H.at && H.shown === ymd(H.day);
     const ftr = ready ? featured(list) : null;
     // the row of four: games in play, or the next to start when nothing is live; never the featured one twice
-    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0);
+    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (likes(g) ? 40 : 0);   // your favorite sports come first
     const rest = list.filter(g => g !== ftr);
     const liveRow = rest.filter(g => g.state === 'in').sort((a, b) => size(b) - size(a));
-    const nextRow = rest.filter(g => g.state === 'pre').sort((a, b) => a.date - b.date || size(b) - size(a));
+    const nextRow = rest.filter(g => g.state === 'pre').sort((a, b) => likes(b) - likes(a) || a.date - b.date || size(b) - size(a));
     const doneRow = rest.filter(g => g.state === 'post').sort((a, b) => size(b) - size(a));
     const four = (liveRow.length ? liveRow : nextRow.length ? nextRow : doneRow).slice(0, 4);
     const rowTitle = liveRow.length ? 'Live now' : nextRow.length ? 'Up next' : 'Finished';
     const title = today ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
     // a redraw every 30 seconds must not take the keyboard's place away
     const act = sec.contains(document.activeElement) ? document.activeElement : null, keepAsk = act?.id === 'hmAsk' ? act.value : null;
-    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-shell'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
+    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-hubmy', 'data-hubsport', 'data-hubsec', 'data-hubfav', 'data-hubunfav', 'data-shell'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
     sec.innerHTML = `
       <header class="pg-head hm-head"><div><h1 class="pg-title">${title}</h1><p class="pg-sub">${H.day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>${days()}</header>
-      <div class="g2 hm-top">
+      ${mine(list)}
+      <div class="g2 hm-top${MY.off.includes('hot') ? ' solo' : ''}">
         ${noLive() ? `<div class="card feature emp hm-empty">${ico('members', 30)}<b>Live scores are switched off for you</b><p>Ask your admin for access to see games, scores and lineups here.</p></div>`
           : !ready ? '<div class="skl hm-ftr-skl"></div>' : ftr ? featureHTML(ftr, list)
           : `<div class="card feature emp hm-empty">${ico('live', 30)}<b>No games ${today ? 'today' : 'on this day'}</b><p>${H.err && !list.length ? 'The scoreboards did not answer. This page tries again every 30 seconds.' : 'Pick another day above, or choose a sport to see its schedule.'}</p></div>`}
-        ${heatCard()}
+        ${MY.off.includes('hot') ? '' : heatCard()}
       </div>
       <section class="hm-live" aria-label="${rowTitle}"${noLive() ? ' hidden' : ''}><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
         ${!ready ? `<div class="g4 hm-cards">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>` : four.length ? `<div class="g4 hm-cards">${four.map(card).join('')}</div>`
           : `<p class="hm-none"><b>Nothing else ${today ? 'today' : 'on this day'}</b><span>The featured game is the only one on the board.</span></p>`}</section>
-      <div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>
-      ${favs(list)}
-      ${((f, st) => f && st ? `<div class="g2 hm-low">${st}<div class="vst">${f}</div></div>` : f ? `<div class="g3 hm-fights">${f}</div>` : st)(today ? fightTiles() : '', standouts(list))}`;
+      ${MY.off.includes('three') ? '' : `<div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>`}
+      ${((f, st) => f && st ? `<div class="g2 hm-low">${st}<div class="vst">${f}</div></div>` : f ? `<div class="g3 hm-fights">${f}</div>` : st)(today && !MY.off.includes('fights') ? fightTiles() : '', MY.off.includes('standouts') ? '' : standouts(list))}`;
     if (keepAsk != null) { const a = $('hmAsk'); if (a) { a.value = keepAsk; a.focus() } } else if (keep) sec.querySelector(keep)?.focus({ preventScroll: true });
     { const dy = sec.querySelector('.hm-days'), on = dy?.querySelector('.on'); if (dy && on) dy.scrollLeft = on.offsetLeft - dy.offsetLeft - (dy.clientWidth - on.offsetWidth) / 2 }
     if (!sec.dataset.shown) { sec.dataset.shown = 1; sec.classList.add('hub-in'); setTimeout(() => sec.classList.remove('hub-in'), 900) }
-    if (ready) { loadHeat(); loadWire() }
+    if (ready) { if (!MY.off.includes('hot') || !MY.off.includes('three')) loadHeat(); if (!MY.off.includes('three')) loadWire() }
   }
 
   /* ---------- showing and leaving the hub ---------- */
@@ -285,6 +336,7 @@
     window.flShell?.sync?.();
   }
   function hide() { if (!root.classList.contains('hub-on')) return; root.classList.remove('hub-on'); sec.hidden = true; clearInterval(poll) }
+  window.flHome = { watch, watching, seen, mine: () => MY };
   window.flHub = { show, hide, load, on: () => root.classList.contains('hub-on'), games: () => H.games, open: g => openGame(g.sport, g.lg, g.id), card, ufc: () => H.ufc, at: () => H.at,
     today() { if (!sameLocalDay(H.day)) { const d = new Date(); d.setHours(0, 0, 0, 0); H.day = d; H.games = []; return load(true) } return load() } };
 
@@ -304,6 +356,17 @@
     const d = ev.target.closest('[data-hubday]');
     if (d) { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + +d.dataset.hubday); if (+t === +H.day) return; H.day = t; H.games = []; paint(); load(true);
       return setTimeout(() => sec.querySelector('.hm-day.on')?.focus(), 0) }
+    const my = ev.target.closest('[data-hubmy],[data-hubsport],[data-hubfav],[data-hubunfav],[data-hubunwatch]');
+    if (my) { const m = my.dataset;
+      if (m.hubmy === 'edit') { MY.edit = true; paint(); return sec.querySelector('#hmEditH')?.focus() }
+      if (m.hubmy === 'done') { MY.edit = false; paint(); return sec.querySelector('[data-hubmy="edit"]')?.focus() }
+      if (m.hubmy === 'skip') { MY.skip = true; store.set('fl.homeSkip', true); return paint() }
+      if (m.hubsport) { MY.sports = MY.sports.includes(m.hubsport) ? MY.sports.filter(k => k !== m.hubsport) : [...MY.sports, m.hubsport]; saveMine(); return paint() }
+      if (m.hubfav != null) { const pool = []; const seenT = new Set(); for (const g of [...H.games].sort((a, b) => likes(b) - likes(a) || b.weight - a.weight)) { if (g.sport === 'tennis' || (MY.sports.length && !likes(g))) continue; for (const t of [g.a, g.b]) { const k = g.sport + t.id; if (!t.id || !t.name || seenT.has(k)) continue; seenT.add(k); pool.push({ g, t }) } }
+        const x = pool.find(p => (p.t.full || p.t.name) === my.textContent.trim()) || pool[+m.hubfav]; if (x) follow(x.g, x.t); paint(); return [...sec.querySelectorAll('[data-hubfav]')].find(b => b.textContent.trim() === my.textContent.trim())?.focus() }
+      if (m.hubunfav) { try { S.fav = S.fav.filter(f => f.id !== m.hubunfav); typeof savePrefs === 'function' && savePrefs() } catch (e) {} return paint() }
+      if (m.hubunwatch) { MY.watch = MY.watch.filter(w => w.key !== m.hubunwatch); saveMine(); return paint() }
+    }
     const lab = ev.target.closest('[data-hublab]');
     if (lab) { let a = {}; try { a = JSON.parse(lab.dataset.hublab) } catch (e) {} return openLab(a) }
     const go = ev.target.closest('[data-hubgo]');
@@ -312,6 +375,7 @@
     const [sport, lg, id] = g.dataset.hub.split('|');
     openGame(sport, lg, id, g, g.dataset.hubtab);
   });
+  sec.addEventListener('change', ev => { const k = ev.target.dataset?.hubsec; if (!k) return; MY.off = ev.target.checked ? MY.off.filter(x => x !== k) : [...new Set([...MY.off, k])]; saveMine(); paint() });
   sec.addEventListener('submit', ev => { if (!ev.target.matches('[data-hubask]')) return; ev.preventDefault(); const q = $('hmAsk').value.trim(); openLab(q ? { q } : {}) });
   // the Lab page takes it from here; before that page exists, fall back to the old research screen
   function openLab(args) { if (window.flLab?.open) return window.flLab.open(args); document.querySelector('[data-shell="lab"]')?.click() }

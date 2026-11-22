@@ -987,7 +987,8 @@ SESSIONS_FILE = CACHE_DIR / "sessions.json"
 _acct_lock = threading.Lock()
 SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
-             "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list, "favThemes": list}   # saved Lab boards, saved prediction slips, favorite sports, time zone
+             "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list, "favThemes": list,
+             "homeOff": list, "watch": list}   # Home: the sections a member has hidden, and the games on their watchlist   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -1616,7 +1617,7 @@ def clean_prefs(raw, old):
         if k in raw and isinstance(raw[k], typ):
             v = raw[k]
             if typ is list:
-                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes") and isinstance(x, str) and len(x) <= 24)][:200]
+                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes", "homeOff") and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
                 if k == "color":

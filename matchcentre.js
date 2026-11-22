@@ -255,10 +255,10 @@
       <tbody>${[a, b].map(t => `<tr><th scope="row">${esc(t.abbr || t.name)}</th>${Array.from({ length: d.periods }, (_, i) => `<td class="num">${esc(t.lines[i] ?? '–')}</td>`).join('')}<td class="num"><b>${esc(t.score)}</b></td></tr>`).join('')}</tbody></table>` : '';
     return `<header class="gx-head" style="${window.flTeamColours ? window.flTeamColours({ hc: a.color, ac: b.color }) : ''}">
       <div class="gx-bar"><span class="gx-lg">${live ? '<span class="pl live"><i></i>Live</span>' : state === 'post' ? '<span class="pl">Final</span>' : '<span class="pl">Upcoming</span>'}<span class="lb">${esc(g.lgName || g.short || '')}</span></span>
-        <span class="gx-tools"><button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}" aria-pressed="${hide}">${hide ? 'Reveal the score' : 'Hide the score'}</button><button type="button" class="ib" data-gx="close" aria-label="Close the match centre">${ic('x', 18) || '×'}</button></span></div>
-      <h2 class="gx-title" id="gxTitle"><span class="gx-team">${crest(a)}<span>${esc(a.full || a.name)}</span>${a.record ? `<small class="lb">${esc(a.record)}</small>` : ''}</span>
+        <span class="gx-tools">${window.flHome && state !== 'post' ? `<button type="button" class="bt ghost sm" data-gx="watch" aria-pressed="${window.flHome.watching(g.key)}">${window.flHome.watching(g.key) ? 'Watching' : 'Watch'}</button>` : ''}<button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}" aria-pressed="${hide}">${hide ? 'Reveal the score' : 'Hide the score'}</button><button type="button" class="ib" data-gx="close" aria-label="Close the match centre">${ic('x', 18) || '×'}</button></span></div>
+      <h2 class="gx-title" id="gxTitle"><span class="gx-team">${crest(a)}<span><span class="gx-full">${esc(a.full || a.name)}</span><span class="gx-short">${esc(a.name || a.full)}</span></span>${a.record ? `<small class="lb">${esc(a.record)}</small>` : ''}</span>
         <span class="gx-mid">${state === 'pre' ? `<b class="gx-vs">v</b>` : `${sc(a)}<i aria-hidden="true">:</i><span class="sr-only"> to </span>${sc(b)}`}<small class="${live ? 'on' : ''}">${esc(status)}</small></span>
-        <span class="gx-team">${crest(b)}<span>${esc(b.full || b.name)}</span>${b.record ? `<small class="lb">${esc(b.record)}</small>` : ''}</span></h2>
+        <span class="gx-team">${crest(b)}<span><span class="gx-full">${esc(b.full || b.name)}</span><span class="gx-short">${esc(b.name || b.full)}</span></span>${b.record ? `<small class="lb">${esc(b.record)}</small>` : ''}</span></h2>
       ${lines}
       <p class="gx-meta lb">${[d?.venue || g.venue, d?.crowd ? `${d.crowd.toLocaleString()} there` : '', (d?.tv?.length ? d.tv : g.tv ? [g.tv] : []).length ? `TV (US listing): ${esc((d?.tv?.length ? d.tv : [g.tv]).join(', '))}` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('')}</p>
     </header>`;
@@ -299,6 +299,7 @@
     const g = o.key ? o : find(o);
     if (!g || !CAN.has(g.sport) || !g.path) return false;
     M.seq++; M.g = g; M.d = null; M.at = 0; M.err = ''; M.loading = false; M.sel = null; M.every = false; M.mode = 'lead'; M.from = from || document.activeElement;
+    window.flHome?.seen(g);
     host.hidden = false; root.classList.add('gx-on'); paint(); sheet.focus({ preventScroll: true }); load();
     clearInterval(M.timer); M.timer = setInterval(() => { if (document.hidden || host.hidden) return; const live = (M.d?.state || M.g.state) === 'in'; if (Date.now() - (M.at || 0) >= (live ? LIVE_MS : IDLE_MS) - 500) load(true) }, 5000);
     clearInterval(M.tick); M.tick = setInterval(() => sheet.querySelectorAll('[data-gxago]').forEach(t => { const x = ago(+t.dataset.gxago); if (t.textContent !== x) t.textContent = x }), 1000);
@@ -330,6 +331,7 @@
     if (k === 'close') return close();
     if (k === 'retry') return load();
     if (k === 'every') { M.every = !M.every; return paint() }
+    if (k === 'watch') { window.flHome?.watch(M.g); return paint() }
     if (k === 'hide') { setSpoil(M.g.key, true); return paint() }
     if (k === 'reveal') { setSpoil(M.g.key, false); return paint() }
     if (k === 'full') { const g = M.g; close(); window.flPages?.current?.() && window.flPages.hide(); return window.flHub?.open(g) }
