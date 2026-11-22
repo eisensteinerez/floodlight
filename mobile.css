@@ -1,0 +1,98 @@
+/* Floodlight · phone layout.
+   Loaded last, after pages.css. Every rule sits inside a phone-width media query, so tablets and desktops never see
+   any of it. It changes sizes, spacing and how things stack, never the content, and reads the theme tokens from
+   tokens.css, so it works the same in all five themes. Wider screens keep their own breakpoints in themes.css. */
+
+@media (max-width:640px){
+
+  /* ---------- page ---------- */
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  html,body{overflow-x:clip}
+  html:root[data-theme]{--pad:16px;--gap:12px;--title-size:clamp(30px,9.6vw,42px)}
+  html:root[data-theme] :is(button,a,[role="button"],label,summary){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  html:root[data-theme] :is(.pg-title,.livebar h2){line-height:1;text-wrap:balance}
+  html:root[data-theme] .pg-sub{font-size:15px;line-height:1.45}
+
+  /* rows that scroll sideways fade at the edge, so it is clear there is more to swipe to */
+  html:root[data-theme] :is(.tb-sports,.ticker,#chips,.quick,.tabs,.sheet-tabs,.tw-tabs,.qf-row,.pg-chips){
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+    scroll-padding-inline:16px;overscroll-behavior-x:contain;scrollbar-width:none}
+  html:root[data-theme] :is(.tb-sports,.ticker,#chips,.quick,.tabs,.sheet-tabs,.tw-tabs,.qf-row,.pg-chips)::-webkit-scrollbar{display:none}
+
+  /* ---------- bottom bar: every label fits ---------- */
+  html:root[data-theme] .flbar{left:8px;right:8px;padding:0 2px}
+  html:root[data-theme] .flb{font-size:11px;letter-spacing:-.02em;gap:5px;padding-inline:1px}
+  html:root[data-theme] .flb span{text-overflow:clip}
+  html:root[data-theme] .flb.on::before{top:4px}
+
+  /* ---------- section heads: title and its note share a line when they fit, else the note drops below ---------- */
+  html:root[data-theme] .group-h{flex-wrap:wrap;row-gap:6px;gap:6px 10px}
+  html:root[data-theme] .group-h strong{flex:0 1 auto;max-width:100%;min-width:0;font-size:20px;white-space:normal}
+  html:root[data-theme] .group-h > span:not(.pill){flex:0 1 auto;font-size:13px;line-height:1.3}
+
+  /* ---------- the big live card ---------- */
+  html:root[data-theme]{--ftr-score:46px;--ftr-name:15px}
+  html:root[data-theme] .ftr{padding:20px 16px 18px}
+  html:root[data-theme] .ftr .mx-main{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:start}
+  html:root[data-theme] .ftr .mx-t{min-width:0;align-items:center;text-align:center}
+  html:root[data-theme] .ftr .mx-logo{width:56px;height:56px}
+  html:root[data-theme] .ftr .mx-n{font-size:var(--ftr-name);line-height:1.1;overflow-wrap:normal;hyphens:manual;text-wrap:balance}
+  html:root[data-theme] .ftr .mx-mid{min-width:0;padding-top:6px}
+  html:root[data-theme] .ftr .mx-sc{font-size:var(--ftr-score)}
+  html:root[data-theme] .ftr .mx-time{font-size:40px}
+  html:root[data-theme] .ftr .mx-mid small{font-size:15px}
+  html:root[data-theme] .ftr .form{flex-wrap:wrap;justify-content:center;gap:2px;max-width:100%}
+  html:root[data-theme] .ftr .form i{width:18px;height:18px;line-height:18px;font-size:10px}
+  html:root[data-theme] .ftr-g{font-size:12.5px;line-height:1.35;max-width:100%;overflow-wrap:anywhere}
+  html:root[data-theme] .ftr .mx-mid::before{width:200px;height:200px;margin:-100px 0 0 -100px}
+  html:root[data-theme] .ftr-foot{align-self:stretch;justify-content:center;text-align:center;padding:10px 18px;font-size:14px;line-height:1.25}
+  html:root[data-theme="team-colors"] .ftr .mx-sc{padding:10px 16px;border-radius:28px}
+
+  /* ---------- match cards in lists ---------- */
+  html:root[data-theme] .m.mx{padding:16px 14px}
+  html:root[data-theme] .m.mx .mx-n{overflow-wrap:break-word;text-wrap:balance}
+
+  /* ---------- small stat tiles ---------- */
+  html:root[data-theme] .tiles .tile{min-width:0}
+  html:root[data-theme] .tiles .tile b{font-size:28px;overflow:visible;text-overflow:clip;white-space:normal}
+  html:root[data-theme] .tiles .tile span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25}
+
+  /* ---------- match page ---------- */
+  html:root[data-theme] .sheet .form i{width:22px;height:22px;line-height:22px;font-size:10.5px}
+  html:root[data-theme] .sheet .form{gap:3px}
+  /* prediction card: verdict on top, the three picks in a row under it */
+  html:root[data-theme] .pr-verdict{grid-template-columns:minmax(0,1fr);gap:14px;padding:16px}
+  html:root[data-theme] .pr-picks,html:root[data-theme] .pr-picks.three{grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:6px}
+  html:root[data-theme] .pr-picks.three{--n:3}
+  html:root[data-theme] .pr-pick{min-width:0;padding-inline:6px}
+  html:root[data-theme] .pr-pick span{overflow-wrap:anywhere}
+  /* match stats: possession, the four key numbers and the bar list all stay inside the card */
+  html:root[data-theme] .sx{grid-template-columns:minmax(0,1fr)}
+  html:root[data-theme] .sx-poss{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;padding:14px 10px}
+  html:root[data-theme] .sx-side{min-width:0}
+  html:root[data-theme] .sx-side b{font-size:36px}
+  html:root[data-theme] .sx-ring{width:88px;height:88px}
+  html:root[data-theme] .sx-keys{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  html:root[data-theme] .sx-key{min-width:0;padding:12px}
+  html:root[data-theme] .sx-kn{gap:8px}
+  html:root[data-theme] .sx-kn b{font-size:22px;white-space:nowrap}
+  html:root[data-theme] .sx-row{grid-template-columns:28px minmax(0,1fr) 84px minmax(0,1fr) 28px;gap:6px}
+  html:root[data-theme] .sx-row em{font-size:12px;line-height:1.2}
+
+  /* ---------- player profile header: photo sits beside the name instead of floating halfway down ---------- */
+  html:root[data-theme] .pfh-main{align-items:flex-start}
+  html:root[data-theme] .pfh-main > :is(.face,.tcard){margin-top:4px}
+
+  /* ---------- team page: recent results ---------- */
+  html:root[data-theme] .fx{grid-template-columns:44px minmax(0,1fr) auto;gap:8px;padding:8px 10px}
+  html:root[data-theme] .fx .r{font-size:16px;gap:6px}
+  html:root[data-theme] .fx .vs{min-width:0}
+}
+
+/* the smallest phones (iPhone SE and mini) */
+@media (max-width:374px){
+  html:root[data-theme]{--title-size:clamp(28px,9.2vw,34px)}
+  html:root[data-theme]{--ftr-score:42px;--ftr-name:14px}
+  html:root[data-theme] .flb{font-size:10.5px}
+  html:root[data-theme] .ftr .mx-logo{width:48px;height:48px}
+}
