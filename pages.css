@@ -188,6 +188,7 @@
 .lab-hn{padding:18px 10px}
 .lab-try{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .lab-try:empty{display:none}
+.lab-cast{display:none}
 .lab-tool{display:grid;gap:8px;justify-items:start;text-align:left;padding:22px;color:var(--text)}
 .lab-tool b{font:var(--display-weight) 20px/1.15 var(--font-display);letter-spacing:var(--display-track)!important}
 .lab-tool > span:last-child{font:500 14px/1.45 var(--font-body);color:var(--text-2)}
@@ -935,3 +936,231 @@ html:root[data-theme] .fgt-gold .fgt-champ-photo{margin-bottom:-4px}
 :root[data-theme] .ufc-k,:root[data-theme] .ufc-seg h4 span{color:var(--live)}
 :root[data-theme] .ufc-sil b{color:var(--text)}
 html:root[data-theme] .fgt-b .fgt-mv{opacity:1}
+
+/* ---------- Stadium Gold: the page layouts ----------
+   The shared skin is in themes.css. Here: Home, Live, the Lab and Predictions as the theme draws them. Every piece keeps
+   its markup and its data; only the arrangement and the dress change. */
+
+/* page headings: the line under a title moves beside it, behind a gold slash */
+html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head){align-items:center;padding-top:10px}
+html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) > div:first-child{display:flex;align-items:center;flex-wrap:wrap;gap:6px 30px}
+html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub{display:flex;align-items:center;gap:22px;margin:0}
+html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub::before{content:"";flex:none;width:2px;height:74px;background:linear-gradient(180deg,transparent,var(--accent),transparent);transform:skewX(-20deg)}
+html:root[data-theme="stadium-gold"] .hm-head .pg-sub{max-width:250px;text-wrap:balance;font:italic 500 17px/1.75 var(--font-body);letter-spacing:.34em!important;text-transform:uppercase!important}
+/* section headings that stand on the page, not in a card: bigger, with a gold rule running off to the right */
+html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h h2{flex:1;display:flex;align-items:center;gap:14px;font-size:clamp(24px,2.5vw,32px)}
+html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h h2::after{content:"";flex:1;min-width:24px;height:1px;margin-left:10px;background:linear-gradient(90deg,var(--border-2),transparent 94%)}
+html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h .lb{font:italic 500 16px/1.2 var(--font-body);color:var(--text)}
+
+/* ---- Home ---- */
+html:root[data-theme="stadium-gold"] .hm-days{gap:10px;padding:8px;margin:-8px}
+html:root[data-theme="stadium-gold"] .hm-day{width:72px;height:74px;gap:7px;border-radius:var(--radius-tile);background:var(--chip-bg);border-color:var(--chip-edge);font:italic 500 15px/1 var(--font-body);color:var(--text)}
+html:root[data-theme="stadium-gold"] .hm-day b{font:italic 800 23px/1 var(--font-display)}
+html:root[data-theme="stadium-gold"] .hm-day:hover{border-color:var(--chip-edge-2)}
+html:root[data-theme="stadium-gold"] .hm-day.on{background:var(--gold-grad);border-color:transparent;color:var(--on-accent);font-weight:700;box-shadow:var(--gold-glow)}
+html:root[data-theme="stadium-gold"] .hm-ftr .ftr-body{gap:18px}
+html:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n{overflow-wrap:break-word;font-size:19px}
+html:root[data-theme="stadium-gold"] .hm-prob-l{font:italic 500 16px/1.2 var(--font-body);color:var(--text);text-shadow:0 1px 8px rgba(0,0,0,.9)}
+html:root[data-theme="stadium-gold"] .hm-prob-l b{font-size:18px}
+html:root[data-theme="stadium-gold"] .hm-count{font:italic 500 16px/1.3 var(--font-body);color:var(--text);text-shadow:0 1px 8px rgba(0,0,0,.9)}
+html:root[data-theme="stadium-gold"] .hm-cd .tile{background:rgba(7,8,10,.72)}
+/* the two buttons on the lead match lean with the card */
+html:root[data-theme="stadium-gold"] .ftr-acts :is(.ftr-foot,.ftr-alt){position:relative;isolation:isolate;min-height:50px;padding:0 30px;background:none;border-color:transparent;box-shadow:none;font:italic 700 18px/1 var(--font-body)}
+html:root[data-theme="stadium-gold"] .ftr-acts :is(.ftr-foot,.ftr-alt)::before{content:"";position:absolute;inset:0 5px;z-index:-1;border-radius:10px;transform:skewX(var(--skew-chip));background:var(--cta-bg);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 8px 26px rgba(233,184,75,.32)}
+html:root[data-theme="stadium-gold"] .ftr-acts .ftr-alt{color:var(--text)}
+html:root[data-theme="stadium-gold"] .ftr-acts .ftr-alt::before{background:rgba(11,12,16,.82);box-shadow:inset 0 0 0 1px var(--chip-edge-2)}
+/* hot and cold: one panel in the markup, two cards on the page. The card faces are the panel's two ::before/::after layers,
+   laid on the same grid rows as the heading and the list they sit behind. */
+html:root[data-theme="stadium-gold"] .hm-heat{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr auto auto;padding:0;border:0;background:none;box-shadow:none;isolation:isolate}
+html:root[data-theme="stadium-gold"] .hm-heat::before,html:root[data-theme="stadium-gold"] .hm-heat::after{content:"";grid-column:1;z-index:-1;border:1px solid transparent;border-radius:var(--radius-card);box-shadow:var(--shadow-card)}
+html:root[data-theme="stadium-gold"] .hm-heat::before{grid-row:1/3;margin-bottom:9px;background:linear-gradient(150deg,rgba(255,226,150,.09),transparent 30%) padding-box,var(--panel) padding-box,var(--gold-edge) border-box}
+html:root[data-theme="stadium-gold"] .hm-heat::after{grid-row:3/5;margin-top:9px;background:var(--ice-panel) padding-box,var(--ice-edge) border-box}
+html:root[data-theme="stadium-gold"] .hm-heat > *{grid-column:1;min-width:0}
+html:root[data-theme="stadium-gold"] .hm-heat > .sec-h{grid-row:1;margin:0;padding:20px 28px 4px}
+html:root[data-theme="stadium-gold"] .hm-heat > .hm-rows{grid-row:2;padding:0 28px 22px}
+html:root[data-theme="stadium-gold"] .hm-heat > .hm-ice{grid-row:3;margin:0;padding:29px 28px 4px;border-top:0}
+html:root[data-theme="stadium-gold"] .hm-heat > .hm-ice + .hm-rows{grid-row:4;padding-bottom:14px}
+html:root[data-theme="stadium-gold"] .hm-heat :is(h2,h3){font-size:24px}
+html:root[data-theme="stadium-gold"] .hm-heat .hm-ice h3{color:#DCEEFF}
+html:root[data-theme="stadium-gold"] .hm-pick b,html:root[data-theme="stadium-gold"] .hm-vs b{font:italic 700 22px/1.05 var(--font-poster)}
+@media (min-width:821px){
+  html:root[data-theme="stadium-gold"] .hm-ftr{padding:30px 56px 28px}
+  html:root[data-theme="stadium-gold"] .hm-ftr::before{inset:0 15px;transform:skewX(var(--skew-card))}
+  html:root[data-theme="stadium-gold"] .hm-heat::before,html:root[data-theme="stadium-gold"] .hm-heat::after{margin-inline:6px;transform:skewX(-2.5deg)}
+  html:root[data-theme="stadium-gold"] .hm-heat > *{padding-inline:36px!important}
+}
+
+/* ---- Live ---- */
+html:root[data-theme="stadium-gold"] .lv-n{font-style:normal}
+html:root[data-theme="stadium-gold"] #pg-live .seg button{min-height:40px}
+
+/* sport pages follow the Live picture: title and count first, then the dates, then the filters */
+html:root[data-theme="stadium-gold"] #list{display:flex;flex-direction:column}
+html:root[data-theme="stadium-gold"] #list > *{flex:none;min-width:0}
+html:root[data-theme="stadium-gold"] #list > .livebar{order:-3;margin:4px 0 14px}
+html:root[data-theme="stadium-gold"] #list > .datebar{order:-2}
+html:root[data-theme="stadium-gold"] #list > .quick{order:-1;margin-bottom:18px}
+
+/* ---- The Lab ---- */
+html:root[data-theme="stadium-gold"] .lab-bar{isolation:isolate;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;background:none;border-color:transparent;box-shadow:none}
+html:root[data-theme="stadium-gold"] .lab-bar::before{content:"";position:absolute;inset:0;z-index:-2;border:1px solid transparent;border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  background:linear-gradient(180deg,rgba(7,8,10,.3) 0,rgba(7,8,10,.45) 40%,rgba(10,11,14,.97) 66%) padding-box,var(--stadium-pitch) center top/auto 150% no-repeat padding-box,var(--gold-edge) border-box}
+html:root[data-theme="stadium-gold"] .lab-cast{display:flex;position:absolute;left:5%;right:5%;top:12px;height:calc(100% - 178px);max-height:300px;z-index:-1;justify-content:center;align-items:flex-end;pointer-events:none;
+  overflow:hidden;-webkit-mask-image:linear-gradient(#000 76%,transparent);mask-image:linear-gradient(#000 76%,transparent)}
+html:root[data-theme="stadium-gold"] .lab-cast:empty{display:none}
+html:root[data-theme="stadium-gold"] .lab-cast img{height:100%;width:auto;min-width:0;max-width:42%;object-fit:contain;object-position:bottom;filter:drop-shadow(0 10px 26px rgba(0,0,0,.7))}
+html:root[data-theme="stadium-gold"] .lab-cast img:nth-child(1){order:2;z-index:1}
+html:root[data-theme="stadium-gold"] .lab-cast img:nth-child(2){order:1;height:82%;margin-right:-10%}
+html:root[data-theme="stadium-gold"] .lab-cast img:nth-child(3){order:3;height:82%;margin-left:-10%}
+html:root[data-theme="stadium-gold"] #pg-lab:has(#labWs:not([hidden])) .lab-cast{display:none}
+html:root[data-theme="stadium-gold"] .lab-bar:has(.lab-cast img){padding-top:210px}
+html:root[data-theme="stadium-gold"] #pg-lab:has(#labWs:not([hidden])) .lab-bar{padding-top:28px}
+html:root[data-theme="stadium-gold"] .lab-ask{min-height:70px;border-radius:16px;border-color:var(--border-2);background:rgba(8,9,12,.86);color:var(--text);box-shadow:0 12px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,236,190,.12)}
+html:root[data-theme="stadium-gold"] .lab-ask input::placeholder{color:var(--text-2)}
+html:root[data-theme="stadium-gold"] .lab-kbd{background:#1B1D23;border-color:var(--chip-edge);color:var(--text)}
+html:root[data-theme="stadium-gold"] .lab-try .lb{font:italic 500 16px/1 var(--font-body);color:var(--text);margin-right:6px}
+/* the four tools: leaning cards, the name in capitals, a gold drawing of what the tool shows */
+html:root[data-theme="stadium-gold"] .lab-tool{isolation:isolate;gap:6px;align-content:start;min-height:190px;padding:24px 30px 24px 38px;background:none;border-color:transparent;box-shadow:none}
+html:root[data-theme="stadium-gold"] .lab-tool::before{content:"";position:absolute;inset:0 12px;z-index:-2;border:1px solid transparent;border-radius:16px;transform:skewX(var(--skew-tile));box-shadow:var(--shadow-card);
+  background:linear-gradient(150deg,rgba(255,226,150,.08),transparent 34%) padding-box,var(--panel) padding-box,var(--gold-edge) border-box}
+html:root[data-theme="stadium-gold"] .lab-tool::after{content:"";position:absolute;inset:14px 30px 10px 52%;z-index:-1;background:var(--tool-art) right bottom/contain no-repeat;opacity:.9;pointer-events:none}
+html:root[data-theme="stadium-gold"] .lab-tool[data-labtool="props"]{--tool-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 160'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23FFE49C'/%3E%3Cstop offset='1' stop-color='%23C8922B' stop-opacity='.12'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='url(%23g)'%3E%3Crect x='14' y='140' width='17' height='20' rx='2'/%3E%3Crect x='39' y='130' width='17' height='30' rx='2'/%3E%3Crect x='64' y='134' width='17' height='26' rx='2'/%3E%3Crect x='89' y='116' width='17' height='44' rx='2'/%3E%3Crect x='114' y='102' width='17' height='58' rx='2'/%3E%3Crect x='139' y='106' width='17' height='54' rx='2'/%3E%3Crect x='164' y='78' width='17' height='82' rx='2'/%3E%3Crect x='189' y='54' width='17' height='106' rx='2'/%3E%3Crect x='214' y='18' width='17' height='142' rx='2'/%3E%3C/g%3E%3C/svg%3E")}
+html:root[data-theme="stadium-gold"] .lab-tool[data-labtool="compare"]{--tool-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 160'%3E%3Cdefs%3E%3ClinearGradient id='s' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%235E6A80'/%3E%3Cstop offset='1' stop-color='%23161B24' stop-opacity='.15'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='url(%23s)' stroke='%23EDBE55' stroke-opacity='.5' stroke-width='1.5'%3E%3Cpath transform='translate(-44 0)' d='M70 160c0-30 6-44 22-50 2-8 0-12-4-18-10-14-8-40 8-52 16-12 40-8 48 8 4 8 4 16 2 24l8 14c1 3-1 5-5 5l-1 10c-1 8-6 11-16 10l-8-1c-2 8-2 14 2 22 10 6 14 14 14 28z'/%3E%3Cpath transform='matrix(-1 0 0 1 344 0)' d='M70 160c0-30 6-44 22-50 2-8 0-12-4-18-10-14-8-40 8-52 16-12 40-8 48 8 4 8 4 16 2 24l8 14c1 3-1 5-5 5l-1 10c-1 8-6 11-16 10l-8-1c-2 8-2 14 2 22 10 6 14 14 14 28z'/%3E%3C/g%3E%3Cpath d='M138 66h24m-8-7 8 7-8 7M162 92h-24m8-7-8 7 8 7' fill='none' stroke='%23F3CE73' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+html:root[data-theme="stadium-gold"] .lab-tool[data-labtool="matchup"]{--tool-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 160'%3E%3Cg fill='none' stroke='%23EDBE55' stroke-opacity='.3' stroke-width='1.5'%3E%3Cpath d='M0 150H240M120 20V150'/%3E%3Ccircle cx='120' cy='96' r='30'/%3E%3Cpath d='M0 40h34v96H0M240 40h-34v96h34'/%3E%3C/g%3E%3Cg fill='none' stroke='%23F3CE73' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M58 128C92 124 108 96 150 60'/%3E%3Cpath d='m138 60 14-2-3 14'/%3E%3Cpath d='M96 140c40-4 74-20 104-50'/%3E%3Cpath d='m188 90 14-2-3 14'/%3E%3Cpath d='m60 52 14 14m0-14-14 14M150 24l12 12m0-12-12 12'/%3E%3Ccircle cx='46' cy='112' r='8'/%3E%3Ccircle cx='186' cy='128' r='8'/%3E%3C/g%3E%3C/svg%3E")}
+html:root[data-theme="stadium-gold"] .lab-tool[data-labtool="trends"]{--tool-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 160'%3E%3Cg stroke='%23EDBE55' stroke-opacity='.14'%3E%3Cpath d='M0 30H240'/%3E%3Cpath d='M0 62H240'/%3E%3Cpath d='M0 94H240'/%3E%3Cpath d='M0 126H240'/%3E%3Cpath d='M40 0V160'/%3E%3Cpath d='M80 0V160'/%3E%3Cpath d='M120 0V160'/%3E%3Cpath d='M160 0V160'/%3E%3Cpath d='M200 0V160'/%3E%3C/g%3E%3Cpath d='M6 132 44 120 78 126 112 96 146 104 178 70 206 76 234 34' fill='none' stroke='%23F3CE73' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/%3E%3Cpath d='M6 140 234 84' fill='none' stroke='%23F4EEDF' stroke-opacity='.55' stroke-width='2' stroke-dasharray='5 7'/%3E%3Cg fill='%23FFE9AE'%3E%3Ccircle cx='44' cy='120' r='4.5'/%3E%3Ccircle cx='78' cy='126' r='4.5'/%3E%3Ccircle cx='112' cy='96' r='4.5'/%3E%3Ccircle cx='146' cy='104' r='4.5'/%3E%3Ccircle cx='178' cy='70' r='4.5'/%3E%3Ccircle cx='206' cy='76' r='4.5'/%3E%3Ccircle cx='234' cy='34' r='4.5'/%3E%3C/g%3E%3C/svg%3E")}
+html:root[data-theme="stadium-gold"] .lab-tool:hover{border-color:transparent}
+html:root[data-theme="stadium-gold"] .lab-tool:hover::before{filter:brightness(1.3)}
+html:root[data-theme="stadium-gold"] .lab-tool[aria-pressed="true"]{border-color:transparent;box-shadow:none}
+html:root[data-theme="stadium-gold"] .lab-tool[aria-pressed="true"]::before{background:linear-gradient(150deg,rgba(255,226,150,.2),rgba(233,184,75,.05) 60%) padding-box,var(--panel) padding-box,var(--gold-grad) border-box;box-shadow:var(--gold-glow),var(--shadow-card)}
+html:root[data-theme="stadium-gold"] .lab-tool-i{width:auto;height:32px;justify-items:start;border:0;border-radius:0;background:none}
+html:root[data-theme="stadium-gold"] .lab-tool-i svg{width:28px;height:28px}
+html:root[data-theme="stadium-gold"] .lab-tool b{font:italic 800 clamp(28px,2.7vw,38px)/.95 var(--font-poster);text-transform:uppercase!important;letter-spacing:.005em!important;background-image:var(--ivory-grad);padding-right:.1em}
+html:root[data-theme="stadium-gold"] .lab-tool > span:last-child{max-width:min(13.5em,56%);font:italic 500 16px/1.35 var(--font-body);color:var(--text)}
+/* tonight's hottest: a leaning card with the player's picture standing on its bottom edge */
+html:root[data-theme="stadium-gold"] .lab-start > .sec-h h2{font:italic 800 clamp(28px,3vw,40px)/1 var(--font-poster);text-transform:uppercase!important;letter-spacing:.005em!important}
+html:root[data-theme="stadium-gold"] .lab-starter{isolation:isolate;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-content:center;align-items:center;gap:4px 14px;min-height:136px;padding:10px 26px 10px 26px;background:none;border-color:transparent;box-shadow:none}
+html:root[data-theme="stadium-gold"] .lab-starter .rw-t{display:contents}
+html:root[data-theme="stadium-gold"] .lab-starter .rw-t b{grid-column:2/-1}
+html:root[data-theme="stadium-gold"] .lab-starter .rw-t small{grid-column:2}
+html:root[data-theme="stadium-gold"] .lab-starter .rw-t small + small{grid-column:2/-1;white-space:normal}
+html:root[data-theme="stadium-gold"] .lab-starter .hbadge{grid-column:3;grid-row:2}
+html:root[data-theme="stadium-gold"] .lab-starter::before{content:"";position:absolute;inset:0 10px;z-index:-2;border:1px solid transparent;border-radius:16px;transform:skewX(var(--skew-tile));box-shadow:var(--shadow-card);
+  background:radial-gradient(ellipse 46% 120% at 12% 60%,rgba(233,184,75,.26),transparent 70%) padding-box,var(--panel) padding-box,var(--gold-edge) border-box}
+html:root[data-theme="stadium-gold"] .lab-starter:hover{border-color:transparent}
+html:root[data-theme="stadium-gold"] .lab-starter:hover::before{filter:brightness(1.3)}
+html:root[data-theme="stadium-gold"] .lab-starter .avx.av-lg{grid-row:1/4;align-self:end;margin-bottom:-10px;width:128px;height:124px;border:0;border-radius:0;background:none;overflow:visible}
+html:root[data-theme="stadium-gold"] .lab-starter .avx.av-lg img{object-fit:contain;object-position:bottom;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6))}
+html:root[data-theme="stadium-gold"] .lab-starter .rw-t b{font:italic 800 28px/1 var(--font-poster);text-transform:uppercase!important;white-space:normal}
+html:root[data-theme="stadium-gold"] .lab-starter .rw-t small{font-size:16px;line-height:1.35;color:var(--text-2)}
+html:root[data-theme="stadium-gold"] .lab-starter .rw-t small + small{color:var(--text)}
+html:root[data-theme="stadium-gold"] .lab-board b{font:italic 800 28px/1 var(--font-poster);text-transform:uppercase!important}
+@media (min-width:1101px){
+  html:root[data-theme="stadium-gold"] #pg-lab:not([hidden]):not(:has(#labWs:not([hidden]))){display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,1fr);align-items:stretch}
+  html:root[data-theme="stadium-gold"] #pg-lab:not(:has(#labWs:not([hidden]))) > *{grid-column:1/-1}
+  html:root[data-theme="stadium-gold"] #pg-lab:not(:has(#labWs:not([hidden]))) > .lab-bar{grid-column:1;min-height:452px;padding:28px 52px 30px 46px}
+  html:root[data-theme="stadium-gold"] #pg-lab:not(:has(#labWs:not([hidden]))) > .lab-bar::before{inset:0 16px;transform:skewX(var(--skew-card))}
+  html:root[data-theme="stadium-gold"] #pg-lab:not(:has(#labWs:not([hidden]))) > .lab-tools{grid-column:2;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 4px}
+}
+
+/* ---- Predictions ---- */
+html:root[data-theme="stadium-gold"] .pd-n{font-style:normal;font-weight:700}
+html:root[data-theme="stadium-gold"] .pd-min .lb{font:italic 500 15px/1 var(--font-body);color:var(--text-2)}
+html:root[data-theme="stadium-gold"] .pd-sort select{border-radius:var(--radius-tile);font:italic 500 17px/1.2 var(--font-body);min-height:48px}
+html:root[data-theme="stadium-gold"] .pd-list{gap:18px}
+/* a pick: rank, the player's picture in a leaning block, the name in capitals, the edge in gold */
+html:root[data-theme="stadium-gold"] .pd-pk{gap:0;padding:0}
+html:root[data-theme="stadium-gold"] .pd-pk::after{content:"";position:absolute;right:1px;bottom:1px;width:44px;height:66px;opacity:.7;border-bottom-right-radius:var(--radius-card);background:linear-gradient(118deg,transparent 49.2%,rgba(233,184,75,.55) 50%,transparent 51%);pointer-events:none}
+html:root[data-theme="stadium-gold"] .pd-top{gap:18px;min-height:122px;padding:16px 24px 16px 26px}
+html:root[data-theme="stadium-gold"] .pd-rank{min-width:40px;font:italic 900 44px/1 var(--font-display);background-image:var(--ivory-grad);padding-right:.14em;text-align:left}
+html:root[data-theme="stadium-gold"] .pd-top .avx.av-lg{align-self:stretch;width:138px;height:auto;min-height:122px;margin:-16px 0;border:0;border-radius:0;font-size:22px;color:var(--gold-text);
+  background:radial-gradient(ellipse 80% 70% at 50% 100%,rgba(233,184,75,.34),transparent 72%),linear-gradient(160deg,#4A360F,#17110A);clip-path:polygon(22% 0,100% 0,78% 100%,0 100%)}
+html:root[data-theme="stadium-gold"] .pd-top .avx.av-lg img{object-fit:contain;object-position:bottom}
+html:root[data-theme="stadium-gold"] .pd-top .avx.av-lg.crest img{inset:22%;width:56%;height:56%;object-position:center}
+html:root[data-theme="stadium-gold"] .pd-open b{font:italic 800 clamp(26px,2.5vw,34px)/1 var(--font-poster);text-transform:uppercase!important;letter-spacing:.005em!important}
+html:root[data-theme="stadium-gold"] .pd-open span{font-size:18px}
+html:root[data-theme="stadium-gold"] .pd-open small{font-size:16px;color:var(--text-2)}
+html:root[data-theme="stadium-gold"] .pd-edge{align-self:stretch;align-content:center;min-width:0;padding-left:20px;border-left:1px solid rgba(244,238,223,.16)}
+html:root[data-theme="stadium-gold"] .pd-edge .lb{font:italic 700 13px/1 var(--font-body);letter-spacing:.14em!important;text-transform:uppercase!important;color:var(--text)}
+html:root[data-theme="stadium-gold"] .pd-edge b{font:italic 900 clamp(40px,4.2vw,60px)/1 var(--font-display);background-image:var(--score-grad);padding:.02em .12em .02em 0;filter:drop-shadow(0 0 18px rgba(233,184,75,.35))}
+html:root[data-theme="stadium-gold"] .pd-pk.neg .pd-edge b{background-image:linear-gradient(180deg,#E9E4D6,#8E8B80);filter:none}
+html:root[data-theme="stadium-gold"] .pd-add{width:50px;height:50px}
+html:root[data-theme="stadium-gold"] .pd-add[aria-pressed="true"]{background:var(--chip-bg);color:var(--text);border-color:var(--chip-edge-2);box-shadow:none}
+html:root[data-theme="stadium-gold"] .pd-bars{gap:12px;padding:16px 26px 8px;border-top:1px solid rgba(244,238,223,.09);background:rgba(0,0,0,.3)}
+html:root[data-theme="stadium-gold"] .pd-bar dt{font-size:16px;color:var(--text)}
+html:root[data-theme="stadium-gold"] .pd-bar .trak{height:10px}
+html:root[data-theme="stadium-gold"] .pd-bar.mkt .trak > i{background:linear-gradient(90deg,#8D94A1,#DADDE3)}
+html:root[data-theme="stadium-gold"] .pd-bar dd b{min-width:52px;font:italic 700 20px/1 var(--font-body)}
+html:root[data-theme="stadium-gold"] .pd-why{padding:8px 26px 20px;border-radius:0 0 var(--radius-card) var(--radius-card);background:rgba(0,0,0,.3)}
+html:root[data-theme="stadium-gold"] .pd-why li{min-height:36px;padding-inline:14px;font:italic 500 15px/1.25 var(--font-body)}
+html:root[data-theme="stadium-gold"] .pd-why li::before{content:"";flex:none;width:18px;height:18px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='8.5' fill='none' stroke='%23EDBE55' stroke-width='1.6'/%3E%3Cpath d='m6 10.4 2.7 2.7L14 7.6' fill='none' stroke='%23EDBE55' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
+html:root[data-theme="stadium-gold"] .pd-done{padding:8px 26px}
+/* the slip is the one gold card on the page */
+html:root[data-theme="stadium-gold"] .pd-slip{border:1px solid transparent;background:var(--slip-grad) padding-box,linear-gradient(135deg,#FFF6D6,#B98427) border-box;box-shadow:0 18px 50px rgba(233,184,75,.2),inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden}
+html:root[data-theme="stadium-gold"] .pd-slip::after{content:"";position:absolute;right:-6px;top:-4px;width:150px;height:124px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100'%3E%3Cg transform='rotate(-28 60 50)' fill='none' stroke='%23150F02' stroke-width='4' stroke-linejoin='round'%3E%3Cpath d='M14 26h92v16a9 9 0 0 0 0 18v16H14V60a9 9 0 0 0 0-18z'/%3E%3Cpath d='M40 30v42' stroke-dasharray='5 6'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;opacity:.16;pointer-events:none}
+html:root[data-theme="stadium-gold"] .pd-slip h2{font-size:30px}
+html:root[data-theme="stadium-gold"] .pd-empty{font:italic 500 17px/1.5 var(--font-body);max-width:26em}
+html:root[data-theme="stadium-gold"] .pd-big,html:root[data-theme="stadium-gold"] .pd-mk b{font-style:italic}
+/* how we have done: a slate card, and the chart in the theme's two series colours */
+html:root[data-theme="stadium-gold"] .pd-res-card{border:1px solid transparent;background:var(--slate-panel) padding-box,var(--slate-edge) border-box}
+html:root[data-theme="stadium-gold"] .pd-res-card h2{font-size:28px}
+html:root[data-theme="stadium-gold"] .pd-res-card p.lb{font:italic 500 15px/1.5 var(--font-body);color:var(--text)}
+html:root[data-theme="stadium-gold"] .pd-cal{gap:6px}
+html:root[data-theme="stadium-gold"] .pd-pair{gap:2px;border-bottom-color:rgba(244,238,223,.4)}
+html:root[data-theme="stadium-gold"] .pd-pair span{width:min(30px,40%);border-radius:4px 4px 0 0}
+html:root[data-theme="stadium-gold"] .pd-pair .said{background:var(--chart-under)}
+html:root[data-theme="stadium-gold"] .pd-pair .hit{background:var(--chart-over)}
+html:root[data-theme="stadium-gold"] .pd-pair i{font:700 14px/1 var(--font-body);color:var(--text);transform:translateX(-50%)!important}
+html:root[data-theme="stadium-gold"] .pd-col b{font:italic 600 14px/1.2 var(--font-body);color:var(--text)}
+html:root[data-theme="stadium-gold"] .pd-col small{font-size:12px;color:var(--text-2)}
+html:root[data-theme="stadium-gold"] .pd-leg{font-size:14px;color:var(--text)}
+html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)}html:root[data-theme="stadium-gold"] .pd-leg .hit{background:var(--chart-over)}
+
+/* ---- phones and tablets ---- */
+@media (max-width:1100px){
+  html:root[data-theme="stadium-gold"] .hm-days{max-width:100%}
+}
+@media (max-width:820px){
+  html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) > div:first-child{gap:4px 18px}
+  html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub{gap:14px;font-size:16px}
+  html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub::before{height:46px}
+  html:root[data-theme="stadium-gold"] .hm-head .pg-sub{font-size:13px;letter-spacing:.26em!important;max-width:210px}
+  html:root[data-theme="stadium-gold"] .hm-day{width:64px;height:66px}
+  html:root[data-theme="stadium-gold"] .hm-heat > .sec-h,html:root[data-theme="stadium-gold"] .hm-heat > .hm-rows{padding-inline:20px}
+  html:root[data-theme="stadium-gold"] .ftr-acts :is(.ftr-foot,.ftr-alt){padding:0 22px;font-size:16px}
+  html:root[data-theme="stadium-gold"] .lab-bar:has(.lab-cast img){padding-top:170px}
+  html:root[data-theme="stadium-gold"] .lab-cast{height:156px;top:10px}
+  html:root[data-theme="stadium-gold"] .lab-ask{min-height:58px}
+  html:root[data-theme="stadium-gold"] .lab-tool{min-height:150px;padding:20px 22px 20px 28px}
+  html:root[data-theme="stadium-gold"] .lab-tool::before{inset:0 8px;transform:skewX(-4deg)}
+  html:root[data-theme="stadium-gold"] .lab-starter{min-height:112px;padding:8px 16px 8px 18px}
+  html:root[data-theme="stadium-gold"] .lab-starter::before{inset:0 6px;transform:skewX(-4deg)}
+  html:root[data-theme="stadium-gold"] .lab-starter .avx.av-lg{width:92px;height:100px;margin-bottom:-8px}
+  html:root[data-theme="stadium-gold"] .lab-starter .rw-t b{font-size:23px}
+}
+@media (max-width:700px){
+  html:root[data-theme="stadium-gold"] .sec-h{flex-wrap:wrap;row-gap:4px}
+  html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h h2{flex:1 0 auto;max-width:100%}
+  html:root[data-theme="stadium-gold"] .ftr{--ftr-score:clamp(44px,13.5vw,64px);padding-inline:18px}
+  html:root[data-theme="stadium-gold"] .ftr .mx-main{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:8px}
+  html:root[data-theme="stadium-gold"] .ftr .mx-t{min-width:0}
+  html:root[data-theme="stadium-gold"] .ftr .mx-logo{width:60px;height:60px}
+  html:root[data-theme="stadium-gold"] .ftr .mx-n{font-size:clamp(17px,4.8vw,22px);overflow-wrap:break-word;hyphens:none}
+  html:root[data-theme="stadium-gold"] .ftr .mx-mid{padding-top:10px}
+  html:root[data-theme="stadium-gold"] .ftr .mx-mid small{font-size:18px}
+  html:root[data-theme="stadium-gold"] .ftr .form{flex-wrap:wrap;justify-content:center;gap:4px}
+  html:root[data-theme="stadium-gold"] .ftr .form i{width:22px;height:22px;font-size:11px}
+  html:root[data-theme="stadium-gold"] .ftr-g{font-size:14px;overflow-wrap:break-word}
+  html:root[data-theme="stadium-gold"] .lab-tool::after{left:58%;opacity:.6}
+  html:root[data-theme="stadium-gold"] .pd-top{min-height:0;padding:16px 16px 14px;gap:10px 12px}
+  html:root[data-theme="stadium-gold"] .pd-rank{min-width:26px;font-size:28px}
+  html:root[data-theme="stadium-gold"] .pd-top .avx.av-lg{align-self:center;width:84px;height:76px;min-height:0;margin:0;border-radius:10px;clip-path:polygon(16% 0,100% 0,84% 100%,0 100%)}
+  html:root[data-theme="stadium-gold"] .pd-open span{font-size:16px}
+  html:root[data-theme="stadium-gold"] .pd-open small{font-size:14px}
+  html:root[data-theme="stadium-gold"] .pd-edge{align-self:auto;min-width:0;padding-left:0;border-left:0}
+  html:root[data-theme="stadium-gold"] .pd-edge b{font-size:36px}
+  html:root[data-theme="stadium-gold"] .pd-add{width:44px;height:44px}
+  html:root[data-theme="stadium-gold"] .pd-bars{padding:14px 16px 6px}
+  html:root[data-theme="stadium-gold"] .pd-why{padding:8px 16px 18px}
+  html:root[data-theme="stadium-gold"] .pd-bar dt{font-size:14px}
+}
+/* ---------- end Stadium Gold ---------- */
