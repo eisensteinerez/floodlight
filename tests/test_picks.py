@@ -468,7 +468,26 @@ def test_rebuild_lists_changed_results():
     msgs = T.report()
     re_ = [e for _, e, _ in msgs if "RE-CHECKED" in e.get("title", "")]
     assert re_ and "✅ win (was void)" in re_[0]["description"], msgs
+    assert "1 result(s) changed." in re_[0]["description"]
     assert c["reported"]                     # an older day is counted, not posted again card by card
+
+
+
+def test_history_recheck_reads_from_the_first_post(monkeypatch):
+    seen = []
+    monkeypatch.setattr(T, "resolve_channels", lambda: ([{"id": "c", "name": "cafe-picks", "icon": "☕"}], "d"))
+    monkeypatch.setattr(T, "messages", lambda cid, start, end, pages=10: seen.append((start, pages)) or [])
+    monkeypatch.setattr(T.time, "sleep", lambda s: None)
+    T.STATE.update(cards={"9:0": _card("9:0", "c", "2026-11-01", [_leg("Ball 10+ Points", "won", "12")])}, v=T.VERSION)
+    T.STATE["cards"]["9:0"]["reported"] = {"result": "won", "legs": ["won"]}
+    T.STATE["cards"]["9:0"]["result"] = "won"
+    T.STATE.pop("rebuild", None)
+    T.D["history"] = True
+    T.reload()
+    assert T.STATE["rebuild"] and T.STATE["before"] == {"9|main": "won"} and not T.STATE["cards"]
+    T.collect(None)
+    assert seen == [(None, 1000)]
+    T.STATE.pop("rebuild", None)
 
 
 if __name__ == "__main__":

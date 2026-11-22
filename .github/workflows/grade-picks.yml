@@ -16,6 +16,10 @@ on:
         description: "Grade and post right away"
         type: boolean
         default: false
+      history:
+        description: "Re-check the whole history: read every post since each channel began, grade it again and post the all-time records"
+        type: boolean
+        default: false
       reset:
         description: "Start the record over (the next scheduled run posts everything again)"
         type: boolean
@@ -36,7 +40,7 @@ concurrency:
 jobs:
   grade:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Load the record
@@ -54,11 +58,12 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           PICKS_DATA_DIR: data
-      - run: python3 pick_tracker.py ${{ inputs.preview && 'try' || inputs.now && 'now' || 'scheduled' }}
+      - run: python3 pick_tracker.py ${{ inputs.preview && 'try' || (inputs.now || inputs.history) && 'now' || 'scheduled' }}
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           PICKS_DATA_DIR: data
           PICKS_RESET: ${{ inputs.reset && 'true' || 'false' }}
+          PICKS_HISTORY: ${{ inputs.history && 'true' || 'false' }}
       - name: Save the record
         if: always() && !inputs.preview
         run: |

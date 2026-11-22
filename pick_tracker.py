@@ -43,7 +43,7 @@ EPOCH_MS = 1420070400000
 VERSION = 5
 LOOK_BACK_H = 48          # posts read each run
 REGRADE_DAYS = 3          # cards re-graded each run (the double check)
-REBUILD_H = 240           # after the reader or grader changes, every post from the last ten days is read again
+KEEP_DAYS = 3650          # cards kept in the record (all of them: the all-time record is the whole history)
 D = {}
 STATE = {"v": VERSION, "cards": {}, "posted": {}, "channels": {}, "icons": {}, "dest": None}
 _lock = threading.RLock()
@@ -95,10 +95,12 @@ def resolve_channels():
     return out, dest
 
 
-def messages(cid, start, end):
-    """Messages in a channel posted between two times, oldest first."""
-    out, after = [], snowflake(start)
-    for _ in range(10):
+def messages(cid, start, end, pages=10):
+    """Messages in a channel posted between two times, oldest first (100 a page)."""
+    out, after = [], snowflake(start) if start else "0"
+    for k in range(pages):
+        if k:
+            time.sleep(0.4)   # a long history: stay well under Discord's read limit
         page = api("GET", f"/channels/{cid}/messages?limit=100&after={after}") or []
         if not page:
             break
@@ -157,9 +159,11 @@ def supersede():
 
 
 def collect(hours=LOOK_BACK_H):
+    """Read the pick channels' posts from the last `hours` (None: from each channel's first post)."""
     chans, dest = resolve_channels()
     end = dt.datetime.now(dt.timezone.utc)
-    start = end - dt.timedelta(hours=hours)
+    start = end - dt.timedelta(hours=hours) if hours else None
+    pages = 10 if hours else 1000
     with _lock:
         STATE["dest"] = dest
         STATE["channels"] = {c["id"]: c["name"] for c in chans}
@@ -169,12 +173,12 @@ def collect(hours=LOOK_BACK_H):
         time.sleep(0.8)   # Discord allows a few reads a second
         try:
             try:
-                msgs = messages(c["id"], start, end)
+                msgs = messages(c["id"], start, end, pages)
             except Exception as e:
                 if "429" not in str(e):
                     raise
                 time.sleep(5)
-                msgs = messages(c["id"], start, end)
+                msgs = messages(c["id"], start, end, pages)
         except Exception as e:
             print(f"pick tracker: can't read #{c['name']}: {e}", file=sys.stderr)
             read_errors.append(c["name"])
@@ -367,15 +371,15 @@ def recap_day():
     return (now_et() - dt.timedelta(hours=9)).date().isoformat()
 
 
-def chunks(blocks, size=3900):
+def chunks(blocks, size=3900, sep="\n\n"):
     out, cur = [], ""
     for b in blocks:
         if len(b) > size:
             b = b[:size - 2] + "\n…"
-        if cur and len(cur) + 2 + len(b) > size:
+        if cur and len(cur) + len(sep) + len(b) > size:
             out.append(cur)
             cur = ""
-        cur = f"{cur}\n\n{b}" if cur else b
+        cur = f"{cur}{sep}{b}" if cur else b
     return out + ([cur] if cur else [])
 
 
@@ -437,21 +441,29 @@ def board_block(by_ch):
 
 
 def recheck_block(cards):
-    """After a rebuild: the cards whose result changed with the new reader and grader (or that it read for the first
-    time), so the records' changes are out in the open."""
+    """After a rebuild: the cards whose result changed with the new reader and grader, and how many it read for the
+    first time, so the records' changes are out in the open. A list of lines."""
     before = STATE.get("before") or {}
-    lines = []
+    lines, first = [], 0
     for c in sorted(cards, key=lambda c: c["at"]):
         if c["single"] or not settled(c) or c.get("result") in (None, "unknown"):
             continue
-        was = before.get(f"{c['post']}|{c['play']}")
+        key = f"{c['post']}|{c['play']}"
+        if key not in before:
+            first += 1
+            continue
+        was = before[key]
         if was == c.get("result"):
             continue
         name = STATE["channels"].get(c["ch"], "?")
         tag = {"won": "✅ win", "lost": "❌ loss", "void": "⚪ void"}.get(c["result"], c["result"])
-        prev = {"won": "win", "lost": "loss", "void": "void", "unknown": "couldn't verify"}.get(was, "not read before")
+        prev = {"won": "win", "lost": "loss", "void": "void", "unknown": "couldn't verify"}.get(was, str(was))
         lines.append(f"**#{name}** {card_day(c)[5:]} {play_name(c) or 'card'}: {tag} (was {prev})")
-    return "\n".join(lines)
+    head = [f"{len(lines)} result(s) changed." if lines else "No earlier result changed."]
+    if first:
+        head.append(f"{first} card(s) were read for the first time (posts the old verifier missed or never graded); "
+                    "they're in the records below.")
+    return head + lines
 
 
 def report(update=False):
@@ -475,7 +487,7 @@ def report(update=False):
         if r and settled(c) and outcome_of(snapshot(c), c) != outcome_of(r, c):
             was = r["result"] if not c["single"] else "-".join(str(r["legs"].count(x)) for x in ("won", "lost"))
             fixed.append((c, TAG.get(was, was).replace("*", "") if not c["single"] else was))
-    recheck = recheck_block(cards) if rebuild else ""
+    recheck = recheck_block(cards) if rebuild else []
     if not new and not fixed and not late and not recheck:
         return []
     out = []
@@ -490,10 +502,16 @@ def report(update=False):
             for k, e in enumerate(embeds):
                 out.append(("", e, ids if k == len(embeds) - 1 else []))
     if recheck:
-        out.append(("", {"title": "🔁 RE-CHECKED WITH THE NEW VERIFIER", "color": B.BLUE,
-                         "description": (recheck[:3800] + ("\n…" if len(recheck) > 3800 else "")),
-                         "footer": {"text": "Every post from the last ten days was read again: every play, leg counts, extras kept apart, "
-                                            "the right game day. The records below include these."}}, []))
+        first = min(c["at"] for c in cards)[:10] if cards else day
+        parts = chunks(["\n".join(recheck[:2]) + "\n"] + recheck[2:], 3800, "\n")
+        for k, desc in enumerate(parts):
+            e = {"color": B.BLUE, "description": desc}
+            if k == 0:
+                e["title"] = "🔁 WHOLE HISTORY RE-CHECKED"
+            if k == len(parts) - 1:
+                e["footer"] = {"text": f"Every post since {first} was read again and graded from ESPN and FotMob: every play, leg "
+                                       "counts, extras kept apart, the right game day. The all-time records below are the result."}
+            out.append(("", e, []))
     by_all = {}
     for c in cards:
         by_all.setdefault(c["ch"], []).append(c)
@@ -542,7 +560,7 @@ def run(final=False, dry=False, hours=LOOK_BACK_H, fresh=True):
     if fresh:
         reload()
     rebuild = STATE.get("rebuild")
-    collect(max(hours, REBUILD_H) if rebuild else hours)
+    collect(None if rebuild else hours)   # a rebuild reads every channel from its first post
     grade_all()
     msgs = report(update=final)
     if msgs and not dry:
@@ -555,7 +573,7 @@ def run(final=False, dry=False, hours=LOOK_BACK_H, fresh=True):
                 STATE.pop("rebuild", None)
                 STATE.pop("before", None)
     with _lock:   # keep four months
-        cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=120)).isoformat()
+        cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=KEEP_DAYS)).isoformat()
         for k in [k for k, c in STATE["cards"].items() if c["at"] < cut]:
             STATE["cards"].pop(k, None)
     if not dry:
@@ -761,23 +779,24 @@ def github_runs(st=None):
 def reload():
     """The saved state, fresh. On GitHub it's the pick-data file; on the server, GitHub's copy when GitHub is running
     the grading, else the server's own."""
+    got = None
     if D.get("data_dir"):
         f = Path(D["data_dir"]) / DATA_FILE
         got = _newest(unseal(f.read_bytes()) if f.exists() else {}, None if D.get("reset") else from_server())
-    elif not D.get("cache_dir"):
-        return
-    else:
+    elif D.get("cache_dir"):
         got = _newest(dict(STATE), storage.load(_path(), {}), mirror())
     if isinstance(got, dict) and got:
         with _lock:
             STATE.clear()
             STATE.update({"v": VERSION, "cards": {}, "posted": {}, "channels": {}, "icons": {}, "dest": None})
             STATE.update(got)
-    if STATE.get("v", 0) < VERSION:
-        # the card reader and grader were rebuilt: read every post of the last ten days again and grade it from scratch.
-        # What each card was called before is kept, so the first post can say which results changed.
-        STATE["before"] = {f"{c.get('post')}|{c.get('play')}": c.get("result") for c in (STATE.get("cards") or {}).values()
-                           if c.get("reported") and not c.get("superseded")}
+    if STATE.get("v", 0) < VERSION or D.pop("history", False):
+        # the card reader and grader were rebuilt (or a history re-check was asked for): read every post since each
+        # channel began and grade it from scratch. What each card was called before is kept, so the first post can say
+        # which results changed.
+        if not STATE.get("rebuild"):
+            STATE["before"] = {f"{c.get('post')}|{c.get('play')}": c.get("result") for c in (STATE.get("cards") or {}).values()
+                               if c.get("reported") and not c.get("superseded")}
         STATE["cards"] = {}
         STATE["rebuild"] = True
         STATE["v"] = VERSION
@@ -842,6 +861,7 @@ if __name__ == "__main__":
             sys.exit(0)
         D["data_dir"] = os.environ.get("PICKS_DATA_DIR") or "data"
         D["reset"] = os.environ.get("PICKS_RESET") == "true"
+        D["history"] = os.environ.get("PICKS_HISTORY") == "true"   # re-read every post since each channel began
         Path(D["data_dir"]).mkdir(exist_ok=True)
         if cmd == "now":
             msgs = run(final=False)

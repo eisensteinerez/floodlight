@@ -124,8 +124,9 @@ At 12:30 AM Eastern it reads the last two days of posts, grades them and posts i
 channel (every card with each pick's result and the reason for each miss, the extras, today's record, all-time record,
 win rate, streak and picks hit; a long night is split over several posts so nothing is cut) and a leaderboard. A card
 that finishes a day or two late (an NFL card posted Saturday, a Monday night leg) is posted the night it finishes. At 8:00 AM it grades everything again from fresh numbers: it posts what finished since, and if a result
-changed it posts the correction. When the reader or grader changes, the first run reads the last ten days again
-and posts a "re-checked" list of the results that changed. No AI, no paid APIs. Tests on real posts: `python3 tests/test_picks.py`.
+changed it posts the correction. When the reader or grader changes, the first run reads every post since each channel began, grades it all again
+and posts a "re-checked" list of the results that changed, then the all-time records. To do that on demand:
+**Actions > Grade pick channels > Run workflow** with "history" ticked. No AI, no paid APIs. Tests on real posts: `python3 tests/test_picks.py`.
 
 Discord often blocks requests from Render's shared address (Cloudflare "error 1015"), so the grading runs first on
 GitHub Actions (`.github/workflows/grade-picks.yml`, free), with one repository secret under **Settings > Secrets and
