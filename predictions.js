@@ -443,21 +443,24 @@
     el.innerHTML = alert + h;
   }
 
-  /* ---------- the slip ---------- */
-  // Legs from different games are independent, so their chances multiply. Legs from one game move together; for those
-  // only the limits are known: no higher than the least likely leg, no lower than the sum of chances minus (legs - 1).
+  /* ---------- the slip ----------
+     The combined chance comes from parlaycore (slipChance): picks from different games multiply; Low or Moderate links
+     (same game, same team, same player) give a rough range; Strong links (one player's stats that count the same plays,
+     a quarterback and his receiver, several overs or unders on one quarterback) are too tight for our rules of thumb, so
+     the slip says so and shows only the limits; picks that can't both hit give 0%. Each leg carries what relate() reads. */
+  const PL = ['type', 'lg', 'sport', 'player', 'team', 'opp', 'k', 'label', 'line', 'side', 'yes', 'start', 'gameKey', 'home', 'away', 'eid'];
+  function plOf(p) { try { const x = window.flParlay?.fromPick(p); return x ? Object.fromEntries(PL.filter(k => x[k] != null).map(k => [k, x[k]])) : null } catch (e) { return null } }
+  const corrLegs = legs => legs.map(l => ({ ...(l.pl || { type: 'other', lg: l.sport }), id: l.id, gameKey: l.pl?.gameKey || l.gameKey, ours0: l.ours, market0: l.market }));
   function combine(legs, key) {
-    const groups = new Map(); for (const l of legs) { if (l[key] == null) return null; groups.set(l.gameKey, [...(groups.get(l.gameKey) || []), l[key]]) }
-    let lo = 1, hi = 1, linked = false;
-    for (const ps of groups.values()) { if (ps.length === 1) { lo *= ps[0]; hi *= ps[0] } else { linked = true; lo *= Math.max(0, ps.reduce((a, b) => a + b, 0) - (ps.length - 1)); hi *= Math.min(...ps) } }
-    return { lo, hi, linked };
+    const C = window.flParlay, xs = corrLegs(legs); if (!C || !legs.length) return null;
+    return C.slipChance(xs, l => key === 'ours' ? l.ours0 : l.market0);
   }
-  const range = c => c.linked && pct(c.lo) !== pct(c.hi) ? `${pct(c.lo)}–${pct(c.hi)}%` : `${pct(c.linked ? c.hi : c.lo)}%`;
+  const range = c => !c ? '–' : c.kind === 'conflict' ? '0%' : pct(c.lo) === pct(c.hi) ? `${pct(c.lo)}%` : `${pct(c.lo)}–${pct(c.hi)}%`;
   function syncSlip() {   // legs keep the numbers they were added at, until the same pick is on the board again
     const live = new Map(allPicks().map(p => [p.id, p]));
     P.slip = P.slip.map(l => { const p = live.get(l.id); return p ? leg(p) : l }); store.set('fl.slip', P.slip);
   }
-  const leg = p => ({ id: p.id, name: p.name, text: p.text, short: p.short || `${p.name} ${p.text}`, ours: p.ours, market: p.market, gameKey: p.gameKey, game: p.game, sport: p.sport });
+  const leg = p => ({ id: p.id, name: p.name, text: p.text, short: p.short || `${p.name} ${p.text}`, ours: p.ours, market: p.market, gameKey: p.gameKey, game: p.game, sport: p.sport, pl: plOf(p) });
   function toggle(id) {
     const i = P.slip.findIndex(l => l.id === id);
     if (i >= 0) P.slip.splice(i, 1); else { const p = allPicks().find(x => x.id === id); if (!p) return; if (P.slip.length >= 12) return window.toast?.('A slip holds up to 12 picks'); P.slip.push(leg(p)) }
@@ -472,14 +475,23 @@
     const d = new Date(), name = `${P.slip.length} ${P.slip.length === 1 ? 'pick' : 'picks'} · ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     P.slips.unshift({ id: 's' + Date.now().toString(36), name, legs: P.slip.map(l => ({ ...l })), at: Date.now() }); P.slips = P.slips.slice(0, 30); saveSlips(); P.saved = Date.now(); draw();
   }
+  const CORR_ICON = { Low: 'help', Moderate: 'help', Strong: 'help', Conflicting: 'x' };
+  function corrNote(c, legs) {
+    if (!c?.corr?.label) return '';
+    const k = c.corr, by = new Map(legs.map(l => [l.id, l])), nm = x => by.get(x.id)?.short || x.player || '';
+    const pairs = k.pairs.filter(x => x.label !== 'Low' || k.label === 'Low').slice(0, 3);
+    return `<div class="pd-corr ${k.label.toLowerCase()}" role="note" aria-label="${esc(k.head)}"><p class="pd-corr-h">${ic(CORR_ICON[k.label], 16)}<b>${esc(k.head)}</b><span class="pl pd-corr-l">${esc(k.label)}</span></p><p>${esc(k.text)}</p>
+      ${pairs.length ? `<ul class="pd-corr-p">${pairs.map(x => `<li><span>${esc(nm(x.a))} + ${esc(nm(x.b))}</span><small>${esc(x.label)}: ${esc(x.why)}</small></li>`).join('')}</ul>` : ''}</div>`;
+  }
   function slipCard() {
     const n = P.slip.length, ours = n ? combine(P.slip, 'ours') : null, mk = n ? combine(P.slip, 'market') : null, noMk = P.slip.filter(l => l.market == null).length;
-    const games = [...new Set(P.slip.filter(l => P.slip.filter(x => x.gameKey === l.gameKey).length > 1).map(l => l.game))];
+    const kind = ours?.kind, big = !ours ? '–' : kind === 'limits' ? `${pct(ours.lo)}–${pct(ours.hi)}%` : range(ours);
+    const sub = kind === 'limits' ? 'Limits only: the link is too strong to model' : kind === 'adjusted' ? `A rough range. Multiplied: ${pct(ours.p)}%` : kind === 'conflict' ? 'These picks can’t all hit' : n > 1 ? 'Different games, so multiplied' : '';
     return `<section class="card pd-slip${n ? ' has' : ' none'}" aria-label="Your slip"><div class="sec-h"><h2>${n ? 'Your slip' : 'Your slip is empty'}</h2>${n ? `<span class="pl">${n} ${n === 1 ? 'pick' : 'picks'}</span>` : ''}</div>
       ${n ? `<ul class="pd-legs">${P.slip.map(l => `<li><span class="rw-t"><b>${esc(l.short)}</b><small>${esc(l.game || '')}</small></span><b class="num">${pct(l.ours)}%</b><button type="button" class="ib pd-rm" data-pdadd="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Remove ${esc(l.short)} from your slip">${ic('x', 16)}</button></li>`).join('')}</ul>
-        <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${range(ours)}</b></div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk ? range(mk) : '–'}</b></div></div>
-        <p class="pd-warn">${games.length ? `${ic('help', 16)}<span><b>Linked picks.</b> ${games.length === 1 ? `More than one pick comes from ${esc(games[0] || 'the same game')}` : 'Some picks come from the same games'}, so they move together and can't be multiplied. The range shows the limits the true chance sits between.</span>`
-          : n > 1 ? `<span>No two picks come from the same game, so the chances are multiplied together.</span>` : `<span>Add another pick to see the chance they all hit.</span>`}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}</p>
+        <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${big}</b>${sub ? `<small class="lb">${esc(sub)}</small>` : ''}</div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk && !noMk ? (mk.kind === 'limits' ? `${pct(mk.lo)}–${pct(mk.hi)}%` : range(mk)) : '–'}</b></div></div>
+        ${n > 1 ? corrNote(ours, P.slip) : ''}
+        <p class="pd-warn">${n === 1 ? '<span>Add another pick to see the chance they all hit.</span>' : !ours?.corr?.label ? '<span>No two picks come from the same game, so the chances are multiplied together.</span>' : ''}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}</p>
         <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="track" data-fk="track">${ic('ticket', 18)}Track it live</button><button type="button" class="bt ghost pd-clear" data-pd="save" data-fk="save">Save slip</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
         <p class="pd-said" role="status">${P.saved ? `Saved. ${window.S?.me ? 'It is kept with your account.' : 'It is kept in this browser; log in to keep it with your account.'}` : ''}</p>`
         : `<p class="pd-empty">Add two or more picks to compare their combined chance.</p>`}

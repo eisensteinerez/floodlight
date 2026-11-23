@@ -2490,3 +2490,18 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-warns{padding-top:6px;padding-bo
 .hw-by{display:grid;gap:8px}.hw-sel{max-width:220px}.hw-sel select{min-height:44px}
 .hw .tbx th[scope="row"]{max-width:14ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:1100px){.hw{order:4}}
+
+/* Slip and parlay correlation warnings (parlaycore correlation): one quiet box; the label says how strong, the
+   border gets heavier only for Strong and Conflicting. Words carry the meaning, colour only repeats it. */
+.pd-corr{margin:14px 0 0;padding:12px 14px;border-radius:var(--radius-tile);border:1px solid var(--line,color-mix(in oklab,var(--text) 18%,transparent));background:var(--surface-2,transparent);display:grid;gap:6px;font:500 13px/1.45 var(--font-body);color:var(--text)}
+.pd-corr p{margin:0}
+.pd-corr-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pd-corr-h svg{flex:none}
+.pd-corr-l{margin-left:auto;font-size:12px}
+.pd-corr.strong{border-color:var(--warning,var(--accent));border-left-width:4px}
+.pd-corr.conflicting{border-color:var(--bad,var(--accent));border-left-width:4px}
+.pd-corr-p{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:6px}
+.pd-corr-p li{display:grid;gap:2px;min-width:0}.pd-corr-p span{font-weight:600;overflow-wrap:anywhere}.pd-corr-p small{color:var(--text-2);font-size:12px}
+.pd-slip.has .pd-corr{color:inherit;background:color-mix(in oklab,var(--on-accent) 9%,transparent);border-color:color-mix(in oklab,var(--on-accent) 30%,transparent)}
+.pd-slip.has .pd-corr.strong,.pd-slip.has .pd-corr.conflicting{border-color:var(--on-accent)}
+.pd-slip.has .pd-corr-p small{color:inherit;opacity:.85}
+.pd-total small.lb{display:block;margin-top:2px;font-size:12px;color:inherit;opacity:.85}

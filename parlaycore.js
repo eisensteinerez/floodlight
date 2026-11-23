@@ -463,6 +463,59 @@
     return { p, lo: Math.min(lo, hi), hi: Math.max(lo, hi), flo, fhi, linked, conflict };
   }
 
+  /* ---------- correlation, as a slip says it ----------
+     correlation(legs) -> { label, rank, pairs, kinds, modeled, head, text }
+       label    null (nothing linked) | 'Low' | 'Moderate' | 'Strong' | 'Conflicting'
+       pairs    every linked pair: { a, b, label, kind, why }
+       kinds    what links them, in words: same player, same team, same game, opposing outcomes, statistics that depend
+                on each other, several overs or unders on one quarterback
+       modeled  true when the adjusted range (estimate) is a fair answer; false when the link is too strong for the rules
+                of thumb to put a number on, or two picks can't both hit
+     Built on relate(): conflict is Conflicting, strong is Strong, slight is Moderate for the same player or the same
+     team and Low for anything else in one game. Two or more same-direction legs on one quarterback's passing are Strong. */
+  const CORR = [null, 'Low', 'Moderate', 'Strong', 'Conflicting'];
+  const KIND = { player: 'the same player', team: 'the same team', game: 'the same game', opposed: 'opposing outcomes', depend: 'statistics that depend on each other', qb: 'several overs or unders on one quarterback' };
+  const QB = new Set(['pyd', 'ptd', 'pcmp', 'patt', 'pint', 'pryd', 'plng']);
+  function correlation(legs) {
+    const pairs = [], kinds = new Set(); let rank = 0;
+    for (let i = 0; i < legs.length; i++) for (let j = i + 1; j < legs.length; j++) {
+      const a = legs[i], b = legs[j], r = relate(a, b); if (!r || r.level === 'independent') continue;
+      const samePlayer = a.type === 'prop' && b.type === 'prop' && !!norm(a.player) && norm(a.player) === norm(b.player);
+      const sameTeam = !samePlayer && ((a.type === 'prop' && b.type === 'prop' && a.team && b.team && nameEq(a.team, b.team)) || (a.type === 'prop' && b.type !== 'prop' && rel(a, b) === 'mate') || (b.type === 'prop' && a.type !== 'prop' && rel(b, a) === 'mate'));
+      const kind = r.level === 'conflict' || (r.dir === 'against' && r.level === 'strong') ? 'opposed' : samePlayer ? (r.level === 'strong' ? 'depend' : 'player') : r.level === 'strong' && sameTeam ? 'depend' : sameTeam ? 'team' : r.level === 'strong' ? 'depend' : 'game';
+      const k = r.level === 'conflict' ? 4 : r.level === 'strong' ? 3 : samePlayer || sameTeam ? 2 : 1;
+      kinds.add(kind); if (samePlayer) kinds.add('player'); if (sameTeam) kinds.add('team');
+      pairs.push({ a, b, label: CORR[k], kind, why: r.why }); rank = Math.max(rank, k);
+    }
+    // several same-direction legs on one quarterback's passing: they rise and fall with the same throws
+    const qbs = new Map(); for (const l of legs) if (l.type === 'prop' && QB.has(l.k) && l.player) { const key = norm(l.player) + '|' + l.side; qbs.set(key, [...(qbs.get(key) || []), l]) }
+    let qb = null; for (const xs of qbs.values()) if (xs.length >= 2) { qb = xs; kinds.add('qb'); rank = Math.max(rank, 3) }
+    const label = CORR[rank], modeled = rank <= 2, top = pairs.slice().sort((x, y) => CORR.indexOf(y.label) - CORR.indexOf(x.label))[0];
+    const named = [...kinds].filter(k => k !== 'game' || kinds.size === 1).map(k => KIND[k]);
+    const list = named.length > 1 ? named.slice(0, -1).join(', ') + ' and ' + named[named.length - 1] : named[0] || '';
+    const qbTxt = qb ? `${qb.length} ${qb[0].side === 'under' ? 'unders' : 'overs'} on ${qb[0].player}’s passing` : '';
+    const head = !label ? '' : label === 'Conflicting' ? 'These picks can’t all hit' : `${label} correlation`;
+    const text = !label ? '' : label === 'Conflicting' ? `${top?.why || 'Two of these picks contradict each other.'} Remove one to see a combined chance.`
+      : label === 'Strong' ? `These picks are strongly correlated${qbTxt ? ` (${qbTxt})` : list ? ` (${list})` : ''}. Their combined probability cannot be calculated by simply multiplying them, and Floodlight can’t model the link accurately, so it shows only the limits.`
+      : label === 'Moderate' ? `These picks are moderately correlated (${list}). The combined chance allows for that as a range, not one exact number.`
+      : 'Some picks share a game, so they are slightly linked. The combined chance allows for that as a range.';
+    return { label, rank, pairs, kinds: [...kinds], modeled, head, text, qb };
+  }
+  /* The combined chance a slip shows, and how honest it can be:
+       independent  no links: the chances multiplied
+       adjusted     Low or Moderate links: estimate()'s rough range, with the plain product beside it
+       limits       Strong links: no single number, only the hard limits (no higher than the least likely linked pick)
+       conflict     two picks can't both hit: 0% */
+  function slipChance(legs, get) {
+    if (!legs.length) return null;
+    const e = estimate(legs, get); if (!e) return null;
+    const c = correlation(legs);
+    if (e.conflict || c.label === 'Conflicting') return { kind: 'conflict', p: 0, lo: 0, hi: 0, corr: c };
+    if (c.label === 'Strong') return { kind: 'limits', p: e.p, lo: e.flo, hi: e.fhi, corr: c };
+    if (e.linked || c.label) return { kind: 'adjusted', p: e.p, lo: e.lo, hi: e.hi, corr: c };
+    return { kind: 'independent', p: e.p, lo: e.p, hi: e.p, corr: c };
+  }
+
   /* ---------- what stops a parlay being locked in ----------
      -> [{ kind: 'conflict' | 'started' | 'stale', ids, why }]. Every rule says what it found and what to do. */
   const priceAge = l => l.rAt ?? l.mAt ?? null;
@@ -647,7 +700,7 @@
       units: priced ? units : null, staked, roi: staked ? units / staked : null, priced, est: series.some(s => s.est && s.u != null), series, last: all.slice(-10), clvN: clvLegs.length, clvBeat };
   }
 
-  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, relate, strongest, sameGame, linkKeys, estimate, blockers, STALE_MIN, closeOf, closeOpen, closeLegs, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
+  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, relate, strongest, sameGame, linkKeys, estimate, correlation, slipChance, blockers, STALE_MIN, closeOf, closeOpen, closeLegs, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
     etDay, fmt, dec, amFromP, amTxt, marginFrom, norm };
   document.addEventListener('fl:me', () => { load() });
 })();
