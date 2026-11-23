@@ -23,8 +23,6 @@
   const MIN = [[0, 'Any'], [3, '3+'], [5, '5+'], [10, '10+']];
   const SORT = [['edge', 'Biggest'], ['conf', 'Most confident'], ['soon', 'Soonest']];
   const KIND = [['all', 'Props and match results'], ['prop', 'Player props only'], ['match', 'Match results only']];
-  const TRACK_SINCE = Date.UTC(2026, 10, 23, 12);   // grading rebuilt and running on its own (PR 54, 2026-11-23)
-  const FULL_AT = 20;                               // graded picks before the full performance module is shown
   const LIVE_FOR = 5 * 3600e3;   // a started prop stays in "Live" this long; nothing tells us when its game ends
   const STALE = 30 * 60000;      // a reading of the books older than this is marked stale (the server re-reads them every 15 minutes)
   const P = { sport: 'all', when: 'tonight', min: 0, sort: 'edge', props: null, matches: null, record: null, loading: false, at: 0, denied: false, all: false,
@@ -60,7 +58,7 @@
     const [props] = await Promise.all([
       window.flEdge ? window.flEdge.props(null, force, r => done(r.sport)) : Promise.resolve({ denied: false }),
       get('/api/forecast/list').then(d => { P.matches = (d.matches || []).map(matchPick); P.fcError = ''; P.fcStatus = 0; P.fcAt = Date.now() }, e => { P.matches = P.matches || []; P.fcError = e.message || 'It did not load.'; P.fcStatus = e.status || 0 }).then(() => done('fc')),
-      Promise.all([get('/api/record'), get('/api/props/record').catch(() => null)]).then(([d, pr]) => { P.record = d.entries || []; if (pr) P.propRec = pr.entries || []; P.recError = ''; P.recAt = Date.now() }, e => { P.record = P.record || []; P.recError = e.message || 'It did not load.' }).then(() => done('rec')),
+      recordLoad(force).then(() => done('rec')),
     ]);
     publish();
     P.denied = !!props.denied && (P.fcStatus === 401 || P.fcStatus === 403);
@@ -490,44 +488,17 @@
           : `<div class="pd-sv"><button type="button" class="pd-load" data-pdload="${s.id}" data-fk="load-${s.id}"><b>${esc(s.name)}</b><small>${c ? range(c) + ' at the time' : ''}</small></button><button type="button" class="ib pd-rm" data-pddel="${s.id}" data-fk="del-${s.id}" aria-label="Delete the saved slip ${esc(s.name)}">${ic('x', 16)}</button></div>` }).join('')}</div>` : ''}</section>`;
   }
 
-  /* ---------- how we have done ---------- */
-  const BUCKETS = [[0, 45, 'Under 45%'], [45, 55, '45–54%'], [55, 65, '55–64%'], [65, 75, '65–74%'], [75, 101, '75%+']];
-  // match forecasts and props in one shape (history.js), last 90 days
-  function results() {
-    const H = window.flHistory, since = Date.now() / 1000 - 90 * 86400;
-    const every = H ? H.all(P.record, P.propRec).filter(e => e.t >= since && (P.sport === 'all' || sportKey(e) === P.sport)) : [];
-    const rows = every.filter(e => H.graded(e) && e.ours), S = H ? H.stats(every) : {};
-    const buckets = BUCKETS.map(([lo, hi, label]) => { const xs = rows.filter(e => e.ours * 100 >= lo && e.ours * 100 < hi), n = xs.length;
-      return { label, n, said: n ? xs.reduce((a, e) => a + e.ours, 0) / n : null, hit: n ? xs.filter(e => e.result === 'won').length / n : null } });
-    return { n: rows.length, rate: S.rate ?? null, buckets, vs: S.vs ?? null, priced: S.priced || 0, clv: S.clv ?? null, clvN: S.clvN || 0, props: rows.filter(e => e.kind === 'prop').length,
-      waiting: every.filter(e => e.kind === 'prop' && !e.result).length };
+  /* ---------- how we have done ----------
+     The same record service, response and sums as Pick history (history.js): one request for both pages, so this
+     section can't say "did not load" while Pick history shows the record. With nothing graded it says so plainly. */
+  function recordLoad(force) {
+    const H = window.flHistory; if (!H) return Promise.resolve();
+    return H.load(force).then(Hs => { P.record = Hs.rows || P.record || []; P.propRec = Hs.props || P.propRec || []; P.recError = Hs.rows || Hs.status ? '' : Hs.err; P.recAt = Hs.at || P.recAt });
   }
   const SPORT_KEY = { NBA: 'nba', WNBA: 'wnba', NFL: 'nfl', NHL: 'nhl', MLB: 'mlb', Soccer: 'soccer' };
   const sportKey = e => SPORT_KEY[e.sport] || 'cfb';
-  function resultsCard() {
-    const R = results(), H = 120, col = v => v == null ? 0 : Math.max(3, Math.round(v * H));
-    // until 20 picks are graded, one quiet line instead of an empty chart (item 6)
-    if (R.n < FULL_AT) {
-      const since = new Date(Math.min(TRACK_SINCE, ...((window.flHistory ? window.flHistory.all(P.record, P.propRec) : []).map(e => e.t * 1000).filter(Boolean)))).toLocaleDateString([], { month: 'long', day: 'numeric' });
-      return `<section class="pd-track" aria-label="How we have done">${ic('clock', 16)}<p>${P.recError ? `The record did not load. <button type="button" class="lk" data-pd="reload" data-fk="rec-retry">Try again</button>`
-        : `Performance tracking started ${esc(since)}. ${R.n ? `${R.n} of ${FULL_AT} finished picks graded so far; the full record shows from ${FULL_AT}.` : 'Finished picks will appear here.'}${R.waiting ? ` <span class="lb">${R.waiting} waiting for a result.</span>` : ''}`}
-        ${R.n || R.waiting ? `<button type="button" class="lk" data-page="history" data-fk="hist">See Pick history</button>` : ''}</p></section>`;
-    }
-    const vsTxt = R.vs == null ? '–' : (R.vs > 0 ? '+' : R.vs < 0 ? '−' : '') + Math.abs(R.vs).toFixed(1);
-    return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
-      <p class="lb">When we said a pick would hit X% of the time, how often did it? ${R.props ? `Match forecasts and ${R.props} graded ${R.props === 1 ? 'prop' : 'props'}` : 'Match forecasts so far'}, last 90 days.</p>
-      <div class="pd-cal" role="img" aria-label="${esc(R.buckets.filter(b => b.n).map(b => `${b.label}: we said ${pct(b.said)}%, it hit ${pct(b.hit)}%, ${b.n} picks`).join('. '))}">${R.buckets.map(b => `<div class="pd-col${b.n ? '' : ' none'}" title="${esc(b.n ? `${b.label}: we said ${pct(b.said)}% on average, ${pct(b.hit)}% hit, ${b.n} ${b.n === 1 ? 'pick' : 'picks'}` : `${b.label}: no picks`)}">
-          <div class="pd-pair" style="height:${H + 22}px"><span class="said" style="height:${col(b.said)}px"><i class="num">${b.n ? pct(b.said) : ''}</i></span><span class="hit" style="height:${col(b.hit)}px"><i class="num">${b.n ? pct(b.hit) : ''}</i></span></div>
-          <b>${esc(b.label)}</b><small class="num">${b.n ? `${b.n} ${b.n === 1 ? 'pick' : 'picks'}` : 'none'}</small></div>`).join('')}</div>
-      <div class="pd-leg" aria-hidden="true"><span><i class="said"></i>We said</span><span><i class="hit"></i>It hit</span></div>
-      <details class="pd-tbl"><summary>See the numbers</summary><div class="tbx-wrap"><table class="tbx"><thead><tr><th scope="col">We said</th><th scope="col" class="r">Average</th><th scope="col" class="r">It hit</th><th scope="col" class="r">Picks</th></tr></thead>
-        <tbody>${R.buckets.map(b => `<tr><th scope="row">${esc(b.label)}</th><td class="r num">${b.n ? pct(b.said) + '%' : '–'}</td><td class="r num">${b.n ? pct(b.hit) + '%' : '–'}</td><td class="r num">${b.n}</td></tr>`).join('')}</tbody></table></div></details>
-      <div class="pd-tiles"><div class="tile inset"><span class="lb">Graded picks</span><b class="fig num">${R.n}</b></div><div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${R.n >= (window.flHistory?.MIN_RATE || 20) ? pct(R.rate) + '%' : '–'}</b>${R.n < (window.flHistory?.MIN_RATE || 20) ? `<small class="lb">shown from ${window.flHistory?.MIN_RATE || 20} graded</small>` : R.n < 50 ? '<small class="lb">small sample</small>' : ''}</div>
-        <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${vsTxt}</b><small class="lb">${R.vs == null ? 'no prices saved' : `points ${R.vs >= 0 ? 'ahead' : 'behind'}, over ${R.priced} priced ${R.priced === 1 ? 'pick' : 'picks'}`}</small></div>
-        <div class="tile inset"><span class="lb">Beat the closing line</span><b class="fig num">${R.clvN ? pct(R.clv) + '%' : '–'}</b><small class="lb">${R.clvN ? `of ${R.clvN} props where it moved` : 'once a prop line moves'}</small></div></div>
-      <p class="lb">“Against the market” is our hit rate minus the chance the prices gave the same picks. “Beat the closing line” counts props whose line or price moved our way before the start.${R.waiting ? ` ${R.waiting} ${R.waiting === 1 ? 'prop is' : 'props are'} still waiting for a result.` : ''}</p>
-      <button type="button" class="bt ghost wide" data-page="history" data-fk="hist">By sport, provider, market, edge and confidence</button></section>`;
-  }
+  function resultsCard() { return window.flHistory ? window.flHistory.widget(e => P.sport === 'all' || sportKey(e) === P.sport) : '' }
+  document.addEventListener('fl:record', () => { if (window.flPages.current() === 'predictions' && $('pdSide')) { const k = document.activeElement?.dataset?.fk; drawSide(); if (k) document.querySelector(`#pdSide [data-fk="${k}"]`)?.focus({ preventScroll: true }) } });
   function fadeCard(L) {
     const now = new Date(), cold = window.flEdge ? window.flEdge.cold((P.props?.picks || []).filter(p => stateOf(p, now) !== 'gone'), 3) : [];
     return `<section class="card pd-fade" aria-label="Fade list"><div class="sec-h"><h2>Fade list</h2><span class="lb">The coldest players tonight</span></div>
@@ -546,7 +517,7 @@
           <b class="num pd-foled">${p ? edgeTxt(p.edge) : '–'}</b><button type="button" class="ib sm" data-pdfollow="${esc(f.k)}" data-fk="unf-${esc(f.k)}" aria-label="Stop following ${esc(f.name)}, ${esc(f.text)}">${ic('x', 16)}</button></li>` }).join('')}</ul>
       <p class="lb">Alerts show on this page while Floodlight is open, and as browser notifications when Alerts are on in Settings.</p></section>`;
   }
-  function drawSide(L) { $('pdSide').innerHTML = slipCard() + followCard() + (P.pending.has('rec') && !P.record ? `<div class="pd-track" aria-hidden="true"><i class="skl" style="height:18px;width:80%"></i></div>` : resultsCard()) + fadeCard(L) }
+  function drawSide(L) { const el = $('pdSide'); if (el) el.innerHTML = slipCard() + followCard() + resultsCard() + fadeCard(L) }
 
   /* ---------- actions ---------- */
   function openPick(id) {
@@ -609,5 +580,5 @@
   window.flPages.add('predictions', { title: 'Predictions', render,
     onShow() { load(); clearInterval(P.timer); P.timer = setInterval(() => { if (window.flPages.current() !== 'predictions') return; if (Date.now() - P.at > 5 * 60000) load(true); else if (!document.activeElement?.closest?.('#pg-predictions select')) draw() }, 60000) },
     onHide() { clearInterval(P.timer); clearTimeout(P.retryT) } });
-  window.flPredictions = { combine, results, state: P, picks: allPicks, sources, load };   // not flPred: that is the match prediction card in predict.js
+  window.flPredictions = { combine, state: P, picks: allPicks, sources, load };   // not flPred: that is the match prediction card in predict.js
 })();
