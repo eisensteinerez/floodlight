@@ -58,6 +58,7 @@ import players as roster
 import health
 import corrections
 import gradebook
+import daily
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -97,7 +98,7 @@ PUBLIC_FILES = {"index.html", "status.js", "recent.js", "linemove.js", "alerts.j
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
                 "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js"}
-PUBLIC_FILES |= {"marketfeed.js", "inbox.js"}   # Home, alerts, daily habits and the installable app
+PUBLIC_FILES |= {"marketfeed.js", "inbox.js", "daily.js"}   # Home, alerts, daily habits and the installable app
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -2108,6 +2109,8 @@ class Handler(SimpleHTTPRequestHandler):
                 _sessions.pop(token, None)
                 _save_accounts()
             return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
+        if u.path == "/api/daily/seen":   # one anonymous tick for "Most researched today" (daily.py)
+            return self.send_auth(200, {"ok": bool(user or not GATED) and daily.seen(body.get("name"), body.get("sport"))})
         if not user:
             return self.send_auth(401, {"error": "Log in first."})
         if u.path == "/api/picks/vote":
@@ -2199,6 +2202,8 @@ class Handler(SimpleHTTPRequestHandler):
             _, user = session_user(self.headers.get("Cookie"))
             if GATED and not user:
                 return self.send_json({"error": "Log in to use Floodlight."}, 401)
+            if u.path == "/api/daily/top":   # "Most researched today" (daily.py): anonymous counts only
+                return self.send_json({"top": daily.top(10, str(q.get("sport") or "")[:8])}, max_age=60)
             if GATED and not can_view(user):
                 return self.send_json({"error": "Your account is paused or waiting for an admin to switch it on."}, 403)
             svc = service_for(u.path)   # a service switched off for this member is refused here, not just hidden in the page
