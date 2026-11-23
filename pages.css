@@ -2518,3 +2518,5 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-warns{padding-top:6px;padding-bo
 .py-corr.strong,.py-corr.conflicting{padding-left:10px;border-left:3px solid var(--warning,var(--accent))}
 .py-whymove{display:block;max-width:60ch}
 .py-word.out{color:var(--text)}
+:root[data-theme] .pd-slip.has .pd-total small.lb{color:var(--on-accent);opacity:.8;font-weight:600}
+.pd-total .pd-mk b{white-space:nowrap}

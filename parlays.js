@@ -521,7 +521,7 @@
       ${n ? `<ul class="py-dl">${legs.map(legLi).join('')}</ul>
         ${bad.length ? `<p class="py-bad" role="note">${ic('x', 16)}<span>${bad.length === 1 ? 'One pick can’t go in.' : `${bad.length} picks can’t go in.`} The reason is under ${bad.length === 1 ? 'it' : 'each one'}.</span><button type="button" class="bt sm ghost" data-py="dropbad" data-fk="dropbad">Take out ${bad.length === 1 ? 'that pick' : `those ${bad.length}`}</button></p>` : ''}
         ${closes ? `<p class="py-hint py-closes">${ic('clock', 14)}Lock in before ${esc(when(closes))}, when the first game starts and its market closes.</p>` : ''}
-        ${sum ? `<p class="py-relsum ${sum.level}" role="note">${ic(sum.level === 'independent' ? 'check' : 'help', 16)}<span>${sum.label ? `<b>${esc(sum.label === 'Conflicting' ? 'Conflicting' : sum.label + ' correlation')}.</b> ` : ''}${esc(sum.text)}</span></p>` : ''}
+        ${sum ? `<p class="py-relsum ${sum.level}" role="note">${ic(sum.level === 'independent' ? 'check' : 'help', 16)}<span>${sum.label === 'Low' || sum.label === 'Conflicting' ? `<b>${esc(sum.label === 'Conflicting' ? 'Conflicting' : 'Low correlation')}.</b> ` : ''}${esc(sum.text)}</span></p>` : ''}
         ${n === 1 ? `<div class="py-tt"><div><span class="py-k">Chance it hits</span><b class="num py-tbig">${c ? pct(c.p) + '%' : '–'}</b></div>
           <div class="py-tm"><span class="py-k">Books say</span><b class="num">${mk ? pct(mk.p) + '%' : '–'}</b><small class="py-src">${esc(srcTxt)}</small></div></div>` : chances(legs, srcTxt)}
         <div class="py-fields"><label class="fl-f"><span>Name (optional)</span><input class="inp" id="pyName" data-fk="name" maxlength="80" placeholder="Sunday four-leg" value="${esc(V.draft.name)}" autocomplete="off"></label>

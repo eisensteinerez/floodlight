@@ -479,8 +479,8 @@
   function corrNote(c, legs) {
     if (!c?.corr?.label) return '';
     const k = c.corr, by = new Map(legs.map(l => [l.id, l])), nm = x => by.get(x.id)?.short || x.player || '';
-    const pairs = k.pairs.filter(x => x.label !== 'Low' || k.label === 'Low').slice(0, 3);
-    return `<div class="pd-corr ${k.label.toLowerCase()}" role="note" aria-label="${esc(k.head)}"><p class="pd-corr-h">${ic(CORR_ICON[k.label], 16)}<b>${esc(k.head)}</b><span class="pl pd-corr-l">${esc(k.label)}</span></p><p>${esc(k.text)}</p>
+    const pairs = k.qb ? [] : k.pairs.filter(x => x.label !== 'Low' || k.label === 'Low').slice(0, 2);   // one quarterback's stack is named in the sentence already
+    return `<div class="pd-corr ${k.label.toLowerCase()}" role="note" aria-label="${esc(k.head)}"><p class="pd-corr-h">${ic(CORR_ICON[k.label], 16)}<b>${esc(k.head)}</b>${k.label === 'Conflicting' ? `<span class="pl pd-corr-l">${esc(k.label)}</span>` : ''}</p><p>${esc(k.text)}</p>
       ${pairs.length ? `<ul class="pd-corr-p">${pairs.map(x => `<li><span>${esc(nm(x.a))} + ${esc(nm(x.b))}</span><small>${esc(x.label)}: ${esc(x.why)}</small></li>`).join('')}</ul>` : ''}</div>`;
   }
   function slipCard() {
@@ -491,7 +491,7 @@
       ${n ? `<ul class="pd-legs">${P.slip.map(l => `<li><span class="rw-t"><b>${esc(l.short)}</b><small>${esc(l.game || '')}</small></span><b class="num">${pct(l.ours)}%</b><button type="button" class="ib pd-rm" data-pdadd="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Remove ${esc(l.short)} from your slip">${ic('x', 16)}</button></li>`).join('')}</ul>
         <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${big}</b>${sub ? `<small class="lb">${esc(sub)}</small>` : ''}</div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk && !noMk ? (mk.kind === 'limits' ? `${pct(mk.lo)}–${pct(mk.hi)}%` : range(mk)) : '–'}</b></div></div>
         ${n > 1 ? corrNote(ours, P.slip) : ''}
-        <p class="pd-warn">${n === 1 ? '<span>Add another pick to see the chance they all hit.</span>' : !ours?.corr?.label ? '<span>No two picks come from the same game, so the chances are multiplied together.</span>' : ''}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}</p>
+        ${(() => { const w = `${n === 1 ? '<span>Add another pick to see the chance they all hit.</span>' : !ours?.corr?.label ? '<span>No two picks come from the same game, so the chances are multiplied together.</span>' : ''}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}`; return w ? `<p class="pd-warn">${w}</p>` : '' })()}
         <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="track" data-fk="track">${ic('ticket', 18)}Track it live</button><button type="button" class="bt ghost pd-clear" data-pd="save" data-fk="save">Save slip</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
         <p class="pd-said" role="status">${P.saved ? `Saved. ${window.S?.me ? 'It is kept with your account.' : 'It is kept in this browser; log in to keep it with your account.'}` : ''}</p>`
         : `<p class="pd-empty">Add two or more picks to compare their combined chance.</p>`}

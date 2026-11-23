@@ -373,7 +373,7 @@
       return R('strong', 'against', `Both hit only if ${who(a)} lands between ${fmt(o.line)} and ${fmt(u.line)} ${stat(a)}.`) }],
     [(a, b) => a.type === 'prop' && b.type === 'prop' && norm(a.player) === norm(b.player), (a, b) => {
       const ta = tilt(a)[0] || (a.side === 'under' ? -1 : 1), tb = tilt(b)[0] || (b.side === 'under' ? -1 : 1), strong = OVERLAP.some(g => g.includes(a.k) && g.includes(b.k));
-      return ta * tb > 0 ? R(strong ? 'strong' : 'slight', 'together', `Both are ${who(a)}’s numbers: a big night lifts both${strong ? ', and they count some of the same plays' : ''}.`)
+      return ta * tb > 0 ? R(strong ? 'strong' : 'slight', 'together', `Both are ${who(a)}’s numbers: ${a.side === 'under' && b.side === 'under' ? 'a quiet night keeps both down' : 'a big night lifts both'}${strong ? ', and they count some of the same plays' : ''}.`)
         : R(strong ? 'strong' : 'slight', 'against', `These pull ${who(a)} in opposite directions: one needs a big night, the other a quiet one.`) }],
     [(a, b) => a.type === 'win' && b.type === 'win', () => R('conflict', null, 'Only one team can win this game. Keep one.')],
     [(a, b) => pairOf(a, b, 'win', 'draw'), () => R('conflict', null, 'A draw means neither team wins, so these can’t both hit. Keep one.')],
@@ -491,7 +491,7 @@
     const qbs = new Map(); for (const l of legs) if (l.type === 'prop' && QB.has(l.k) && l.player) { const key = norm(l.player) + '|' + l.side; qbs.set(key, [...(qbs.get(key) || []), l]) }
     let qb = null; for (const xs of qbs.values()) if (xs.length >= 2) { qb = xs; kinds.add('qb'); rank = Math.max(rank, 3) }
     const label = CORR[rank], modeled = rank <= 2, top = pairs.slice().sort((x, y) => CORR.indexOf(y.label) - CORR.indexOf(x.label))[0];
-    const named = [...kinds].filter(k => k !== 'game' || kinds.size === 1).map(k => KIND[k]);
+    const ORDER = ['qb', 'opposed', 'depend', 'player', 'team', 'game'], named = ORDER.filter(k => kinds.has(k) && (k !== 'game' || kinds.size === 1)).slice(0, 3).map(k => KIND[k]);
     const list = named.length > 1 ? named.slice(0, -1).join(', ') + ' and ' + named[named.length - 1] : named[0] || '';
     const qbTxt = qb ? `${qb.length} ${qb[0].side === 'under' ? 'unders' : 'overs'} on ${qb[0].player}’s passing` : '';
     const head = !label ? '' : label === 'Conflicting' ? 'These picks can’t all hit' : `${label} correlation`;
