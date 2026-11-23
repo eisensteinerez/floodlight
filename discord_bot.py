@@ -473,10 +473,12 @@ def soccer_deep(p, n=10):
 def load_player(sport, name, team=None):
     """A player's games, newest first: {sport, id, fid, name, team, teamAbbr, photo, games: [{date, opp, home, raw...}]}.
     The team is the player record's (players.py) when there is one; team is a hint for two players with one name."""
+    hint = team   # go() below sets its own `team` (the one it reads), so the hint gets a name of its own
+
     def go():
         if sport == "soccer":
             return soccer_player(name)
-        o = find_player(sport, name, team)
+        o = find_player(sport, name, hint)
         if not o:
             raise LookupError(f"Couldn't find a {SPORTS[sport]} player called {name}.")
         if sport == "mlb":
@@ -518,7 +520,7 @@ def load_player(sport, name, team=None):
                 photo = rec.get("photo") or photo
         return {"sport": sport, "id": str(o["id"]), "fid": fid, "name": o.get("name") or name, "team": team, "teamAbbr": abbr, "photo": photo, "games": uniq}
     import teamcheck as _tc
-    return memo(("player", sport, norm(name), _tc.canon(sport, team) or ""), 3600, go)
+    return memo(("player", sport, norm(name), _tc.canon(sport, hint) or ""), 3600, go)
 
 
 # ---------- maths (research.js rsRate) ----------

@@ -190,6 +190,29 @@ def test_find_player_uses_the_record(reg, monkeypatch):
     assert B.find_player("nba", "LeBron James") == {"id": "1966", "lg": "nba", "name": "LeBron James", "fid": "nba:1966"}
 
 
+def test_load_player_runs_with_a_team_hint(reg, monkeypatch):
+    """The real load_player, end to end: the team hint reaches find_player and the record's team comes back.
+    (A team hint shadowed by load_player's own `team` once made every Lab search and prop board fail.)"""
+    import datetime as dt
+    import discord_bot as B
+    P.read_rosters("nba")
+    B._cache.clear()
+    seen = {}
+    real_find = B.find_player
+
+    def find(s, n, t=None):
+        seen.setdefault("hint", t)
+        return real_find(s, n, t)
+    monkeypatch.setattr(B, "find_player", find)
+    monkeypatch.setattr(B, "espn_season", lambda path, pid, y: [{"id": f"{y}-{i}", "date": dt.datetime(y, 11, 1 + i, tzinfo=dt.timezone.utc), "opp": "BOS"} for i in range(6)])
+    monkeypatch.setattr(B, "get_json", lambda url, ttl: {"athlete": {"team": {"displayName": "Los Angeles Lakers", "abbreviation": "LAL"}}})
+    for hint in ("PHI", None):
+        B._cache.clear()
+        p = B.load_player("nba", "LeBron James", hint)
+        assert p["fid"] == "nba:1966" and p["teamAbbr"] == "PHI" and p["team"] == "Philadelphia 76ers" and len(p["games"]) == 12
+    assert seen["hint"] == "PHI"
+
+
 # ---------- corrections ----------
 def test_wrong_team_on_a_shown_prop_is_corrected_once(reg, tmp_path, monkeypatch):
     f, clock = reg
