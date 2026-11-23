@@ -39,7 +39,7 @@
         <div class="lab-hits" id="labHits" role="listbox" aria-label="Results" hidden></div>
         <div class="lab-try" id="labTry"></div>
       </section>
-      <div class="g4 lab-tools" role="group" aria-label="Tools">${TOOLS.map(([k, icon, name, line]) => `<button type="button" class="card hit lab-tool" data-labtool="${k}" aria-pressed="false"><span class="lab-tool-i" aria-hidden="true">${ic(icon, 22)}</span><b>${name}</b><span>${line}</span></button>`).join('')}</div>
+      <div class="g4 lab-tools" role="tablist" aria-label="Lab tools">${TOOLS.map(([k, icon, name, line], i) => `<button type="button" class="card hit lab-tool" role="tab" id="labTab-${k}" data-labtool="${k}" aria-selected="false" aria-controls="labWs" tabindex="${i ? -1 : 0}"><span class="lab-tool-i" aria-hidden="true">${ic(icon, 22)}</span><b>${name}</b><span>${line}</span></button>`).join('')}</div>
       <section class="lab-ws" id="labWs" aria-label="Workspace" hidden>
         <div class="lab-ws-h"><div class="lab-ws-t"><span class="lb" id="labWsK">Workspace</span><h2 id="labWsT" tabindex="-1"></h2></div>
           <div class="lab-ws-a" id="labWsA"></div></div>
@@ -166,7 +166,21 @@
     if (e !== 'classic') { try { typeof closeResearch === 'function' && S.rs.open && closeResearch() } catch (x) {} }
     drawStart(); drawHead();
   }
-  function tool(k) { L.tool = k; document.querySelectorAll('.lab-tool').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.labtool === k))) }
+  /* The four tools are tabs: one workspace below them, and only one tool in it at a time. With a player or team open
+     from search, no tab is selected and the workspace is a plain region named "Workspace". Arrow keys move between tabs. */
+  function tool(k) {
+    L.tool = k; const tabs = [...document.querySelectorAll('.lab-tool')], ws = $('labWs');
+    tabs.forEach((b, i) => { const on = b.dataset.labtool === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on || (!k && i === 0) ? 0 : -1 });
+    if (!ws) return;
+    if (k && tabs.some(b => b.dataset.labtool === k)) { ws.setAttribute('role', 'tabpanel'); ws.setAttribute('aria-labelledby', 'labTab-' + k); ws.removeAttribute('aria-label') }
+    else { ws.removeAttribute('role'); ws.removeAttribute('aria-labelledby'); ws.setAttribute('aria-label', 'Workspace') }
+  }
+  document.addEventListener('keydown', ev => {
+    const b = ev.target.closest?.('.lab-tool[role="tab"]'); if (!b) return;
+    const tabs = [...document.querySelectorAll('.lab-tool[role="tab"]')], i = tabs.indexOf(b);
+    const j = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? (i + 1) % tabs.length : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? (i - 1 + tabs.length) % tabs.length : ev.key === 'Home' ? 0 : ev.key === 'End' ? tabs.length - 1 : -1;
+    if (j < 0) return; ev.preventDefault(); tabs[j].focus(); runTool(tabs[j].dataset.labtool);
+  });
   /* o: { sport, name | player, team (true for a team), stat, line, side, tab, mode } and, for the older engine, { classic, id, lg, tnId, ... } */
   function open(o = {}) {
     if (denied()) { window.flPages.show('lab'); return }
@@ -241,7 +255,7 @@
     $('labWsK').textContent = b ? `Board: ${b.name}` : L.engine === 'classic' ? (L.hint || 'More tools') : L.engine === 'compare' ? 'Compare' : L.engine === 'trends' ? 'Trends' : c?.sport ? `Workspace · ${SPORT_NAME[c.sport] || ''}` : 'Workspace';
     $('labWsA').innerHTML = `${canSave() ? `<button type="button" class="bt ghost" data-lab="save" aria-expanded="${L.saving}">${ic('save', 18)}Save to a board</button>` : ''}<button type="button" class="ib" data-lab="closews" aria-label="Close the workspace">${ic('x', 18)}</button>`;
     const vs = $('labViews'); vs.hidden = !b;
-    if (b) vs.innerHTML = `<span class="lb">In this board</span><div class="cx-row scroll">${b.items.map((v, i) => `<span class="lab-view"><button type="button" class="cx sm" aria-pressed="${!!c && viewKey(c) === viewKey(v)}" data-labview="${i}">${esc(viewLabel(v))}</button><button type="button" class="lab-rm" data-labrm="${i}" aria-label="Remove ${esc(viewLabel(v))} from this board">${ic('x', 14)}</button></span>`).join('')}</div>`;
+    if (b) vs.innerHTML = `<span class="lb">In this board</span><div class="cx-row scroll">${b.items.map((v, i) => `<span class="lab-view"><button type="button" class="cx sm${!!c && viewKey(c) === viewKey(v) ? " on" : ""}"${!!c && viewKey(c) === viewKey(v) ? " aria-current=\"true\"" : ""} data-labview="${i}">${esc(viewLabel(v))}</button><button type="button" class="lab-rm" data-labrm="${i}" aria-label="Remove ${esc(viewLabel(v))} from this board">${ic('x', 14)}</button></span>`).join('')}</div>`;
     drawSave();
   }
   function drawSave() {

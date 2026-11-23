@@ -215,7 +215,7 @@ html:root[data-theme="stadium-gold"] .hm-cmd-i b{font:italic 800 18px/1 var(--fo
 .lab-tool b{font:var(--display-weight) 20px/1.15 var(--font-display);letter-spacing:var(--display-track)!important}
 .lab-tool > span:last-child{font:500 14px/1.45 var(--font-body);color:var(--text-2)}
 .lab-tool-i{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);color:var(--accent)}
-.lab-tool[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),var(--shadow-card)}
+.lab-tool[aria-selected="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),var(--shadow-card)}
 .lab-ws{display:grid;gap:14px;scroll-margin-top:12px;min-width:0}
 .lab-ws[hidden],.lab-frame[hidden],.lab-classic[hidden],.lab-toolws[hidden],.lab-start[hidden]{display:none}
 .lab-ws-h{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 20px;flex-wrap:wrap}
@@ -1054,8 +1054,8 @@ html:root[data-theme="stadium-gold"] .lab-tool[data-labtool="matchup"]{--tool-ar
 html:root[data-theme="stadium-gold"] .lab-tool[data-labtool="trends"]{--tool-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 160'%3E%3Cg stroke='%23EDBE55' stroke-opacity='.14'%3E%3Cpath d='M0 30H240'/%3E%3Cpath d='M0 62H240'/%3E%3Cpath d='M0 94H240'/%3E%3Cpath d='M0 126H240'/%3E%3Cpath d='M40 0V160'/%3E%3Cpath d='M80 0V160'/%3E%3Cpath d='M120 0V160'/%3E%3Cpath d='M160 0V160'/%3E%3Cpath d='M200 0V160'/%3E%3C/g%3E%3Cpath d='M6 132 44 120 78 126 112 96 146 104 178 70 206 76 234 34' fill='none' stroke='%23F3CE73' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/%3E%3Cpath d='M6 140 234 84' fill='none' stroke='%23F4EEDF' stroke-opacity='.55' stroke-width='2' stroke-dasharray='5 7'/%3E%3Cg fill='%23FFE9AE'%3E%3Ccircle cx='44' cy='120' r='4.5'/%3E%3Ccircle cx='78' cy='126' r='4.5'/%3E%3Ccircle cx='112' cy='96' r='4.5'/%3E%3Ccircle cx='146' cy='104' r='4.5'/%3E%3Ccircle cx='178' cy='70' r='4.5'/%3E%3Ccircle cx='206' cy='76' r='4.5'/%3E%3Ccircle cx='234' cy='34' r='4.5'/%3E%3C/g%3E%3C/svg%3E")}
 html:root[data-theme="stadium-gold"] .lab-tool:hover{border-color:transparent}
 html:root[data-theme="stadium-gold"] .lab-tool:hover::before{filter:brightness(1.3)}
-html:root[data-theme="stadium-gold"] .lab-tool[aria-pressed="true"]{border-color:transparent;box-shadow:none}
-html:root[data-theme="stadium-gold"] .lab-tool[aria-pressed="true"]::before{background:linear-gradient(150deg,rgba(255,226,150,.2),rgba(233,184,75,.05) 60%) padding-box,var(--panel) padding-box,var(--gold-grad) border-box;box-shadow:var(--gold-glow),var(--shadow-card)}
+html:root[data-theme="stadium-gold"] .lab-tool[aria-selected="true"]{border-color:transparent;box-shadow:none}
+html:root[data-theme="stadium-gold"] .lab-tool[aria-selected="true"]::before{background:linear-gradient(150deg,rgba(255,226,150,.2),rgba(233,184,75,.05) 60%) padding-box,var(--panel) padding-box,var(--gold-grad) border-box;box-shadow:var(--gold-glow),var(--shadow-card)}
 html:root[data-theme="stadium-gold"] .lab-tool-i{width:auto;height:32px;justify-items:start;border:0;border-radius:0;background:none}
 html:root[data-theme="stadium-gold"] .lab-tool-i svg{width:28px;height:28px}
 html:root[data-theme="stadium-gold"] .lab-tool b{font:italic 800 clamp(28px,2.7vw,38px)/.95 var(--font-poster);text-transform:uppercase!important;letter-spacing:.005em!important;background-image:var(--ivory-grad);padding-right:.1em}
