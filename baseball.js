@@ -817,9 +817,10 @@ function bsPlayerHero(v, back){
   const a = v.bio, t = a?.currentTeam, c = bsColorFor(t, t?.name), col = (() => { const x = hex('#' + c.color); return x && lum(x) > .03 ? x : hex('#' + (c.alt || '')) || '#3D6FD9' })(); v.color = col;
   const ss = v.ss?.[v.season], g = v.grp, st = ss?.season?.[g], mlb = BSL[v.lg].sport === 1 || t?.sport?.id === 1;
   const stats = st ? BS_KEY[g].tiles.map(k => { if (st[k] == null) return null; const r = bsRankIn(ss.peers?.[g], g, k, st, v.id);
-    return { label: BS_TILE[k], value: st[k], rank: r ? `${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}` : '' } }) : [];
+    return { label: BS_TILE[k], value: st[k], unit: r?.perGame ? 'ranked per game' : '', rank: r?.rank, n: r ? r.n : null, pc: r?.pc } }) : [];
   const caption = st ? `${esc(v.season)} · ${esc(BSL[v.lg].name)} · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}` : '';
-  return flProfile.hero({ back, sport: mlb ? 'mlb' : '', heatSport: 'mlb', id: v.id, name: a?.fullName, color: col,
+  return flProfile.hero({ back, sport: mlb ? 'mlb' : '', heatSport: 'mlb', lab: mlb ? 'mlb' : '', id: v.id, name: a?.fullName, color: col, tabs: true,
+    sportName: 'Baseball', league: BSL[v.lg]?.short || BSL[v.lg]?.name || '', leagueKey: v.lg, teamName: t?.name || '',
     face: `<img class="face espn-shot" src="${esc(a ? bsShot(a.id, mlb) : SIL)}" alt="" ${bsImgErr}>`,
     teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(bsLogo(t.id))}" alt="" ${bsLogoErr}><button class="linkbtn" data-bsteam="${esc(t.id)}" data-bsl="${esc(BS_LEAGUES.find(l => l.src === 'sa' && l.sport === t.sport?.id && (!l.league || l.league === t.league?.id))?.key || v.lg)}">${esc(t.name)}</button></span>` : '',
     number: a?.primaryNumber, position: a?.primaryPosition?.name,
@@ -838,26 +839,27 @@ function bsStatRow(v, g, k, st, peers){
   const pc = r?.pc, cls = pc == null ? '' : pc >= 70 ? 'hi' : pc < 30 ? 'lo' : '';
   const pgTxt = pg == null ? '' : pg >= 10 ? pg.toFixed(1) : pg.toFixed(2);
   return `<div class="fbps-row${n ? '' : ' z'}"><span class="ps-t">${esc(bsLabel(g, k))}</span><b class="num">${esc(raw)}</b><span class="num ps-90">${pgTxt}</span><span class="fbps-rk">${r ? `<b class="num">${fbOrd(r.rank)}</b><small>/${r.n}</small>` : ''}</span>
-    ${pc == null ? '<span class="ps-bar-c"></span><span></span>' : `<span class="ps-bar-c"><span class="ps-bar" role="img" aria-label="${pc} percentile"><i class="${cls}" style="width:${Math.max(2, pc)}%"></i></span></span><span class="num ps-p ${cls}">${pc}</span>`}</div>`;
+    ${pc == null ? '<span class="ps-bar-c"></span><span></span>' : `<span class="ps-bar-c"><span class="ps-bar" role="img" aria-label="${flFmt.ord(pc)} percentile"><i class="${cls}" style="width:${Math.max(2, pc)}%"></i></span></span><span class="num ps-p ${cls}">${pc}</span>`}</div>`;
 }
-function bsStatsBody(v){
+function bsStatsBody(v, part){
   const ss = v.ss?.[v.season];
   if (!ss || ss.loading) return `<div class="skel" style="height:300px"></div>`;
   const g = v.grp, st = ss.season[g];
   if (!st) return `<div class="note">No ${esc(v.season)} ${g} stats in ${esc(BSL[v.lg].name)} for this player.</div>`;
   const peers = ss.peers?.[g];
   let h = '';
-  if (peers) {
+  if (peers && part !== 'rows') {
     const items = BS_KEY[g].radar.map(([k, title]) => { const r = bsRankIn(peers, g, k, st, v.id); return r ? { title, value: r.pc / 100 } : null }).filter(Boolean);
     const cand = Object.keys(st).filter(k => !BS_SKIP.has(k) && k !== 'gamesPlayed' && bsNum(st[k]) != null).map(k => ({ k, r: bsRankIn(peers, g, k, st, v.id) })).filter(c => c.r);
     const strong = cand.filter(c => c.r.pc >= 80).sort((a, b) => b.r.pc - a.r.pc).slice(0, 5), weak = cand.filter(c => c.r.pc <= 20).sort((a, b) => a.r.pc - b.r.pc).slice(0, 4);
     const chip = c => `<li><span>${esc(bsLabel(g, c.k))}</span><b class="num">${esc(st[c.k])}</b><small>${fbOrd(c.r.rank)} of ${c.r.n}</small></li>`;
     const rad = items.length >= 3 ? radarSVG({ title: 'vs league', items }, v.color || '#3D6FD9') : '';
     const title = Object.fromEntries(BS_KEY[g].radar);
-    h += flViz.playerBoard(cand.map(c => ({ label: bsLabel(g, c.k), short: title[c.k] || bsLabel(g, c.k), val: String(st[c.k]), rank: c.r.rank, n: c.r.n, pc: c.r.pc })), {
+    h += flViz.playerBoard(cand.map(c => ({ label: bsLabel(g, c.k), short: title[c.k] || bsLabel(g, c.k), val: String(st[c.k]), rank: c.r.rank, n: c.r.n, pc: c.r.pc, low: BS_LOW[g]?.has(c.k) && !BS_RATE.has(c.k) ? { good: 'avoiding ' + bsLabel(g, c.k).toLowerCase(), noun: bsLabel(g, c.k).toLowerCase() } : BS_LOW[g]?.has(c.k) ? { good: 'a low ' + bsLabel(g, c.k), noun: '' } : null })), {
       color: v.color || '#3D6FD9', peers: `${BSL[v.lg].name} ${g === 'pitching' ? 'pitchers' : 'hitters'}`, season: String(v.season || ''), radar: BS_KEY[g].radar.map(r => r[1]),
       note: !peers.some(p => p.id === String(v.id)) ? `Not enough ${g === 'pitching' ? 'innings' : 'plate appearances'} yet to count as a regular, so treat these as rough.` : '' });
   }
+  if (part === 'board') return h;
   const first = BS_FIRST[g], keys = Object.keys(st).filter(k => !BS_SKIP.has(k) && (typeof st[k] === 'number' || /^[-.\d]/.test(String(st[k]))) && !/^[.-]+-*$/.test(String(st[k])))
     .sort((a, b) => { const i = x => { const j = first.indexOf(x); return j < 0 ? 99 : j }; return i(a) - i(b) });
   const nz = keys.filter(k => bsNum(st[k])), zero = keys.filter(k => !bsNum(st[k]));
@@ -892,12 +894,15 @@ function bsCareerPane(v){
 function bsPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
   const a = v.bio; if (!a) return `<div class="skel" style="height:240px"></div>`;
+  const extra = flProfile.extra(v); if (extra != null) return extra;
   if (v.tab === 'stats') {
     const rows = [['Position', a.primaryPosition?.name], ['Bats / throws', a.batSide && a.pitchHand ? `${a.batSide.description} / ${a.pitchHand.description}` : ''], ['Age', a.currentAge ? `${a.currentAge}${a.birthDate ? ' · born ' + fmtDate(new Date(a.birthDate + 'T12:00:00'), { day: 'numeric', month: 'long', year: 'numeric' }) : ''}` : ''],
       ['Height / weight', [a.height, a.weight ? a.weight + ' lb' : ''].filter(Boolean).join(' · ')], ['Born in', [a.birthCity, a.birthStateProvince, a.birthCountry].filter(Boolean).join(', ')], ['MLB debut', a.mlbDebutDate ? fmtDate(new Date(a.mlbDebutDate + 'T12:00:00'), { day: 'numeric', month: 'short', year: 'numeric' }) : ''],
       ['Drafted', a.draftYear ? String(a.draftYear) : ''], ['Nickname', a.nickName]].filter(r => r[1]);
-    return bsPlayerPicker(v) + bsStatsBody(v) + `<div class="sub-h"><h5>Profile</h5></div><div class="bio">${rows.map(([k, x]) => `<div><span>${k}</span><strong>${esc(x)}</strong></div>`).join('')}</div>`;
+    return `<div class="pf-pane-h"><h2 class="sr-only">All stats</h2>${bsPlayerPicker(v)}</div>` + bsStatsBody(v, 'rows') + `<div class="sub-h"><h5>Profile</h5></div><div class="bio">${rows.map(([k, x]) => `<div><span>${k}</span><strong>${esc(x)}</strong></div>`).join('')}</div>`;
   }
+  if (v.tab === 'overview') return `<div class="pf-pane-h"><h2 class="sr-only">Overview</h2>${flProfile.modeBar()}${bsPlayerPicker(v)}</div>` + bsStatsBody(v, 'board')
+    + (flProfile.mode() === 'summary' ? `<p class="pf-next-step lb">Every stat with its rank is under <button type="button" class="lk" data-pftab="stats">All stats</button>.</p>` : '');
   if (v.tab === 'log') return bsPlayerPicker(v) + bsGameLog(v);
   if (v.tab === 'career') return bsCareerPane(v);
   return '';
@@ -1188,7 +1193,7 @@ function bsRenderSheet(v){
     hero = `<div class="hero solo" style="--tc:var(--accent)">${topBar(back)}<div class="thead">${l.logo ? `<img class="crest" src="${esc(l.logo)}" alt="" ${bsLogoErr}>` : ''}<div><h3>${esc(l.name)}</h3><p><span>${esc(l.area)}</span><span>${bsSeason(v.id)} season</span></p></div></div></div>`;
     tabs = [['stand', 'Standings'], ...(l.src === 'sa' || l.x || l.src === 'bb' ? [['leaders', 'Leaders']] : []), ...(l.src === 'fs' ? [['results', 'Results & fixtures']] : [])]; body = bsLeaguePane(v) }
   else if (v.x) { hero = bsXHero(v, back); tabs = [['stats', 'Stats'], ['log', 'Game log'], ['career', 'Career']]; body = bsXPane(v) }
-  else { hero = bsPlayerHero(v, back); tabs = [['stats', 'Stats'], ['log', 'Game log'], ['career', 'Career']]; body = bsPlayerPane(v) }
+  else { hero = bsPlayerHero(v, back); tabs = flProfile.tabs([['overview', 'Overview'], ['log', 'Game log'], ['career', 'Career'], ['stats', 'All stats']]); if (!tabs.some(t => t[0] === v.tab)) v.tab = 'overview'; body = bsPlayerPane(v) }
   S.curTabs = tabs;
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${hero}${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel" style="--tc:${esc(v.color || 'var(--accent)')}">${body}</div></div>`;

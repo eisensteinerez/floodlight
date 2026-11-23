@@ -548,7 +548,7 @@ const fbRate = n => /pct|avg|per[A-Z]|pergame|^long|rating|qbr|gamesPlayed/i.tes
 const fbNum = t => { if (t == null || t === '-' || t === '') return null; const x = parseFloat(String(t).replace(/,/g, '')); return isFinite(x) ? x : null };
 const FBP_LABEL = { 'passing.sacks': 'Sacks taken', 'passing.sackYardsLost': 'Sack yards lost', 'passing.interceptions': 'Interceptions thrown', 'passing.longPassing': 'Longest pass' };
 const fbLbl = (k, x) => FBP_LABEL[k] || x.displayName;
-const fbOrd = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]) };
+const fbOrd = n => flFmt.ord(n);   // the one ordinal formatter (fmt.js)
 
 // league leaderboard for a position group, reduced to { id, pos, gp, s: { 'category.stat': number } }
 const fbPools = new Map();
@@ -587,7 +587,7 @@ function fbRankIn(v, key, val){
 
 function openFbPlayer(id, lgKey){
   if (!id) return;
-  if (viewBlocked({ type: 'fbplayer' })) return; pushView({ type: 'fbplayer', id: String(id), lg: lgKey || 'nfl', tab: 'stats' });
+  if (viewBlocked({ type: 'fbplayer' })) return; pushView({ type: 'fbplayer', id: String(id), lg: lgKey || 'nfl', tab: 'overview' });
   const v = S.stack[S.stack.length - 1], l = FBL[v.lg] || FBL.nfl;
   Promise.allSettled([cj(`${FBW}/${l.path}/athletes/${id}`), cj(`${FBW}/${l.path}/athletes/${id}/overview`), cj(`${FBW}/${l.path}/athletes/${id}/stats`)]).then(([b, o, c]) => {
     v.bio = val(b)?.athlete; v.ov = val(o); v.car = val(c); if (!v.bio) v.err = true;
@@ -623,19 +623,23 @@ function fbPlayerHero(v, back){
   let stats = [], caption = '';
   if (ss?.raw && keys.some(k => ss.raw[k])) {
     stats = keys.map(k => { const x = ss.raw[k]; if (!x) return null; const r = fbRankIn(v, k, fbStatVal(x));
-      return { label: x.shortDisplayName || x.displayName, value: x.displayValue, rank: r ? `${fbOrd(r.rank)} of ${r.n}${r.perGame ? ' · per game' : ''}` : '' } });
+      return { label: x.shortDisplayName || x.displayName, value: x.displayValue, unit: r?.perGame ? 'ranked per game' : '', rank: r?.rank, n: r ? r.n : null, pc: r?.pc } });
     caption = `${esc(v.season)} regular season${ss.gp ? ` · ${ss.gp} game${ss.gp === 1 ? '' : 's'}` : ''}${ss.peers ? ` · ranked among ${esc(fbPeerLabel(v))}` : ''}`;
   } else if (a?.statsSummary?.statistics?.length) {
     stats = a.statsSummary.statistics.slice(0, 4).map(x => ({ label: x.shortDisplayName || x.displayName, value: x.displayValue, rank: x.rankDisplayValue || '' }));
     caption = esc(a.statsSummary.displayName || '');
   }
   const sport = /college/.test(FBL[v.lg]?.path || v.lg) ? 'cfb' : 'nfl';
-  return flProfile.hero({ back, sport, heatSport: sport === 'cfb' ? '' : 'nfl', id: v.id, name: a?.displayName, color: col,
+  const inj = a?.injuries?.[0];
+  return flProfile.hero({ back, sport, heatSport: sport === 'cfb' ? '' : 'nfl', lab: sport === 'cfb' ? '' : 'nfl', id: v.id, name: a?.displayName, color: col, tabs: true,
+    sportName: 'Football', league: FBL[v.lg]?.short || FBL[v.lg]?.name || '', leagueKey: v.lg, teamName: t?.displayName || '',
+    avail: !a ? null : inj ? { text: inj.status || 'Injured', tone: /out|reserve/i.test(inj.status || '') ? 'out' : 'warn' } : a.status?.name ? { text: a.status.name, tone: /active/i.test(a.status.name) ? 'ok' : 'warn' } : null,
+    next: t?.id ? { path: 'football/' + (FBL[v.lg]?.path || 'nfl'), teamId: t.id } : null,
     face: `<img class="face espn-shot" src="${esc(a ? fbShot(a, v.lg) : SIL)}" alt="" onerror="this.onerror=null;this.src=SIL">`,
     teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-fbteam="${esc(t.id)}" data-fbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
     number: a?.displayJersey, position: a?.position?.displayName,
     chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace, a.college?.name] : [],
-    status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}</span>` : '', stats, caption });
+    stats, caption });
 }
 function fbSeasonPicker(v){
   const ys = v.seasons?.length ? v.seasons : [v.season]; if (ys.length < 2) return '';
@@ -649,9 +653,9 @@ function fbStatRow(v, cat, x){
   const rk = r ? `<b class="num">${fbOrd(r.rank)}</b><small>/${r.n}</small>` : n && x.rank && x.rank > 0 ? `<small title="ESPN rank among all ${esc(FBL[v.lg]?.name || '')} players">${esc(x.rankDisplayValue || fbOrd(x.rank))}</small>` : '';
   const pgTxt = pg == null ? '' : pg >= 100 ? pg.toFixed(0) : pg >= 10 ? pg.toFixed(1) : pg.toFixed(2);
   return `<div class="fbps-row${n ? '' : ' z'}"><span class="ps-t" title="${esc(x.description || '')}">${esc(fbLbl(key, x))}</span><b class="num">${esc(x.displayValue)}</b><span class="num ps-90">${pgTxt}</span><span class="fbps-rk">${rk}</span>
-    ${pc == null ? '<span class="ps-bar-c"></span><span></span>' : `<span class="ps-bar-c"><span class="ps-bar" role="img" aria-label="${pc} percentile"><i class="${cls}" style="width:${Math.max(2, pc)}%"></i></span></span><span class="num ps-p ${cls}">${pc}</span>`}</div>`;
+    ${pc == null ? '<span class="ps-bar-c"></span><span></span>' : `<span class="ps-bar-c"><span class="ps-bar" role="img" aria-label="${flFmt.ord(pc)} percentile"><i class="${cls}" style="width:${Math.max(2, pc)}%"></i></span></span><span class="num ps-p ${cls}">${pc}</span>`}</div>`;
 }
-function fbStatsBody(v){
+function fbStatsBody(v, part){
   const ss = v.ss?.[v.season];
   if (!ss || ss.loading) return `<div class="skel" style="height:300px"></div>`;
   if (!ss.cats?.length) return `<div class="note">No ${esc(v.season)} regular-season stats for this player yet.</div>`;
@@ -662,7 +666,7 @@ function fbStatsBody(v){
   let h = '';
   // strengths, weaknesses and radar, from the curated stats for the position
   const K = FBP_KEY[v.gk];
-  if (K && ss.peers) {
+  if (K && ss.peers && part !== 'rows') {
     const cand = [...new Set([...K.tiles, ...K.radar.map(r => r[0]), ...K.more])].map(k => { const x = ss.raw[k]; if (!x) return null; const n = fbStatVal(x);
       const [cat] = k.split('.'); if (!shown.some(c => c.name === cat)) return null;
       const r = n || FBP_LOW.has(k) ? fbRankIn(v, k, n) : null; return r ? { k, x, r } : null }).filter(Boolean);
@@ -672,11 +676,11 @@ function fbStatsBody(v){
       return x ? { title, value: (r?.pc ?? 0) / 100 } : null }).filter(Boolean);
     const rad = items.length >= 3 ? radarSVG({ title: 'vs ' + fbPeerLabel(v), items }, v.color || '#3D6FD9') : '';
     const radarKeys = new Set(K.radar.map(r => r[0])), title = Object.fromEntries(K.radar);
-    h += flViz.playerBoard(cand.map(c => ({ label: fbLbl(c.k, c.x), short: title[c.k] || fbLbl(c.k, c.x), val: c.x.displayValue, rank: c.r.rank, n: c.r.n, pc: c.r.pc, onRadar: radarKeys.has(c.k) })), {
+    h += flViz.playerBoard(cand.map(c => ({ label: fbLbl(c.k, c.x), short: title[c.k] || fbLbl(c.k, c.x), val: c.x.displayValue, rank: c.r.rank, n: c.r.n, pc: c.r.pc, onRadar: radarKeys.has(c.k), low: FBP_LOW.has(c.k) ? { good: 'avoiding ' + fbLbl(c.k, c.x).toLowerCase(), noun: fbLbl(c.k, c.x).toLowerCase() } : null })), {
       color: v.color || '#3D6FD9', peers: fbPeerLabel(v), name: (v.bio?.displayName || v.name || '').split(' ').slice(-1)[0], radar: K.radar.map(r => r[1]),
       note: !ss.qualified && !['DL', 'LB', 'DB'].includes(v.gk) ? "Not enough plays yet to make ESPN's qualified list, so treat these as rough." : '' });
   }
-  for (const c of shown) {
+  if (part !== 'board') for (const c of shown) {
     const skipIn = FBP_SKIP_IN[c.name] || [], first = FBP_FIRST[c.name] || [];
     const list = c.stats.filter(x => !FBP_SKIP.has(x.name) && !skipIn.includes(x.name) && !(c.name !== 'general' && x.name === 'gamesPlayed') && !(FBP_ADV.has(x.name) && !fbStatVal(x)))
       .sort((a, b) => { const i = x => { const k = first.indexOf(x.name); return k < 0 ? 99 : k }; return i(a) - i(b) });
@@ -717,10 +721,16 @@ function fbCareer(v){
 function fbPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
   const a = v.bio; if (!a) return `<div class="skel" style="height:240px"></div>`;
+  const extra = flProfile.extra(v); if (extra != null) return extra;
   if (v.tab === 'stats') {
     const rows = [['Position', a.position?.displayName], ['Age', a.age ? `${a.age}${a.displayDOB ? ' · born ' + a.displayDOB : ''}` : ''], ['Height', a.displayHeight], ['Weight', a.displayWeight],
       ['College', a.college?.name], ['Experience', a.displayExperience || (a.experience?.years != null ? a.experience.years + ' seasons' : '')], ['Birthplace', [a.displayBirthPlace].filter(Boolean).join('')], ['Draft', a.displayDraft]].filter(r => r[1]);
-    return fbSeasonPicker(v) + fbStatsBody(v) + `<div class="sub-h"><h5>Profile</h5></div><div class="bio">${rows.map(([k, x]) => `<div><span>${k}</span><strong>${esc(x)}</strong></div>`).join('')}</div>`;
+    return `<div class="pf-pane-h"><h2 class="sr-only">All stats</h2>${fbSeasonPicker(v)}</div>` + fbStatsBody(v, 'rows') + `<div class="sub-h"><h5>Profile</h5></div><div class="bio">${rows.map(([k, x]) => `<div><span>${k}</span><strong>${esc(x)}</strong></div>`).join('')}</div>`;
+  }
+  if (v.tab === 'overview') {
+    const md = flProfile.mode();
+    return `<div class="pf-pane-h"><h2 class="sr-only">Overview</h2>${flProfile.modeBar()}${fbSeasonPicker(v)}</div>` + fbStatsBody(v, 'board')
+      + (md === 'summary' ? `<p class="pf-next-step lb">Every stat with its rank is under <button type="button" class="lk" data-pftab="stats">All stats</button>.</p>` : '');
   }
   if (v.tab === 'log') return fbSeasonPicker(v) + fbGameLog(v);
   if (v.tab === 'career') return fbCareer(v);
@@ -854,7 +864,7 @@ function fbRenderSheet(v){
     if (e.src === 'tsdb') tabs = [['odds', 'Odds'], ['pred', 'Prediction']];
     if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = fbPane(v) }
   else if (v.type === 'fbteam') { hero = fbTeamHero(v, back); tabs = [['sched', 'Schedule'], ['roster', 'Roster'], ['stand', 'Standings'], ...(v.lg === 'nfl' || FBL[v.lg].college ? [['fut', 'Title odds']] : [])]; body = fbTeamPane(v) }
-  else { hero = fbPlayerHero(v, back); tabs = [['stats', 'Stats'], ['log', 'Game log'], ['career', 'Career'], ['news', 'News']]; body = fbPlayerPane(v) }
+  else { hero = fbPlayerHero(v, back); tabs = flProfile.tabs([['overview', 'Overview'], ['log', 'Game log'], ['career', 'Career'], ['stats', 'All stats'], ['news', 'News']]); if (!tabs.some(t => t[0] === v.tab)) v.tab = 'overview'; body = fbPlayerPane(v) }
   S.curTabs = tabs;
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${hero}${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel" style="--tc:${esc(v.color || 'var(--accent)')}">${body}</div></div>`;
