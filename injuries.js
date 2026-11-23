@@ -11,10 +11,12 @@
   const TTL = 10 * 60000;
   const norm = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').replace(/ (jr|sr|ii|iii|iv)$/, '').trim();
   // one scale for every league's wording, most serious first
-  const LEVELS = [['out', 'Out'], ['doubtful', 'Doubtful'], ['questionable', 'Questionable'], ['dtd', 'Day to day'], ['probable', 'Probable']];
+  const LEVELS = [['out', 'Out'], ['doubtful', 'Doubtful'], ['questionable', 'Questionable'], ['dtd', 'Day to day'], ['probable', 'Probable'], ['active', 'Active']];
   function level(s) {
     const t = String(s || '').toLowerCase();
     if (/out|injured reserve|\bir\b|injured list|\bil\b|suspen|inactive|pup|non-football/.test(t)) return 'out';
+    // listed but playing: "Active" on the report is not a doubt (it is checked after "inactive", which is out)
+    if (/^\s*(active|available)\b/.test(t)) return 'active';
     if (/doubt/.test(t)) return 'doubtful';
     if (/question|game.?time/.test(t)) return 'questionable';
     if (/day.?to.?day|\bdtd\b/.test(t)) return 'dtd';
