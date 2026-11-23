@@ -288,7 +288,7 @@
         <button type="button" class="lk pd-folb" data-pdfollow="${esc(k)}" data-fk="fol-${esc(k)}" aria-pressed="${!!fol}">${ic('star', 16)}${fol ? 'Following' : 'Follow'}<span class="sr-only"> ${esc(p.name)}, ${esc(p.text)}</span></button>
         ${window.flShare ? `<button type="button" class="lk pd-share" data-pdshare="${esc(p.id)}" data-fk="sh-${esc(k)}">${window.flShare.ICON}Share<span class="sr-only"> ${esc(p.name)}, ${esc(p.text)} as a picture</span></button>` : ''}
         ${R ? `<span class="lb num pd-rng" title="${p.type === 'prop' ? 'One standard error either side, from the games behind the reading' : 'The span between our model alone and the market'}">Likely ${pct(R.lo)}–${pct(R.hi)}%</span>` : ''}${alertSel}</div>
-      ${on ? `<div class="pd-ev" id="ev-${esc(k)}" role="region" aria-label="Evidence for ${esc(p.name)}, ${esc(p.text)}">${p.type === 'prop' ? window.flEvidence.prop(p) : window.flEvidence.match(p, P.ev.get(p.id))}${window.flShare ? `<div class="pd-evfoot"><button type="button" class="bt ghost sm" data-pdshareev="${esc(p.id)}" data-fk="shev-${esc(k)}">${window.flShare.ICON}Share this evidence</button></div>` : ''}</div>` : ''}`;
+      ${on ? `<div class="pd-ev" id="ev-${esc(k)}" role="region" aria-label="Evidence for ${esc(p.name)}, ${esc(p.text)}">${p.type === 'prop' ? window.flEvidence.prop(p) : window.flEvidence.match(p, P.ev.get(p.id))}${window.flShare || window.flBoards ? `<div class="pd-evfoot">${window.flBoards ? `<button type="button" class="bt ghost sm" data-pdboard="${esc(k)}" data-fk="bd-${esc(k)}">${window.flShell?.ic?.('save', 16) || ''}Save to a board</button>` : ''}${window.flShare ? `<button type="button" class="bt ghost sm" data-pdshareev="${esc(p.id)}" data-fk="shev-${esc(k)}">${window.flShare.ICON}Share this evidence</button>` : ''}</div>` : ''}</div>` : ''}`;
   }
   /* a pick, or a pick with its evidence, as a picture to share (share.js draws it in the current theme) */
   function shareOpts(p, withEvidence) {
@@ -314,7 +314,9 @@
     if (force) P.ev.delete(p.id);
     get('/api/forecast/get?keys=' + encodeURIComponent(p.m.key)).then(d => P.ev.set(p.id, d.forecasts?.[p.m.key] || { error: 'nothing saved' }), e => P.ev.set(p.id, { error: e.message || 'it did not answer' })).then(draw);
   }
-  function toggleEvidence(k) { const p = allPicks().find(x => keyOf(x) === k || x.id === k); if (!p) return; k = keyOf(p); if (P.open.has(k)) P.open.delete(k); else { P.open.add(k); loadEvidence(p) } draw() }
+  // a pick as something to come back to (Home's Continue researching) or to keep on a board
+  const pickItem = (p, k = keyOf(p)) => ({ kind: 'pred', key: 'pred:' + k, label: `${p.name}: ${p.text}`, sub: [p.game, p.start ? new Date(p.start).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · '), photo: p.photo || '', open: { page: 'predictions', pick: k } });
+  function toggleEvidence(k) { const p = allPicks().find(x => keyOf(x) === k || x.id === k); if (!p) return; k = keyOf(p); if (P.open.has(k)) P.open.delete(k); else { P.open.add(k); loadEvidence(p); window.flRecent?.note(pickItem(p, k)) } draw() }
   const skel = n => Array.from({ length: n }, () => `<div class="card pd-pk pd-skl" aria-hidden="true"><div class="pd-top"><span class="skl pd-sk-av"></span><span class="pd-sk-t"><i class="skl" style="width:46%"></i><i class="skl" style="width:64%"></i><i class="skl" style="width:38%"></i></span><span class="skl pd-sk-e"></span><span class="skl pd-sk-b"></span></div>
     <div class="pd-bars"><i class="skl"></i><i class="skl"></i></div></div>`).join('');
   function drawBoard(L) {
@@ -468,10 +470,11 @@
     const pg = e.target.closest('#pg-predictions'); if (!pg) return;
     const t = e.target.closest('button, a, article'); if (!t) return;
     const d = t.dataset;
-    if (d.pdsport) { P.sport = d.pdsport; P.all = false; return draw() }
+    if (d.pdsport) { P.sport = d.pdsport; P.all = false; if (P.sport !== 'all') window.flRecent?.note({ kind: 'filters', key: 'filters:predictions', label: `Predictions for ${t.firstChild?.textContent?.trim() || P.sport}`, sub: 'The last filter you chose', open: { page: 'predictions', filters: { sport: P.sport } } }); return draw() }
     if (d.pdwhen) { P.when = d.pdwhen; P.all = false; return draw() }
     if (d.pdmin != null) { P.min = +d.pdmin; P.all = false; return draw() }
     if (d.pdev) return toggleEvidence(d.pdev);
+    if (d.pdboard) { const p = allPicks().find(x => keyOf(x) === d.pdboard); return p && window.flBoards?.offer(pickItem(p, d.pdboard), t) }
     if (d.pdshare || d.pdshareev) { const p = allPicks().find(x => x.id === (d.pdshare || d.pdshareev)); return p && window.flShare?.share(shareOpts(p, !!d.pdshareev), t) }
     if (d.pdevretry) { const p = allPicks().find(x => x.id === d.pdevretry); if (p) { loadEvidence(p, true); draw() } return }
     if (d.pdadd) return toggle(d.pdadd);

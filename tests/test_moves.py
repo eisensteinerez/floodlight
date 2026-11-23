@@ -138,6 +138,40 @@ def test_a_sentence_with_no_readable_player_is_kept_with_low_confidence():
     assert len(evs) == 1 and evs[0]["player"] is None and evs[0]["sentence"].startswith("Received")
 
 
+
+def test_contract_terms_only_what_the_sentence_says():
+    t = M.contract_terms
+    assert t("Signed G Kevin Porter Jr. to a 10-day contract.")["summary"] == "10-day contract"
+    assert t("Signed F A Smith to a rest-of-season contract.")["length"] == "rest-of-season"
+    assert t("Signed G A Smith to a contract for the rest of the season.")["summary"] == "Rest-of-season contract"
+    two = t("Signed QB Joe Flacco to a two-year, $10 million contract.")
+    assert two == {"summary": "Two-year contract, $10 million", "length": "two-year", "money": "$10 million", "type": "", "text": "two-year, $10 million contract"}
+    assert t("Signed G A Smith to a 3-year, $4.5M contract.")["summary"] == "Three-year contract, $4.5 million"
+    assert t("Agreed to terms with WR A Smith on a one-year deal.")["summary"] == "One-year contract"
+    assert t("Signed F Oso Ighodaro to a multiyear contract extension.")["summary"] == "Multiyear contract extension"
+    assert t("Signed QB A Smith to a four-year contract extension worth $120 million.")["money"] == "$120 million"
+    assert t("Converted C Duop Reath's contract to a two-way contract.")["type"] == "two-way"
+    assert t("Converted the contract of F Harrison Ingram to a twpo-way contract.")["summary"] == "Two-way contract"
+    assert t("Seattle Mariners signed free agent RHP John Doe to a minor league contract.")["summary"] == "Minor league contract"
+    assert t("Signed RB A Smith to a reserve/future contract.")["summary"] == "Reserve/future contract"
+    # nothing stated, nothing returned: no placeholder, and an injured list is not a contract
+    for s in ("Signed WR A Smith to a contract.", "Signed DB Nick Whiteside to the active roster.", "Placed RHP A Smith on the 10-day injured list.",
+              "Exercised the third-year team options on Fs Kon Knueppel and Liam McNeeley.", "Waived F AK Okereke."):
+        assert t(s) == {}, s
+
+
+def test_events_carry_terms_to_the_page():
+    evs = run("nba", [("2026-11-02", "NY", "Signed G Malcolm Brogdon to a 10-day contract. Waived F Pacome Dadiet.")], TEAMS)
+    pub = {e["player"]["name"]: M.public(e) for e in evs}
+    assert pub["Malcolm Brogdon"]["terms"]["summary"] == "10-day contract" and "terms" not in pub["Pacome Dadiet"]
+
+
+def test_activated_and_claimed_are_their_own_kinds():
+    nfl = run("nfl", [("2026-11-21", "DEN", "Activated S P.J. Locke off injured reserve. Claimed S Devon Key off waivers from Minnesota. Activated LB Justin Strnad from the practice squad.")], NFL)
+    k = {e["player"]["name"]: e["kind"] for e in nfl}
+    assert k == {"P.J. Locke": "activate", "Devon Key": "claim", "Justin Strnad": "promote"}
+    assert next(e for e in nfl if e["kind"] == "claim")["other"]["abbr"] == "MIN"
+
 if __name__ == "__main__":
     fails = 0
     for n, f in list(globals().items()):

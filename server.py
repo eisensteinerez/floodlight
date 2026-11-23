@@ -92,7 +92,7 @@ def signup_allowed(addr):
     return True
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
-PUBLIC_FILES = {"index.html", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
+PUBLIC_FILES = {"index.html", "recent.js", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
@@ -1003,7 +1003,7 @@ _acct_lock = threading.Lock()
 SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
              "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list, "favThemes": list,
-             "homeOff": list, "homeOrder": list, "watch": list}   # Home: the sections a member has hidden, and the games on their watchlist   # saved Lab boards, saved prediction slips, favorite sports, time zone
+             "homeOff": list, "homeOrder": list, "watch": list, "books": list}   # Home: the sections a member has hidden, and the games on their watchlist   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -1057,6 +1057,13 @@ def _mlb_moves(days=21):
         out.append({"id": str(t.get("id") or len(out)), "date": t.get("date") or t.get("effectiveDate"), "text": text[:600], "code": t.get("typeCode") or "", "kind": t.get("typeDesc") or "",
                     "player": {"id": str(person.get("id") or ""), "name": person.get("fullName") or ""} if person.get("id") else None,
                     "from": side(t.get("fromTeam")), "to": side(t.get("toTeam"))})
+        try:   # the contract, only when the sentence states it ("to a minor league contract")
+            import moves_parse
+            terms = moves_parse.contract_terms(text)
+            if terms:
+                out[-1]["terms"] = terms
+        except Exception:
+            pass
     out.sort(key=lambda m: m["date"], reverse=True)
     return out[:600]
 
@@ -1627,8 +1634,11 @@ _parlays = storage.load(PARLAYS_FILE, {})   # {username: [parlay, ...]} newest f
 PARLAY_MAX, PARLAY_LEGS = 300, 12
 LEG_TYPES = ("prop", "win", "draw", "total", "spread")
 LEG_TEXT = ("id", "type", "sport", "lg", "path", "eid", "game", "gameKey", "home", "away", "homeAbbr", "awayAbbr", "side", "team", "player", "opp",
-            "k", "label", "text", "short", "photo", "logo", "book")
-LEG_NUM = ("start", "line", "ours0", "market0", "mu", "sd", "m0", "t0")
+            "k", "label", "text", "short", "photo", "logo", "book", "msrc")
+# mAt/rAt: when the price and the pick were read (ms). posted: the line the book posted, when the member moved away from it.
+# A leg's closing price (close, closeAt) and result (res, final) are never taken from "add": they have their own ops and windows.
+LEG_NUM = ("start", "line", "ours0", "market0", "mu", "sd", "m0", "t0", "mAt", "rAt", "posted")
+CLOSE_BEFORE, CLOSE_AFTER = 30 * 60, 5 * 60   # a closing price is taken from 30 minutes before a leg's start to 5 after, once
 LEG_RESULTS = ("hit", "miss", "push", "void")
 
 
@@ -1647,11 +1657,55 @@ def _leg_clean(raw):
         v = _num(raw.get(k))
         if v is not None:
             leg[k] = v
-    if raw.get("yes") is True:
-        leg["yes"] = True
+    for k in ("yes", "edited"):
+        if raw.get(k) is True:
+            leg[k] = True
     if not leg.get("id") or not leg.get("text") or _num(leg.get("start")) is None:
         return None
     return leg
+
+
+def _leg_clash(legs):
+    """Picks that can't all hit together, said in words, or None. The same rules the page applies (parlaycore.js relate):
+    one player over and under a line he can't straddle, both teams to win, a winner and a draw, two spreads in one game,
+    a total over and under that can't both land, a favourite covering while the other team wins, a draw with a side giving
+    points, and the same pick twice."""
+    def same_player(a, b):
+        return a["type"] == b["type"] == "prop" and a.get("lg") == b.get("lg") and norm(a.get("player")) and norm(a.get("player")) == norm(b.get("player")) \
+            and a.get("k") == b.get("k") and abs(a["start"] - b["start"]) < 6 * 3600e3
+
+    def over_under(a, b):   # the over's line at or above the under's: no count lands both
+        o, u = (a, b) if a.get("side") != "under" else (b, a)
+        return a.get("side") != b.get("side") and bool(a.get("yes") or (_num(o.get("line")) is not None and _num(u.get("line")) is not None and o["line"] >= u["line"]))
+    seen = set()
+    for i, a in enumerate(legs):
+        sig = (a["type"], a.get("gameKey"), a.get("side"), a.get("line"), norm(a.get("player") or ""), a.get("k"))
+        if sig in seen:
+            return "The same pick is in this parlay twice."
+        seen.add(sig)
+        for b in legs[i + 1:]:
+            kinds = {a["type"], b["type"]}
+            if same_player(a, b) and over_under(a, b):
+                return f"{a.get('player')} can't go both over and under that line in one game. Keep one side."
+            if not a.get("gameKey") or a.get("gameKey") != b.get("gameKey"):
+                continue
+            if a["type"] == b["type"] == "win" and a.get("side") != b.get("side"):
+                return "Both teams can't win the same game. Keep one."
+            if kinds == {"win", "draw"}:
+                return "A draw means neither team wins, so these can't both hit. Keep one."
+            if a["type"] == b["type"] == "spread":
+                return "A game takes one spread, at one line. Keep one."
+            if a["type"] == b["type"] == "total" and over_under(a, b):
+                return "The total can't be over and under those lines at once. Keep one."
+            if kinds == {"spread", "win"}:
+                sp, w = (a, b) if a["type"] == "spread" else (b, a)
+                if sp.get("side") != w.get("side") and _num(sp.get("line")) is not None and sp["line"] <= 0:
+                    return "If the favourite covers, it wins, so the other team can't. Keep one."
+            if kinds == {"spread", "draw"}:
+                sp = a if a["type"] == "spread" else b
+                if _num(sp.get("line")) is not None and sp["line"] < 0:
+                    return "A draw means the side giving goals doesn't cover. Keep one."
+    return None
 
 
 def _parlay_status(legs):
@@ -1680,14 +1734,23 @@ def parlays_action(body, user):
                 return 400, {"error": "Add at least one pick first."}
             if len({l["id"] for l in legs}) != len(legs):
                 return 400, {"error": "The same pick is in this parlay twice."}
+            clash = _leg_clash(legs)
+            if clash:   # picks that can't all hit are refused here too, not only on the page
+                return 400, {"error": clash}
             late = next((l for l in legs if l["start"] / 1000 < now - 120), None)
             if late:   # a parlay is locked in before its games start, so the record can't be written after the fact
                 return 400, {"error": f"{late.get('game') or late['text']} has already started. Take that pick out and save again."}
             if len(mine) >= PARLAY_MAX:
                 return 400, {"error": f"You can keep {PARLAY_MAX} parlays. Delete an old one first."}
             p = {"id": "p" + secrets.token_hex(6), "at": int(now * 1000), "name": re.sub(r"\s+", " ", str(body.get("name") or "")).strip()[:80],
-                 "legs": legs, "status": "open"}
-            for k, lo, hi in (("odds", -100000, 1000000), ("stake", 0, 1e6), ("ours0", 0, 1), ("market0", 0, 1)):
+                 "legs": legs, "status": "open", "v": 2}
+            # what the member saw when locking in: the warning about linked picks, and whether a line was moved
+            warn = re.sub(r"\s+", " ", body["warn"]).strip()[:240] if isinstance(body.get("warn"), str) else ""
+            if warn:
+                p["warn"] = warn
+            if body.get("edited") is True or any(l.get("edited") for l in legs):
+                p["edited"] = True
+            for k, lo, hi in (("odds", -100000, 1000000), ("stake", 0, 1e6), ("ours0", 0, 1), ("market0", 0, 1), ("lo0", 0, 1), ("hi0", 0, 1)):
                 v = _num(body.get(k), lo, hi)
                 if v is not None and not (k == "odds" and -100 < v < 100):
                     p[k] = v
@@ -1707,6 +1770,17 @@ def parlays_action(body, user):
                         cur.pop(k, None)
                     else:
                         cur[k] = v
+        elif op == "close":   # a leg's closing price: the books' chance just before its start, written once, inside its window
+            by = {l["id"]: l for l in cur["legs"]}
+            for r in (body.get("legs") if isinstance(body.get("legs"), list) else [])[:PARLAY_LEGS]:
+                leg = by.get(str(r.get("id") or "")) if isinstance(r, dict) else None
+                v = _num(r.get("close"), 0, 1) if isinstance(r, dict) else None
+                if not leg or "close" in leg or v is None or not 0 < v < 1:
+                    continue
+                start = leg["start"] / 1000
+                if not start - CLOSE_BEFORE <= now <= start + CLOSE_AFTER:
+                    continue
+                leg["close"], leg["closeAt"] = round(v, 4), int(now * 1000)
         elif op == "result":   # a leg's result, sent by the page once its game says so
             by = {l["id"]: l for l in cur["legs"]}
             for r in (body.get("legs") if isinstance(body.get("legs"), list) else [])[:PARLAY_LEGS]:
@@ -1757,7 +1831,7 @@ def clean_prefs(raw, old):
         if k in raw and isinstance(raw[k], typ):
             v = raw[k]
             if typ is list:
-                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes", "homeOff", "homeOrder") and isinstance(x, str) and len(x) <= 24)][:200]
+                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes", "homeOff", "homeOrder", "favLeagues", "books") and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
                 if k == "color":
