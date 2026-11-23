@@ -472,6 +472,26 @@
     return out;
   }
 
+  /* ---------- the closing price ----------
+     A leg's closing chance is the books' price (margin taken out) read in the last minutes before its start, while the page
+     is open. It can be written once, between 30 minutes before the start and 5 minutes after; the server holds the same window. */
+  const CLOSE_BEFORE = 30 * 60000, CLOSE_AFTER = 5 * 60000;
+  const closeOpen = (l, now = Date.now()) => now >= l.start - CLOSE_BEFORE && now <= l.start + CLOSE_AFTER;
+  // -> { p } once read, else { state: 'later' | 'due' | 'none' | 'missed' | 'old' }
+  function closeOf(p, l, now = Date.now()) {
+    if (l.close != null) return { p: l.close };
+    if (!p.v) return { state: 'old' };
+    if (!LG[l.lg]?.board) return { state: 'none' };
+    return now < l.start - CLOSE_BEFORE ? { state: 'later' } : closeOpen(l, now) ? { state: 'due' } : { state: 'missed' };
+  }
+  async function closeLegs(p, rows) {
+    rows = rows.filter(r => { const l = p.legs.find(x => x.id === r.id); return l && l.close == null && r.close > 0 && r.close < 1 && closeOpen(l) });
+    if (!rows.length) return;
+    if (p.local || !me()) { for (const r of rows) { const l = p.legs.find(x => x.id === r.id); l.close = +r.close.toFixed(4); l.closeAt = Date.now() } }
+    else await send(p, { op: 'close', legs: rows.map(r => ({ id: r.id, close: +r.close.toFixed(4) })) }).catch(() => {});
+    changed();
+  }
+
   /* ---------- live odds: what the books post right now for one leg ---------- */
   const oddsCache = new Map(), slugs = new Map();   // game -> { at, promise, data }; soccer game -> its league
   function oddsBoard(leg, g, force) {
@@ -558,17 +578,20 @@
   // parlays made before signing in move to the account while none of their games has started
   async function pushLocal() {
     for (const p of P.list.filter(x => x.local && x.status === 'open' && x.legs.every(l => l.start > Date.now()))) {
-      try { const d = await api('/api/parlays', { op: 'add', name: p.name, legs: p.legs, odds: p.odds, stake: p.stake, ours0: p.ours0, market0: p.market0 }); P.list = [...d.parlays, ...P.list.filter(x => x.local && x.id !== p.id)]; changed() } catch {}
+      try { const d = await api('/api/parlays', { op: 'add', name: p.name, legs: p.legs, odds: p.odds, stake: p.stake, ours0: p.ours0, market0: p.market0, lo0: p.lo0, hi0: p.hi0, warn: p.warn, edited: p.edited }); P.list = [...d.parlays, ...P.list.filter(x => x.local && x.id !== p.id)]; changed() } catch {}
     }
   }
   async function add(draft) {
     const legs = draft.legs || []; if (!legs.length) throw new Error('Add at least one pick first.');
     const late = legs.find(l => l.start < Date.now() - 120000); if (late) throw new Error(`${late.game || late.text} has already started. Take that pick out and save again.`);
     const clash = blockers(legs).find(b => b.kind === 'conflict'); if (clash) throw new Error(clash.why);
-    const body = { op: 'add', name: draft.name || '', legs, odds: draft.odds ?? null, stake: draft.stake ?? null, ours0: combine(legs, start0)?.p ?? null, market0: combine(legs, l => l.market0)?.p ?? null };
+    // what the member saw when locking in, kept for the history: the range, the relationship warning and whether a line was moved
+    const est = estimate(legs, start0), warn = String(draft.warn || '').slice(0, 240), edited = legs.some(l => l.edited);
+    const body = { op: 'add', name: draft.name || '', legs, odds: draft.odds ?? null, stake: draft.stake ?? null, ours0: combine(legs, start0)?.p ?? null, market0: combine(legs, l => l.market0)?.p ?? null,
+      ...(est?.linked ? { lo0: +est.lo.toFixed(4), hi0: +est.hi.toFixed(4) } : {}), ...(warn ? { warn } : {}), ...(edited ? { edited: true } : {}) };
     if (me()) { const d = await api('/api/parlays', body); P.list = [...d.parlays, ...P.list.filter(p => p.local)]; changed(); return d.parlay }
-    const p = { id: 'l' + Date.now().toString(36), at: Date.now(), name: body.name, legs: legs.map(l => ({ ...l })), status: 'open', local: true, ...(body.odds != null ? { odds: body.odds } : {}), ...(body.stake != null ? { stake: body.stake } : {}),
-      ...(body.ours0 != null ? { ours0: body.ours0 } : {}), ...(body.market0 != null ? { market0: body.market0 } : {}) };
+    const p = { id: 'l' + Date.now().toString(36), at: Date.now(), v: 2, name: body.name, legs: legs.map(l => { const c = { ...l }; delete c.close; delete c.closeAt; delete c.res; return c }), status: 'open', local: true, ...(body.odds != null ? { odds: body.odds } : {}), ...(body.stake != null ? { stake: body.stake } : {}),
+      ...(body.ours0 != null ? { ours0: body.ours0 } : {}), ...(body.market0 != null ? { market0: body.market0 } : {}), ...(body.lo0 != null ? { lo0: body.lo0, hi0: body.hi0 } : {}), ...(warn ? { warn } : {}), ...(edited ? { edited: true } : {}) };
     P.list.unshift(p); changed(); return p;
   }
   async function send(p, body) {
@@ -612,14 +635,16 @@
       net += p.status === 'won' ? 1 : p.status === 'lost' ? -1 : 0;
       series.push({ id: p.id, t: p.settled || p.at, status: p.status, name: p.name, n: p.legs.length, u, units, net, est: !!pr?.est }) }
     const priced = series.filter(s => s.u != null).length;
+    // the closing line: did the books' chance for a pick rise (a better price was locked in) or fall after it was locked in
+    const clvLegs = (list || P.list).flatMap(p => p.legs).filter(l => l.close != null && l.market0 != null && l.res !== 'void'), clvBeat = clvLegs.filter(l => l.close - l.market0 > .005).length;
     return { n: all.length, won: won.length, lost: lost.length, push: push.length, open: (list || P.list).filter(p => p.status === 'open').length, rate: decided ? won.length / decided : null,
       streak: decided ? { n: run, kind } : null, best, legHit: legs.filter(l => l.res === 'hit').length, legN: legs.length, legRate: legs.length ? legs.filter(l => l.res === 'hit').length / legs.length : null,
       byLeague: tally(legs, l => LG[l.lg]?.name || l.lg), byType: tally(legs, l => ({ prop: 'Player props', win: 'To win', draw: 'Draws', total: 'Totals', spread: 'Spreads' })[l.type]),
       bySize: tally(all.filter(p => p.status !== 'push'), p => p.legs.length === 1 ? 'Singles' : p.legs.length <= 3 ? `${p.legs.length} picks` : p.legs.length <= 5 ? '4 to 5 picks' : '6 or more picks'),
-      units: priced ? units : null, staked, roi: staked ? units / staked : null, priced, est: series.some(s => s.est && s.u != null), series, last: all.slice(-10) };
+      units: priced ? units : null, staked, roi: staked ? units / staked : null, priced, est: series.some(s => s.est && s.u != null), series, last: all.slice(-10), clvN: clvLegs.length, clvBeat };
   }
 
-  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, relate, strongest, sameGame, linkKeys, estimate, blockers, STALE_MIN, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
+  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, relate, strongest, sameGame, linkKeys, estimate, blockers, STALE_MIN, closeOf, closeOpen, closeLegs, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
     etDay, fmt, dec, amFromP, amTxt, marginFrom, norm };
   document.addEventListener('fl:me', () => { load() });
 })();

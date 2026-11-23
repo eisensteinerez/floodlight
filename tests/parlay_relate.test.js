@@ -63,6 +63,9 @@ t('blockers: conflicts, started games and stale prices', () => {
   const s = C.blockers([{ ...kelce, rAt: now - 31 * 60000 }], now); assert.equal(s[0].kind, 'stale'); assert.match(s[0].why, /30 minutes/);
   assert.equal(C.blockers([{ ...kelce, rAt: undefined, mAt: undefined }], now)[0].kind, 'stale');   // no read time at all: refresh first
 });
+t('closing price window: 30 minutes before to 5 after', () => {
+  const l = { start: 1e6 * 60000 };
+  assert.equal(C.closeOpen(l, l.start - 31 * 60000), false); assert.equal(C.closeOpen(l, l.start - 29 * 60000), true); assert.equal(C.closeOpen(l, l.start + 4 * 60000), true); assert.equal(C.closeOpen(l, l.start + 6 * 60000), false) });
 t('fromGame marks a moved line as edited and keeps the posted one', () => {
   const G = { lg: 'nfl', eid: '7', date: new Date(T0), home: { name: 'Chiefs', full: 'Kansas City Chiefs', abbr: 'KC' }, away: { name: 'Bills', full: 'Buffalo Bills', abbr: 'BUF' }, odds: { total: 47.5, spread: -3.5, fair: { home: .6, away: .4 } }, readAt: Date.now() };
   const a = C.fromGame(G, 'total', 'over', 47.5), b = C.fromGame(G, 'total', 'over', 49), c = C.fromGame(G, 'spread', 'away', 3.5);
