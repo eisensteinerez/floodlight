@@ -47,6 +47,7 @@ import boxing
 import forecaster
 import dfs
 import odds
+import linehist
 import ufcdata
 import storage
 import discord_bot
@@ -86,7 +87,7 @@ def signup_allowed(addr):
     return True
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
-PUBLIC_FILES = {"index.html", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
+PUBLIC_FILES = {"index.html", "linemove.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "history.js",
@@ -2016,6 +2017,10 @@ class Handler(SimpleHTTPRequestHandler):
                     q.pop("id")
                 b = odds.board(q)
                 return self.send_json({**b, "value": odds.value_picks(b)})
+            if u.path == "/api/odds/history":   # every kept price reading for a game (linehist.py), same inputs as the board
+                if q.get("sport") not in ("soccer", "football", "basketball", "baseball") or not re.fullmatch(r"[A-Za-z0-9_.]{1,20}", q.get("lg", "")):
+                    return self.send_json({"error": "bad request"}, 400)
+                return self.send_json(linehist.history(q))
             if u.path == "/api/tm/search":
                 clubs, players = tm_search(q.get("q", ""))
                 return self.send_json({"clubs": clubs[:10], "players": players[:12]}, max_age=3600)
@@ -2181,7 +2186,9 @@ def _memory_guard():
 if __name__ == "__main__":
     import atexit
     atexit.register(save_photos)
-    odds.setup(fetch=fetch, similar=similar)
+    linehist.setup(CACHE_DIR, al=odds._al, similar=similar)
+    atexit.register(linehist.flush)
+    odds.setup(fetch=fetch, similar=similar, on_board=linehist.record)
     ufcdata.setup(fetch=fetch, cache_dir=CACHE_DIR)
     ensure_admin()
     migrate_members()

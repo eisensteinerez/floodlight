@@ -162,6 +162,17 @@
       <p class="lb gx-pxn">Read <time data-gxago="${M.oddsAt}">${ago(M.oddsAt)}</time>; ${d.state === 'in' ? 're-read every 45 seconds while the game is live' : 're-read every 5 minutes before the start'}. ${!many && offers.length ? `Only ${esc(BOOKS[offers[0].book] || offers[0].book)} has this game up, so there is nothing to compare yet. ` : ''}${bad.length ? `${esc(bad.join(' and '))} did not answer this time. ` : ''}The percentage is the chance inside each price, margin included. Shown for research; Floodlight does not take bets.</p></section>`;
   }
 
+  /* ---------- how the price has moved (linemove.js) ----------
+     Every price reading the server kept for this game, so the chart and the prices card above it read the same board. */
+  function movement(g, d, hide) {
+    const LM = window.flLineMove, q = LM && oddsQuery(g, d); if (!q) return '';
+    const h = `<div class="sec-h"><h3>How the price has moved</h3><span class="lb">Since we started reading it</span></div>`;
+    if (hide && d.state !== 'pre') return `<section class="card gx-card" aria-label="How the price has moved">${h}${hidden('Live price moves show who is ahead')}</section>`;
+    const home = d.a.home ? d.a : d.b, away = d.a.home ? d.b : d.a, nm = t => t.abbr || t.name;
+    return `<section class="card gx-card" aria-label="How the price has moved">${h}${LM.html(LM.load(Object.fromEntries(q)), { head: false, names: { home: nm(home), away: nm(away), draw: 'Draw' }, side: d.a.home ? 'home' : 'away' })}</section>`;
+  }
+  document.addEventListener('fl:lm', () => { if (M.g && !host.hidden) paint() });
+
   /* ---------- pieces ---------- */
   const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 5 ? 'just now' : s < 60 ? `${s} seconds ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago` };
   const hm = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -326,6 +337,7 @@
         </div><div class="gx-c">
           <section class="card gx-card" aria-labelledby="gxTlH"><div class="sec-h"><h3 id="gxTlH">Timeline</h3><span class="lb">Newest first</span></div>${timeline(d, hide)}</section>
           ${prices(d, hide)}
+          ${movement(g, d, hide)}
           ${F ? `<section class="card gx-card" aria-label="Form, series and team numbers">${F}</section>` : ''}
         </div></div>`;
     }

@@ -12,6 +12,7 @@
   --radius-card:36px; --radius-tile:22px; --radius-pill:999px;
   --font-display:"Syne",sans-serif; --display-weight:800; --font-body:"Manrope",system-ui,sans-serif; --display-track:-.02em; --score-weight:800;
   --sc-em:.92; --sc-pad:0px;   /* score width per character, and the score pill padding: small cards shrink a wide score to fit */
+  --lm-1:#C08A1E; --lm-2:#3590D0; --lm-3:#D9603D; --lm-4:#1E9A7A;   /* line movement chart, one colour per book in a fixed order (checked for colour-blind separation on this surface) */
   --shadow-card:0 40px 80px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08); --shadow-pop:0 30px 70px rgba(0,0,0,.6);
   --chart-over:linear-gradient(180deg,#FFE08A,#E0A422); --chart-under:linear-gradient(180deg,#4A5568,#2A3342); --chart-avg:#7FD4FF; --chart-line:rgba(255,255,255,.55);
   --chart-over-flat:#F5C451; --chart-under-flat:#4A5568;
@@ -33,6 +34,7 @@
   --radius-card:44px; --radius-tile:28px; --radius-pill:999px;
   --font-display:"Outfit",sans-serif; --display-weight:900; --font-body:"Outfit",system-ui,sans-serif; --display-track:-.03em; --score-weight:900;
   --sc-em:.66; --sc-pad:32px;   /* score width per character, and the score pill padding: small cards shrink a wide score to fit */
+  --lm-1:#9A6A00; --lm-2:#1F6FB8; --lm-3:#C2451F; --lm-4:#0F7F5F;   /* line movement chart, one colour per book in a fixed order (checked for colour-blind separation on this surface) */
   --shadow-card:0 30px 70px rgba(16,24,40,.10); --shadow-pop:0 30px 70px rgba(16,24,40,.22);
   --chart-over:linear-gradient(180deg,#5B80FF,#2B59FF); --chart-under:#FFB58A; --chart-avg:#0E1116; --chart-line:#0E1116;
   --chart-over-flat:#2B59FF; --chart-under-flat:#FFB58A;
@@ -56,6 +58,7 @@
   --radius-card:28px; --radius-tile:18px; --radius-pill:999px;
   --font-display:"Instrument Serif",Georgia,serif; --display-weight:400; --font-body:"Hanken Grotesk",system-ui,sans-serif; --display-track:-.01em; --score-weight:400;
   --sc-em:.54; --sc-pad:0px;   /* score width per character, and the score pill padding: small cards shrink a wide score to fit */
+  --lm-1:#C08A1E; --lm-2:#3590D0; --lm-3:#D9603D; --lm-4:#1E9A7A;   /* line movement chart, one colour per book in a fixed order (checked for colour-blind separation on this surface) */
   --shadow-card:0 50px 100px rgba(0,0,0,.45); --shadow-pop:0 30px 70px rgba(0,0,0,.6);
   --chart-over:linear-gradient(180deg,#F0DCB0,#B89655); --chart-under:transparent; --chart-avg:#F1EADB; --chart-line:#D9BD86;
   --chart-over-flat:#D9BD86; --chart-under-flat:transparent;
@@ -77,6 +80,7 @@
   --radius-card:36px; --radius-tile:22px; --radius-pill:999px;
   --font-display:"Sora",sans-serif; --display-weight:200; --font-body:"Sora",system-ui,sans-serif; --display-track:-.02em; --score-weight:200;
   --sc-em:.56; --sc-pad:0px;   /* score width per character, and the score pill padding: small cards shrink a wide score to fit */
+  --lm-1:#C08A1E; --lm-2:#3590D0; --lm-3:#D9603D; --lm-4:#1E9A7A;   /* line movement chart, one colour per book in a fixed order (checked for colour-blind separation on this surface) */
   --shadow-card:0 30px 80px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.22); --shadow-pop:0 30px 70px rgba(0,0,0,.6);
   --chart-over:linear-gradient(180deg,#5EEAD4,#3B82F6); --chart-under:rgba(255,255,255,.10); --chart-avg:#F9A8D4; --chart-line:rgba(255,255,255,.6);
   --chart-over-flat:#5EEAD4; --chart-under-flat:rgba(255,255,255,.18);
@@ -99,6 +103,7 @@
   --radius-card:32px; --radius-tile:20px; --radius-pill:999px;
   --font-display:"Jost",sans-serif; --display-weight:200; --font-body:"Jost",system-ui,sans-serif; --display-track:-.02em; --score-weight:200;
   --sc-em:.56; --sc-pad:0px;   /* score width per character, and the score pill padding: small cards shrink a wide score to fit */
+  --lm-1:#9A6A00; --lm-2:#1F6FB8; --lm-3:#C2451F; --lm-4:#0F7F5F;   /* line movement chart, one colour per book in a fixed order (checked for colour-blind separation on this surface) */
   --shadow-card:0 24px 60px rgba(17,17,17,.06); --shadow-pop:0 30px 70px rgba(17,17,17,.2);
   --chart-over:#111111; --chart-under:#D4D4CE; --chart-avg:#E5432A; --chart-line:#111111;
   --chart-over-flat:#111111; --chart-under-flat:#D4D4CE;
@@ -120,6 +125,7 @@
   --radius-card:22px; --radius-tile:14px; --radius-pill:999px;
   --font-display:"Montserrat",sans-serif; --display-weight:800; --font-body:"Barlow",system-ui,sans-serif; --display-track:-.02em; --score-weight:900;
   --sc-em:.58; --sc-pad:0px;   /* score width per character, and the score pill padding: small cards shrink a wide score to fit */
+  --lm-1:#C08A1E; --lm-2:#3590D0; --lm-3:#D9603D; --lm-4:#1E9A7A;   /* line movement chart, one colour per book in a fixed order (checked for colour-blind separation on this surface) */
   --shadow-card:0 30px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,236,190,.07); --shadow-pop:0 30px 80px rgba(0,0,0,.75);
   --chart-over:linear-gradient(180deg,#FFE7A6,#D9A235); --chart-under:linear-gradient(180deg,#8D94A1,#4B515D); --chart-avg:#F4EEDF; --chart-line:rgba(244,238,223,.6);
   --chart-over-flat:#EDBE55; --chart-under-flat:#727987;

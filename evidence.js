@@ -138,9 +138,16 @@
     return `<div class="ev-tiles">${tile(`${esc(pickName)}${k === 'draw' ? '' : ' to win'}`, `${pct(p.ours)}%`, R ? `Range ${pct(R.lo)}–${pct(R.hi)}%` : '')}${tile('Market', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No price saved' : 'Margin taken out')}${proj}</div>
       ${sec('Every outcome', bars)}
       ${sec('What moved this forecast', trail, snaps.length > 1 ? `${snaps.length} forecasts saved. Since the first, our number for ${esc(pickName)} has ${delta === 0 ? 'not moved' : `moved ${delta > 0 ? 'up' : 'down'} ${Math.abs(delta)} ${Math.abs(delta) === 1 ? 'point' : 'points'}`}.` : 'Only one forecast has been saved so far, so there is no movement to show yet.')}
+      ${moved_(p)}
       ${sec('Why the model leans this way', reasons.length ? `<ul class="ev-list">${reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : '')}
       ${sec('What would change this pick', `<ul class="ev-list">${what.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`)}
       <p class="lb ev-how">How it is made: Floodlight's forecast model blended with the book's price. Last made ${esc(whenTxt(last.at))} (${esc(stageName(last.stage).toLowerCase())})${(last.books || []).length ? `, prices from ${esc(last.books.join(', '))}` : ''}. The range is the span between our model alone and the market. This is research, not a guarantee.</p>`;
+  }
+  /* how the book's price has moved since the server started reading it (linemove.js, the same readings as the match centre) */
+  function moved_(p) {
+    const LM = window.flLineMove, m = p.m; if (!LM || !m?.ko || !m.lg) return '';
+    const e = LM.load({ sport: m.sport, lg: m.lg, home: m.home, away: m.away, date: new Date(m.ko * 1000).toISOString() });
+    return `<section class="ev-sec">${LM.html(e, { title: 'How the price has moved', names: { home: m.home, away: m.away, draw: 'Draw' }, side: m.pick })}</section>`;
   }
   window.flEvidence = { prop, match, propRange, matchRange };
 })();

@@ -133,6 +133,7 @@
     if (k) { const b = [...document.querySelectorAll('#pg-predictions [data-fk]')].find(x => x.dataset.fk === k); b?.focus({ preventScroll: true }) }
   }
   function draw() { if (!$('pdBoard')) return; keep(() => { const L = lists(); drawFilters(L); drawFresh(); drawBoard(L); drawSide(L) }) }
+  document.addEventListener('fl:lm', () => { if (P.open.size && !document.getElementById('pg-predictions')?.hidden) draw() });   // a price history landed (linemove.js)
 
   function drawFilters(L) {
     const chip = (k, l, n) => `<button type="button" class="cx" role="radio" aria-checked="${P.sport === k}" tabindex="${P.sport === k ? 0 : -1}" data-pdsport="${k}" data-fk="sp-${k}">${esc(l)}${n != null && !(P.loading && !n) ? `<span class="num pd-n">${n}</span>` : ''}</button>`;
