@@ -237,7 +237,44 @@ FRI, SAT, SUN = dt.date(2026, 11, 20), dt.date(2026, 11, 21), dt.date(2026, 11, 
 
 
 def read(name, day):
-    return P.cards_in({"text": P.text_of({"content": getattr(posts, name)})}, "props", day)
+    singles = name.startswith(("PP_", "CAFE_"))      # cafe-picks and parlay-predictor post singles of their own
+    return P.cards_in({"text": P.text_of({"content": getattr(posts, name)})}, "props", day, singles)
+
+
+CODEX_SUN_SINGLES = """@everyone
+DAILY LOCKS — Sunday, November 22
+NFL
+Parlay: No verified executable parlay quote
+11 games, all unstarted at 11:43 AM ET. Singles only; prices before fees. Paper units, no wagers.
+
+Trevor Lawrence 150+ passing yards YES — 90¢ (≈-900) • Kalshi • 8/10 • 0.5u
+JAX @ NYG • 4:25 PM ET
+• 150+ in 5/5 recent and 9/9 available L10 games; prior 17/17.
+
+George Pickens 30+ receiving yards YES — 87¢ (≈-669) • Kalshi • 8/10 • 0.5u
+TEN @ DAL • 1:00 PM ET
+
+Amon-Ra St. Brown 40+ receiving yards YES — 85¢ • Kalshi • 8/10 • 0.5u
+DET @ TB • 1:00 PM ET
+"""
+
+
+def test_props_post_of_singles_is_one_card():
+    cs = P.cards_in({"text": CODEX_SUN_SINGLES}, "props", SUN)
+    assert len(cs) == 1 and len(cs[0]["legs"]) == 3, [(c["play"], len(c["legs"])) for c in cs]
+    T.STATE.update(cards={}, channels={"c": "codex-props"})
+    T.add_posts("c", [{"id": "1", "bot": True, "at": dt.datetime(2026, 11, 22, 16, 44, tzinfo=dt.timezone.utc), "text": CODEX_SUN_SINGLES}])
+    c = T.live_cards()[0]
+    for g, r in zip(c["legs"], ["won", "won", "lost"]):
+        g["result"] = r
+    c["result"] = G.card_result(c["legs"])
+    s = T.stats([c])
+    assert (s["won"], s["lost"]) == (0, 1)        # one card, one miss: 0-1, not 2-1
+
+
+def test_parlay_predictor_singles_stay_singles():
+    T.STATE.update(cards={}, channels={"p": "parlay-predictor", "k": "cafe-picks", "c": "codex-props"})
+    assert T.own_singles("p") and T.own_singles("k") and not T.own_singles("c")
 
 
 def test_extra_legs_are_not_part_of_the_card():
@@ -279,7 +316,7 @@ def test_every_play_in_a_post_is_read():
                    ("leg:5-leg steelers/eagles parlay", 5), ("single:spread", 1), ("single:spread", 1), ("leg:4-leg ml parlay", 4)], got
     assert all(c["sport"] == "nfl" for c in cs)
     assert [g["label"] for g in cs[5]["legs"]][:2] == ["Freiermuth O4.5 Receptions", "Metcalf O14.5 Receiving yards"]
-    assert cs[5]["legs"][0]["hint"] == ["Steelers", "Eagles"] and cs[5]["legs"][0]["alt"] == "reyd"
+    assert cs[5]["legs"][0]["hint"] == ["Steelers", "Eagles"] and not cs[5]["legs"][0].get("alt")
     assert labels(cs[6]) == ["Bears 1Q -2.5"] and labels(cs[8]) == ["PIT ML", "DET ML", "JAC ML", "SF ML"]
 
 
@@ -359,10 +396,12 @@ def test_bare_last_name_uses_the_cards_teams():
 
 
 @espn
-def test_catches_or_yards():
-    g = P.parse_leg("Godwin 5+ Rec", "props", "nfl", loose=True)
+def test_rec_under_eight_is_catches():
+    g = P.parse_leg("Godwin 5+ Rec", "props", "nfl", loose=True)       # 3 catches for 31 yards
     G.grade_leg(g, SUN)
-    assert g["result"] == "unknown" and "catches (3) or yards (31)" in g["actual"]
+    assert (g["result"], g["actual"]) == ("lost", "3")
+    assert P.parse_leg("Mark Andrews U4.5 Rec — -149 (DraftKings) • 1u", "props", "nfl")["stat"] == "rec"
+    assert P.parse_leg("Metcalf 15+ Rec", "props", "nfl", loose=True)["stat"] == "reyd"
 
 
 @espn
@@ -488,6 +527,25 @@ def test_history_recheck_reads_from_the_first_post(monkeypatch):
     T.collect(None)
     assert seen == [(None, 1000)]
     T.STATE.pop("rebuild", None)
+
+
+
+def test_the_same_night_is_never_posted_twice(monkeypatch):
+    sent = []
+    monkeypatch.setattr(T, "send", lambda dest, payload: sent.append(payload))
+    monkeypatch.setattr(T.time, "sleep", lambda s: None)
+    msgs = [("📊 **NIGHTLY RESULTS — Sunday, November 22**", {"title": "Results"}, ["1:0"]),
+            ("", {"title": "🔁 WHOLE HISTORY RE-CHECKED · 6.1", "_kind": "recheck"}, []),
+            ("", {"title": "📈 ALL-TIME RECORDS"}, [])]
+    monkeypatch.setattr(T, "recent_posts", lambda dest: ["📊 **NIGHTLY RESULTS — Sunday, November 22**"])
+    assert T.post("d", msgs) == ["1:0"] and not sent            # already there: counted as posted, nothing sent
+    monkeypatch.setattr(T, "recent_posts", lambda dest: ["🔁 WHOLE HISTORY RE-CHECKED · 6.1"])
+    T.post("d", [("📊 **UPDATED RESULTS — Monday**", {"title": "🔁 WHOLE HISTORY RE-CHECKED · 6.1", "_kind": "recheck"}, []),
+                 ("", {"title": "📈 ALL-TIME RECORDS"}, [])])
+    assert not sent                                             # a repeat re-check with nothing new posts nothing
+    monkeypatch.setattr(T, "recent_posts", lambda dest: [])
+    T.post("d", msgs)
+    assert len(sent) == 3 and "_kind" not in sent[1]["embeds"][0]
 
 
 if __name__ == "__main__":

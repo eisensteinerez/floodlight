@@ -216,9 +216,7 @@ def parse_prop(l, sports, loose=False):
         side = "under" if side == "over" else "over"
     if sp == "nfl" and k == "rec" and re.fullmatch(r"rec\.?", stat.strip(), re.I) and line >= 8.5:
         k = "reyd"                 # "Metcalf 15+ Rec": nobody bets 15 catches, it's receiving yards
-    g = prop_leg(sp, tidy(name), k, side, line)
-    if sp == "nfl" and k == "rec" and re.fullmatch(r"rec\.?", stat.strip(), re.I):
-        g["alt"] = "reyd"          # "Freiermuth 5+ Rec" could be catches or yards: graded both ways, kept only if they agree
+    g = prop_leg(sp, tidy(name), k, side, line)   # under 8.5 "Rec" is catches ("Andrews U4.5 Rec")
     if single and sp != "soccer":
         g["loose"] = True          # only a last name ("Freiermuth 5+ Rec"): graded only if exactly one player fits
     return g
@@ -574,8 +572,33 @@ def borrow_teams(legs, text):
     return legs
 
 
-def cards_in(post, kind, posted_et):
-    """A post's cards: [{"play", "sport", "slate", "legs"}]. Empty for practice posts and posts with no card."""
+def merge_singles(secs):
+    """Props channels: a post is one card, played like a parlay, even when its picks are listed as singles with their
+    own stakes ("Trevor Lawrence 150+ passing yards • 0.5u"): 10 picks with one miss is 0-1, not 9-1."""
+    singles = [s for s in secs if s["play"].startswith("single:")]
+    if not singles:
+        return secs
+    rest = [s for s in secs if not s["play"].startswith("single:")]
+    main = next((s for s in rest if s["play"] == "main" and s["legs"]), None)
+    if not main:
+        main = singles[0]
+        main["play"] = "main"
+        main["title"] = ""
+        rest.insert(0, main)
+        singles = singles[1:]
+    seen = {leg_key(g) for g in main["legs"]}
+    for s in singles:
+        for g in s["legs"]:
+            if leg_key(g) not in seen:
+                main["legs"].append(g)
+                seen.add(leg_key(g))
+    return rest
+
+
+def cards_in(post, kind, posted_et, singles=False):
+    """A post's cards: [{"play", "sport", "slate", "legs"}]. Empty for practice posts and posts with no card.
+    `singles`: the channel posts singles as plays of their own (cafe-picks, parlay-predictor); in the props channels a
+    post's singles are one card."""
     text = post["text"]
     if PRACTICE.search(text[:400]):
         return []
@@ -596,6 +619,8 @@ def cards_in(post, kind, posted_et):
         return list(cards.values())
     slate = slate_date(text, posted_et)
     secs = sections(text, kind)
+    if kind != "soccer" and not singles:
+        secs = merge_singles(secs)
     extras = []
     for s in secs:
         for g in s["extras"]:
