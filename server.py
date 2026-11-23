@@ -58,6 +58,7 @@ import players as roster
 import health
 import corrections
 import gradebook
+import markets
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -95,7 +96,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "status.js", "recent.js", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "markets.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
                 "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
@@ -2295,6 +2296,23 @@ class Handler(SimpleHTTPRequestHandler):
                 st = health.status()
                 st["rosters"] = roster.health()["sports"]
                 return self.send_json(st, max_age=30)
+            if u.path == "/api/markets":   # the verified market service (markets.py): open markets, what was taken off and why
+                if user and not (has(user, "lab") or has(user, "predictions")):
+                    return self.send_json({"error": "Your account doesn't include The Lab or Predictions.", "service": "lab"}, 403)
+                sp = str(q.get("sport") or "nba")
+                if q.get("id"):
+                    m = markets.get(str(q["id"])[:24])
+                    return self.send_json({"market": m} if m else {"error": "No market with that id."}, 200 if m else 404)
+                try:
+                    b = lab.board(sp)
+                except LookupError as e:
+                    return self.send_json({"error": str(e)}, 404)
+                except Exception as e:
+                    print(f"markets: {sp}: {type(e).__name__}: {e}")
+                    return self.send_json({"error": "A data source didn't answer. Try again in a minute."}, 502)
+                return self.send_json({"sport": sp, "at": b.get("at"), "fetched": b.get("fetched"), "markets": b["rows"], "removed": b.get("removed") or [], "counts": b.get("counts") or {},
+                                       "providers": b.get("providers") or {}, "schedule": b.get("schedule"), "injuries": b.get("injuries"), "statuses": markets.LABEL,
+                                       "maxAge": markets.MAX_AGE, "now": int(time.time())})
             if u.path == "/api/corrections":   # the public correction log (corrections.py)
                 return self.send_json({"entries": corrections.entries(), "now": int(time.time())}, max_age=60)
             if u.path in ("/api/admin/alerts", "/api/admin/flags"):   # owner alerts and the players being re-checked
@@ -2554,6 +2572,11 @@ if __name__ == "__main__":
     roster.setup(fetch=fetch, file=CACHE_DIR / "players.json", health=health)
     atexit.register(roster.flush)
     corrections.setup(file=CACHE_DIR / "corrections.json")
+    # the verified market service: every page's lines are checked against the league schedule and injury report here
+    markets.setup(file=CACHE_DIR / "markets.json",
+                  schedule=markets.espn_schedule(discord_bot.get_json, discord_bot.ESPN, discord_bot.ESPN_PATH),
+                  injuries=markets.espn_injuries(discord_bot.get_json, discord_bot.ESPN, discord_bot.ESPN_PATH, markets.injury_level))
+    atexit.register(lambda: markets.save(True))
     health.setup(fetch=fetch, file=CACHE_DIR / "health.json", players=roster, propbook=lambda: list(propbook.BOOK.values()),
                  send=health.discord_sender(lambda m, p_, pl=None: discord_bot.discord(m, p_, pl, token=os.environ.get("DISCORD_BOT_TOKEN"))))
     threading.Thread(target=_player_upkeep, daemon=True, name="player-upkeep").start()

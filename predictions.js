@@ -226,7 +226,14 @@
     const open = by.filter(p => p.v.state === 'open'), pre = open.filter(p => inWhen(p, now));
     const ranked = pre.filter(p => p.sedge != null && p.sedge >= P.min).sort(MK.SORTS[P.sort] || MK.SORTS.edge);
     const bare = P.min > 0 || P.priced ? [] : pre.filter(p => p.edge == null).sort(P.sort === 'soon' ? MK.SORTS.soon : (a, b) => b.ours - a.ours);
-    const incomplete = by.filter(p => p.v.state === 'incomplete'), checking = by.filter(p => p.v.state === 'checking');
+    // the markets the verified service took off (markets.py): never cards, listed with their status and reason
+    const srv = Object.values(P.props?.by || {}).flatMap(r => (r.removed || []).map(x => ({ ...x, sport: r.sport }))).filter(x => P.sport === 'all' || x.sport === P.sport);
+    const rtext = x => x.label ? `${x.side === 'under' ? 'Under' : 'Over'} ${window.flEdge?.fmt ? window.flEdge.fmt(x.line) : x.line} ${String(x.label).toLowerCase()}` : '';
+    const incomplete = [...by.filter(p => p.v.state === 'incomplete'), ...srv.filter(x => MK.STATUS_STATE[x.status] === 'incomplete' && P.kind !== 'match')
+      .map(x => ({ id: x.mid, name: x.player, text: rtext(x), sport: x.sport, start: x.start ? new Date(x.start) : null, v: { text: `${x.statusLabel}: ${x.reason}` } }))];
+    const checking = by.filter(p => p.v.state === 'checking');
+    for (const x of srv) if (MK.STATUS_STATE[x.status] === 'closed' && !P.gone.has(x.mid) && P.kind !== 'match')
+      P.gone.set(x.mid, { k: x.mid, name: x.player, text: rtext(x), sport: x.sport, game: x.opp ? `v ${x.opp}` : '', start: x.start ? Date.parse(x.start) || 0 : 0, label: MK.STATUS_LABEL[x.status] || x.statusLabel, why: x.status, note: x.reason, at: Date.now() });
     P.lastOpen = all.filter(p => p.v.state === 'open');
     const done = (P.record || []).filter(e => ['won', 'lost'].includes(e.result) && e.ko * 1000 > now - 27 * 3600e3 && (P.sport === 'all' || (e.sport === 'soccer' ? 'soccer' : e.lg === 'nfl' ? 'nfl' : 'cfb') === P.sport)).sort((a, b) => b.ko - a.ko);
     const gone = [...P.gone.values()].filter(g => P.sport === 'all' || g.sport === P.sport).sort((a, b) => b.at - a.at);
@@ -539,7 +546,7 @@
     if (L.bare.length) h += `<section aria-label="Picks with no market price"><div class="sec-h"><h2>Our number only</h2><span class="lb">No book posts both sides of these lines, so there is no edge to rank</span></div><div class="vst pd-list">${L.bare.slice(0, P.all ? 60 : 6).map(p => card(p, 0, now)).join('')}</div>
       ${L.bare.length > 6 && !L.ranked.length ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show fewer' : `Show all ${L.bare.length}`}</button>` : ''}</section>`;
     // taken off the board during this visit: started, closed, cancelled or ruled out, with the state Pick history files it under
-    if (L.gone.length) h += `<section aria-label="Taken off the board"><details class="card pd-held pd-gone" data-pdfold="gone"${P.fold.has('gone') ? ' open' : ''}><summary><b>Taken off the board</b> <span class="lb">${L.gone.length} since you opened this page</span></summary>
+    if (L.gone.length) h += `<section aria-label="Taken off the board"><details class="card pd-held pd-gone" data-pdfold="gone"${P.fold.has('gone') ? ' open' : ''}><summary><b>Taken off the board</b> <span class="lb">${L.gone.length} recently</span></summary>
       <ul class="pd-heldl">${L.gone.slice(0, 30).map(g => `<li><b>${esc(g.name)}</b> ${esc(g.text)} <span class="pl pd-gst">${esc(g.label)}</span><small>${esc(g.note)}${g.start ? ` · ${esc(new Date(g.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}` : ''}</small></li>`).join('')}</ul>
       <p class="lb">Props shown before their start are graded after the game. <button type="button" class="lk" data-page="history" data-fk="gone-hist">See Pick history</button></p></details></section>`;
     if (L.done.length) h += `<section aria-label="Finished in the last day"><div class="sec-h"><h2>Finished</h2><span class="lb">Results stay here for a day</span></div><div class="card pd-done">${L.done.map(e => { const hit = e.result === 'won', pick = e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`;
