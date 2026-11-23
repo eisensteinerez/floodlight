@@ -116,7 +116,23 @@ def fail(feed, sport="all", err="", n=None):
         r.update(fail=_now(), err=str(err)[:160], fails=(r.get("fails") or 0) + 1)
 
 
+def plain(err):
+    """An error as a person would say it."""
+    e = str(err or "")
+    m = re.search(r"HTTP Error (\d{3})|\b(4\d\d|5\d\d)\b", e)
+    if "timed out" in e.lower() or "timeout" in e.lower():
+        return "timed out"
+    if m and "HTTP" in e:
+        return f"answered with error {m.group(1) or m.group(2)}"
+    if "urlopen error" in e or "URLError" in e or "Connection" in e:
+        return "couldn't connect"
+    if "readable" in e or "JSON" in e:
+        return "sent an answer that couldn't be read"
+    return e[:80]
+
+
 def saw(url, good, err=""):
+    err = plain(err) if not good else ""
     feed, sport = classify(url)
     if feed:
         (ok if good else fail)(feed, sport, err=err if not good else "")

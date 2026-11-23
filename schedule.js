@@ -94,7 +94,7 @@
     }
     if (!n) return { tone: 'empty', text: STATES.empty };
     const head = `${n} game${n === 1 ? '' : 's'} scheduled${part ? ` (${part})` : ''}`;
-    if (shown != null && shown < n) return { tone: shown ? 'filtered' : 'none-match', text: shown ? `Showing ${shown} of ${n} games${filter ? ` · ${filter}` : ''}` : `None of this week’s ${n} games match${filter ? ` ${filter}` : ' these filters'}.`, head, clear: true };
+    if (shown != null && shown < n) return { tone: shown ? 'filtered' : 'none-match', text: shown ? `Showing ${shown} of ${n} games${filter ? `, by ${filter}` : ''}` : `None of this week’s ${n} games match ${filter || 'these filters'}.`, head, clear: true };
     return { tone: 'ready', text: head, head };
   }
 
@@ -102,10 +102,11 @@
   const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function filterText(filter) {
     const q = typeof S !== 'undefined' && S.q ? S.q.trim() : '';
-    return [q && `matching “${q}”`, filter === 'live' && 'live now', filter === 'fav' && 'from your teams', filter === 'top25' && 'with a Top 25 team', filter === 'nhl' && 'in the NHL'].filter(Boolean).join(', ');
+    const f = { live: 'Live', fav: 'My teams', top25: 'Top 25', nhl: 'NHL only' }[filter];
+    return [q && `the search “${q}”`, f && `the ${f} filter`].filter(Boolean).join(' and ');
   }
   function filteredEmpty(total, sportKey, filter, when = 'on this day') {
-    return `<div class="empty-state"><strong>None of the ${total} game${total === 1 ? '' : 's'} ${escH(when)} match${filterText(filter) ? ' ' + escH(filterText(filter)) : ' these filters'}</strong>The games are there; the filter hides them.<div style="margin-top:12px"><button class="btn ghost" data-schedclear="${escH(sportKey)}">Show all ${total} games</button></div></div>`;
+    return `<div class="empty-state"><strong>None of the ${total} game${total === 1 ? '' : 's'} ${escH(when)} match ${escH(filterText(filter) || 'these filters')}</strong>The games are there; the filter hides them.<div style="margin-top:12px"><button class="btn ghost" data-schedclear="${escH(sportKey)}">Show all ${total} games</button></div></div>`;
   }
   document.addEventListener('click', ev => {
     const b = ev.target.closest?.('[data-schedclear]'); if (!b || typeof S === 'undefined') return;

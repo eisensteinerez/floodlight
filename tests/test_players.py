@@ -265,3 +265,36 @@ def test_watch_alerts(tmp_path):
     n = len(sent)
     health.watch(now=t["t"] + 600)   # the same alerts are not sent again within six hours
     assert len(sent) == n
+
+
+# ---------- the Lab board takes the team from the record ----------
+def test_lab_board_rows_use_the_record(reg, monkeypatch):
+    import lab
+    import discord_bot as B
+    P.read_rosters("nba")
+    rows = [{"player": "LeBron James", "team": "PHI", "opp": "BOS", "k": "pts", "label": "Points", "line": 24.5, "side": "over", "fid": "nba:1966",
+             "l5": {"pct": .6}, "l10": {"pct": .6, "n": 10, "hit": 6}, "l20": {"pct": .55}, "avg": 25.1, "offers": [{"book": "prizepicks", "line": 24.5}], "recent": []},
+            {"player": "Jaylen Brown", "team": "BOS", "opp": "NYK", "k": "pts", "label": "Points", "line": 22.5, "side": "over", "fid": "nba:3917376",
+             "l5": {"pct": .6}, "l10": {"pct": .6, "n": 10, "hit": 6}, "l20": {"pct": .55}, "avg": 23.0, "offers": [{"book": "sleeper", "line": 22.5}], "recent": []}]
+    monkeypatch.setattr(B, "memo", lambda key, ttl, fn: fn())
+    monkeypatch.setattr(B, "props_board", lambda *a, **k: {"rows": rows, "lines": 2, "errors": {}})
+    b = lab.board("nba")
+    lbj, jb = b["rows"]
+    assert (lbj["team"], lbj["teamName"], lbj["teamStatus"], lbj["hold"], lbj["fid"]) == ("PHI", "Philadelphia 76ers", "verified", False, "nba:1966")
+    assert jb["team"] == "PHI" and jb["bookTeam"] == "BOS" and jb["hold"] is True
+    assert "providers_disagree" in jb["flags"] and "not_in_game" in jb["flags"] and "Sleeper lists BOS" in jb["teamNote"]
+    assert jb["opp"] == "NY"   # both sides in ESPN's codes, so one game has one key
+
+
+def test_lab_player_carries_the_record(reg, monkeypatch):
+    import lab
+    import discord_bot as B
+    P.read_rosters("nba")
+    monkeypatch.setattr(B, "load_player", lambda s, n, t=None: {"sport": s, "id": "1966", "fid": "nba:1966", "name": "LeBron James", "team": "Philadelphia 76ers", "teamAbbr": "PHI", "photo": "", "games": []})
+    monkeypatch.setattr(lab, "_deeper", lambda s, p: p)
+    monkeypatch.setattr(lab, "_extras", lambda s, p, n: {"crest": "https://x/lal.png"})
+    monkeypatch.setattr(B, "dfs_lines", lambda s: {"lines": []})
+    d = lab.player("nba", "LeBron James")
+    assert d["registry"]["teamName"] == "Philadelphia 76ers" and d["registry"]["status"] == "verified" and d["fid"] == "nba:1966"
+    import urllib.parse
+    assert "/nba/500/phi.png" in urllib.parse.unquote(d["crest"])   # the record's team crest, not the player page's

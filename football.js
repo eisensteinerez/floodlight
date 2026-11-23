@@ -104,7 +104,7 @@ async function fbLoad(key, wk){
     if (!wk) S.fb.weeks[key] = S.fb.weeks[key] || { week: meta.week, type: meta.type, start: meta.start };
   } catch (e) {   // keep what was read before (and how many games it had): the page says it couldn't load, never "no games"
     const was = S.fb.data[id];
-    S.fb.data[id] = { error: true, events: was?.events || [], meta: was?.meta || {}, known: was?.events?.length || S.fb.counts?.[key]?.n || 0, at: Date.now() };
+    S.fb.data[id] = { error: true, events: was?.events || [], meta: was?.meta || {}, known: was?.events?.length || 0, at: Date.now() };
   }
   return S.fb.data[id];
 }
@@ -162,8 +162,7 @@ async function renderFootball(){
     for (const k of keys) { const d = S.fb.data[cachedId(k)]; if (d && !d.error) (S.fb.counts ||= {})[k] = { n: d.events.length, live: d.events.filter(e => e.state === 'in').length } }
     fbRail();
     // one sentence, from the same record as the nav count: how many games, how many shown, and why the rest aren't
-    const total = evs.length, err = sets.some(d => d.error), filt = [q && `matching “${S.q.trim()}”`, S.fb.filter === 'live' && 'live now', S.fb.filter === 'fav' && 'from your teams',
-      S.fb.filter === 'top25' && 'with a Top 25 team'].filter(Boolean).join(', ');
+    const total = evs.length, err = sets.some(d => d.error), filt = window.flSched ? window.flSched.filterText(S.fb.filter) : '';
     const rec = { status: err && !total ? 'error' : 'ready', games: evs, counts: window.flSched ? window.flSched.counts(evs.map(e => ({ st: e.state === 'in' ? 'live' : e.state === 'post' ? 'final' : /postpon|delay/i.test(e.detail) ? 'postponed' : /cancel/i.test(e.detail) ? 'canceled' : 'upcoming' })))
       : { total, live: 0, postponed: 0, canceled: 0 }, knownTotal: sets.reduce((a, d) => a + (d.known || 0), 0) || null };
     const said = window.flSched ? window.flSched.say(rec, list.length, filt) : { tone: total ? 'ready' : 'empty', text: `${list.length} games` };

@@ -32,12 +32,15 @@
   /* this browser's own schedule reads (schedule.js) join the server's schedule line */
   function withPage(feeds) {
     const mine = [];
-    const sched = window.flSched?.all?.() || [];
-    for (const r of sched) if (r.at) mine.push({ sport: r.spec.path, name: (r.spec.path.split('/')[1] || r.spec.path).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) + ' (read by this page)',
-      state: r.status === 'error' ? 'unavailable' : Date.now() - r.at > 3600e3 ? 'delayed' : 'live', at: r.at / 1000, err: r.error || '' });
+    const NAME = { 'soccer/all': 'Soccer', 'football/nfl': 'NFL', 'football/college-football': 'College football', 'basketball/nba': 'NBA', 'basketball/wnba': 'WNBA',
+      'basketball/mens-college-basketball': 'College basketball', 'hockey/nhl': 'NHL', 'baseball/mlb': 'MLB', 'tennis/atp': 'ATP', 'tennis/wta': 'WTA' };
+    const last = new Map();   // the newest read of each league by this browser
+    for (const r of window.flSched?.all?.() || []) if (r.at && (!last.has(r.spec.path) || last.get(r.spec.path).at < r.at)) last.set(r.spec.path, r);
+    for (const [path, r] of last) mine.push({ sport: path, name: `${NAME[path] || path} (this browser)`, state: r.status === 'error' ? 'unavailable' : Date.now() - r.at > 3600e3 ? 'delayed' : 'live',
+      at: r.status === 'error' ? null : r.at / 1000, err: r.status === 'error' ? 'didn’t answer' : '' });
     if (!mine.length) return feeds;
     return feeds.map(f => f.feed !== 'schedules' ? f : { ...f, sports: [...f.sports, ...mine], state: f.state === 'unknown' ? (mine.every(m => m.state === 'live') ? 'live' : 'partial') : f.state,
-      at: Math.max(f.at || 0, ...mine.map(m => m.at)) });
+      at: Math.max(f.at || 0, ...mine.map(m => m.at || 0)) || null });
   }
 
   const pill = st => `<span class="ds-st ds-${esc(st)}"><i aria-hidden="true"></i>${esc(STATE[st] || st)}</span>`;
