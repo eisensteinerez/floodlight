@@ -20,7 +20,7 @@ import storage
 import teamcheck
 
 D = {"file": Path(__file__).resolve().parent / ".floodlight-cache" / "corrections.json", "now": time.time}
-LOG = {"entries": [], "keys": []}
+LOG = {"entries": [], "keys": [], "reports": []}
 _lock = threading.RLock()
 
 
@@ -30,10 +30,11 @@ def setup(**deps):
         saved = storage.load(D["file"], {}) or {}
         LOG["entries"] = saved.get("entries") or []
         LOG["keys"] = saved.get("keys") or []
+        LOG["reports"] = saved.get("reports") or []
 
 
 def _save():
-    storage.save(D["file"], {"entries": LOG["entries"][-500:], "keys": LOG["keys"][-3000:]})
+    storage.save(D["file"], {"entries": LOG["entries"][-500:], "keys": LOG["keys"][-3000:], "reports": LOG["reports"][-1000:]})
 
 
 def entries(limit=100):
@@ -65,6 +66,46 @@ def remove(cid):
             _save()
             return True
     return False
+
+
+# ---------- "Report incorrect data": private until an administrator looks ----------
+REPORT_FIELDS = ("marketId", "eventId", "player", "provider", "sport", "stat", "line", "side", "verifiedAt", "page", "device", "what")
+
+
+def report(fields, text, by=""):
+    """A member says something on a card is wrong. Kept for the administrators (never in the public log); the page fills
+    in the market, player, provider, verification time, page address and device by itself."""
+    text = str(text or "").strip()[:800]
+    if len(text) < 4:
+        raise ValueError("Say what looks wrong.")
+    r = {"id": secrets.token_hex(5), "at": int(D["now"]()), "text": text, "by": str(by or "")[:60], "resolved": None}
+    for k in REPORT_FIELDS:
+        v = (fields or {}).get(k)
+        if v not in (None, ""):
+            r[k] = v if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)[:300]
+    with _lock:
+        LOG["reports"].append(r)
+        _save()
+    return r
+
+
+def reports(open_only=False, limit=200):
+    with _lock:
+        xs = [r for r in LOG["reports"] if not open_only or not r.get("resolved")]
+        return sorted(xs, key=lambda r: -r["at"])[:limit]
+
+
+def resolve(rid, outcome, by="", note=""):
+    """Close a report: "corrected" (a public entry says what was fixed), "no_error" or "duplicate"."""
+    if outcome not in ("corrected", "no_error", "duplicate"):
+        raise ValueError("Outcome is corrected, no_error or duplicate.")
+    with _lock:
+        r = next((x for x in LOG["reports"] if x["id"] == rid), None)
+        if not r:
+            return None
+        r["resolved"] = {"outcome": outcome, "at": int(D["now"]()), "by": str(by or "")[:60], "note": str(note or "")[:300]}
+        _save()
+        return r
 
 
 def _day(ts):

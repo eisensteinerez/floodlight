@@ -226,7 +226,14 @@
     const open = by.filter(p => p.v.state === 'open'), pre = open.filter(p => inWhen(p, now));
     const ranked = pre.filter(p => p.sedge != null && p.sedge >= P.min).sort(MK.SORTS[P.sort] || MK.SORTS.edge);
     const bare = P.min > 0 || P.priced ? [] : pre.filter(p => p.edge == null).sort(P.sort === 'soon' ? MK.SORTS.soon : (a, b) => b.ours - a.ours);
-    const incomplete = by.filter(p => p.v.state === 'incomplete'), checking = by.filter(p => p.v.state === 'checking');
+    // the markets the verified service took off (markets.py): never cards, listed with their status and reason
+    const srv = Object.values(P.props?.by || {}).flatMap(r => (r.removed || []).map(x => ({ ...x, sport: r.sport }))).filter(x => P.sport === 'all' || x.sport === P.sport);
+    const rtext = x => x.label ? `${x.side === 'under' ? 'Under' : 'Over'} ${window.flEdge?.fmt ? window.flEdge.fmt(x.line) : x.line} ${String(x.label).toLowerCase()}` : '';
+    const incomplete = [...by.filter(p => p.v.state === 'incomplete'), ...srv.filter(x => MK.STATUS_STATE[x.status] === 'incomplete' && P.kind !== 'match')
+      .map(x => ({ id: x.mid, name: x.player, text: rtext(x), sport: x.sport, start: x.start ? new Date(x.start) : null, v: { text: `${x.statusLabel}: ${x.reason}` } }))];
+    const checking = by.filter(p => p.v.state === 'checking');
+    for (const x of srv) if (MK.STATUS_STATE[x.status] === 'closed' && !P.gone.has(x.mid) && P.kind !== 'match')
+      P.gone.set(x.mid, { k: x.mid, name: x.player, text: rtext(x), sport: x.sport, game: x.opp ? `v ${x.opp}` : '', start: x.start ? Date.parse(x.start) || 0 : 0, label: MK.STATUS_LABEL[x.status] || x.statusLabel, why: x.status, note: x.reason, at: Date.now() });
     P.lastOpen = all.filter(p => p.v.state === 'open');
     const done = (P.record || []).filter(e => ['won', 'lost'].includes(e.result) && e.ko * 1000 > now - 27 * 3600e3 && (P.sport === 'all' || (e.sport === 'soccer' ? 'soccer' : e.lg === 'nfl' ? 'nfl' : 'cfb') === P.sport)).sort((a, b) => b.ko - a.ko);
     const gone = [...P.gone.values()].filter(g => P.sport === 'all' || g.sport === P.sport).sort((a, b) => b.at - a.at);
@@ -475,6 +482,9 @@
     const risks = W.length ? `<ul class="ev-warns" aria-label="Things to weigh">${W.map(([t, w]) => `<li><b>${esc(t)}</b><small>${esc(w)}</small></li>`).join('')}</ul>` : '<p class="lb">Nothing unusual stands out for this pick.</p>';
     return `<section class="ev-sec pd-sup"><h4>Supported edge</h4>${edges}</section><section class="ev-sec"><h4>The game and the market</h4>${game}</section><section class="ev-sec"><h4>Things to weigh</h4>${risks}</section>`;
   }
+  // what "Report incorrect data" sends with the member's note (datastatus.js opens the dialog)
+  const reportOf = p => ({ marketId: p.mid || p.id, eventId: p.eventId || p.v?.event?.id || '', player: p.name, provider: (p.books || []).map(b => BOOK[b] || b).join(', '),
+    sport: p.sport, stat: p.text, line: p.line, side: p.side, verifiedAt: p.at ? Math.round(+new Date(p.at) / 1000) : '', page: '#/predictions' });
   function evidence(p) {
     if (!window.flEvidence) return '';
     const k = keyOf(p), on = P.open.has(k), R = rangeOf(p), fol = following(p);
@@ -482,6 +492,7 @@
     return `<div class="pd-evbar"><button type="button" class="lk" data-pdopen="${esc(p.id)}" data-fk="lab-${esc(k)}">${ic('lab', 16)}Open in the Lab<span class="sr-only">: ${esc(p.name)}, ${esc(p.text)}</span></button>
         <button type="button" class="lk pd-folb" data-pdfollow="${esc(k)}" data-fk="fol-${esc(k)}" aria-pressed="${!!fol}">${ic('star', 16)}${fol ? 'Following' : 'Follow'}<span class="sr-only"> ${esc(p.name)}, ${esc(p.text)}</span></button>
         ${window.flShare ? `<button type="button" class="lk pd-share" data-pdshare="${esc(p.id)}" data-fk="sh-${esc(k)}">${window.flShare.ICON}Share<span class="sr-only"> ${esc(p.name)}, ${esc(p.text)} as a picture</span></button>` : ''}
+        <button type="button" class="lk pd-rep" data-report="${esc(JSON.stringify(reportOf(p)))}" data-fk="rep-${esc(k)}">${ic('help', 16)}Report incorrect data<span class="sr-only">: ${esc(p.name)}, ${esc(p.text)}</span></button>
         ${R ? `<span class="lb num pd-rng" title="${p.type === 'prop' ? 'One standard error either side, from the games behind the reading' : 'The span between our model alone and the market'}">Likely ${pct(R.lo)}–${pct(R.hi)}%</span>` : ''}${alertSel}</div>
       ${on ? `<div class="pd-ev" id="ev-${esc(k)}" role="region" aria-label="Evidence for ${esc(p.name)}, ${esc(p.text)}">${support(p)}${p.type === 'prop' ? window.flEvidence.prop(p) : window.flEvidence.match(p, P.ev.get(p.id))}${window.flShare || window.flBoards ? `<div class="pd-evfoot">${window.flBoards ? `<button type="button" class="bt ghost sm" data-pdboard="${esc(k)}" data-fk="bd-${esc(k)}">${window.flShell?.ic?.('save', 16) || ''}Save to a board</button>` : ''}${window.flShare ? `<button type="button" class="bt ghost sm" data-pdshareev="${esc(p.id)}" data-fk="shev-${esc(k)}">${window.flShare.ICON}Share this evidence</button>` : ''}</div>` : ''}</div>` : ''}`;
   }
@@ -539,7 +550,7 @@
     if (L.bare.length) h += `<section aria-label="Picks with no market price"><div class="sec-h"><h2>Our number only</h2><span class="lb">No book posts both sides of these lines, so there is no edge to rank</span></div><div class="vst pd-list">${L.bare.slice(0, P.all ? 60 : 6).map(p => card(p, 0, now)).join('')}</div>
       ${L.bare.length > 6 && !L.ranked.length ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show fewer' : `Show all ${L.bare.length}`}</button>` : ''}</section>`;
     // taken off the board during this visit: started, closed, cancelled or ruled out, with the state Pick history files it under
-    if (L.gone.length) h += `<section aria-label="Taken off the board"><details class="card pd-held pd-gone" data-pdfold="gone"${P.fold.has('gone') ? ' open' : ''}><summary><b>Taken off the board</b> <span class="lb">${L.gone.length} since you opened this page</span></summary>
+    if (L.gone.length) h += `<section aria-label="Taken off the board"><details class="card pd-held pd-gone" data-pdfold="gone"${P.fold.has('gone') ? ' open' : ''}><summary><b>Taken off the board</b> <span class="lb">${L.gone.length} recently</span></summary>
       <ul class="pd-heldl">${L.gone.slice(0, 30).map(g => `<li><b>${esc(g.name)}</b> ${esc(g.text)} <span class="pl pd-gst">${esc(g.label)}</span><small>${esc(g.note)}${g.start ? ` · ${esc(new Date(g.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}` : ''}</small></li>`).join('')}</ul>
       <p class="lb">Props shown before their start are graded after the game. <button type="button" class="lk" data-page="history" data-fk="gone-hist">See Pick history</button></p></details></section>`;
     if (L.done.length) h += `<section aria-label="Finished in the last day"><div class="sec-h"><h2>Finished</h2><span class="lb">Results stay here for a day</span></div><div class="card pd-done">${L.done.map(e => { const hit = e.result === 'won', pick = e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`;
