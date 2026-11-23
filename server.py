@@ -63,6 +63,8 @@ import support
 import referrals
 import ownerstats
 import markets
+import groups
+import daily
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -102,6 +104,7 @@ PUBLIC_FILES = {"index.html", "analytics.js", "landing.js", "support.js", "refer
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "markets.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
                 "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js"}
+PUBLIC_FILES |= {"marketfeed.js", "inbox.js", "daily.js", "compete.js", "pwa.js", "sw.js", "offline.html"}   # Home, alerts, daily habits and the installable app
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -2216,12 +2219,16 @@ class Handler(SimpleHTTPRequestHandler):
                 _sessions.pop(token, None)
                 _save_accounts()
             return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
+        if u.path == "/api/daily/seen":   # one anonymous tick for "Most researched today" (daily.py)
+            return self.send_auth(200, {"ok": bool(user or not GATED) and daily.seen(body.get("name"), body.get("sport"))})
         if not user:
             return self.send_auth(401, {"error": "Log in first."})
         if u.path == "/api/support/reply":   # the member answers on their own ticket
             return self.send_auth(*support.member_reply(user["username"], body, user.get("prefs", {}).get("display", "")))
         if u.path == "/api/referrals/claim":   # a new account names the invite link that brought it (referrals.py)
             return self.send_auth(*referral_claim(user, body, client_addr(self)))
+        if u.path.startswith("/api/groups/"):   # private competitions (groups.py), virtual points only
+            return self.send_auth(*groups.post(u.path, body, user))
         if u.path == "/api/picks/vote":
             if not can_view(user):
                 return self.send_auth(403, {"error": "Your account is paused or waiting for an admin to switch it on."})
@@ -2311,6 +2318,12 @@ class Handler(SimpleHTTPRequestHandler):
             _, user = session_user(self.headers.get("Cookie"))
             if GATED and not user:
                 return self.send_json({"error": "Log in to use Floodlight."}, 401)
+            if u.path == "/api/daily/top":   # "Most researched today" (daily.py): anonymous counts only
+                return self.send_json({"top": daily.top(10, str(q.get("sport") or "")[:8])}, max_age=60)
+            if u.path == "/api/groups" or u.path.startswith("/api/groups/"):   # private competitions (groups.py), virtual points only
+                if not user:
+                    return self.send_auth(401, {"error": "Sign in to join or make a group."})
+                return self.send_auth(*groups.get(u.path, q, user))
             if GATED and not can_view(user):
                 return self.send_json({"error": "Your account is paused or waiting for an admin to switch it on."}, 403)
             svc = service_for(u.path)   # a service switched off for this member is refused here, not just hidden in the page
@@ -2779,6 +2792,7 @@ if __name__ == "__main__":
     import pick_grade   # the Discord pick grader grades the site's props too
     pick_grade.D["fetch"] = fetch
     propbook.setup(cache_dir=CACHE_DIR, board=lab.board, grade=pick_grade.grade_prop, mlb=propbook.mlb_grade(discord_bot))
+    groups.setup(fetch=fetch, grade=pick_grade.grade_prop, grade_mlb=propbook.D.get("mlb"))   # private competitions grade with the same graders
     # the one player record, data health and the correction log (players.py, health.py, corrections.py)
     roster.setup(fetch=fetch, file=CACHE_DIR / "players.json", health=health)
     atexit.register(roster.flush)

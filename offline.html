@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Offline · Floodlight</title>
+<meta name="theme-color" content="#0A0D12">
+<style>
+:root{--bg:#0A0D12;--fg:#E8ECF3;--muted:#9AA5BA;--line:#243049;--accent:#F4C542;--accent-ink:#1A1405;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#EEF1F5;--fg:#0E1420;--muted:#4F5A70;--line:#DCE1EA;--accent:#8A5F00;--accent-ink:#FFFFFF;color-scheme:light}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px max(16px,env(safe-area-inset-left))}
+main{max-width:30rem}
+h1{font-size:1.5rem;line-height:1.2;margin:0 0 8px}
+p{margin:0 0 16px;color:var(--muted)}
+button{font:inherit;font-weight:700;min-height:44px;padding:0 20px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+  <h1>You’re offline</h1>
+  <p>Floodlight needs a connection the first time it opens on this device. After that, your saved boards, follows and alerts inbox open without one.</p>
+  <button type="button" onclick="location.reload()">Try again</button>
+</main>
+</body>
+</html>

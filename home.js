@@ -73,6 +73,9 @@
   const sec = document.createElement('section'); sec.id = 'hub'; sec.className = 'hub'; sec.setAttribute('aria-label', 'Live Hub'); sec.hidden = true;
   document.querySelector('.shell')?.prepend(sec);
   document.addEventListener('fl:spoil', () => { if (root.classList.contains('hub-on')) paint() });
+  // the personal counts (daily.js) arrive after the board: redraw once they settle, never while someone is using Home
+  let dailyT = 0; document.addEventListener('fl:daily', () => { clearTimeout(dailyT); dailyT = setTimeout(() => { if (root.classList.contains('hub-on') && !sec.contains(document.activeElement)) paint() }, 400) });
+  document.addEventListener('fl:injuries', () => { if (root.classList.contains('hub-on') && !sec.contains(document.activeElement) && window.flRecent?.list().length) paint() });
   document.addEventListener('fl:recent', () => { if (root.classList.contains('hub-on') && !sec.contains(document.activeElement)) paint() });
 
   const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
@@ -140,6 +143,7 @@
     if (H.loading || (!force && Date.now() - H.at < 25000 && H.shown === ymd(H.day))) return;
     H.loading = true; H.err = 0; if (!H.at) { H.t0 = Date.now(); wakeSlow() }
     const want = H.day, day = ymd(want), today = sameLocalDay(want);
+    if (today && !H.at) { kept(day); if (H.at && root.classList.contains('hub-on')) paint() }   // the last scoreboard this device saw today draws at once, marked with its time
     // a dated scoreboard goes through the one schedule request (schedule.js), so Home counts a league's day exactly as
     // its sport page does: same league id (FBS is group 80, Division I basketball group 50), same local day
     const group = f => f[1].includes('college') ? (f[0] === 'basketball' ? 50 : 80) : null;
@@ -155,12 +159,25 @@
     if (+want !== +H.day) return load(true);   // the day was changed while this one loaded
     // today: what is live, what starts today, and what finished in the last 12 hours. Another day: that day's games.
     const now = Date.now();
+    if (H.down && !all.length && today && H.games.length && H.shown === day) {   // the scoreboards are down: keep the last reading up
+      H.delay = true; H.loading = false; if (root.classList.contains('hub-on')) paint(); return;
+    }
+    H.delay = false;
     H.games = today ? all.filter(g => g.state === 'in' || Math.abs(+g.date - now) < 20 * 36e5 && sameLocalDay(g.date) || (g.state === 'post' && now - g.date < 12 * 36e5))
       : all.filter(g => g.date.getFullYear() === want.getFullYear() && g.date.getMonth() === want.getMonth() && g.date.getDate() === want.getDate());
-    H.at = Date.now(); H.shown = day;
+    H.at = Date.now(); H.shown = day; H.good = H.at;
+    if (today && !H.down) keep(day);
     if (root.classList.contains('hub-on')) paint();
     if (today) { H.live = liveGames().length; document.dispatchEvent(new CustomEvent('fl:hub', { detail: { live: H.live } })) }
     else document.dispatchEvent(new Event('fl:hubday'));   // another day's board (Live reads it)
+  }
+  /* the day's scoreboard, kept on this device so the next visit paints at once (and a failed load still has scores to
+     show, with their time). Only today's board is kept, and only for today. */
+  const HUBKEEP = 'fl.hubLast';
+  function keep(day) { try { localStorage.setItem(HUBKEEP, JSON.stringify({ day, at: H.at, games: H.games.slice(0, 220) })) } catch (e) { try { localStorage.removeItem(HUBKEEP) } catch (x) {} } }
+  function kept(day) {
+    const v = store.get(HUBKEEP, null); if (!v || v.day !== day || !Array.isArray(v.games) || !v.games.length) return;
+    H.games = v.games.map(g => ({ ...g, date: new Date(g.date) })); H.at = v.at; H.good = v.at; H.shown = day; H.delay = true;
   }
   const sameLocalDay = d => { const n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate() };
   const liveGames = () => H.games.filter(g => g.state === 'in');
@@ -215,8 +232,9 @@
   function edgeOf(g) {
     if (!HEAT.picks?.length || !LG_OF[g.sport === 'soccer' ? 'soccer' : g.lg]) return null;
     const names = [g.a, g.b].flatMap(t => [t.ab, t.name, t.full]).filter(Boolean).map(flat);
-    const mine = HEAT.picks.filter(p => p.edge != null && p.edge >= 10 && (!p.start || p.start > Date.now() - 6 * 36e5) && (p.sport === 'soccer' ? g.sport === 'soccer' : p.sport === g.lg) && [p.team, p.opp].some(x => x && names.includes(flat(x))));
-    return mine.sort((x, y) => y.edge - x.edge)[0] || null;
+    const ed = p => window.flFeed ? window.flFeed.edge(p) : p.edge;
+    const mine = HEAT.picks.filter(p => ed(p) != null && ed(p) >= 10 && (!p.start || p.start > Date.now() - 6 * 36e5) && (p.sport === 'soccer' ? g.sport === 'soccer' : p.sport === g.lg) && [p.team, p.opp].some(x => x && names.includes(flat(x))));
+    const best = mine.sort((x, y) => ed(y) - ed(x))[0]; return best ? { ...best, edge: ed(best) } : null;
   }
   const level = (g, t) => { const F = favList(), id = favId(g, t), f = F.find(x => x.id === id || (x.tid && String(x.tid) === t.id && x.sport === g.sport) || (!PRE[g.sport] && (x.name || '').toLowerCase() === (t.full || t.name || '').toLowerCase())); return f ? (f.level || 'follow') : null };
   let RATE = new WeakMap();
@@ -304,17 +322,26 @@
   /* hot and cold: the Lab's heat reading for the players with lines posted today */
   const HEAT = { picks: null, at: 0, loading: false, denied: false, sports: '' };
   const LAB_SPORT = { basketball: 'nba', football: 'nfl', hockey: 'nhl', baseball: 'mlb', soccer: 'soccer' };
+  /* Markets come from the one feed every page reads (marketfeed.js: the verified market service, else the Lab's
+     board). The reading kept from an earlier visit shows at once, marked with its time, while a fresh one loads; when
+     the provider is slow or down, that reading stays up with "Last updated" instead of an empty card. */
   function loadHeat() {
-    if (!window.flEdge || HEAT.loading || Date.now() - HEAT.at < 5 * 60000) return;
+    const F = window.flFeed;
+    if (!F || HEAT.loading || Date.now() - HEAT.at < 5 * 60000) return;
     // the leagues playing today, biggest first; with no games at all, ask the two the books post most lines for
     const today = [...new Set(H.games.filter(g => ['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer').sort((a, b) => b.weight - a.weight).map(g => g.sport === 'soccer' ? 'soccer' : g.lg))].slice(0, 3);
     const sports = today.length ? today : H.at ? [] : null; if (!sports) return;
     HEAT.loading = true; HEAT.t0 = Date.now(); wakeSlow();
-    window.flEdge.props(sports.length ? sports : ['nba', 'nfl']).then(r => { HEAT.picks = r.picks; HEAT.denied = r.denied; HEAT.at = Date.now()
-      // every board failed and none was kept from an earlier visit: say so, don't call it an empty day
-      HEAT.failed = !r.picks.length && Object.values(r.by || {}).length > 0 && Object.values(r.by).every(x => !x.picks?.length && (x.error || Object.keys(x.errors || {}).length) && x.status !== 401 && x.status !== 403) }).catch(() => { HEAT.picks = []; HEAT.failed = true; HEAT.at = Date.now() })
+    if (HEAT.picks == null) { const k = F.now(); if (k.length) { HEAT.picks = k; HEAT.delay = true; HEAT.good = F.keptAt() || 0 } }
+    F.open(sports.length ? sports : ['nba', 'nfl']).then(r => {
+      HEAT.denied = !!r.denied; HEAT.at = Date.now();
+      if (r.failed && HEAT.picks?.length) { HEAT.delay = true; HEAT.failed = false }   // keep the last reading up, with its time
+      else { HEAT.picks = r.markets; HEAT.failed = r.failed; HEAT.delay = !!r.stale; HEAT.good = r.stale ? r.lastGood : Date.now() }
+    }).catch(() => { HEAT.at = Date.now(); if (HEAT.picks?.length) HEAT.delay = true; else { HEAT.picks = []; HEAT.failed = true } })
       .finally(() => { HEAT.loading = false; if (root.classList.contains('hub-on')) paint() });
   }
+  // "Last updated 9:42 AM": shown under a market card while it is showing an earlier reading
+  const stamp = what => HEAT.delay && HEAT.picks?.length ? `<p class="hm-stamp lb" role="status">${HEAT.good ? `Last updated ${esc(hm(new Date(HEAT.good)))}. ` : ''}The provider is slow to answer, so this is the last reading. ${retry(what)}</p>` : '';
   // the states every Home module goes through: loading (with words, not only grey bars), failed (with a retry),
   // finished (today's games are over: point at tomorrow), and empty (nothing to show, said plainly)
   /* A skeleton is only for the first few seconds. A block still empty after SLOW_MS says so and offers a retry, in a box
@@ -323,43 +350,44 @@
   let P0 = 0;   // when Home first drew
   const slow = t0 => Date.now() - (t0 || P0 || Date.now()) > SLOW_MS;
   let slowT = 0; const wakeSlow = () => { clearTimeout(slowT); slowT = setTimeout(() => { if (root.classList.contains('hub-on')) paint() }, SLOW_MS + 200) };
-  const slowState = (n, t, what) => `<div class="hm-slow" style="--rows:${n}">${state('', t, 'Nothing is wrong with your account. It may just be a busy moment for the source.', retry(what))}</div>`;
+  // after the timeout: what is late (the provider, not the account), when it last answered, and a retry
+  const slowState = (n, t, what, good = 0) => `<div class="hm-slow" style="--rows:${n}" role="status">${state('clock', t, `Provider delay: the source has not answered yet, and Home keeps asking. ${good ? `Last successful update: ${esc(hm(new Date(good)))}${sameLocalDay(new Date(good)) ? '' : ` on ${esc(new Date(good).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}`}.` : 'Nothing has loaded on this device yet.'}`, retry(what))}</div>`;
   const loadingRows = (n, what) => `<div class="hm-load" role="status" aria-live="polite"><span class="sr-only">${what}</span>${'<div class="skl hm-skl" aria-hidden="true"></div>'.repeat(n)}</div>`;
   const state = (icon, t, d, btn = '') => `<div class="hm-state">${icon ? ico(icon, 20) : ''}<p><b>${t}</b><span>${d}</span></p>${btn}</div>`;
   const retry = what => `<button type="button" class="bt ghost sm" data-hubretry="${what}">Try again</button>`;
   const tomorrow = `<button type="button" class="bt ghost sm" data-hubday="1">See tomorrow</button>`;
   // today's lines are done once every pick's game has started
   const linesOver = () => isToday() && HEAT.picks?.length > 0 && HEAT.picks.every(p => p.start && p.start < Date.now());
-  const heatRow = p => `<button type="button" class="rw" data-hublab="${esc(JSON.stringify(window.flEdge.labArgs(p)))}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}</b><small>${[p.fid || p.team ? (window.flPlayers ? window.flPlayers.span(p.fid, p.teamName || p.team) : esc(p.teamName || p.team || '')) : '', esc(p.label || '')].filter(Boolean).join(' · ')}</small></span>${window.flHeat.badge(p.heat)}</button>`;
+  const heatRow = p => `<button type="button" class="rw" data-hublab="${esc(JSON.stringify(window.flFeed.labArgs(p)))}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}</b><small>${[p.fid || p.team ? (window.flPlayers ? window.flPlayers.span(p.fid, p.teamName || p.team) : esc(p.teamName || p.team || '')) : '', esc(p.label || '')].filter(Boolean).join(' · ')}</small></span>${window.flHeat.badge(p.heat)}</button>`;
   function heatCard() {
-    const E = window.flEdge, has = HEAT.picks && HEAT.picks.length;
-    const hot = has ? E.hot(HEAT.picks, 3) : [], cold = has ? E.cold(HEAT.picks, 2) : [];
+    const F = window.flFeed, has = HEAT.picks && HEAT.picks.length;
+    const hot = has ? F.hot(3, HEAT.picks) : [], cold = has ? F.cold(2, HEAT.picks) : [];
     const head = `<div class="sec-h"><h2>Hot right now</h2><button type="button" class="lk" data-shell="lab">Open Lab</button></div>`;
     // one message for the whole card when there is nothing to split into hot and cold
-    const whole = HEAT.picks == null ? (slow(HEAT.t0) ? slowState(4, 'Live insights are taking longer than expected.', 'heat') : loadingRows(4, 'Reading today’s player lines…'))
+    const whole = HEAT.picks == null ? (slow(HEAT.t0) ? slowState(4, 'Player lines are taking longer than expected', 'heat', window.flFeed?.keptAt?.()) : loadingRows(4, 'Reading today’s player lines…'))
       : HEAT.denied ? state('lab', 'The Lab is switched off for you', 'Ask your admin for Lab access to see who is running hot.')
       : HEAT.failed ? state('', 'Today’s player lines didn’t load', 'The pick’em apps didn’t answer. Nothing is wrong with your account.', retry('heat'))
-      : !has ? state('', 'No player lines yet', isToday() ? 'The apps usually post lines in the morning. This fills in by itself.' : 'Lines are posted on the day of the games.')
+      : !has ? state('', 'No qualifying markets yet', isToday() ? 'No open, verified player line for a game still to start. The apps usually post lines in the morning, and this fills in by itself.' : 'Lines are posted on the day of the games.')
       : linesOver() ? state('', 'Today’s lines are closed', 'Every game with a line has started. Tomorrow’s lines go up in the morning.', tomorrow) : '';
     if (whole) return `<aside class="card hm-heat" aria-label="Hot and cold players">${head}${whole}</aside>`;
     const none = (t, d) => `<p class="hm-none"><b>${t}</b><span>${d}</span></p>`;
     return `<aside class="card hm-heat" aria-label="Hot and cold players">${head}
       <div class="hm-rows">${hot.length ? hot.map(heatRow).join('') : none('Nobody is running hot', 'No player with a line today reads 60 or more.')}</div>
       <div class="sec-h hm-ice"><h3>Ice cold</h3></div>
-      <div class="hm-rows">${cold.length ? cold.map(heatRow).join('') : none('Nobody is ice cold', 'No player with a line today reads under 40.')}</div></aside>`;
+      <div class="hm-rows">${cold.length ? cold.map(heatRow).join('') : none('Nobody is ice cold', 'No player with a line today reads under 40.')}</div>${stamp('heat')}</aside>`;
   }
 
   /* the three cards: best edge, transfer wire, the Lab */
   function edgeCard() {
-    const E = window.flEdge, pc = x => Math.round(x * 100), open = (HEAT.picks || []).filter(p => !p.start || p.start > Date.now()), top = HEAT.picks ? E.ranked(open)[0] : null;
-    const body = HEAT.picks == null ? (slow(HEAT.t0) ? slowState(3, 'The best edge is taking longer than expected.', 'heat') : loadingRows(3, 'Finding the best edge…'))
+    const F = window.flFeed, pc = x => Math.round(x * 100), top = HEAT.picks ? F.ranked(HEAT.picks)[0] : null, ed = top ? F.edge(top) : 0, sup = top?.sedge != null;
+    const body = HEAT.picks == null ? (slow(HEAT.t0) ? slowState(3, 'The best edge is taking longer than expected', 'heat', F.keptAt?.()) : loadingRows(3, 'Finding the best edge…'))
       : HEAT.denied ? state('pred', 'Predictions are switched off for you', 'Ask your admin for access.')
       : HEAT.failed ? state('pred', 'Prices didn’t load', 'The apps didn’t answer, so there is no edge to show yet.', retry('heat'))
       : linesOver() ? state('pred', 'Today’s picks have started', 'Every priced pick is in play. See how they are doing on Predictions, or look at tomorrow.', tomorrow)
-      : !top ? state('pred', 'No priced picks yet', 'An edge needs a line with a price on both sides. None is posted for today’s games right now.')
-      : `<button type="button" class="hm-pick" data-hublab="${esc(JSON.stringify(E.labArgs(top)))}">${face(top.photo, top.name, 'avx av-lg')}<span class="rw-t"><b>${esc(top.name)}</b><small>${esc(top.text)}${top.game ? ' · ' + esc(top.game) : ''}</small></span></button>
+      : !top ? state('pred', 'No qualifying markets', 'An edge needs an open line with a price on both sides, for a game still to start. None is posted right now.')
+      : `<button type="button" class="hm-pick" data-hublab="${esc(JSON.stringify(F.labArgs(top)))}">${face(top.photo, top.name, 'avx av-lg')}<span class="rw-t"><b>${esc(top.name)}</b><small>${esc(top.text)}${top.game ? ' · ' + esc(top.game) : ''}</small></span></button>
         <div class="hm-nums"><span class="tile inset"><small class="lb">Our number</small><b class="fig num">${pc(top.ours)}%</b></span><span class="tile inset"><small class="lb">Market</small><b class="fig num">${pc(top.market)}%</b></span>
-          <span class="tile inset"><small class="lb">Edge</small><b class="fig num hm-edge">${top.edge > 0 ? '+' : top.edge < 0 ? '−' : ''}${Math.abs(top.edge)}</b></span></div>`;
+          <span class="tile inset"><small class="lb">${sup ? 'Supported edge' : 'Edge'}</small><b class="fig num hm-edge">${ed > 0 ? '+' : ed < 0 ? '−' : ''}${Math.abs(ed)}</b></span></div>${stamp('heat')}`;
     return `<section class="card hm-c3" aria-label="Best edge tonight"><div class="sec-h"><h2>Best edge ${isNight() ? 'tonight' : 'today'}</h2>${top ? window.flHeat.badge(top.heat) : ''}</div>${body}
       <button type="button" class="bt wide" data-shell="pred">See all predictions${ico('arrow', 18)}</button></section>`;
   }
@@ -447,12 +475,20 @@
     const live = x => { if (x.kind !== 'game') return ''; const g = list.find(y => 'game:' + y.key === x.key); return !g ? '' : g.state === 'in' ? '<span class="pl live"><i></i>Live</span>' : g.state === 'pre' ? `<span class="lb">${esc(hm(g.date))}</span>` : '<span class="lb">Final</span>' };
     const faces = x => x.photo || x.photo2 ? `<span class="rc-faces" aria-hidden="true">${[x.photo, x.photo2].filter(Boolean).map((src, i) => face(src, i ? '' : x.label, 'avx av-sm')).join('')}</span>` : `<span class="rc-ic" aria-hidden="true">${ico(x.kind === 'compare' ? 'swap' : x.kind === 'trend' ? 'trend' : x.kind === 'pred' ? 'pred' : x.kind === 'parlay' ? 'ticket' : x.kind === 'game' ? 'live' : x.kind === 'filters' ? 'grid' : 'lab', 18)}</span>`;
     const head = x => { const v = R.verb(x); return v ? `${v} ${x.label}` : x.label };
+    // what changed since you looked: a line that moved, an injury report entry newer than your visit
+    const who = x => ({ name: x.open?.lab?.name || (['player', 'pred', 'props'].includes(x.kind) ? x.label : ''), sport: x.open?.lab?.sport || x.open?.filters?.sport || '' });
+    const badges = x => { const w = who(x); if (!w.name) return ''; const out = [], F = window.flFeed, I = window.flInjuries;
+      const mv = F ? F.forPlayer(w.name).map(m => ({ m, d: F.moved(m) })).find(o => o.d && (!o.d.at || o.d.at > x.at - 864e5)) : null;
+      if (mv) out.push(`<span class="pl rc-badge" title="${esc(`${mv.m.label || 'Line'}: ${mv.d.from} to ${mv.d.to}`)}">${ico('trend', 12)}Line ${esc(String(mv.d.from))} → ${esc(String(mv.d.to))}</span>`);
+      if (I && I.PATH?.[w.sport]) { if (!I.ready(w.sport)) I.load(w.sport); const st = I.status(w.sport, w.name);
+        if (st && st.date && st.date > x.at) out.push(`<span class="pl rc-badge rc-inj">${ico('help', 12)}Injury: ${esc(st.status || I.LEVEL_NAME?.[st.lv] || 'update')}</span>`) }
+      return out.length ? `<span class="rc-badges">${out.join('')}</span>` : '' };
     const tile = x => { const k = esc(x.key);
-      return `<li class="rc${x.pinned ? ' pinned' : ''}"><button type="button" class="rc-open" data-hubrc="open|${k}">${faces(x)}<span class="rw-t"><small class="lb">${esc(KIND[x.kind] || '')}${x.pinned ? ' · pinned' : ''}</small><b>${esc(head(x))}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</span>${live(x)}</button>
+      return `<li class="rc${x.pinned ? ' pinned' : ''}"><button type="button" class="rc-open" data-hubrc="open|${k}">${faces(x)}<span class="rw-t"><small class="lb">${esc(KIND[x.kind] || '')}${x.pinned ? ' · pinned' : ''} · <time datetime="${new Date(x.at).toISOString()}">viewed ${esc(ago(x.at))}</time></small><b>${esc(head(x))}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}${badges(x)}</span>${live(x)}</button>
         <span class="rc-acts"><button type="button" class="ib" data-hubrc="pin|${k}" aria-pressed="${!!x.pinned}" aria-label="${x.pinned ? 'Unpin' : 'Pin'} ${esc(x.label)}" title="${x.pinned ? 'Unpin' : 'Pin to the top'}">${ico('star', 16)}</button>${window.flBoards ? `<button type="button" class="ib" data-hubrc="board|${k}" aria-label="Save ${esc(x.label)} to a board" title="Save to a board">${ico('save', 16)}</button>` : ''}<button type="button" class="ib" data-hubrc="drop|${k}" aria-label="Remove ${esc(x.label)} from history" title="Remove from history">${ico('x', 16)}</button></span></li>` };
     return `<section class="card hm-back" aria-labelledby="hmBackH"><div class="sec-h"><h2 id="hmBackH" tabindex="-1">Continue researching</h2>
-        ${BACK.confirm ? `<span class="rc-ask" role="group" aria-label="Clear history"><span class="lb">Clear ${items.filter(x => !x.pinned).length} item${items.filter(x => !x.pinned).length === 1 ? '' : 's'}? Pinned ones stay.</span><button type="button" class="bt danger sm" data-hubrc="clear|yes">Clear history</button><button type="button" class="bt ghost sm" data-hubrc="clear|no">Keep it</button></span>`
-          : `<button type="button" class="lk" data-hubrc="clear|ask">Clear history</button>`}</div>
+        ${BACK.confirm ? (n => `<span class="rc-ask" role="group" aria-label="Remove from history"><span class="lb">${n.pin ? `Remove ${n.rest} unpinned item${n.rest === 1 ? '' : 's'}, or all ${n.all} including ${n.pin} pinned?` : `Remove all ${n.all} item${n.all === 1 ? '' : 's'}?`}</span>${n.pin && n.rest ? '<button type="button" class="bt ghost sm" data-hubrc="clear|yes">Keep pinned</button>' : ''}<button type="button" class="bt danger sm" data-hubrc="clear|all">Remove all</button><button type="button" class="bt ghost sm" data-hubrc="clear|no">Cancel</button></span>`)({ all: items.length, pin: items.filter(x => x.pinned).length, rest: items.filter(x => !x.pinned).length })
+          : `<button type="button" class="lk" data-hubrc="clear|ask">Remove all</button>`}</div>
       <ul class="rc-list">${shown.map(tile).join('')}</ul>
       ${items.length > 6 ? `<button type="button" class="lk" data-hubrc="more|">${BACK.all ? 'Show fewer' : `Show ${Math.min(16, items.length) - 6} more`}</button>` : ''}</section>`;
   }
@@ -482,7 +518,10 @@
       close: 'the market has it close', edge: 'it has a strong prediction edge' }[top.k] || '';
   }
   function brief(list, ftr) {
-    if (MY.off.includes('brief') || !list.length) return '';
+    if (MY.off.includes('brief')) return '';
+    // the personal briefing on top: your teams, your players, injuries and results that are yours (daily.js)
+    const greet = isToday() && window.flDaily?.greeting ? window.flDaily.greeting(list) : '';
+    if (!list.length) return greet ? `<section class="card hm-brief" aria-labelledby="hmGreetH">${greet}</section>` : '';
     const hid = g => g.state !== 'pre' && window.flMC?.spoil?.(g.key), core = [], extra = [];
     const nm = g => `${g.a.name}–${g.b.name}`, gap = g => Math.abs((+g.a.score || 0) - (+g.b.score || 0));
     const live = list.filter(g => g.state === 'in'), pre = list.filter(g => g.state === 'pre'), post = list.filter(g => g.state === 'post');
@@ -493,8 +532,8 @@
     if (big && big.state !== 'post') { const b = because(big);
       core.push({ i: 'star', g: big, k: 'Biggest game', t: dot([nm(big), big.state === 'in' ? 'On now' : hm(big.date), big.tvNat && tvName(big.tvNat)]), why: b ? `Chosen because ${b}` : 'The highest-ranked game on the board' }) }
     // 2 the best prediction on today's open lines
-    const E = window.flEdge, top = HEAT.picks && E ? E.ranked(HEAT.picks.filter(p => !p.start || p.start > Date.now()))[0] : null;
-    if (top && top.edge > 0 && !MY.off.includes('three')) core.push({ i: 'pred', lab: E.labArgs(top), k: 'Best prediction', t: dot([top.name, top.text]), why: `Edge +${top.edge}: Floodlight ${Math.round(top.ours * 100)}%, market ${Math.round(top.market * 100)}%` });
+    const FD = window.flFeed, top = HEAT.picks && FD ? FD.ranked(HEAT.picks)[0] : null, ted = top ? FD.edge(top) : 0;
+    if (top && ted > 0 && !MY.off.includes('three')) core.push({ i: 'pred', lab: FD.labArgs(top), k: 'Best prediction', t: dot([top.name, top.text]), why: `${top.sedge != null ? 'Supported edge' : 'Edge'} +${ted}: Floodlight ${Math.round(top.ours * 100)}%, market ${Math.round(top.market * 100)}%` });
     // 3 an injury in the biggest game: a player ruled out (or doubtful), first one with a line posted today
     const ig = [big, ...pre].find(g => g && g.state === 'pre' && ['basketball', 'football', 'hockey', 'baseball'].includes(g.sport) && g.lg !== 'cbb');
     if (ig) { loadInjuries(ig);
@@ -516,13 +555,13 @@
     if (tv.length) { const n = pre.filter(g => g.tvNat).length; extra.push({ i: 'tv', up: 'tv', k: 'On TV', t: tv.map(g => dot([nm(g), `${tvName(g.tvNat)} ${hm(g.date)}`])).join('; '), why: `${n} game${n === 1 ? '' : 's'} on national TV still to start` }) }
     // four show; anything the core four left empty is filled from the extras, and the rest wait behind one button
     const shown = core.slice(0, 4), more = [...core.slice(4), ...extra]; while (shown.length < 4 && more.length) shown.push(more.shift());
-    if (!shown.length) return '';
+    if (!shown.length) return greet ? `<section class="card hm-brief" aria-labelledby="hmGreetH">${greet}</section>` : '';
     const head = isToday() ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
     const attr = x => x.g ? hubAttr(x.g) : x.lab ? `data-hublab="${esc(JSON.stringify(x.lab))}"` : x.shell ? `data-shell="${x.shell}"` : x.up ? `data-hubup="${x.up}" data-hubjump="1"` : '';
     const item = x => { const a = attr(x), tag = a ? 'button' : 'p';
       return `<li><${tag}${a ? ' type="button"' : ''} class="hm-bi" ${a}>${ico(x.i, 18)}<span class="hm-bt"><small class="hm-bk">${esc(x.k)}</small><span class="hm-bm">${x.t}</span>${x.why ? `<small class="lb">${esc(x.why)}</small>` : ''}</span></${tag}></li>` };
     const WORD = ['', 'One', 'Two', 'Three', 'Four', 'Five'];
-    return `<section class="card hm-brief" aria-labelledby="hmBriefH"><h2 id="hmBriefH">${head} in 60 seconds</h2>
+    return `<section class="card hm-brief" aria-labelledby="${greet ? 'hmGreetH' : 'hmBriefH'}">${greet}${greet ? `<h3 class="hm-brief-h" id="hmBriefH">${head} in 60 seconds</h3>` : `<h2 id="hmBriefH">${head} in 60 seconds</h2>`}
       <ul class="hm-bl hm-brief-l">${shown.map(item).join('')}</ul>
       ${more.length ? `<details class="hm-more"${H.moreOpen ? ' open' : ''}><summary>${WORD[more.length] || more.length} more update${more.length === 1 ? '' : 's'}</summary><ul class="hm-bl hm-brief-l">${more.map(item).join('')}</ul></details>` : ''}</section>`;
   }
@@ -548,23 +587,29 @@
         ${customOrder() ? '<button type="button" class="lk" data-hubmy="reset">Put the sections back in the usual order</button>' : ''}</div>
       ${MY.watch.length ? `<div class="hm-ed"><h3>Watchlist</h3><div class="cx-row">${MY.watch.map(w => `<button type="button" class="cx sm" aria-pressed="true" data-hubunwatch="${esc(w.key)}" aria-label="Stop watching ${esc(w.a)} v ${esc(w.b)}">${esc(w.a)} v ${esc(w.b)}${ico('x', 14)}</button>`).join('')}</div><p class="lb">Add a game with the Watch button in its match centre.</p></div>` : '<p class="lb">To watch a single game, open it and press Watch. It then sits in Your games with live updates.</p>'}</section>`;
   }
-  /* Tonight at a glance: the numbers that matter right now, each one a way into the page that lists them. A number that
-     is zero is left out, except the count of games, so the row never shows a row of zeros. */
+  /* Tonight at a glance: the numbers that matter right now, each one a way into the list it counts (Live, Predictions
+     or the daily dashboard, already filtered). A number that is zero is left out, except the count of games, so the
+     row never shows a row of zeros. The personal counts come from daily.js, the same numbers the briefing says. */
   function cmdRow(list) {
     if (!isToday() || noLive() || !list.length) return '';
     const live = list.filter(g => g.state === 'in').length, soon = list.filter(g => g.state === 'pre').length;
     // "On national TV": games still to start on a national network in the US listing (the same count Today in 60 seconds
     // gives). Local channels and team apps are left out, so it is the games most people can turn on, not every listing.
     const watchable = list.filter(g => g.state === 'pre' && g.tvNat).length;
-    const E = window.flEdge, top = HEAT.picks && E ? E.ranked(HEAT.picks.filter(p => !p.start || p.start > Date.now()))[0] : null;
+    const F = window.flFeed, top = HEAT.picks && F ? F.ranked(HEAT.picks)[0] : null, ted = top ? F.edge(top) : 0;
     const day0 = new Date(); day0.setHours(0, 0, 0, 0);
     const fol = (store.get('fl.pdFollow', []) || []).filter(f => f && f.start && f.start >= +day0 && f.start < +day0 + 864e5).length;
+    const mineN = list.filter(g => isMine(g) || watching(g.key)).length, D = window.flDaily?.counts?.(list) || {};
     const it = (k, n, l, cls = '', say = '') => `<button type="button" class="hm-cmd-i${cls}" data-hubcmd="${k}" title="${esc(say)}" aria-label="${esc(`${n} ${l}. ${say}`)}"><b class="num">${n}</b><span>${l}</span></button>`;
     return `<nav class="hm-cmd" aria-label="${isNight() ? 'Tonight' : 'Today'} at a glance">${[
       live ? it('live', live, 'live', ' is-live', 'Games in play now. Opens Live, filtered to them') : '',
       soon ? it('games', soon, 'still to start', '', 'Today’s games that have not started. Opens Live, filtered to them') : it('games', list.length, `game${list.length === 1 ? '' : 's'} today`, '', 'Every game today has started. Opens today’s results'),
+      mineN ? it('mine', mineN, `with your teams`, '', 'Games today involving teams you follow or games you watch. Opens Live, filtered to My teams') : '',
       watchable ? it('watch', watchable, 'on national TV', '', 'Games on national TV that have not started yet. Opens Live, filtered to them') : '',
-      top && top.edge > 0 ? it('edge', `+${top.edge}`, 'best edge', ' is-edge', 'The biggest gap between our number and the market today. Opens Predictions') : '',
+      top && ted > 0 ? it('edge', `+${ted}`, 'best prediction', ' is-edge', `${top.sedge != null ? 'The biggest supported edge' : 'The biggest gap between our number and the market'} today. Opens Predictions`) : '',
+      D.inj ? it('inj', D.inj, `injury update${D.inj === 1 ? '' : 's'}`, '', 'Injury report changes today for your teams, your players and players with a line. Opens the list') : '',
+      D.players ? it('players', D.players, `followed player${D.players === 1 ? '' : 's'}`, '', 'Players you follow with an open line today. Opens the list') : '',
+      D.moves ? it('moves', D.moves, `line move${D.moves === 1 ? '' : 's'}`, '', 'Open lines that moved today. Opens the list, biggest move first') : '',
       fol ? it('follow', fol, `followed pick${fol === 1 ? '' : 's'}`, '', 'Picks you follow with a game today. Opens Predictions') : ''].join('')}</nav>`;
   }
   const isNight = () => new Date().getHours() >= 17;
@@ -619,6 +664,7 @@
     const ord = MY.edit ? ['mine', ...order().filter(k => k !== 'mine')] : order();
     sec.innerHTML = `
       <header class="pg-head hm-head"><div class="hm-when"><h1 class="pg-title" tabindex="-1">${title}</h1><p class="pg-sub hm-date">${today ? `${H.day.toLocaleDateString([], { weekday: 'long' })} · ` : ''}${H.day.toLocaleDateString([], { month: 'long', day: 'numeric' })}</p></div><div class="hm-hr">${days()}${ready ? cmdRow(list) : ''}</div></header>
+      ${H.delay && ready && H.good ? `<p class="hm-stamp hm-stamp-top lb" role="status">${ico('clock', 16)}<span>Scores as of ${esc(hm(new Date(H.good)))}. ${H.loading ? 'Getting the latest…' : 'The scoreboards are slow to answer, so these may be behind.'}</span>${H.loading ? '' : retry('games')}</p>` : ''}
       ${ord.map(k => part[k]()).join('\n')}`;
     if (keepAsk != null) { const a = $('hmAsk'); if (a) { a.value = keepAsk; a.focus() } } else if (keep) sec.querySelector(keep)?.focus({ preventScroll: true });
     { const dy = sec.querySelector('.hm-days'), on = dy?.querySelector('.on'); if (dy && on) dy.scrollLeft = on.offsetLeft - dy.offsetLeft - (dy.clientWidth - on.offsetWidth) / 2 }
@@ -671,7 +717,7 @@
       if (act === 'board' && x) return window.flBoards?.offer(x, rc);
       if (act === 'drop' && x) { const all = R.list(), at = all.findIndex(y => y.key === key); R.drop(key); paint(); tell(`Removed ${x.label} from your history.`); const nx = R.list()[Math.min(at, R.list().length - 1)];
         return (nx ? sec.querySelector(`[data-hubrc="drop|${CSS.escape(nx.key)}"]`) : $('hmBackH') || sec.querySelector('.pg-title'))?.focus() }
-      if (act === 'clear') { if (key === 'ask') { BACK.confirm = true; paint(); return sec.querySelector('[data-hubrc="clear|yes"]')?.focus() } BACK.confirm = false; if (key === 'yes') { R.clear(); tell('History cleared. Pinned items stay.') } paint(); return ($('hmBackH') || sec.querySelector('.pg-title'))?.focus() }
+      if (act === 'clear') { if (key === 'ask') { BACK.confirm = true; paint(); return sec.querySelector('[data-hubrc="clear|yes"]')?.focus() } BACK.confirm = false; if (key === 'yes') { R.clear(); tell('History cleared. Pinned items stay.') } if (key === 'all') { R.clear(true); tell('History removed, pinned items too.') } paint(); return ($('hmBackH') || sec.querySelector('.pg-title'))?.focus() }
       if (act === 'more') { BACK.all = !BACK.all; paint(); return sec.querySelector('[data-hubrc="more|"]')?.focus() }
       return }
     const fm = ev.target.closest('[data-hubfm]');
@@ -704,8 +750,9 @@
     const cmd = ev.target.closest('[data-hubcmd]');
     if (cmd) { const k = cmd.dataset.hubcmd, P = window.flPages;
       if (k === 'edge' || k === 'follow') return P?.show('predictions');
-      const soon = H.games.some(g => g.state === 'pre');
-      const arg = k === 'live' ? 'show:live' : k === 'watch' ? 'show:next,watch:national' : k === 'games' ? (soon ? 'show:next' : 'show:done') : undefined;
+      if (k === 'inj' || k === 'players' || k === 'moves') return P?.show('today', k);
+      const soon = H.games.some(g => g.state === 'pre'), mineLive = H.games.some(g => g.state === 'in' && (isMine(g) || watching(g.key)));
+      const arg = k === 'live' ? 'show:live' : k === 'watch' ? 'show:next,watch:national' : k === 'games' ? (soon ? 'show:next' : 'show:done') : k === 'mine' ? `show:${mineLive ? 'live' : 'next'},only:mine` : undefined;
       return P?.show('live', arg) || document.querySelector('[data-shell="live"]')?.click() }
     const lab = ev.target.closest('[data-hublab]');
     if (lab) { let a = {}; try { a = JSON.parse(lab.dataset.hublab) } catch (e) {} return openLab(a) }
