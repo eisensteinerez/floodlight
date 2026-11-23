@@ -1607,3 +1607,6 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-ev{padding:4px 26px 22px;border-
 .hm-next{display:flex;align-items:center;gap:8px;margin:10px 0 0;font:500 14px/1.4 var(--font-body);color:var(--text-2)}
 .hm-next svg{flex:none}.hm-next .lk{font-weight:700}
 .hm-next span{display:inline}.hm-next .lk{display:inline;min-height:0;padding:0;margin:0;vertical-align:baseline}
+
+/* Match centre prices: sportsbooks and exchanges in their own groups */
+.gx-px .gx-grp th{padding:12px 12px 6px;font:700 12px/1.3 var(--font-body);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)}

@@ -3721,7 +3721,7 @@ function setBig(on){
   if (S.stack.length || S.sel) renderSheet();
   if (on) window.scrollTo({ top: 0 });
 }
-function closeSheet(){
+function closeSheet(quiet){   // quiet: closed by the site itself (a page or sport change), not by the user, so nothing is announced
   const leagueRoot = S.stack.length === 1 && S.stack[0].type === 'league';
   if (S.big) setBig(false);
   S.sel = null; S.summary = null;
@@ -3731,7 +3731,7 @@ function closeSheet(){
   // closing a match inside a league goes back to that league; closing the league page itself empties the panel
   if (!leagueRoot && S.sport === 'soccer' && scopeLeague() && matchMedia('(min-width:821px)').matches) return openLeague(scopeLeague());
   S.stack = []; syncStage(); $('sheet').innerHTML = emptySheet();
-  $('announce').textContent = 'Match closed';
+  if (!quiet) $('announce').textContent = 'Match closed';
 }
 function leagueData(v){
   const key = `${v.id}|${v.season}`;
@@ -4848,7 +4848,7 @@ document.addEventListener('click', ev => {
     else if (LG[f]) { S.scope = f; if (f !== before) { S.lgMode = 'upcoming'; store.set('fl.lgMode', 'upcoming') } }   // picking a league starts on its upcoming games
     store.set('fl.filter', S.filter); store.set('fl.scope', S.scope); render(); window.scrollTo({top:0});
     if (scopeLeague() && S.scope !== before) openLeague(scopeLeague());
-    else if (!S.scope && S.stack[0]?.type === 'league') closeSheet();
+    else if (!S.scope && S.stack[0]?.type === 'league') closeSheet(true);
     return }
   if (t.dataset.date) { leaveMarket(); const [y, m, d] = t.dataset.date.split('-').map(Number); return goToDate(new Date(y, m - 1, d, 12)) }
   if (t.dataset.pname) { hideResults(); return openPlayerByName(t.dataset.pname) }

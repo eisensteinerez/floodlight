@@ -19,7 +19,7 @@
     if (d.guard && d.guard(arg) === false) return false;
     if (cur && cur !== name) leave(cur);
     window.flHub?.on?.() && window.flHub.hide();
-    try { S.stack?.length && typeof closeSheet === 'function' && closeSheet() } catch (e) {}
+    try { S.stack?.length && typeof closeSheet === 'function' && closeSheet(true) } catch (e) {}
     try { S.rs?.open && typeof closeResearch === 'function' && closeResearch() } catch (e) {}
     const el = host(name); lastFocus = document.activeElement;
     cur = name; root.classList.add('page-on'); root.dataset.page = name; el.hidden = false;

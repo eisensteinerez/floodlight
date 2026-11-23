@@ -857,7 +857,7 @@ async function fbSearch(q){
 function setSport(sp){
   S.sport = sp; store.set('fl.sport', sp);
   document.documentElement.dataset.sport = sp;
-  closeSheet(); S.page = 'matches'; render();
+  closeSheet(true); S.page = 'matches'; render();
 }
 document.addEventListener('click', ev => {
   const t = ev.target.closest('button[data-sport],[data-fblg],[data-fbview],[data-fbgame],[data-fbteam],[data-fbplayer],[data-fbact],[data-fbfilter],[data-fbpicklg]'); if (!t) return;
