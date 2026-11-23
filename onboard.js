@@ -1,21 +1,14 @@
-/* Floodlight · first-visit setup. Six short steps that build Home around you: your sports, your leagues, your teams
-   (with how closely to follow each), your players, a few settings (sportsbooks, time zone, hidden scores, alerts) and a
-   look. Every answer lands in the setting the rest of the site already reads, so nothing here is a second copy:
-     sports          home.js favorite sports (fl.favSports, account prefs favSports)
-     leagues         S.favLeagues (account prefs favLeagues): NFL, NBA… by key, soccer competitions by their slug
-     teams           S.fav, the same list a team page's follow star writes, with a level on each:
-                       fav    Favorite: comes first on Home (featured game and Your games)
-                       follow Follow: on Home and in alerts
-                       quiet  Quiet follow: on Home and in feeds, never in alerts
-     players         S.favPlayers, the list the player pages' follow button writes
-     sportsbooks     fl.myBooks; with one book chosen, prices open on that book (fl.book)
-     time zone       fl.tz and account prefs tz (IANA name). Times still follow this device's clock; see the note
-     hidden scores   the match centre's "hide every score" switch (flMC.setSpoilAll)
-     alerts          alerts.js settings (flAlerts.set); the browser is never asked for permission here
-   Recommended teams come from ESPN's team list for each league picked (the popular ones first), plus today's board,
-   and a search across those lists. Players come from ESPN's player search.
-   It shows once, on a first visit that lands on Home with nothing set up yet. Finishing or skipping marks it done for
-   good; Settings has "Set up Home again". Whatever was picked before a skip is kept. */
+/* Floodlight · new-account setup. Six short steps right after sign-up (and on a first visit to Home with nothing set up):
+     1 sports        NFL, NBA, Soccer (with its leagues), NHL, MLB, College sports, Tennis, UFC, Boxing. Saves the favorite
+                     sports (home.js) and the matching leagues (S.favLeagues, account prefs favLeagues)
+     2 teams         about three teams, so Home is personal at once: S.fav with a level on each (fav, follow, quiet)
+     3 players       suggested from the chosen teams' rosters (ESPN), plus search: S.favPlayers
+     4 interests     live scores, player stats, fantasy, predictions, injuries, transfers, line movement, and sportsbooks:
+                     account prefs interests (fl.interests) and fl.myBooks
+     5 alerts        game starting, score changes, final result, player injury, line movement, prediction result: flAlerts.set()
+     6 how it works  one example player card that explains hit rate, supported edge, following, boards and Prediction Cards
+   then "Your Floodlight is ready." Every answer lands in the setting the rest of the site already reads, so nothing here is
+   a second copy. Finishing or skipping marks it done for good; Settings has "Set up Home again". */
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ic = (n, s = 16) => window.flShell?.ic?.(n, s) || '';
@@ -25,7 +18,13 @@
   const mark = how => { try { localStorage.setItem(KEY, JSON.stringify({ how, at: Date.now() })) } catch {} };
   const O = { step: 0, sports: [], from: null, el: null, q: '', pq: '', phits: null, pseq: 0, said: '' };
   const SPORTS = [['soccer', 'Soccer'], ['football', 'Football'], ['basketball', 'Basketball'], ['baseball', 'Baseball'], ['hockey', 'Hockey'], ['tennis', 'Tennis'], ['ufc', 'UFC'], ['boxing', 'Boxing']];
-  const STEPS = [['Your sports', 'What do you follow?'], ['Leagues', 'Your leagues'], ['Teams', 'Teams to follow'], ['Players', 'Players to follow'], ['Settings', 'A few settings'], ['Look', 'Pick a look']];
+  const STEPS = [['Sports', 'What do you follow?'], ['Teams', 'Pick about three teams'], ['Players', 'Players to follow'], ['Interests', 'What are you here for?'], ['Alerts', 'What should we tell you about?'], ['How it works', 'How to read a player']];
+  // the sports a person picks on step 1: [key, label, home.js sports, leagues]
+  const PICKS = [['nfl', 'NFL', ['football'], ['nfl']], ['nba', 'NBA', ['basketball'], ['nba']], ['soccer', 'Soccer', ['soccer'], []], ['nhl', 'NHL', ['hockey'], ['nhl']], ['mlb', 'MLB', ['baseball'], ['mlb']],
+    ['college', 'College sports', ['football', 'basketball'], ['fbs', 'cbb']], ['tennis', 'Tennis', ['tennis'], ['atp', 'wta']], ['ufc', 'UFC', ['ufc'], ['ufc']], ['boxing', 'Boxing', ['boxing'], []]];
+  const INTERESTS = [['live', 'Live scores'], ['stats', 'Player statistics'], ['fantasy', 'Fantasy sports'], ['predictions', 'Predictions'], ['injuries', 'Injuries'], ['transfers', 'Transfers'], ['lines', 'Line movement']];
+  const ALERTS = [['start', 'Game starting'], ['score', 'Score changes'], ['final', 'Final result'], ['pkInjury', 'Player injury'], ['pkLine', 'Line movement', 'advanced_alerts'], ['pkResult', 'Prediction result']];
+  const TEAM_GOAL = 3;
   const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/';
   const flat = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g, '');
   const S_ = () => window.S || {};
@@ -63,7 +62,7 @@
     fetch(`${ESPN}${L[3]}/teams?limit=400`).then(r => { if (!r.ok) throw new Error(r.status); return r.json() }).then(d => {
       const list = (d.sports?.[0]?.leagues?.[0]?.teams || []).map(x => x.team || x).filter(t => t?.id && (t.displayName || t.name)).map(t => ({ id: String(t.id), name: t.shortDisplayName || t.name || t.displayName, full: t.displayName || t.name, ab: t.abbreviation || '', logo: t.logos?.[0]?.href || t.logo || '' }));
       TEAMS.set(k, { list });
-    }).catch(() => TEAMS.set(k, { list: [], err: true })).finally(() => { if (O.el && O.step === 2) paint(document.activeElement?.id ? '#' + CSS.escape(document.activeElement.id) : null) });
+    }).catch(() => TEAMS.set(k, { list: [], err: true })).finally(() => { if (O.el && O.step === 1) paint(document.activeElement?.id ? '#' + CSS.escape(document.activeElement.id) : null) });
   }
   // a team in the shape S.fav keeps (the same id the team pages and home.js give it)
   function favOf(lgKey, t) {
@@ -101,6 +100,39 @@
     return out.slice(0, 16);
   }
 
+  /* ---------- step 1: a pick turns on its sports and leagues ---------- */
+  const picked = k => { const p = PICKS.find(x => x[0] === k); if (!p) return false; if (p[3].length) return p[3].every(l => favLeagues().includes(l)); return p[2].every(sp => O.sports.includes(sp)) && (k !== 'soccer' || favLeagues().some(l => SOCCER_KEYS.includes(l)) || O.sports.includes('soccer')) };
+  function togglePick(k) {
+    const p = PICKS.find(x => x[0] === k); if (!p) return;
+    const on = !picked(k);
+    for (const l of p[3]) setLeague(l, on);
+    const others = PICKS.filter(x => x[0] !== k && picked(x[0])).flatMap(x => x[2]);
+    O.sports = on ? [...new Set([...O.sports, ...p[2]])] : O.sports.filter(sp => !p[2].includes(sp) || others.includes(sp));
+    if (on && k === 'soccer' && !favLeagues().some(l => SOCCER_KEYS.includes(l))) setLeague('eng.1', true);
+    if (!on && k === 'soccer') for (const l of SOCCER_KEYS) if (favLeagues().includes(l)) setLeague(l, false);
+    window.flHome?.setSports(O.sports);
+    for (const l of p[3]) if (on) loadTeams(l);
+    return on;
+  }
+
+  /* ---------- step 3: players from the chosen teams' rosters ---------- */
+  const ROSTERS = new Map();   // fav id -> { list } | { loading } | { err }
+  function loadRoster(f) {
+    const L = leagueOf(f.lg); if (!L || !L[3] || !f.tid || ROSTERS.has(f.id)) return;
+    ROSTERS.set(f.id, { loading: true });
+    fetch(`${ESPN}${L[3]}/teams/${encodeURIComponent(f.tid)}/roster`).then(r => { if (!r.ok) throw new Error(r.status); return r.json() }).then(d => {
+      const raw = (d.athletes || []).flatMap(x => x.items ? x.items : [x]);
+      const list = raw.filter(a => a?.id && a.displayName).map(a => ({ id: String(a.id), name: a.displayName, team: f.name, photo: a.headshot?.href || '', sport: L[2], league: L[1], yrs: +(a.experience?.years || 0), pos: a.position?.abbreviation || '' }))
+        .sort((a, b) => (!!b.photo - !!a.photo) || (b.yrs - a.yrs)).slice(0, 5);
+      ROSTERS.set(f.id, { list });
+    }).catch(() => ROSTERS.set(f.id, { err: true })).finally(() => { if (O.el && O.step === 2) paint(document.activeElement?.id ? '#' + CSS.escape(document.activeElement.id) : null) });
+  }
+  const interests = () => store.get('fl.interests', []);
+  function setInterests(list) {
+    store.set('fl.interests', list);
+    try { if (window.S?.me && typeof api === 'function') api('/api/me/prefs', { interests: list }).then(d => { if (d.user) S.me = d.user }).catch(() => {}) } catch (e) {}
+  }
+
   /* ---------- players: ESPN's player search ---------- */
   const SEARCH = 'https://site.api.espn.com/apis/common/v3/search';
   let pT = 0;
@@ -134,7 +166,8 @@
     if (list.length === 1) { store.set('fl.book', list[0]); try { if (window.S) S.bookSel = list[0] } catch (e) {} }
     try { if (window.S?.me && typeof api === 'function') api('/api/me/prefs', { books: list }).then(d => { if (d.user) S.me = d.user }).catch(() => {}) } catch (e) {}
   }
-  const notify = () => { try { return { on: false, start: true, score: true, final: true, ...JSON.parse(localStorage.getItem('fl.notify') || '{}') } } catch { return { on: false, start: true, score: true, final: true } } };
+  const NDEF = { on: false, start: true, score: true, final: true, pkInjury: true, pkLine: true, pkResult: true };
+  const notify = () => { try { return { ...NDEF, ...JSON.parse(localStorage.getItem('fl.notify') || '{}') } } catch { return { ...NDEF } } };
   function setNotify(patch) { if (window.flAlerts?.set) window.flAlerts.set(patch); else store.set('fl.notify', { ...notify(), ...patch }) }
 
   /* ---------- drawing ---------- */
@@ -142,57 +175,79 @@
   const LEVELS = [['fav', 'Favorite', 'First on Home'], ['follow', 'Follow', 'On Home, with alerts'], ['quiet', 'Quiet', 'On Home, no alerts']];
   const levelSeg = (f, name) => `<div class="seg obd-lv" role="radiogroup" aria-label="How closely to follow ${esc(name)}">${LEVELS.map(([k, l, d]) => { const on = (findFav(f)?.level || 'follow') === k;
     return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" tabindex="${on ? 0 : -1}" data-oblv="${esc(f.id)}|${k}" title="${esc(d)}">${l}</button>` }).join('')}</div>`;
+  const playerBtn = p => { const on = favPlayers().some(x => String(x.id) === String(p.id)); return `<li><button type="button" class="obd-pb" aria-pressed="${on}" data-obpl="${esc(JSON.stringify(p))}"><span class="avx av-sm">${p.photo ? `<img src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span aria-hidden="true">${esc(p.name.split(' ').map(w => w[0]).slice(0, 2).join(''))}</span></span><span class="rw-t"><b>${esc(p.name)}</b><small>${esc([p.pos, p.team, p.league].filter(Boolean).join(' · '))}</small></span>${on ? `<span class="pl">${ic('check', 14)}Following</span>` : '<span class="lb">Follow</span>'}</button></li>` };
   function body() {
     const st = O.step;
-    if (st === 0) return `<p class="obd-lead">Your sports come first on Home and in Live. Pick as many as you like.</p>
-      <div class="cx-row obd-chips" role="group" aria-label="Sports">${SPORTS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${O.sports.includes(k)}" data-obsport="${k}">${esc(l)}</button>`).join('')}</div>`;
-    if (st === 1) {
-      const mine = favLeagues(), groups = [...SPORTS.filter(([k]) => !O.sports.length || O.sports.includes(k)).map(([k, l]) => [l, allLeagues().filter(x => x[2] === k)])].filter(x => x[1].length);
-      return `<p class="obd-lead">Games from your leagues rank higher on Home, after your own teams. Teams in the next step come from these leagues.</p>
-        ${groups.map(([l, xs]) => `<div class="obd-grp" role="group" aria-label="${esc(l)}"><span class="lb">${esc(l)}</span><div class="cx-row obd-chips">${xs.map(x => `<button type="button" class="cx" aria-pressed="${mine.includes(x[0])}" data-oblg="${esc(x[0])}">${esc(x[1])}</button>`).join('')}</div></div>`).join('')}`;
+    if (st === 0) {
+      const soc = picked('soccer');
+      return `<p class="obd-lead">Your sports come first on Home and in Live. Pick as many as you like.</p>
+      <div class="cx-row obd-chips" role="group" aria-label="Sports">${PICKS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${picked(k)}" data-obpick="${k}">${esc(l)}</button>`).join('')}</div>
+      ${soc ? `<div class="obd-grp" role="group" aria-label="Soccer leagues"><span class="lb">Soccer leagues</span><div class="cx-row obd-chips">${soccerLeagues().map(x => `<button type="button" class="cx" aria-pressed="${favLeagues().includes(x[0])}" data-oblg="${esc(x[0])}">${esc(x[1])}</button>`).join('')}</div></div>` : ''}`;
     }
-    if (st === 2) {
+    if (st === 1) {
       for (const k of favLeagues()) loadTeams(k);
       const F = favs(), loading = favLeagues().some(k => TEAMS.get(k)?.loading), rec = recommended(), hits = O.q ? search(O.q) : null;
       const chip = x => { const on = !!findFav(x.f); return `<button type="button" class="cx obd-team" aria-pressed="${on}" data-obteam="${esc(JSON.stringify(x.f))}">${logo(x.f.logo)}${esc(x.f.name)}</button>` };
       const byWhy = new Map(); for (const x of rec) (byWhy.get(x.why) || byWhy.set(x.why, []).get(x.why)).push(x);
-      return `<p class="obd-lead">Choose how closely to follow each one. <b>Favorite</b> teams come first on Home. <b>Follow</b> puts them on Home and in alerts. <b>Quiet</b> keeps them on Home with no alerts.</p>
-        ${F.length ? `<div class="obd-mine"><span class="lb" id="obMineL">Your teams (${F.length})</span><ul class="obd-fl" aria-labelledby="obMineL">${F.map(f => `<li><span class="obd-fn">${logo(f.logo)}<b>${esc(f.name)}</b></span>${levelSeg(f, f.name)}<button type="button" class="ib" data-obunfav="${esc(f.id)}" aria-label="Stop following ${esc(f.name)}">${ic('x', 16)}</button></li>`).join('')}</ul></div>` : ''}
-        <div class="obd-find"><label class="lb" for="obQ">Find a team</label><div class="obd-q">${ic('search', 18)}<input class="inp" id="obQ" type="search" autocomplete="off" spellcheck="false" placeholder="${favLeagues().length ? 'A team in your leagues…' : 'Pick leagues first, or search today’s teams…'}" value="${esc(O.q)}"></div></div>
-        ${hits ? (hits.length ? `<div class="cx-row obd-chips" role="group" aria-label="Matches">${hits.map(chip).join('')}</div>` : `<p class="lb">No team in your leagues matches “${esc(O.q)}”. Check the spelling, or add its league in the step before.</p>`) : ''}
-        ${!hits && loading && !rec.length ? '<p class="lb" role="status">Loading teams for your leagues…</p>' : ''}
+      const n = F.length;
+      return `<p class="obd-lead">Three teams is enough for Home to show your games, your players and your alerts from day one.</p>
+        <div class="obd-goal" role="status"><span class="obd-goal-bar" aria-hidden="true"><i style="width:${Math.min(100, n / TEAM_GOAL * 100)}%"></i></span><b>${n >= TEAM_GOAL ? `${n} teams picked` : `${n} of ${TEAM_GOAL} teams`}</b></div>
+        ${F.length ? `<div class="obd-mine"><span class="lb" id="obMineL">Your teams. <b>Favorite</b> comes first on Home, <b>Follow</b> adds alerts, <b>Quiet</b> means no alerts.</span><ul class="obd-fl" aria-labelledby="obMineL">${F.map(f => `<li><span class="obd-fn">${logo(f.logo)}<b>${esc(f.name)}</b></span>${levelSeg(f, f.name)}<button type="button" class="ib" data-obunfav="${esc(f.id)}" aria-label="Stop following ${esc(f.name)}">${ic('x', 16)}</button></li>`).join('')}</ul></div>` : ''}
+        <div class="obd-find"><label class="lb" for="obQ">Find a team</label><div class="obd-q">${ic('search', 18)}<input class="inp" id="obQ" type="search" autocomplete="off" spellcheck="false" placeholder="${favLeagues().length ? 'A team in your sports…' : 'Pick sports first, or search today’s teams…'}" value="${esc(O.q)}"></div></div>
+        ${hits ? (hits.length ? `<div class="cx-row obd-chips" role="group" aria-label="Matches">${hits.map(chip).join('')}</div>` : `<p class="lb">No team matches “${esc(O.q)}”. Check the spelling, or add its sport in the step before.</p>`) : ''}
+        ${!hits && loading && !rec.length ? '<p class="lb" role="status">Loading teams…</p>' : ''}
         ${!hits ? [...byWhy].map(([why, xs]) => `<div class="obd-grp" role="group" aria-label="${esc(why === 'Plays today' ? 'Playing today' : `Popular in ${why}`)}"><span class="lb">${esc(why === 'Plays today' ? 'Playing today' : `Popular in ${why}`)}</span><div class="cx-row obd-chips">${xs.slice(0, 16).map(chip).join('')}</div></div>`).join('')
-          + (!rec.length && !loading ? `<div class="obd-empty"><b>No teams to suggest yet.</b><p class="lb">Pick a league in the step before, or follow a team later from any of its games.</p></div>` : '') : ''}`;
+          + (!rec.length && !loading ? (favLeagues().some(k => TEAMS.get(k)?.err) ? `<div class="obd-empty"><b>Teams didn't load.</b><p class="lb">The team list didn't answer. Search by name above, try again in a moment, or go on and add teams later in Settings.</p></div>`
+            : `<div class="obd-empty"><b>No teams to suggest.</b><p class="lb">Tennis, UFC and boxing have no teams. Pick a team sport in the step before, or go on.</p></div>`) : '') : ''}
+        ${O.need ? `<p class="obd-need" role="alert">Pick ${TEAM_GOAL - n} more so Home has something to show, or <button type="button" class="lk" data-ob="force">go on without</button>.</p>` : ''}`;
+    }
+    if (st === 2) {
+      const F = favs().filter(f => f.tid); F.slice(0, 6).forEach(loadRoster);
+      const mine = favPlayers(), hits = O.phits;
+      const sugg = F.slice(0, 6).map(f => [f, ROSTERS.get(f.id)]).filter(([, r]) => r?.list?.length);
+      const loading = F.slice(0, 6).some(f => ROSTERS.get(f.id)?.loading);
+      return `<p class="obd-lead">Followed players get their own lines on Home and are one tap away in the Lab.</p>
+        ${mine.length ? `<div class="cx-row obd-chips" role="group" aria-label="Your players">${mine.map(p => `<button type="button" class="cx" data-obpl="${esc(JSON.stringify(p))}" aria-label="Stop following ${esc(p.name)}">${esc(p.name)}${ic('x', 14)}</button>`).join('')}</div>` : ''}
+        ${sugg.map(([f, r]) => `<div class="obd-grp"><span class="lb">From ${esc(f.name)}</span><ul class="obd-pl" aria-label="Players on ${esc(f.name)}">${r.list.map(playerBtn).join('')}</ul></div>`).join('')}
+        ${loading && !sugg.length ? '<p class="lb" role="status">Finding players on your teams…</p>' : ''}
+        <div class="obd-find"><label class="lb" for="obPq">Find anyone else</label><div class="obd-q">${ic('search', 18)}<input class="inp" id="obPq" type="search" autocomplete="off" spellcheck="false" placeholder="For example: Jayson Tatum…" value="${esc(O.pq)}"></div></div>
+        ${hits === 'error' ? '<p class="lb" role="status">The player search did not answer. Try again in a moment, or go on.</p>'
+          : hits ? (hits.length ? `<ul class="obd-pl" aria-label="Matches">${hits.map(playerBtn).join('')}</ul>` : `<p class="lb">No player matches “${esc(O.pq)}”.</p>`) : ''}
+        ${window.flPlan && !flPlan.can('follows_unlimited') ? `<p class="lb">Free follows up to 3 players. <a class="lk" href="#/pricing" data-page="pricing">Plus</a> has no limit.</p>` : ''}`;
     }
     if (st === 3) {
-      const mine = favPlayers(), hits = O.phits;
-      return `<p class="obd-lead">Followed players are easy to reach from the sport pages and the Lab. Search for anyone.</p>
-        ${mine.length ? `<div class="cx-row obd-chips" role="group" aria-label="Your players">${mine.map(p => `<button type="button" class="cx" data-obpl="${esc(JSON.stringify(p))}" aria-label="Stop following ${esc(p.name)}">${esc(p.name)}${ic('x', 14)}</button>`).join('')}</div>` : ''}
-        <div class="obd-find"><label class="lb" for="obPq">Find a player</label><div class="obd-q">${ic('search', 18)}<input class="inp" id="obPq" type="search" autocomplete="off" spellcheck="false" placeholder="For example: Jayson Tatum…" value="${esc(O.pq)}"></div></div>
-        ${hits === 'error' ? '<p class="lb" role="status">The player search did not answer. Try again in a moment, or skip this step.</p>'
-          : hits ? (hits.length ? `<ul class="obd-pl" aria-label="Matches">${hits.map(p => { const on = favPlayers().some(x => String(x.id) === p.id); return `<li><button type="button" class="obd-pb" aria-pressed="${on}" data-obpl="${esc(JSON.stringify(p))}"><span class="avx av-sm">${p.photo ? `<img src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span aria-hidden="true">${esc(p.name.split(' ').map(w => w[0]).slice(0, 2).join(''))}</span></span><span class="rw-t"><b>${esc(p.name)}</b><small>${esc([p.team, p.league].filter(Boolean).join(' · '))}</small></span>${on ? `<span class="pl">${ic('check', 14)}Following</span>` : '<span class="lb">Follow</span>'}</button></li>` }).join('')}</ul>` : `<p class="lb">No player matches “${esc(O.pq)}”.</p>`) : ''}`;
+      const mine = interests(), books = store.get('fl.myBooks', []);
+      return `<p class="obd-lead">We'll put these first. Pick any.</p>
+        <div class="cx-row obd-chips" role="group" aria-label="Interests">${INTERESTS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${mine.includes(k)}" data-obint="${k}">${esc(l)}</button>`).join('')}</div>
+        ${mine.some(k => ['predictions', 'lines', 'fantasy'].includes(k)) ? `<fieldset class="obd-fs"><legend>Where do you play?</legend><p class="lb">Prices open on your book when you pick just one.</p>
+          <div class="cx-row obd-chips">${BOOKS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${books.includes(k)}" data-obbook="${k}">${l}</button>`).join('')}</div></fieldset>` : ''}`;
     }
     if (st === 4) {
-      const books = store.get('fl.myBooks', []), tz = store.get('fl.tz', '') || deviceTz(), dev = deviceTz(), zones = [...new Set([dev, ...TZS, tz].filter(Boolean))], N = notify(), hideAll = !!window.flMC?.spoilAll?.();
-      return `<div class="obd-set">
-        <fieldset class="obd-fs"><legend>Sportsbooks you use</legend><p class="lb">Floodlight reads these four. With one chosen, prices open on it.</p>
-          <div class="cx-row obd-chips">${BOOKS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${books.includes(k)}" data-obbook="${k}">${l}</button>`).join('')}</div></fieldset>
-        <fieldset class="obd-fs"><legend><label for="obTz">Time zone</label></legend>
-          <select class="inp" id="obTz" data-obtz>${zones.map(z => `<option value="${esc(z)}"${z === tz ? ' selected' : ''}>${esc(tzName(z))}${z === dev ? ' · this device' : ''}</option>`).join('')}</select>
-          <p class="lb">${tz === dev ? 'Times on Floodlight follow this device’s clock, which is set to this zone.' : 'Saved with your account. Floodlight still shows times by this device’s clock, which is set to ' + esc(tzName(dev)) + '.'}</p></fieldset>
-        <fieldset class="obd-fs"><legend>Scores</legend>
-          <label class="obd-sw"><input class="sw" type="checkbox" role="switch" data-obspoil ${hideAll ? 'checked' : ''}><span><b>Hide scores until I reveal them</b><small class="lb">For watching later. Each game has its own Reveal button.</small></span></label></fieldset>
-        <fieldset class="obd-fs"><legend>Alerts for your teams</legend>
-          <label class="obd-sw"><input class="sw" type="checkbox" role="switch" data-obal="on" ${N.on ? 'checked' : ''}><span><b>Game alerts</b><small class="lb">For teams you follow, not quiet ones. They show while Floodlight is open. Settings can also turn on browser notifications.</small></span></label>
-          ${[['start', 'Game starting'], ['score', 'Score changes'], ['final', 'Final score']].map(([k, l]) => `<label class="obd-sw sub"><input class="sw" type="checkbox" role="switch" data-obal="${k}" ${N[k] ? 'checked' : ''} ${N.on ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</fieldset></div>`;
+      const N = notify(), plus = k => k && window.flPlan && !flPlan.can(k);
+      return `<p class="obd-lead">Alerts are for the teams and players you follow, never quiet ones. They show while Floodlight is open; Settings can also turn on phone and browser notifications.</p>
+        <fieldset class="obd-fs"><legend class="sr-only">Alerts</legend>
+          <label class="obd-sw"><input class="sw" type="checkbox" role="switch" data-obal="on" ${N.on ? 'checked' : ''}><span><b>Alerts on</b></span></label>
+          ${ALERTS.map(([k, l, feat]) => `<label class="obd-sw sub"><input class="sw" type="checkbox" role="switch" data-obal="${k}" ${N[k] && !plus(feat) ? 'checked' : ''} ${N.on && !plus(feat) ? '' : 'disabled'}><span>${l}${plus(feat) ? ' <span class="pl">Plus</span>' : ''}</span></label>`).join('')}</fieldset>`;
     }
-    const T = window.flTheme, cur = T?.get();
-    return `<p class="obd-lead">Six looks, same scores. You can change it any time in Settings.</p>
-      <div class="st-themes obd-themes" role="radiogroup" aria-label="Theme">${(T?.list || []).map(([id, name, desc]) => `<button type="button" class="st-theme${id === cur ? ' on' : ''}" role="radio" aria-checked="${id === cur}" tabindex="${id === cur ? 0 : -1}" data-obtheme="${id}">
-        ${T.preview(id)}<span class="st-tn">${esc(name)}</span><span class="st-td">${esc(desc)}</span></button>`).join('')}</div>`;
+    if (st === 5) return `<p class="obd-lead">Every player in the Lab reads the same way. Here's an example (made-up numbers, not a live line).</p>
+      <figure class="obd-demo"><div class="obd-demo-top"><b>Example player · Points</b><span class="pl">Over 25.5</span></div>
+        <ol class="obd-explain">
+          <li><b>Hit rate</b><span>How often he went over this line: <strong>6 of the last 10</strong> games. Check last 5, 20 and the season too; one hot week is not a trend.</span></li>
+          <li><b>Floodlight chance and supported edge</b><span>Our estimate (58%) against the line's price. Supported edge starts from the raw gap, then takes off points for a small sample, injuries, lineup doubts and missing data. Open “See the evidence” on any card for the steps.</span></li>
+          <li><b>Evidence grade</b><span>A to D: how much solid data sits behind the number. A strong edge on D evidence is a guess.</span></li>
+          <li><b>Follow</b><span>The ☆ on a player puts his new lines on Home and in your alerts.</span></li>
+          <li><b>Save to a board</b><span>Boards keep lines you're researching, like “Tonight's NBA”. They tell you when a line moves or a game starts.</span></li>
+          <li><b>Add to a Prediction Card</b><span>Group picks, see the combined chance, and get a warning when two picks depend on each other.</span></li></ol></figure>`;
+    return `<div class="obd-ready"><p class="obd-lead">Home now leads with ${favs().length ? `your ${favs().length} team${favs().length > 1 ? 's' : ''}` : 'your sports'}${favPlayers().length ? ` and ${favPlayers().length} player${favPlayers().length > 1 ? 's' : ''}` : ''}. Change any of it later in Settings.</p>
+      ${S_().me && !S_().me.email_verified ? `<p class="lb">One more thing: confirm your email from the link we sent${S_().me.email ? ` to ${esc(S_().me.email)}` : ''}, so you can always get back in.</p>` : ''}</div>`;
   }
   function paint(focusSel) {
-    const el = O.el; if (!el) return; const last = O.step === STEPS.length - 1;
+    const el = O.el; if (!el) return; const ready = O.step === STEPS.length, last = O.step === STEPS.length - 1;
+    if (ready) {
+      el.querySelector('.obd-card').innerHTML = `<header class="obd-head"><h2 id="obTitle" tabindex="-1">Your Floodlight is ready.</h2></header><div class="obd-body">${body()}</div>
+        <footer class="obd-foot"><span></span><span class="obd-nav"><button type="button" class="bt ghost" data-ob="lab">Open the Lab</button><button type="button" class="bt" data-ob="finish">Show me my Home</button></span></footer>`;
+      return el.querySelector('#obTitle')?.focus();
+    }
     const caret = document.activeElement?.selectionStart;
     el.querySelector('.obd-card').innerHTML = `
       <header class="obd-head"><p class="lb obd-step" id="obStep">Step ${O.step + 1} of ${STEPS.length} · ${esc(STEPS[O.step][0])}</p><ol class="obd-dots" aria-hidden="true">${STEPS.map((_, i) => `<li class="${i <= O.step ? 'on' : ''}"></li>`).join('')}</ol>
@@ -200,14 +255,15 @@
       <div class="obd-body">${body()}</div>
       <p class="sr-only" role="status" id="obSay">${esc(O.said)}</p>
       <footer class="obd-foot"><button type="button" class="lk obd-skip" data-ob="skip">Skip setup</button>
-        <span class="obd-nav">${O.step ? '<button type="button" class="bt ghost" data-ob="back">Back</button>' : ''}<button type="button" class="bt" data-ob="${last ? 'finish' : 'next'}">${last ? 'Show me my Home' : 'Next'}</button></span></footer>`;
+        <span class="obd-nav">${O.step ? '<button type="button" class="bt ghost" data-ob="back">Back</button>' : ''}<button type="button" class="bt" data-ob="next">${last ? 'Finish' : 'Next'}</button></span></footer>`;
     const f = focusSel ? el.querySelector(focusSel) : el.querySelector('#obTitle');
     f?.focus({ preventScroll: !!focusSel }); if (caret != null && f?.setSelectionRange && f.type === 'search') try { f.setSelectionRange(caret, caret) } catch (e) {}
   }
   const say = t => { O.said = t };
   function open(force, from) {
     if (O.el || (!force && done())) return false;
-    O.step = 0; O.sports = [...(window.flHome?.mine?.().sports || [])]; O.from = from || document.activeElement; O.q = ''; O.pq = ''; O.phits = null;
+    O.step = 0; O.sports = [...(window.flHome?.mine?.().sports || [])]; O.from = from || document.activeElement; O.q = ''; O.pq = ''; O.phits = null; O.need = false;
+    if (!store.get('fl.tz', '') && deviceTz()) saveTz(deviceTz());   // the device's time zone, kept with the account
     const el = document.createElement('div'); el.className = 'obd'; el.innerHTML = `<div class="obd-scrim"></div><section class="obd-card card" role="dialog" aria-modal="true" aria-labelledby="obTitle" aria-describedby="obStep"></section>`;
     document.body.appendChild(el); O.el = el; document.documentElement.classList.add('obd-on'); paint(); return true;
   }
@@ -221,6 +277,10 @@
   document.addEventListener('click', ev => {
     if (!O.el || !O.el.contains(ev.target)) { const s = ev.target.closest?.('[data-obagain]'); if (s) open(true, s); return }
     const t = ev.target.closest('button'); if (!t) return; const d = t.dataset;
+    if (d.obpick) { const on = togglePick(d.obpick); say(`${on ? 'Added' : 'Removed'} ${PICKS.find(x => x[0] === d.obpick)?.[1]}.`); return paint(`[data-obpick="${d.obpick}"]`) }
+    if (d.obint) { const cur = interests(), list = cur.includes(d.obint) ? cur.filter(x => x !== d.obint) : [...cur, d.obint]; setInterests(list); return paint(`[data-obint="${d.obint}"]`) }
+    if (d.ob === 'force') { O.need = false; O.step++; return paint() }
+    if (d.ob === 'lab') { close('finished'); return window.flPages?.show('lab') }
     if (d.obsport) { const k = d.obsport; O.sports = O.sports.includes(k) ? O.sports.filter(x => x !== k) : [...O.sports, k]; window.flHome?.setSports(O.sports); return paint(`[data-obsport="${k}"]`) }
     if (d.oblg) { const on = !favLeagues().includes(d.oblg); setLeague(d.oblg, on); if (on) loadTeams(d.oblg); say(`${on ? 'Following' : 'Stopped following'} ${leagueOf(d.oblg)?.[1] || d.oblg}.`); return paint(`[data-oblg="${CSS.escape(d.oblg)}"]`) }
     if (d.obteam) { const f = parse(d.obteam); if (!f) return; const on = !findFav(f); setFav(f, on ? 'follow' : null); say(on ? `Following ${f.name}. Choose Favorite or Quiet above to change how closely.` : `Stopped following ${f.name}.`); return paint(`[data-obteam="${CSS.escape(d.obteam)}"]`) }
@@ -229,8 +289,11 @@
     if (d.obpl) { const p = parse(d.obpl); if (!p) return; const on = !favPlayers().some(x => String(x.id) === String(p.id)); setPlayer(p, on); say(on ? `Following ${p.name}.` : `Stopped following ${p.name}.`); return paint(`[data-obpl="${CSS.escape(d.obpl)}"]`) || paint('#obPq') }
     if (d.obbook) { const cur = store.get('fl.myBooks', []), list = cur.includes(d.obbook) ? cur.filter(x => x !== d.obbook) : [...cur, d.obbook]; saveBooks(list); return paint(`[data-obbook="${d.obbook}"]`) }
     if (d.obtheme) { window.flTheme?.set(d.obtheme); return paint(`[data-obtheme="${d.obtheme}"]`) }
-    if (d.ob === 'next') { O.step = Math.min(STEPS.length - 1, O.step + 1); O.said = ''; return paint() }
-    if (d.ob === 'back') { O.step = Math.max(0, O.step - 1); O.said = ''; return paint() }
+    if (d.ob === 'next') {
+      if (O.step === 1 && favs().length < TEAM_GOAL && recommended().length) { O.need = true; return paint('[data-ob="force"]') }
+      O.need = false; O.step = Math.min(STEPS.length, O.step + 1); O.said = ''; return paint();
+    }
+    if (d.ob === 'back') { O.step = Math.max(0, O.step - 1); O.said = ''; O.need = false; return paint() }
     if (d.ob === 'finish') return close('finished');
     if (d.ob === 'skip') return close('skipped');
   });
@@ -255,19 +318,23 @@
     const first = f[0], last = f[f.length - 1];
     if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus() } else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus() }
   });
-  document.addEventListener('fl:hub', () => { if (O.el && O.step === 2) { const a = document.activeElement; paint(a?.id ? '#' + CSS.escape(a.id) : a?.dataset?.obteam ? `[data-obteam="${CSS.escape(a.dataset.obteam)}"]` : null) } });
+  document.addEventListener('fl:hub', () => { if (O.el && O.step === 1) { const a = document.activeElement; paint(a?.id ? '#' + CSS.escape(a.id) : a?.dataset?.obteam ? `[data-obteam="${CSS.escape(a.dataset.obteam)}"]` : null) } });
 
   /* first visit: landing on Home, nothing set up yet, not inside a theme preview or the Lab's embed */
   function maybe() {
+    let fresh = false; try { fresh = sessionStorage.getItem('fl.newAccount') === '1'; sessionStorage.removeItem('fl.newAccount') } catch {}
+    if (fresh && window.top === window) return open(true);   // right after sign-up, whatever the page
     if (done() || window.top !== window || /[?&](flpreview|embed)=/.test(location.search) || location.hash) return;
     let has = false; try { has = (window.S?.fav || []).length || JSON.parse(localStorage.getItem('fl.favSports') || '[]').length || localStorage.getItem('fl.homeSkip') } catch {}
     if (has) return mark('had-setup');
     open();
   }
+  // signing up inside the app (no reload): open as soon as the new account is in
+  document.addEventListener('fl:me', () => { let f = false; try { f = sessionStorage.getItem('fl.newAccount') === '1' } catch {} if (f && window.S?.me && !O.el) setTimeout(maybe, 400) });
   if (document.readyState === 'complete') setTimeout(maybe, 1200); else addEventListener('load', () => setTimeout(maybe, 1200));
 
   const settingsCard = () => `<section class="card feature st-card" aria-labelledby="stObH"><p class="st-crumb">Settings › Home</p><div class="st-h"><h2 id="stObH">Home setup</h2></div>
-    <div class="st-rows"><div class="st-row"><div class="st-l"><span>Set up Home again</span><small>Walks through your sports, leagues, teams (and how closely to follow each), players, sportsbooks, time zone, hidden scores, alerts and a look. What you already have is kept.</small></div>
+    <div class="st-rows"><div class="st-row"><div class="st-l"><span>Set up Home again</span><small>Walks through your sports, teams (and how closely to follow each), players, interests, alerts and how to read a player. What you already have is kept.</small></div>
       <div class="st-c"><button type="button" class="bt ghost" data-obagain>Set up Home again</button></div></div></div></section>`;
   window.flOnboard = { open: () => open(true), done, settingsCard, LEVELS };
 })();
