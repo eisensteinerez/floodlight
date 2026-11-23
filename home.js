@@ -450,9 +450,10 @@
       <ul class="rc-list">${shown.map(tile).join('')}</ul>
       ${items.length > 6 ? `<button type="button" class="lk" data-hubrc="more|">${BACK.all ? 'Show fewer' : `Show ${Math.min(16, items.length) - 6} more`}</button>` : ''}</section>`;
   }
-  /* Today in 60 seconds: a short briefing, read from the games on Home. Six lines at most, each opening what it names
-     and saying in small type why it was chosen: the biggest game, the best edge on the market, an injury that matters,
-     the best game on now, a transfer, and where to watch. A game whose score you have hidden is never described by it. */
+  /* Today in 60 seconds: a short briefing, read from the games on Home. Four lines show: the biggest game, the best
+     prediction on the market, an injury that matters and the best game on now. A transfer and where to watch sit under
+     "Two more updates". Each line is a short label, one fact, and in small type why it was chosen. Each opens what it
+     names. A game whose score you have hidden is never described by it. */
   const INJ = { key: '', rows: null, at: 0, loading: false };
   function loadInjuries(g) {
     if (!g || !['basketball', 'football', 'hockey', 'baseball'].includes(g.sport) || g.lg === 'cbb' || INJ.loading) return;
@@ -463,44 +464,61 @@
         status: i.status || i.type?.description || '', what: i.details?.type || i.details?.detail || '', pos: i.athlete?.position?.abbreviation || '' })).filter(x => x.who && /^(out|doubtful)$/i.test(x.status)));
     }).catch(() => { INJ.rows = [] }).finally(() => { INJ.loading = false; INJ.at = Date.now(); if (root.classList.contains('hub-on')) paint() });
   }
+  // a network's clean name (broadcast.js knows them all); the few short forms the feeds use, if it hasn't loaded
+  const TVN = { 'USA Net': 'USA Network', 'NFL Net': 'NFL Network', 'ESPN Dep': 'ESPN Deportes', NBATV: 'NBA TV', CBSSN: 'CBS Sports Network', Tele: 'Telemundo' };
+  const tvName = n => window.flTV?.name ? window.flTV.name(n) : TVN[n] || n;
+  // why a game was chosen, in one short clause: its biggest reason
+  function because(g) {
+    const top = rate(g).why.find(x => x.n > 0 && x.k !== 'soon'); if (!top) return '';
+    const sp = (SPORTS.find(x => x[0] === g.sport) || [, g.sport])[1].toLowerCase(), t = [g.a, g.b].find(x => level(g, x));
+    return { fav: `${t?.name || 'A favorite team'} is one of your favorites`, team: `you follow ${t?.name || 'a team in it'}`, watch: 'it is on your watchlist', league: `you follow ${lgLabel(g)}`,
+      sport: `you follow ${sp}`, tv: 'it is on national TV', top: `${lgLabel(g)} is a top league`, rank: 'ranked teams meet', stage: g.stage && g.stage !== 'Playoffs' ? 'it is a knockout round' : 'it is a playoff game',
+      close: 'the market has it close', edge: 'it has a strong prediction edge' }[top.k] || '';
+  }
   function brief(list, ftr) {
     if (MY.off.includes('brief') || !list.length) return '';
-    const hid = g => g.state !== 'pre' && window.flMC?.spoil?.(g.key), out = [];
-    const nm = g => `${g.a.name} v ${g.b.name}`, gap = g => Math.abs((+g.a.score || 0) - (+g.b.score || 0));
+    const hid = g => g.state !== 'pre' && window.flMC?.spoil?.(g.key), core = [], extra = [];
+    const nm = g => `${g.a.name}–${g.b.name}`, gap = g => Math.abs((+g.a.score || 0) - (+g.b.score || 0));
     const live = list.filter(g => g.state === 'in'), pre = list.filter(g => g.state === 'pre'), post = list.filter(g => g.state === 'post');
+    const dot = xs => xs.filter(Boolean).map(esc).join(' · ');
+    if (!live.length && !pre.length) core.push({ i: 'clock', k: 'Day over', t: `Everything ${isToday() ? 'today' : 'on this day'} has finished · ${post.length} final${post.length === 1 ? '' : 's'}`, why: 'Pick another day above to see what is coming' });
     // 1 the biggest game still to be decided
     const big = featured(list, 'top');
-    if (big && big.state !== 'post') out.push({ i: 'star', g: big, t: `<b>Biggest game:</b> ${esc(nm(big))}, ${big.state === 'in' ? 'on now' : esc(hm(big.date))}${big.tvNat ? ` on ${esc(big.tvNat)}` : ''}.`, why: reason(big) || 'The highest-ranked game on the board' });
-    // 2 the best edge on today's open lines
+    if (big && big.state !== 'post') { const b = because(big);
+      core.push({ i: 'star', g: big, k: 'Biggest game', t: dot([nm(big), big.state === 'in' ? 'On now' : hm(big.date), big.tvNat && tvName(big.tvNat)]), why: b ? `Chosen because ${b}` : 'The highest-ranked game on the board' }) }
+    // 2 the best prediction on today's open lines
     const E = window.flEdge, top = HEAT.picks && E ? E.ranked(HEAT.picks.filter(p => !p.start || p.start > Date.now()))[0] : null;
-    if (top && top.edge > 0 && !MY.off.includes('three')) out.push({ i: 'pred', lab: E.labArgs(top), t: `<b>Best edge:</b> ${esc(top.name)}, ${esc(top.text)}.`, why: `Floodlight says ${Math.round(top.ours * 100)}%, the market ${Math.round(top.market * 100)}%: the widest gap on today’s open lines` });
+    if (top && top.edge > 0 && !MY.off.includes('three')) core.push({ i: 'pred', lab: E.labArgs(top), k: 'Best prediction', t: dot([top.name, top.text]), why: `Edge +${top.edge}: Floodlight ${Math.round(top.ours * 100)}%, market ${Math.round(top.market * 100)}%` });
     // 3 an injury in the biggest game: a player ruled out (or doubtful), first one with a line posted today
     const ig = [big, ...pre].find(g => g && g.state === 'pre' && ['basketball', 'football', 'hockey', 'baseball'].includes(g.sport) && g.lg !== 'cbb');
     if (ig) { loadInjuries(ig);
       if (INJ.key === ig.key && INJ.rows?.length) { const lined = new Set((HEAT.picks || []).map(p => flat(p.name))), x = INJ.rows.find(r => lined.has(flat(r.who))) || INJ.rows[0];
-        out.push({ i: 'help', g: ig, t: `<b>${esc(x.status)}:</b> ${esc(x.who)}${x.pos ? ` (${esc(x.pos)})` : ''}${x.what ? `, ${esc(x.what.toLowerCase())}` : ''}, ${esc(x.team)}.`, why: `From ESPN’s injury report for ${nm(ig)}${lined.has(flat(x.who)) ? '. A player line is posted for this player today' : ''}` }) } }
+        core.push({ i: 'help', g: ig, k: `Injury · ${x.status}`, t: dot([`${x.who}${x.pos ? ` (${x.pos})` : ''}`, x.team, x.what && x.what.toLowerCase()]), why: `ESPN injury report for ${nm(ig)}${lined.has(flat(x.who)) ? ' · has a player line today' : ''}` }) } }
     // 4 the best game on now: the closest score among the live games (hidden scores are left out)
     if (live.length) {
       const close = live.filter(g => !hid(g) && g.a.score !== '' && g.sport !== 'tennis').sort((x, y) => gap(x) - gap(y) || pts(y) - pts(x))[0];
       const g = close || [...live].sort((x, y) => pts(y) - pts(x))[0];
-      if (g !== big || close) out.push({ i: 'live', g, t: close ? `<b>Best game on now:</b> ${esc(nm(close))}, ${gap(close) ? `${gap(close)} in it` : 'level'}${close.clock ? `, ${esc(close.clock)}` : ''}.` : `<b>On now:</b> ${esc(nm(g))}.`,
-        why: close ? `The closest score of the ${live.length} game${live.length === 1 ? '' : 's'} in play` : `The biggest of the ${live.length} game${live.length === 1 ? '' : 's'} in play (scores hidden)` });
+      if (g !== big || close) core.push({ i: 'live', g, k: close ? 'Best game on now' : 'On now', t: close ? dot([nm(close), gap(close) ? `${gap(close)} in it` : 'Level', close.clock]) : dot([nm(g)]),
+        why: close ? `Closest score of ${live.length} live game${live.length === 1 ? '' : 's'}` : `Biggest of ${live.length} live game${live.length === 1 ? '' : 's'} · scores hidden` });
     }
-    // 5 a transfer: one involving a team you follow, else the latest trade, else the latest signing
+    // more: a transfer (one involving a team you follow, else the latest trade, else the latest signing), and where to watch
     const F = favList(), yours = t => [t.from, t.to, t.lead].some(x => x && F.some(f => (f.name || '').toLowerCase() === String(x.name || '').toLowerCase()));
     const mv = (WIRE.rows || []).find(yours) || (WIRE.rows || []).find(t => t.type === 'trade' || t.type === 'transfer') || (WIRE.rows || [])[0];
-    if (mv && Date.now() - mv.when < 4 * 864e5) out.push({ i: 'transfers', shell: 'transfers', t: mv.says?.line ? `<b>${esc(mv.label)}:</b> ${esc(mv.player?.name || mv.lead?.name || '')}. ${esc(mv.says.line.replace(/\.$/, ''))}.` : `<b>${esc(mv.label)}:</b> ${esc(mv.player?.name || mv.lead?.name || '')}${mv.to?.name ? `, to ${esc(mv.to.short || mv.to.name)}` : mv.from?.name ? `, from ${esc(mv.from.short || mv.from.name)}` : ''}.`,
-      why: yours(mv) ? 'Involves a team you follow' : mv.type === 'trade' || mv.type === 'transfer' ? `The latest ${mv.type} in ${mv.league || 'your leagues'}` : `The latest move in ${mv.league || 'your leagues'}` });
-    // 6 where to watch: national TV games still to start
+    if (mv && Date.now() - mv.when < 4 * 864e5) extra.push({ i: 'transfers', shell: 'transfers', k: mv.label || 'Transfer', t: dot([mv.player?.name || mv.lead?.name, mv.says?.line ? mv.says.line.replace(/\.$/, '') : mv.to?.name ? `to ${mv.to.short || mv.to.name}` : mv.from?.name ? `from ${mv.from.short || mv.from.name}` : '']),
+      why: yours(mv) ? 'Involves a team you follow' : `The latest ${mv.type === 'trade' || mv.type === 'transfer' ? mv.type : 'move'} in ${mv.league || 'your leagues'}` });
     const tv = pre.filter(g => g.tvNat).sort((x, y) => pts(y) - pts(x) || x.date - y.date).slice(0, 2).sort((x, y) => x.date - y.date);
-    if (tv.length) out.push({ i: 'tv', up: 'tv', t: `<b>On TV:</b> ${tv.map(g => `${esc(nm(g))}, ${esc(g.tvNat)} ${esc(hm(g.date))}`).join('; ')}.`, why: `${pre.filter(g => g.tvNat).length} game${pre.filter(g => g.tvNat).length === 1 ? '' : 's'} on national TV still to start. Opens the On TV list below` });
-    if (!live.length && !pre.length) out.unshift({ i: 'clock', t: `<b>Everything ${isToday() ? 'today' : 'on this day'} is over.</b> ${post.length} final${post.length === 1 ? '' : 's'}.`, why: 'Pick another day above to see what is coming' });
-    if (!out.length) return '';
+    if (tv.length) { const n = pre.filter(g => g.tvNat).length; extra.push({ i: 'tv', up: 'tv', k: 'On TV', t: tv.map(g => dot([nm(g), `${tvName(g.tvNat)} ${hm(g.date)}`])).join('; '), why: `${n} game${n === 1 ? '' : 's'} on national TV still to start` }) }
+    // four show; anything the core four left empty is filled from the extras, and the rest wait behind one button
+    const shown = core.slice(0, 4), more = [...core.slice(4), ...extra]; while (shown.length < 4 && more.length) shown.push(more.shift());
+    if (!shown.length) return '';
     const head = isToday() ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
     const attr = x => x.g ? hubAttr(x.g) : x.lab ? `data-hublab="${esc(JSON.stringify(x.lab))}"` : x.shell ? `data-shell="${x.shell}"` : x.up ? `data-hubup="${x.up}" data-hubjump="1"` : '';
+    const item = x => { const a = attr(x), tag = a ? 'button' : 'p';
+      return `<li><${tag}${a ? ' type="button"' : ''} class="hm-bi" ${a}>${ico(x.i, 18)}<span class="hm-bt"><small class="hm-bk">${esc(x.k)}</small><span class="hm-bm">${x.t}</span>${x.why ? `<small class="lb">${esc(x.why)}</small>` : ''}</span></${tag}></li>` };
+    const WORD = ['', 'One', 'Two', 'Three', 'Four', 'Five'];
     return `<section class="card hm-brief" aria-labelledby="hmBriefH"><h2 id="hmBriefH">${head} in 60 seconds</h2>
-      <ul class="hm-bl hm-brief-l">${out.slice(0, 6).map(x => { const a = attr(x), tag = a ? 'button' : 'p';
-        return `<li><${tag}${a ? ' type="button"' : ''} class="hm-bi" ${a}>${ico(x.i, 18)}<span class="hm-bt"><span>${x.t}</span>${x.why ? `<small class="lb">${esc(x.why)}.</small>` : ''}</span></${tag}></li>` }).join('')}</ul></section>`;
+      <ul class="hm-bl hm-brief-l">${shown.map(item).join('')}</ul>
+      ${more.length ? `<details class="hm-more"${H.moreOpen ? ' open' : ''}><summary>${WORD[more.length] || more.length} more update${more.length === 1 ? '' : 's'}</summary><ul class="hm-bl hm-brief-l">${more.map(item).join('')}</ul></details>` : ''}</section>`;
   }
   const LV = [['fav', 'Favorite', 'First on Home'], ['follow', 'Follow', 'On Home, with alerts'], ['quiet', 'Quiet', 'On Home, no alerts']];
   const lvSeg = f => `<div class="seg obd-lv" role="radiogroup" aria-label="How closely to follow ${esc(f.name)}">${LV.map(([k, l, d]) => { const on = (f.level || 'follow') === k;
@@ -666,6 +684,7 @@
     const [sport, lg, id] = g.dataset.hub.split('|');
     openGame(sport, lg, id, g, g.dataset.hubtab);
   });
+  sec.addEventListener('toggle', ev => { if (ev.target.matches?.('.hm-more')) H.moreOpen = ev.target.open }, true);
   sec.addEventListener('change', ev => { const k = ev.target.dataset?.hubsec; if (!k) return; MY.off = ev.target.checked ? MY.off.filter(x => x !== k) : [...new Set([...MY.off, k])]; saveMine(); paint() });
   sec.addEventListener('submit', ev => { if (!ev.target.matches('[data-hubask]')) return; ev.preventDefault(); const q = $('hmAsk').value.trim(); openLab(q ? { q } : {}) });
   let sayEl = null;

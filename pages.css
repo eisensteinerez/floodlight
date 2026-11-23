@@ -1425,7 +1425,17 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 .hm-brief,.hm-back{display:grid;gap:10px}.hm-brief.card,.hm-back.card{padding-block:20px}.hm-back .sec-h{margin:0;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
 .hm-brief h2,.hm-back h2{margin:0;font:700 20px/1.2 var(--font-body);letter-spacing:0;text-transform:none}
 .hm-bl{list-style:none;margin:0;padding:0;display:grid;gap:2px}
-.hm-brief .hm-bl{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 20px}
+.hm-brief .hm-bl{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 12px}
+@media (max-width:1180px){.hm-brief .hm-bl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.hm-bk{font:600 12px/1.3 var(--font-body);color:var(--muted)}
+.hm-bm{font:600 15px/1.35 var(--font-body);color:var(--text);overflow-wrap:anywhere}
+.hm-more{margin-top:2px}
+.hm-more > summary{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;border-radius:var(--radius-pill);font:600 14px/1 var(--font-body);color:var(--accent);cursor:pointer;list-style:none}
+.hm-more > summary::-webkit-details-marker{display:none}
+.hm-more > summary::after{content:"";width:7px;height:7px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);transition:transform var(--t-fast)}
+.hm-more[open] > summary::after{transform:translateY(1px) rotate(-135deg)}
+.hm-more > summary:hover{background:var(--surface-2)}
+.hm-more > summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .hm-bi{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:0;padding:6px 10px;border:0;border-radius:var(--radius-tile);background:none;color:var(--text);
   font:500 15px/1.4 var(--font-body);text-align:left;cursor:pointer}
 p.hm-bi{cursor:default}.hm-bi>span{flex:1;min-width:0}.hm-bi svg{flex:none;color:var(--muted)}.hm-bi b{font-weight:700}
