@@ -420,7 +420,7 @@
     M.seq++; M.g = g; M.d = null; M.at = 0; M.err = ''; M.odds = null; M.oddsAt = 0; M.oddsErr = ''; M.oddsBusy = false; M.loading = false; M.sel = null; M.every = false; M.mode = 'lead'; M.from = from || document.activeElement;
     window.flHome?.seen(g); sheet.innerHTML = ''; sheet.classList.remove('gx-tight');
     host.hidden = false; root.classList.add('gx-on'); paint(); sheet.focus({ preventScroll: true }); load();
-    clearInterval(M.timer); M.timer = setInterval(() => { if (document.hidden || host.hidden) return; const live = (M.d?.state || M.g.state) === 'in'; if (Date.now() - (M.at || 0) >= (live ? LIVE_MS : IDLE_MS) - 500) load(true) }, 5000);
+    clearInterval(M.timer); M.timer = setInterval(() => { if (document.hidden || host.hidden) return; const live = (M.d?.state || M.g.state) === 'in'; if (Date.now() - (M.at || 0) >= (live ? LIVE_MS : IDLE_MS) * (window.flSaver?.() ? 4 : 1) - 500) load(true) }, 5000);
     clearInterval(M.tick); M.tick = setInterval(() => sheet.querySelectorAll('[data-gxago]').forEach(t => { const x = ago(+t.dataset.gxago); if (t.textContent !== x) t.textContent = x }), 1000);
     return true;
   }

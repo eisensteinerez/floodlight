@@ -447,14 +447,14 @@
     shownAt = Date.now(); root.classList.add('hub-on'); sec.hidden = false;
     window.S && S.stack?.length && typeof closeSheet === 'function' && closeSheet(true);
     paint(); load(); scrollTo({ top: 0 });
-    clearInterval(poll); poll = setInterval(() => { if (!document.hidden && root.classList.contains('hub-on')) load(true) }, 30000);
+    clearInterval(poll); poll = setInterval(() => { if (!document.hidden && root.classList.contains('hub-on') && !(window.flSaver?.() && Date.now() - H.at < 12e4)) load(true) }, 30000);   // data saver: every two minutes
     window.flShell?.sync?.();
   }
   function hide() { if (!root.classList.contains('hub-on')) return; root.classList.remove('hub-on'); sec.hidden = true; clearInterval(poll) }
   // for the first-visit setup (onboard.js): favorite sports, and following a team from a game on the board
   const following = (g, t) => favList().some(f => f.id === favId(g, t) || (f.tid && String(f.tid) === t.id && f.sport === g.sport) || (!PRE[g.sport] && (f.name || '').toLowerCase() === (t.full || t.name || '').toLowerCase()));
   function setSports(list) { MY.sports = SPORTS.map(s => s[0]).filter(k => k !== 'all' && list.includes(k)); saveMine(); if (root.classList.contains('hub-on')) paint() }
-  window.flHome = { watch, watching, seen, mine: () => MY, isMine: g => isMine(g), following, follow: (g, t) => { follow(g, t); if (root.classList.contains('hub-on')) paint(); return following(g, t) }, setSports, SPORTS };
+  window.flHome = { edit() { show(); MY.edit = true; paint(); sec.querySelector('#hmEditH')?.focus() }, watch, watching, seen, mine: () => MY, isMine: g => isMine(g), following, follow: (g, t) => { follow(g, t); if (root.classList.contains('hub-on')) paint(); return following(g, t) }, setSports, SPORTS };
   window.flHub = { show, hide, load, on: () => root.classList.contains('hub-on'), games: () => H.games, open: g => openGame(g.sport, g.lg, g.id), card, ufc: () => H.ufc, at: () => H.at,
     day: () => H.day, setDay(d) { if (+d === +H.day) return load(); H.day = d; H.games = []; H.at = 0; return load(true) },
     today() { if (!sameLocalDay(H.day)) { const d = new Date(); d.setHours(0, 0, 0, 0); H.day = d; H.games = []; return load(true) } return load() } };

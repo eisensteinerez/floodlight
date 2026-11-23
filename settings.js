@@ -17,6 +17,10 @@
   ];
   const SIZES = [[0.9, 'Small'], [1, 'Default'], [1.15, 'Large'], [1.3, 'Extra large']];
   const BRIGHT = [['dim', 'Dimmed'], ['', 'Normal'], ['bright', 'Bright']];
+  const sizeTxt = i => `${SIZES[i][1]} · ${Math.round(SIZES[i][0] * 100)}%`;
+  // data saver: live pages refresh every two minutes instead of every 30 seconds (home.js, live.js, matchcentre.js read it)
+  window.flSaver = () => look().saver === true;
+  const RESET = { confirm: false };
 
   /* ---------- the theme ---------- */
   const current = () => root.dataset.theme;
@@ -112,7 +116,7 @@
     if (!el.querySelector('#stMain')) { pvStop(); el.innerHTML = `<div id="stMain" class="vst"></div><section class="card feature st-card pv-card" aria-labelledby="stPvH"><div id="stPvCtl" class="vst"></div><div class="pv-box" id="stPvBox"><button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button></div></section>` }
     if (PV.theme == null) PV.theme = cur;
     pvControls();
-    el.querySelector('#stMain').innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks and reads on this device.</p></div></header>
+    el.querySelector('#stMain').innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks, reads and alerts you.</p><p class="lb st-where">${typeof S !== 'undefined' && S.me ? 'Your theme and favorite themes follow your account. Everything else on this page is kept on this device only.' : 'Everything on this page is kept on this device. Sign in and your theme follows you to other devices too.'}</p></div></header>
       <div class="card feature st-card">
         <p class="st-crumb">Settings › Appearance</p>
         <div class="st-h"><h2 id="stThemeH">Theme</h2><span class="st-saved" id="stSaved" role="status" aria-live="polite"></span></div>
@@ -123,7 +127,7 @@
         </div>
         <div class="st-rows">
           <div class="st-row"><div class="st-l"><label for="stSize">Text size</label><small>Makes everything on the page larger or smaller.</small></div>
-            <div class="st-c st-size"><span class="st-a" aria-hidden="true">A</span><input id="stSize" type="range" min="0" max="${SIZES.length - 1}" step="1" value="${si}" aria-valuetext="${SIZES[si][1]}"><span class="st-a big" aria-hidden="true">A</span><span class="chip st-val" id="stSizeV">${SIZES[si][1]}</span></div></div>
+            <div class="st-c st-size"><span class="st-a" aria-hidden="true">A</span><input id="stSize" type="range" min="0" max="${SIZES.length - 1}" step="1" value="${si}" aria-valuetext="${sizeTxt(si)}"><span class="st-a big" aria-hidden="true">A</span><span class="chip st-val num" id="stSizeV">${sizeTxt(si)}</span></div></div>
           <div class="st-row"><div class="st-l"><span id="stBrL">Brightness</span><small>Dims or lifts the whole page without changing the theme.</small></div>
             <div class="st-c seg st-seg" role="radiogroup" aria-labelledby="stBrL">${BRIGHT.map(([v, l]) => `<button type="button" role="radio" aria-checked="${br === v}" class="${br === v ? 'on' : ''}" data-bright-pick="${v}">${l}</button>`).join('')}</div></div>
           <div class="st-row"><div class="st-l"><label for="prefMotion">Reduce motion</label><small>Turns off pulsing, flicker and grow-in animations.</small></div>
@@ -133,7 +137,16 @@
           <div class="st-row"><div class="st-l"><label for="prefAlerts">Announce goals</label><small>Reads out a goal in a match you have open, for screen readers.</small></div>
             <div class="st-c"><input class="sw" type="checkbox" role="switch" id="prefAlerts" ${ls.get('fl.alerts', 'true') !== 'false' ? 'checked' : ''}></div></div>
         </div>
-      </div>${window.flAlerts?.card() || ''}${window.flOnboard?.settingsCard() || ''}`;
+        <div class="st-foot"><button type="button" class="bt ghost sm" data-streset="look">Reset text, brightness and motion</button></div>
+      </div>${window.flAlerts?.card() || ''}
+      <section class="card feature st-card" aria-labelledby="stDataH"><p class="st-crumb">Settings › Data</p><div class="st-h"><h2 id="stDataH">Data</h2></div>
+        <div class="st-rows"><div class="st-row"><div class="st-l"><label for="stSaver">Data saver</label><small>Live scores, Home and the match centre refresh every 2 minutes instead of every 30 seconds. Uses less data and battery. Kept on this device.</small></div>
+          <div class="st-c"><input class="sw" type="checkbox" role="switch" id="stSaver" ${look().saver ? 'checked' : ''}></div></div></div></section>
+      ${window.flOnboard?.settingsCard() || ''}
+      <section class="card st-card st-reset" aria-labelledby="stResetH"><div class="st-h"><h2 id="stResetH">Restore all defaults</h2></div>
+        <p class="lb">Puts the theme, text size, brightness, motion, contrast, alerts and data saver on this device back to how they started. Teams you follow, your watchlist and saved slips are kept.</p>
+        ${RESET.confirm ? `<div class="st-confirm" role="group" aria-label="Confirm"><b>Restore every setting on this page?</b><button type="button" class="bt sm" data-streset="all-yes">Restore defaults</button><button type="button" class="bt ghost sm" data-streset="all-no">Keep my settings</button></div>`
+          : '<div><button type="button" class="bt ghost sm" data-streset="all">Restore all defaults…</button></div>'}</section>`;
   }
   function sync() { const el = document.getElementById('pg-settings'); if (!el || el.hidden) return; const f = document.activeElement, pick = f?.dataset?.themePick, id = f?.id; render(el);
     if (pick) el.querySelector(`[data-theme-pick="${current()}"]`)?.focus(); else if (id) document.getElementById(id)?.focus() }
@@ -149,9 +162,19 @@
     const j = ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : /Right|Down/.test(ev.key) ? (i + 1) % n : (i - 1 + n) % n;
     ev.preventDefault(); all[j].focus(); all[j].click();
   });
-  document.addEventListener('input', ev => { if (ev.target.id !== 'stSize') return; const i = +ev.target.value; ev.target.setAttribute('aria-valuetext', SIZES[i][1]); document.getElementById('stSizeV').textContent = SIZES[i][1];
+  document.addEventListener('input', ev => { if (ev.target.id !== 'stSize') return; const i = +ev.target.value; ev.target.setAttribute('aria-valuetext', sizeTxt(i)); document.getElementById('stSizeV').textContent = sizeTxt(i);
     if (typeof S !== 'undefined') { S.prefs.size = SIZES[i][0]; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } saved() });
-  document.addEventListener('change', ev => { if (/^pref(Motion|Contrast|Alerts)$/.test(ev.target.id) && ev.target.closest('#pg-settings')) saved() });
+  document.addEventListener('change', ev => { if (/^pref(Motion|Contrast|Alerts)$/.test(ev.target.id) && ev.target.closest('#pg-settings')) saved();
+    if (ev.target.id === 'stSaver') { setLook({ saver: ev.target.checked }); saved() } });
+  /* resets: one section, or every setting on the page (asked once, in place) */
+  function resetLook() { if (typeof S !== 'undefined') { S.prefs.size = 1; S.prefs.motion = false; S.prefs.contrast = false; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } ls.set('fl.alerts', 'true'); setBright('') }
+  document.addEventListener('click', ev => {
+    const r = ev.target.closest?.('[data-streset]'); if (!r) return; const k = r.dataset.streset, el = document.getElementById('pg-settings');
+    if (k === 'look') { resetLook(); saved(); return el?.querySelector('[data-streset="look"]')?.focus() }
+    if (k === 'all') { RESET.confirm = true; sync(); return el?.querySelector('[data-streset="all-yes"]')?.focus() }
+    if (k === 'all-no') { RESET.confirm = false; sync(); return el?.querySelector('[data-streset="all"]')?.focus() }
+    if (k === 'all-yes') { RESET.confirm = false; resetLook(); setLook({ saver: false }); window.flAlerts?.reset?.(); setTheme('night-match'); saved(); el?.querySelector('#stResetH')?.setAttribute('tabindex', '-1'); el?.querySelector('#stResetH')?.focus(); const s = document.getElementById('stSaved'); if (s) s.textContent = 'Defaults restored' }
+  });
 
   /* ---------- favorite themes: starred on the profile page, then one press away in the three-dot menu ---------- */
   const localFavs = () => { try { const a = JSON.parse(ls.get('fl.favThemes', '[]')); return Array.isArray(a) ? a : [] } catch { return [] } };
