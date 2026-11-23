@@ -167,7 +167,7 @@
     if (st === 3) {
       const mine = favPlayers(), hits = O.phits;
       return `<p class="obd-lead">Followed players are easy to reach from the sport pages and the Lab. Search for anyone.</p>
-        ${mine.length ? `<div class="cx-row obd-chips" role="group" aria-label="Your players">${mine.map(p => `<button type="button" class="cx" aria-pressed="true" data-obpl="${esc(JSON.stringify(p))}" aria-label="Stop following ${esc(p.name)}">${esc(p.name)}${ic('x', 14)}</button>`).join('')}</div>` : ''}
+        ${mine.length ? `<div class="cx-row obd-chips" role="group" aria-label="Your players">${mine.map(p => `<button type="button" class="cx" data-obpl="${esc(JSON.stringify(p))}" aria-label="Stop following ${esc(p.name)}">${esc(p.name)}${ic('x', 14)}</button>`).join('')}</div>` : ''}
         <div class="obd-find"><label class="lb" for="obPq">Find a player</label><div class="obd-q">${ic('search', 18)}<input class="inp" id="obPq" type="search" autocomplete="off" spellcheck="false" placeholder="For example: Jayson Tatum…" value="${esc(O.pq)}"></div></div>
         ${hits === 'error' ? '<p class="lb" role="status">The player search did not answer. Try again in a moment, or skip this step.</p>'
           : hits ? (hits.length ? `<ul class="obd-pl" aria-label="Matches">${hits.map(p => { const on = favPlayers().some(x => String(x.id) === p.id); return `<li><button type="button" class="obd-pb" aria-pressed="${on}" data-obpl="${esc(JSON.stringify(p))}"><span class="avx av-sm">${p.photo ? `<img src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span aria-hidden="true">${esc(p.name.split(' ').map(w => w[0]).slice(0, 2).join(''))}</span></span><span class="rw-t"><b>${esc(p.name)}</b><small>${esc([p.team, p.league].filter(Boolean).join(' · '))}</small></span>${on ? `<span class="pl">${ic('check', 14)}Following</span>` : '<span class="lb">Follow</span>'}</button></li>` }).join('')}</ul>` : `<p class="lb">No player matches “${esc(O.pq)}”.</p>`) : ''}`;
@@ -215,7 +215,7 @@
     if (!O.el) return; mark(how);
     O.el.remove(); O.el = null; document.documentElement.classList.remove('obd-on');
     if (how === 'finished' && window.flHub?.show) { try { localStorage.removeItem('fl.upTab') } catch (e) {} window.flHub.show() }   // Up next opens on "For you" with the new choices
-    (O.from && document.contains(O.from) ? O.from : document.querySelector('.tb-brand'))?.focus?.({ preventScroll: true });
+    (O.from && O.from !== document.body && document.contains(O.from) ? O.from : document.querySelector('#hub h1, .tb-brand'))?.focus?.({ preventScroll: true });   // a first visit opened over nothing: land on Home's heading
   }
   const parse = s => { try { return JSON.parse(s) } catch { return null } };
   document.addEventListener('click', ev => {
