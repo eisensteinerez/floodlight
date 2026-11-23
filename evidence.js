@@ -86,15 +86,35 @@
     const what = [flip,
       m5 && mAll && mins.length >= 10 ? `It assumes about ${fmt(Math.round(m5))} minutes, the last-5 average (${fmt(Math.round(mAll))} over the whole log). A cut in minutes lowers every counting stat.` : '',
       p.market != null ? `The edge is ${p.edge > 0 ? '+' : ''}${p.edge} against a price read ${p.at ? ago(p.at) : 'earlier'}. If the app moves the line or the price, the edge moves with it.` : 'No app posts both sides of this line, so there is no market number to compare with.',
-      'Not in this number: injuries, a changed role or starting lineup, rest days and anything announced after the games in the log.'].filter(Boolean);
-    return `${warn}<div class="ev-tiles">${tile('Our number', `${pct(p.ours)}%`, `Likely range ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'Margin taken out')}
-        ${p.yes ? '' : tile('We project', fmt(Math.round(p.mu * 10) / 10), `Line ${fmt(p.line)}${p.sd ? ` · usually ${fmt(Math.max(0, Math.round((p.mu - p.sd) * 10) / 10))} to ${fmt(Math.round((p.mu + p.sd) * 10) / 10)}` : ''}`)}${tile('Games read', R.n, p.conf ? `${esc(p.conf)} confidence` : '')}</div>
+    ].filter(Boolean);
+    const h10 = rows.find(r => r.label === 'Last 10') || rows[0];
+    return `${warn}<div class="ev-tiles">${tile('Floodlight’s chance', `${pct(p.ours)}%`, `Our projection · likely ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market’s chance', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'From the price, margin taken out')}${h10 ? tile('Hit rate', `${h10.h} of ${h10.n}`, `${esc(h10.label.toLowerCase())}, what happened`) : ''}
+        ${p.yes ? '' : tile('We project', fmt(Math.round(p.mu * 10) / 10), `Line ${fmt(p.line)}${p.sd ? ` · usually ${fmt(Math.max(0, Math.round((p.mu - p.sd) * 10) / 10))} to ${fmt(Math.round((p.mu + p.sd) * 10) / 10)}` : ''}`)}</div>
       ${sec('Game log against the line', bars)}
       ${sec(`How often ${word.toLowerCase()} hit`, table)}
       ${sec('Spread of results', dist, dist ? `The last ${Math.min(40, gs.length)} games, grouped by result. The line is ${fmt(p.line)}.` : '')}
       ${sec('Posted prices', market, market ? `Read ${p.at ? ago(p.at) : 'earlier'}. A chance is shown only where the app posts both sides, with its margin taken out.` : '')}
       ${sec('What would change this pick', `<ul class="ev-list">${what.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`)}
+      ${wrong(p, R, gs)}
       <p class="lb ev-how">How it is made: the Lab's heat reading. Recent games count more than old ones, and the hit rate is blended with a projection for this line. The range is one standard error either side, so it is wider when fewer games are behind it. This is research from past games, not a guarantee.</p>`;
+  }
+
+  /* Why Floodlight may be wrong: the plain limits of this number, and why a big edge can sit beside middling confidence.
+     Edge is the gap between our chance and the market's. Confidence is how much stands behind our chance. They are
+     different measures, so a large gap read from few or uneven games is a large edge with modest confidence. */
+  function wrong(p, R, gs) {
+    const out = [];
+    if (p.market != null && R) {
+      const lo = pct(R.lo) - pct(p.market), hi = pct(R.hi) - pct(p.market), sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
+      out.push(`Edge and confidence measure different things. The edge (${sg(p.edge)}) is the gap between our chance and the market’s. Confidence${p.conf ? ` (${p.conf})` : ''} is how much stands behind our chance. Across our likely range the edge runs from ${sg(lo)} to ${sg(hi)}${lo <= 0 && hi > 0 ? ', so it could be nothing at all' : ''}.`);
+    }
+    if (gs && gs.length < 15) out.push(`Only ${gs.length} games are behind it. A few unusual nights move a short log a long way.`);
+    if (p.edge != null && Math.abs(p.edge) >= 10) out.push('Big gaps with the market are rare for good reason. The books hear about injuries, rest and role changes before a game log shows them, so a large edge sometimes means the market knows something we don’t.');
+    if (gs) { const m5 = avg(gs.slice(0, 5).map(g => g.min).filter(m => m != null)), m20 = avg(gs.slice(0, 20).map(g => g.min).filter(m => m != null)); if (m5 && m20 && m5 < m20 * .85) out.push(`Minutes are falling: ${fmt(Math.round(m5))} over the last 5 against ${fmt(Math.round(m20))} over the last 20. If the role has shrunk, older games overstate it.`) }
+    if (p.teamNote) out.push(p.teamNote);
+    if (!gs) out.push('The forecast leans on the book’s line. If the line is stale or the news check was skipped, late team news is missing.');
+    out.push('Injury and lineup news is not read into this number. Check the latest team news before the start.');
+    return sec('Why Floodlight may be wrong', `<ul class="ev-list">${out.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`);
   }
 
   /* ---------- a match forecast ---------- */
@@ -136,12 +156,13 @@
       R && R.model != null ? `Our model on its own says ${pct(R.model)}%; the market says ${p.market != null ? pct(p.market) + '%' : 'nothing yet'}. The number shown sits between them.` : '',
       last.weather ? `Weather at the last check: ${last.weather}.` : '',
       last.ai ? 'A news check was included.' : 'No news check was run for this match: late injuries and team news are not in it unless the book has priced them.'].filter(Boolean);
-    return `<div class="ev-tiles">${tile(`${esc(pickName)}${k === 'draw' ? '' : ' to win'}`, `${pct(p.ours)}%`, R ? `Range ${pct(R.lo)}–${pct(R.hi)}%` : '')}${tile('Market', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No price saved' : 'Margin taken out')}${proj}</div>
+    return `<div class="ev-tiles">${tile(`Floodlight: ${esc(pickName)}${k === 'draw' ? '' : ' to win'}`, `${pct(p.ours)}%`, R ? `Our forecast · range ${pct(R.lo)}–${pct(R.hi)}%` : 'Our forecast')}${tile('Market’s chance', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No price saved' : 'From the price, margin taken out')}${proj}</div>
       ${sec('Every outcome', bars)}
       ${sec('What moved this forecast', trail, snaps.length > 1 ? `${snaps.length} forecasts saved. Since the first, our number for ${esc(pickName)} has ${delta === 0 ? 'not moved' : `moved ${delta > 0 ? 'up' : 'down'} ${Math.abs(delta)} ${Math.abs(delta) === 1 ? 'point' : 'points'}`}.` : 'Only one forecast has been saved so far, so there is no movement to show yet.')}
       ${moved_(p)}
       ${sec('Why the model leans this way', reasons.length ? `<ul class="ev-list">${reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : '')}
       ${sec('What would change this pick', `<ul class="ev-list">${what.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`)}
+      ${wrong(p, R, null)}
       <p class="lb ev-how">How it is made: Floodlight's forecast model blended with the book's price. Last made ${esc(whenTxt(last.at))} (${esc(stageName(last.stage).toLowerCase())})${(last.books || []).length ? `, prices from ${esc(last.books.join(', '))}` : ''}. The range is the span between our model alone and the market. This is research, not a guarantee.</p>`;
   }
   /* how the book's price has moved since the server started reading it (linemove.js, the same readings as the match centre) */
@@ -150,5 +171,5 @@
     const e = LM.load({ sport: m.sport, lg: m.lg, home: m.home, away: m.away, date: new Date(m.ko * 1000).toISOString() });
     return `<section class="ev-sec">${LM.html(e, { title: 'How the price has moved', names: { home: m.home, away: m.away, draw: 'Draw' }, side: m.pick })}</section>`;
   }
-  window.flEvidence = { prop, match, propRange, matchRange };
+  window.flEvidence = { prop, match, propRange, matchRange, setLine };
 })();

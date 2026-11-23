@@ -1581,6 +1581,7 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-ev{padding:4px 26px 22px;border-
 @media (max-width:560px){html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-evbar,.pd-ev){padding-left:16px;padding-right:16px}}
 /* the evidence bar: Share sits at the right with the likely range beside it, not floating in the middle */
 .pd-evbar .pd-share{margin-left:auto}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-evbar :is(.lk){min-height:44px}
 
 /* Transfers: where a move came from, and moves inside one team */
 .tw-links{display:flex;flex-wrap:wrap;gap:0 16px}
@@ -1751,3 +1752,34 @@ details.sl-day>summary:focus-visible{outline:2px solid var(--focus,var(--accent)
 .sl-more{margin:12px auto 0;display:flex;min-height:44px}
 @media (prefers-reduced-motion:reduce){details.sl-day>summary::before{transition:none}}
 @media (max-width:600px){.sl-top .group-h span{display:none}}
+
+/* ---------- Predictions: one card, one main action (predictions.js) ---------- */
+/* the name opens the evidence; Lab, follow and share sit together under it */
+.pd-cue{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font:600 13px/1.2 var(--font-body);font-style:normal;color:var(--accent)}
+.pd-open[aria-expanded="true"] .pd-chev{transform:rotate(180deg)}
+.pd-pk:hover{border-color:var(--border-2)}.pd-pk.open{border-color:var(--border-2)}
+.pd-evbar{flex-wrap:wrap;justify-content:flex-start;gap:4px 18px}.pd-evbar .lk{display:inline-flex;align-items:center;gap:6px;min-height:36px}
+.pd-folb[aria-pressed="true"] svg{fill:currentColor}
+.pd-alsel{display:inline-flex;align-items:center;gap:8px;font:500 13px/1.2 var(--font-body);color:var(--text-2)}.pd-alsel select{min-height:36px;padding-block:4px;width:auto}
+/* the three numbers, told apart */
+.pd-hr{display:grid;grid-template-columns:104px minmax(0,1fr);align-items:center;gap:12px}.pd-hr dt{font:500 13px/1.2 var(--font-body);color:var(--text-2)}.pd-hr dd{margin:0}.pd-hr b{font:700 15px/1 var(--font-body)}
+@media (max-width:560px){.pd-hr{grid-template-columns:86px minmax(0,1fr)}}
+.pd-defs{border:1px solid var(--border);border-radius:var(--radius-tile);padding:0 16px;background:var(--surface)}
+.pd-defs summary{min-height:44px;display:flex;align-items:center;font:600 14px/1.3 var(--font-body);cursor:pointer}
+.pd-defs dl{display:grid;gap:10px;margin:0 0 14px}.pd-defs dt{font:700 14px/1.3 var(--font-body)}.pd-defs dd{margin:2px 0 0;font:500 14px/1.5 var(--font-body);color:var(--text-2);max-width:72ch}
+/* the line moved, and the same line on each app */
+.pd-moved{gap:4px;border-color:var(--border-2);color:var(--text)}.pd-fol{gap:4px}
+.pd-lines{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0;font:500 13px/1.3 var(--font-body);color:var(--text-2)}
+.pd-ln b{color:var(--text-2);font-weight:700}.pd-ln.on b{color:var(--text)}
+/* the picks you follow */
+.pd-folc{display:grid;gap:10px}.pd-folc .sec-h{margin:0}.pd-folc p{margin:0}
+.pd-folr{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)}.pd-folr:last-child{border-bottom:0}
+.pd-folr .rw-t{flex:1;min-width:0}.pd-foled{font:700 16px/1 var(--font-body);min-width:36px;text-align:right}
+.pd-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.pd-bar,.pd-hr{grid-template-columns:136px minmax(0,1fr)}
+@media (max-width:560px){.pd-bar,.pd-hr{grid-template-columns:96px minmax(0,1fr)}}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-meta{padding:6px 26px 4px;background:rgba(0,0,0,.3)}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-evbar .pd-alsel{color:var(--text-2)}
+@media (max-width:560px){html:root[data-theme="stadium-gold"] .pd-pk .pd-meta{padding-inline:16px}}
+html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}html:root[data-theme="stadium-gold"] .pd-hr b{font:italic 700 20px/1 var(--font-body)}
+@media (max-width:560px){html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:14px}}
