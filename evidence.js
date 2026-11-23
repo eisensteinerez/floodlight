@@ -7,7 +7,13 @@
      record (the book's line, the quarterbacks, the weather, the news check), plus the reasons saved with the latest one.
    The range beside a number is not a second model. For a prop it is one standard error either side, from the number of
    games behind the reading. For a match it is the span between our model alone and the market, which the forecast blends.
-   "What would change this" lists the inputs the number rests on, and says plainly what it does not know about. */
+   "What would change this" lists the inputs the number rests on, and says plainly what it does not know about.
+   Above the numbers, warning tags say what makes this one shakier than usual (small sample, a role change, minutes in
+   doubt, a back-to-back, the line moving, the player on the injury report, a team mismatch). Three numbers are told
+   apart in words: the hit rate (what happened), the projection (what we expect tonight) and the model probability (the
+   chance this exact line hits). For a prop, the line's history comes from the prop record (propbook.py: the first
+   reading is kept and later ones beside it), and "What changed since we first published" reads off those readings.
+   The injury section reads the league report through injuries.js. */
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pct = x => Math.round(x * 100), fmt = v => Number.isInteger(v) ? String(v) : (+v).toFixed(1);
@@ -42,6 +48,95 @@
   document.addEventListener('pointermove', ev => { if (dragBox) setLine(dragBox, fromY(dragBox, ev.clientY)) });
   document.addEventListener('pointerup', () => { dragBox?.classList.remove('dragging'); dragBox = null });
   document.addEventListener('pointercancel', () => { dragBox?.classList.remove('dragging'); dragBox = null });
+
+  /* ---------- the prop's own history, from the prop record (fetched once per prop, then the page redraws) ---------- */
+  const MOVES = new Map();   // sport|player|k -> { at, props } | { loading } | { error }
+  const movesKey = p => `${p.sport}|${p.name}|${p.k}`;
+  function moves(p) {
+    const k = movesKey(p), have = MOVES.get(k);
+    if (have && (have.loading || Date.now() - (have.at || 0) < 5 * 60000)) return have;
+    MOVES.set(k, { ...(have || {}), loading: true });
+    const q = new URLSearchParams({ sport: p.sport, player: p.name, k: p.k, start: p.start ? Math.round(+p.start / 1000) : '' });
+    fetch('/api/props/moves?' + q, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+      .then(d => MOVES.set(k, { at: Date.now(), props: d.props || [] }), e => MOVES.set(k, { at: Date.now(), error: e.message || 'did not load' }))
+      .finally(() => document.dispatchEvent(new CustomEvent('fl:evidence', { detail: { key: k } })));
+    return MOVES.get(k);
+  }
+  const clock = t => new Date(t * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  function lineHistory(p) {
+    const m = moves(p), rec = (m.props || []).find(x => x.side === p.side || x.line === p.line) || (m.props || [])[0];
+    const over = p.side === 'over', offers = (p.offers || []).filter(o => typeof o.line === 'number');
+    const best = offers.length ? offers.reduce((a, o) => (over ? o.line < a.line : o.line > a.line) ? o : a) : null;
+    if (m.loading && !rec) return sec('Line history', '<p class="lb">Loading the saved readings for this line…</p>');
+    const reads = rec?.readings || [], first = reads[0], tiles = `<div class="ev-tiles">${tile('Opening line', first ? fmt(first.line) : '–', first ? `First read ${esc(clock(first.at))}` : 'Not saved yet')}${tile('Current line', fmt(p.line), p.at ? `Read ${ago(p.at)}` : '')}${best ? tile('Best available', fmt(best.line), `${esc(BOOK[best.book] || best.book || '')}${best.line !== p.line ? ` · better for the ${over ? 'over' : 'under'}` : ''}`) : ''}</div>`;
+    const table = reads.length > 1 ? `<div class="tbx-wrap"><table class="tbx ev-tbl"><thead><tr><th scope="col">Read</th><th scope="col" class="r">Line</th><th scope="col" class="r">Ours</th><th scope="col" class="r">Market</th></tr></thead>
+      <tbody>${reads.slice(-8).map(r => `<tr><th scope="row" class="num">${esc(clock(r.at))}</th><td class="r num">${fmt(r.line)}</td><td class="r num">${r.ours == null ? '–' : pct(r.ours) + '%'}</td><td class="r num">${r.market == null ? '–' : pct(r.market) + '%'}</td></tr>`).join('')}</tbody></table></div>` : '';
+    // what changed since we first published, in words
+    const why = [];
+    if (first) {
+      if (first.line !== p.line) why.push(`The line moved from ${fmt(first.line)} to ${fmt(p.line)}, which makes the ${over ? 'over' : 'under'} ${(p.line > first.line) === over ? 'harder' : 'easier'} to hit.`);
+      if (first.ours != null && Math.abs(first.ours - p.ours) >= .01) why.push(`Our chance went from ${pct(first.ours)}% to ${pct(p.ours)}%${first.line !== p.line ? ', mostly because of the line move' : ', from a newer reading of his game log'}.`);
+      if (first.market != null && p.market != null && Math.abs(first.market - p.market) >= .01) why.push(`The market’s chance went from ${pct(first.market)}% to ${pct(p.market)}%, so the books moved ${p.market > first.market ? 'toward' : 'away from'} this side.`);
+      if (!why.length) why.push(`Nothing has moved since we first published it ${esc(clock(first.at))}.`);
+    }
+    const note = m.error ? `The saved readings did not load (${m.error}).` : first ? 'Every reading is saved beside the first one, which is never replaced. The pick is graded on the line first published.' : 'This line is saved the first time the Predictions page shows it, so its history starts now.';
+    return sec('Line history', tiles + table, note) + (first ? sec('What changed since we first published', `<ul class="ev-list">${why.map(w => `<li>${w}</li>`).join('')}</ul>`) : '');
+  }
+
+  /* ---------- warning tags: what makes this reading shakier than usual ---------- */
+  const DAILY = new Set(['nba', 'wnba', 'nhl', 'mlb']);
+  function warnings(p, gs, oppGs) {
+    const out = [], mins = n => gs.slice(0, n).map(g => g.min).filter(m => m != null), m5 = avg(mins(5)), m20 = avg(mins(20));
+    if (gs.length < 15) out.push(['Small sample', `Only ${gs.length} games behind it`]);
+    if (m5 && m20 && mins(20).length >= 10 && Math.abs(m5 - m20) / m20 >= .15) out.push(['Role recently changed', `${fmt(Math.round(m5))} minutes over the last 5 against ${fmt(Math.round(m20))} over 20`]);
+    const ms = mins(5); if (ms.length >= 4 && m5) { const sd = Math.sqrt(avg(ms.map(m => (m - m5) ** 2))); if (sd / m5 > .25) out.push(['Expected minutes uncertain', `Minutes swung from ${fmt(Math.round(Math.min(...ms)))} to ${fmt(Math.round(Math.max(...ms)))} in the last 5`]) }
+    const ds = gs.slice(0, 4).map(g => g.date).filter(Boolean), gap = DAILY.has(p.sport) ? 14 : 21;
+    for (let i = 0; i + 1 < ds.length; i++) if ((ds[i] - ds[i + 1]) / 864e5 >= gap) { out.push(['Returning from injury or a long absence', `A ${Math.round((ds[i] - ds[i + 1]) / 864e5)}-day gap between games ${i ? 'recently' : 'before his last game'}`]); break }
+    if (p.start && ds[0] && DAILY.has(p.sport) && p.sport !== 'mlb' && (+p.start - ds[0]) / 36e5 < 36) out.push(['Back-to-back', 'He played yesterday']);
+    if (p.opp && oppGs.length < 2) out.push(['Opponent data limited', oppGs.length ? `One game against ${p.opp} in the log` : `No games against ${p.opp} in the log`]);
+    const rec = (MOVES.get(movesKey(p))?.props || [])[0], f = rec?.readings?.[0];
+    if (f && Math.abs(f.line - p.line) >= 1) out.push([`Market moved ${fmt(Math.abs(p.line - f.line))} ${Math.abs(p.line - f.line) === 1 ? 'point' : 'points'}`, `From ${fmt(f.line)} to ${fmt(p.line)} since we first published it`]);
+    const I = window.flInjuries, st = I?.status(p.sport, p.name);
+    if (st) out.push([st.lv === 'out' ? 'Listed out' : 'Lineup not confirmed', `${st.status || I.LEVEL_NAME[st.lv]} on the injury report${st.what ? ` (${st.what})` : ''}`]);
+    if (p.teamNote) out.push(['Possible data mismatch', p.teamNote]);
+    return out.length ? `<ul class="ev-warns" aria-label="Warnings">${out.map(([t, w]) => `<li><b>${esc(t)}</b><small>${esc(w)}</small></li>`).join('')}</ul>` : '';
+  }
+
+  /* ---------- the injury report for this player and his team ---------- */
+  function injuries(p) {
+    const I = window.flInjuries; if (!I || !I.PATH[p.sport]) return '';
+    const v = I.ready(p.sport); if (!v) { I.load(p.sport); return sec('Injuries and lineup', '<p class="lb">Loading the injury report…</p>') }
+    const me = I.status(p.sport, p.name), tm = p.team ? I.team(p.sport, p.team) : null, mates = (tm?.players || []).filter(x => I.norm(x.name) !== I.norm(p.name) && ['out', 'doubtful'].includes(x.lv));
+    const opp = p.opp ? I.team(p.sport, p.opp) : null, oppOut = (opp?.players || []).filter(x => x.lv === 'out');
+    const li = [me ? `<b>${esc(p.name)}: ${esc(me.status || I.LEVEL_NAME[me.lv])}</b>${me.what ? ` (${esc(me.what)})` : ''}${me.note ? `. ${esc(me.note)}` : ''}` : `${esc(p.name)} is not on the injury report. That is not the same as a confirmed start: Floodlight doesn’t read confirmed lineups yet.`,
+      mates.length ? `Teammates out or doubtful: ${mates.slice(0, 6).map(x => `${esc(x.name)}${x.pos ? ` (${esc(x.pos)})` : ''}, ${esc(x.status || I.LEVEL_NAME[x.lv])}`).join('; ')}. A missing teammate can raise his minutes and usage; the game log doesn’t know that yet.` : tm ? 'No teammates are listed out or doubtful.' : '',
+      oppOut.length ? `${esc(opp.name)} are without ${oppOut.slice(0, 5).map(x => esc(x.name)).join(', ')}.` : ''].filter(Boolean);
+    return sec('Injuries and lineup', `<ul class="ev-list">${li.map(x => `<li>${x}</li>`).join('')}</ul><p class="lb">From the league injury report, read ${ago(v.at)}. <a class="lk" href="#/injuries/${esc(p.sport)}" data-page="injuries" data-arg="${esc(p.sport)}">See the full report</a></p>`);
+  }
+
+  /* ---------- three numbers told apart ---------- */
+  function three(p, R, h10) {
+    const over = p.side === 'over', word = p.yes ? (over ? 'Yes' : 'No') : `${over ? 'over' : 'under'} ${fmt(p.line)}`;
+    const rows = [
+      ['Hit rate', h10 ? `${h10.h} of ${h10.n}` : '–', `What happened: how often the ${esc(word)} came in over his ${h10 ? esc(h10.label.toLowerCase()) : 'recent games'}.`],
+      !p.yes && p.mu != null ? ['Projection', fmt(Math.round(p.mu * 10) / 10), `What we expect tonight: our estimate of his ${esc(String(p.label || '').toLowerCase())}, with recent games counting more.`] : null,
+      ['Model probability', `${pct(p.ours)}%`, `The chance this exact line hits: our projection and his spread of results set against ${fmt(p.line)}.`],
+      ['Confidence range', `${pct(R.lo)}–${pct(R.hi)}%`, `How sure we are of that chance: one standard error either side, from ${R.n || 'the'} games. Fewer or more uneven games make it wider.`]].filter(Boolean);
+    return `<dl class="ev-three">${rows.map(([k, v, d]) => `<div><dt>${k} <b class="num">${v}</b></dt><dd>${d}</dd></div>`).join('')}</dl>
+      ${h10 && h10.n >= 8 && h10.h / h10.n >= .8 ? `<p class="lb">${h10.h} of the last ${h10.n} does not mean a ${pct(h10.h / h10.n)}% chance tonight. A short run overstates what comes next, so the model probability pulls it back toward his projection and spread.</p>` : ''}`;
+  }
+
+  /* ---------- what was read, when, and what is not read at all ---------- */
+  function coverage(p, gs) {
+    const I = window.flInjuries, v = I?.ready(p.sport), last = gs.find(g => g.date)?.date, outdoor = p.sport === 'nfl' || p.sport === 'mlb';
+    const li = [`Lines read ${p.at ? ago(p.at) : 'earlier'} from ${esc((p.books || []).map(b => BOOK[b] || b).join(', ') || 'the apps')}.`,
+      last ? `Game log through ${esc(new Date(last).toLocaleDateString([], { day: 'numeric', month: 'short' }))} (${gs.length} games).` : `Game log: ${gs.length} games.`,
+      v ? `Injury report read ${ago(v.at)}.` : I?.PATH[p.sport] ? 'Injury report not loaded.' : 'No injury report is read for this sport.',
+      'Opponent strength: not rated yet. The “Against” row above is the only opponent signal.',
+      outdoor ? 'Weather: not read into player props yet.' : 'Weather: indoor sport, not a factor.',
+      'Confirmed starting lineups: not read yet.'];
+    return sec('Data freshness and what isn’t read', `<ul class="ev-list">${li.map(x => `<li>${x}</li>`).join('')}</ul>`);
+  }
 
   /* ---------- a player prop ---------- */
   function prop(p) {
@@ -88,14 +183,22 @@
       p.market != null ? `The edge is ${p.edge > 0 ? '+' : ''}${p.edge} against a price read ${p.at ? ago(p.at) : 'earlier'}. If the app moves the line or the price, the edge moves with it.` : 'No app posts both sides of this line, so there is no market number to compare with.',
     ].filter(Boolean);
     const h10 = rows.find(r => r.label === 'Last 10') || rows[0];
-    return `${warn}<div class="ev-tiles">${tile('Floodlight’s chance', `${pct(p.ours)}%`, `Our projection · likely ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market’s chance', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'From the price, margin taken out')}${h10 ? tile('Hit rate', `${h10.h} of ${h10.n}`, `${esc(h10.label.toLowerCase())}, what happened`) : ''}
+    const lastDate = gs.find(g => g.date)?.date, rest = p.start && lastDate ? Math.max(0, Math.floor((+p.start - lastDate) / 864e5)) : null;
+    const expMin = m5 && mins.length >= 5 ? tile('Expected minutes', fmt(Math.round(m5)), `Last-5 average${mAll ? ` · ${fmt(Math.round(mAll))} over the log` : ''}`) : '';
+    const restT = rest != null ? tile('Rest', rest === 0 ? 'Same day' : `${rest} ${rest === 1 ? 'day' : 'days'}`, `Since his last game${rest <= 1 && DAILY.has(p.sport) && p.sport !== 'mlb' ? ' · back-to-back' : ''}`) : '';
+    return `${warnings(p, gs, oppGs)}${warn}<div class="ev-tiles">${tile('Floodlight’s chance', `${pct(p.ours)}%`, `Our projection · likely ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market’s chance', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'From the price, margin taken out')}${h10 ? tile('Hit rate', `${h10.h} of ${h10.n}`, `${esc(h10.label.toLowerCase())}, what happened`) : ''}
         ${p.yes ? '' : tile('We project', fmt(Math.round(p.mu * 10) / 10), `Line ${fmt(p.line)}${p.sd ? ` · usually ${fmt(Math.max(0, Math.round((p.mu - p.sd) * 10) / 10))} to ${fmt(Math.round((p.mu + p.sd) * 10) / 10)}` : ''}`)}</div>
+      ${sec('What these numbers mean', three(p, R, h10))}
+      ${expMin || restT ? `<div class="ev-tiles">${expMin}${restT}</div>` : ''}
       ${sec('Game log against the line', bars)}
-      ${sec(`How often ${word.toLowerCase()} hit`, table)}
+      ${sec(`How often ${word.toLowerCase()} hit`, table, 'Last 5, 10 and 20 games, home and away, and head to head against tonight’s opponent.')}
       ${sec('Spread of results', dist, dist ? `The last ${Math.min(40, gs.length)} games, grouped by result. The line is ${fmt(p.line)}.` : '')}
       ${sec('Posted prices', market, market ? `Read ${p.at ? ago(p.at) : 'earlier'}. A chance is shown only where the app posts both sides, with its margin taken out.` : '')}
+      ${lineHistory(p)}
+      ${injuries(p)}
       ${sec('What would change this pick', `<ul class="ev-list">${what.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`)}
       ${wrong(p, R, gs)}
+      ${coverage(p, gs)}
       <p class="lb ev-how">How it is made: the Lab's heat reading. Recent games count more than old ones, and the hit rate is blended with a projection for this line. The range is one standard error either side, so it is wider when fewer games are behind it. This is research from past games, not a guarantee.</p>`;
   }
 
@@ -113,7 +216,7 @@
     if (gs) { const m5 = avg(gs.slice(0, 5).map(g => g.min).filter(m => m != null)), m20 = avg(gs.slice(0, 20).map(g => g.min).filter(m => m != null)); if (m5 && m20 && m5 < m20 * .85) out.push(`Minutes are falling: ${fmt(Math.round(m5))} over the last 5 against ${fmt(Math.round(m20))} over the last 20. If the role has shrunk, older games overstate it.`) }
     if (p.teamNote) out.push(p.teamNote);
     if (!gs) out.push('The forecast leans on the book’s line. If the line is stale or the news check was skipped, late team news is missing.');
-    out.push('Injury and lineup news is not read into this number. Check the latest team news before the start.');
+    out.push(gs ? 'Injury and lineup news is shown above but not read into the number itself, and confirmed lineups are not read at all. Check the latest team news before the start.' : 'Injury and lineup news is not read into this number unless the news check ran. Check the latest team news before the start.');
     return sec('Why Floodlight may be wrong', `<ul class="ev-list">${out.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`);
   }
 
