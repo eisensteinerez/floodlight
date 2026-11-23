@@ -65,6 +65,35 @@
     ev.preventDefault(); const sel = all[j].getAttributeNames().filter(a => a.startsWith('data-')).map(a => `[${a}="${CSS.escape(all[j].getAttribute(a))}"]`).join('');
     all[j].click(); setTimeout(() => (sel && document.querySelector(`[role="radiogroup"] > [role="radio"]${sel}`) || all[j]).focus(), 0);
   });
+  /* ---------- help that is shown in full once, then folds behind a "?" ----------
+     flHelp.button(key) is the "?" for a page heading; flHelp.panel(key, title, html) is the help card it opens.
+     The card is open the first time a person ever sees that key (remembered on this device as fl.help), and stays
+     open for the rest of that visit so a re-render does not snap it shut. After that it starts folded. */
+  const HLP = { seen: (() => { try { return JSON.parse(localStorage.getItem('fl.help') || '{}') || {} } catch { return {} } })(), open: new Map() };
+  const hKey = k => String(k).replace(/[^a-z0-9-]/gi, '');
+  function hOpen(k) {
+    if (!HLP.open.has(k)) { HLP.open.set(k, !HLP.seen[k]); if (!HLP.seen[k]) { HLP.seen[k] = 1; try { localStorage.setItem('fl.help', JSON.stringify(HLP.seen)) } catch {} } }
+    return HLP.open.get(k);
+  }
+  function hSet(k, on, focus) {
+    HLP.open.set(k, on);
+    document.querySelectorAll(`[data-help="${k}"]`).forEach(b => b.setAttribute('aria-expanded', on));
+    document.querySelectorAll(`#hlp-${k}`).forEach(p => { p.hidden = !on });
+    if (focus === 'panel' && on) document.getElementById('hlp-' + k + '-h')?.focus({ preventScroll: false });
+    if (focus === 'button') document.querySelector(`[data-help="${k}"]`)?.focus();
+  }
+  document.addEventListener('click', ev => {
+    const q = ev.target.closest?.('[data-help]'); if (q) { const k = q.dataset.help; hSet(k, !hOpen(k), 'panel'); return }
+    const x = ev.target.closest?.('[data-help-close]'); if (x) hSet(x.dataset.helpClose, false, 'button');
+  });
+  const esc0 = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  window.flHelp = {
+    isOpen: k => hOpen(hKey(k)),
+    button(key, label = 'How this page works') { const k = hKey(key);
+      return `<button type="button" class="hlp-q" data-help="${k}" aria-expanded="${hOpen(k)}" aria-controls="hlp-${k}" title="${esc0(label)}"><span aria-hidden="true">?</span><span class="sr-only">${esc0(label)}</span></button>` },
+    panel(key, title, html) { const k = hKey(key);
+      return `<section class="card hlp" id="hlp-${k}" aria-labelledby="hlp-${k}-h"${hOpen(k) ? '' : ' hidden'}><div class="hlp-top"><h2 class="hlp-h" id="hlp-${k}-h" tabindex="-1">${esc0(title)}</h2><button type="button" class="bt ghost sm" data-help-close="${k}">Got it</button></div><div class="hlp-b">${html}</div></section>` },
+  };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   defs.set('noaccess', { title: 'Ask your admin for access', fresh: true, render(el, svc) {
     const A = window.flAccess, name = A?.name(svc) || 'This part of Floodlight', mine = Object.entries(A?.services() || {}).filter(([k, on]) => on && A.name(k)).map(([k]) => A.name(k));

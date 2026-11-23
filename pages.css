@@ -81,6 +81,26 @@
 :root[data-theme] .tour h2:focus-visible{outline:0}
 
 /* ---------- Home ---------- */
+/* the Home hero: TODAY, the date in one small line under it, the day strip beside. About a quarter shorter than the
+   other front-door titles, so the briefing and the top of the featured game fit on the first screen */
+html:root[data-theme] .hm-head{align-items:center;padding-top:0!important;margin-top:-6px;row-gap:12px}
+html:root[data-theme] .hm-head .pg-title{font-size:calc(var(--title-size) * .66)!important}
+.hm-date{margin:6px 0 0;font:500 15px/1.3 var(--font-body);color:var(--text-2)}
+.hm-hr{display:grid;justify-items:end;gap:10px;min-width:0;max-width:100%}
+/* Tonight at a glance: five numbers in one row, each a door into the page that lists them */
+.hm-cmd{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.hm-cmd-i{display:inline-flex;align-items:baseline;gap:6px;min-height:44px;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface);color:var(--text-2);font:500 14px/1 var(--font-body);white-space:nowrap;transition:border-color var(--t-fast),color var(--t-fast)}
+.hm-cmd-i{align-items:center}
+.hm-cmd-i b{font:700 17px/1 var(--font-body);color:var(--text);font-variant-numeric:tabular-nums}
+.hm-cmd-i.is-live b{color:var(--live)}
+.hm-cmd-i.is-live b::before{content:"";display:inline-block;width:7px;height:7px;margin:0 6px 2px 0;border-radius:50%;background:var(--live)}
+.hm-cmd-i.is-edge b{color:var(--accent)}
+.hm-cmd-i:hover{border-color:var(--border-2);color:var(--text)}
+.hm-cmd-i:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:1100px){.hm-hr{justify-items:start;width:100%}.hm-cmd{justify-content:flex-start}}
+@media (max-width:640px){.hm-cmd{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;width:100%;padding:3px;margin:-3px}.hm-cmd::-webkit-scrollbar{display:none}.hm-cmd-i{flex:none}}
+html:root[data-theme="stadium-gold"] .hm-cmd-i{font-style:italic;background:var(--chip-bg);border-color:var(--chip-edge)}
+html:root[data-theme="stadium-gold"] .hm-cmd-i b{font:italic 800 18px/1 var(--font-display)}
 :root[data-theme] .hub{display:flex;flex-direction:column;gap:var(--gap);grid-column:1/-1;min-width:0;padding:0;background:none;border:0}
 :root[data-theme] .hub[hidden]{display:none}
 .hm-days{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px;max-width:100%}
@@ -595,7 +615,7 @@ html:root[data-theme] .tw-busy th[scope="row"]{padding:6px 12px 6px 0;border-bot
 .mb-menu{position:fixed;z-index:95;min-width:230px;display:grid;padding:6px;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--surface);box-shadow:var(--shadow-pop)}
 .mb-menu button{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:calc(var(--radius-tile) - 4px);font:600 14px/1.2 var(--font-body);color:var(--text);text-align:left}
 .mb-menu button:hover,.mb-menu button:focus-visible{background:var(--surface-2);outline-offset:-2px}
-:root[data-theme] .mb-detail{position:sticky;top:96px;display:grid;gap:14px;align-content:start}
+:root[data-theme] .mb-detail{position:sticky;top:calc(var(--top-h,0px) + 16px);display:grid;gap:14px;align-content:start}
 .mb-detail:focus{outline:none}
 .mb-d-top{display:flex;align-items:flex-start;gap:14px}
 .mb-d-top > div{flex:1 1 0;min-width:0;display:grid;gap:3px;justify-items:start}
@@ -764,7 +784,7 @@ html.fl-no-live #tbLive,html.fl-no-live #flBarLive{display:none}
 .py-find{margin:0}
 :root[data-theme] .py-jump{display:none}.py-jump svg{flex:none}
 
-:root[data-theme] .py-ticket{background:var(--accent);color:var(--on-accent);border-color:transparent;padding:26px 26px 22px;backdrop-filter:none;position:sticky;top:132px}
+:root[data-theme] .py-ticket{background:var(--accent);color:var(--on-accent);border-color:transparent;padding:26px 26px 22px;backdrop-filter:none;position:sticky;top:calc(var(--top-h,0px) + 16px)}
 :root[data-theme] .py-ticket h2,.py-ticket .rw-t b,.py-ticket .rw-t small,.py-ticket .py-k,.py-ticket .fl-f,.py-ticket .py-hint,.py-ticket .py-err{color:var(--on-accent)}
 .py-ticket .pl{background:transparent;border-color:color-mix(in oklab,var(--on-accent) 45%,transparent);color:var(--on-accent)}
 .py-dl{list-style:none;margin:0;padding:0;display:grid}
@@ -946,7 +966,9 @@ html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head){align-item
 html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) > div:first-child{display:flex;align-items:center;flex-wrap:wrap;gap:6px 30px}
 html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub{display:flex;align-items:center;gap:22px;margin:0}
 html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub::before{content:"";flex:none;width:2px;height:74px;background:linear-gradient(180deg,transparent,var(--accent),transparent);transform:skewX(-20deg)}
-html:root[data-theme="stadium-gold"] .hm-head .pg-sub{max-width:250px;text-wrap:balance;font:italic 500 17px/1.75 var(--font-body);letter-spacing:.34em!important;text-transform:uppercase!important}
+html:root[data-theme="stadium-gold"] .hm-head .pg-sub{display:block!important;margin:6px 0 0!important;max-width:none;font:italic 500 15px/1.3 var(--font-body);letter-spacing:.16em!important;text-transform:uppercase!important;color:var(--text-2)}
+html:root[data-theme="stadium-gold"] .hm-head > div.hm-when:first-child{display:block!important}
+html:root[data-theme="stadium-gold"] .hm-head .pg-sub::before{display:none}
 /* section headings that stand on the page, not in a card: bigger, with a gold rule running off to the right */
 html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h h2{flex:1;display:flex;align-items:center;gap:14px;font-size:clamp(24px,2.5vw,32px)}
 html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h h2::after{content:"";flex:1;min-width:24px;height:1px;margin-left:10px;background:linear-gradient(90deg,var(--border-2),transparent 94%)}
@@ -954,8 +976,8 @@ html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab
 
 /* ---- Home ---- */
 html:root[data-theme="stadium-gold"] .hm-days{gap:10px;padding:8px;margin:-8px}
-html:root[data-theme="stadium-gold"] .hm-day{width:72px;height:74px;gap:7px;border-radius:var(--radius-tile);background:var(--chip-bg);border-color:var(--chip-edge);font:italic 500 15px/1 var(--font-body);color:var(--text)}
-html:root[data-theme="stadium-gold"] .hm-day b{font:italic 800 23px/1 var(--font-display)}
+html:root[data-theme="stadium-gold"] .hm-day{width:64px;height:64px;gap:6px;border-radius:var(--radius-tile);background:var(--chip-bg);border-color:var(--chip-edge);font:italic 500 15px/1 var(--font-body);color:var(--text)}
+html:root[data-theme="stadium-gold"] .hm-day b{font:italic 800 21px/1 var(--font-display)}
 html:root[data-theme="stadium-gold"] .hm-day:hover{border-color:var(--chip-edge-2)}
 html:root[data-theme="stadium-gold"] .hm-day.on{background:var(--gold-grad);border-color:transparent;color:var(--on-accent);font-weight:700;box-shadow:var(--gold-glow)}
 html:root[data-theme="stadium-gold"] .hm-ftr .ftr-body{gap:18px}
@@ -1126,8 +1148,8 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
   html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) > div:first-child{gap:4px 18px}
   html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub{gap:14px;font-size:16px}
   html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub::before{height:46px}
-  html:root[data-theme="stadium-gold"] .hm-head .pg-sub{font-size:13px;letter-spacing:.26em!important;max-width:210px}
-  html:root[data-theme="stadium-gold"] .hm-day{width:64px;height:66px}
+  html:root[data-theme="stadium-gold"] .hm-head .pg-sub{font-size:13px;letter-spacing:.12em!important}
+  html:root[data-theme="stadium-gold"] .hm-day{width:58px;height:58px}
   html:root[data-theme="stadium-gold"] .hm-heat > .sec-h,html:root[data-theme="stadium-gold"] .hm-heat > .hm-rows{padding-inline:20px}
   html:root[data-theme="stadium-gold"] .ftr-acts :is(.ftr-foot,.ftr-alt){padding:0 22px;font-size:16px}
   html:root[data-theme="stadium-gold"] .lab-bar:has(.lab-cast img){padding-top:170px}
@@ -1375,7 +1397,7 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 .pv-wait progress::-webkit-progress-value{background:var(--accent);border-radius:99px;transition:width .3s}
 .pv-wait progress::-moz-progress-bar{background:var(--accent);border-radius:99px}
 /* the controls stay in reach while the preview scrolls past */
-.pv-bar{position:sticky;top:12px;z-index:3;display:grid;gap:12px;padding:12px;margin:-12px;border-radius:var(--radius-tile);background:var(--surface)}
+.pv-bar{position:sticky;top:calc(var(--top-h,0px) + 12px);z-index:3;display:grid;gap:12px;padding:12px;margin:-12px;border-radius:var(--radius-tile);background:var(--surface)}
 :root[data-theme="aurora-glass"] .pv-bar{background:color-mix(in oklab,var(--bg) 82%,transparent);backdrop-filter:blur(14px)}
 .pv-cmp{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-2)}.pv-cmp select{max-width:180px}
 .pv-acts{display:flex;flex-wrap:wrap;gap:10px;margin-left:auto}.pv-acts .bt{display:inline-flex;align-items:center;gap:8px}
@@ -1418,7 +1440,17 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 .hm-brief,.hm-back{display:grid;gap:10px}.hm-brief.card,.hm-back.card{padding-block:20px}.hm-back .sec-h{margin:0;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
 .hm-brief h2,.hm-back h2{margin:0;font:700 20px/1.2 var(--font-body);letter-spacing:0;text-transform:none}
 .hm-bl{list-style:none;margin:0;padding:0;display:grid;gap:2px}
-.hm-brief .hm-bl{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 20px}
+.hm-brief .hm-bl{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 12px}
+@media (max-width:1180px){.hm-brief .hm-bl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.hm-bk{font:600 12px/1.3 var(--font-body);color:var(--muted)}
+.hm-bm{font:600 15px/1.35 var(--font-body);color:var(--text);overflow-wrap:anywhere}
+.hm-more{margin-top:2px}
+.hm-more > summary{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;border-radius:var(--radius-pill);font:600 14px/1 var(--font-body);color:var(--accent);cursor:pointer;list-style:none}
+.hm-more > summary::-webkit-details-marker{display:none}
+.hm-more > summary::after{content:"";width:7px;height:7px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);transition:transform var(--t-fast)}
+.hm-more[open] > summary::after{transform:translateY(1px) rotate(-135deg)}
+.hm-more > summary:hover{background:var(--surface-2)}
+.hm-more > summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .hm-bi{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:0;padding:6px 10px;border:0;border-radius:var(--radius-tile);background:none;color:var(--text);
   font:500 15px/1.4 var(--font-body);text-align:left;cursor:pointer}
 p.hm-bi{cursor:default}.hm-bi>span{flex:1;min-width:0}.hm-bi svg{flex:none;color:var(--muted)}.hm-bi b{font-weight:700}
@@ -1439,6 +1471,12 @@ button.hm-bi:hover{background:var(--surface-2)}button.hm-bi:focus-visible{outlin
 .hm-sw{display:flex;align-items:center;gap:12px;min-height:44px;font:600 14px/1.3 var(--font-body);cursor:pointer}
 .g2.hm-top.solo{grid-template-columns:minmax(0,1fr)}
 @media (max-width:820px){.hm-invite{grid-template-columns:minmax(0,1fr)}}
+/* Your games before any team is followed: one thin line, so the featured game stays on the first screen */
+.hm-banner{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;min-height:56px;padding:8px 8px 8px 20px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface)}
+.hm-banner p{flex:1 1 280px;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;margin:0;font:500 15px/1.4 var(--font-body);color:var(--text-2)}
+.hm-banner p b{font:700 15px/1.3 var(--font-body);color:var(--text)}
+.hm-ban-acts{display:flex;align-items:center;gap:8px}
+@media (max-width:520px){.hm-banner{padding:12px}.hm-ban-acts{width:100%}.hm-ban-acts .bt{flex:1;justify-content:center}}
 .gx-body{grid-template-columns:minmax(0,1fr)}.gx-fresh{min-width:0}.gx-fresh .lb{min-width:0;flex:1 1 240px}
 :root[data-theme] .gx-title{font:700 18px/1.2 var(--font-body);letter-spacing:0;text-transform:none;font-style:normal}
 .gx-card .sec-h{flex-wrap:wrap}.gx-team > span:not(.gx-crest){min-width:0;max-width:100%}
@@ -1487,6 +1525,12 @@ button.hm-bi:hover{background:var(--surface-2)}button.hm-bi:focus-visible{outlin
 .py-exf dt{font:500 13px/1.3 var(--font-body);color:var(--text-2)}.py-exf dd{margin:0;font:var(--display-weight) clamp(26px,3vw,38px)/1 var(--font-display)}
 .py-new[hidden]{display:none}
 @media (max-width:560px){.py-exf{grid-template-columns:minmax(0,1fr)}}
+.py-cols.one{grid-template-columns:minmax(0,1fr)}
+#pyHelp:empty,#pyBuild:empty{display:none}
+.py-none-b{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.py-exp{margin-left:auto;display:grid;justify-items:end;gap:4px;text-align:right}
+.py-exp b{font:700 16px/1 var(--font-body)}
+.py-ex.drw,.py-how.drw{gap:0}
 
 /* ---------- evidence: move the line on the game log ---------- */
 .ev-log.drag{cursor:ns-resize;touch-action:none;user-select:none}
@@ -1983,7 +2027,18 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .mb-prev h4{margin:0;font:700 15px/1.3 var(--font-body);letter-spacing:0;text-transform:none}.mb-prev p{margin:0;font:500 14px/1.5 var(--font-body);color:var(--text-2)}.mb-prev b{color:var(--text)}
 .mb-prev .mb-lose{color:var(--text)}
 .card.mb-guide{padding:2px 22px}.mb-guide[open]{padding-bottom:6px}
-.mb-main.solo{grid-template-columns:minmax(0,1fr)}
+.mb-solo{display:grid;gap:14px}
+.mb-solo-me{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.mb-solo-me > div{display:grid;gap:4px;flex:1;min-width:200px}
+.mb-solo-me b{font:700 17px/1.3 var(--font-body)}
+.mb-solo-me small{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.mb-solo-p{margin:0;max-width:70ch;font:500 14px/1.5 var(--font-body);color:var(--text-2)}
+.mb-solo-p b{color:var(--text)}
+:root[data-theme] .mb-policy.drw{padding:0}
+.mb-policy .drw-b{padding-top:4px}
+#hlp-members .mb-gd{margin:0}
+:root[data-theme] .mb-policy .mb-pol-top h2{font:700 16px/1.3 var(--font-body);letter-spacing:0;text-transform:none}
+.mb-log-none{margin:0;max-width:70ch}
 
 /* ---------- Parlays: where the books' number comes from, same-game picks, tracking not betting (parlays.js) ---------- */
 .py-src{display:block;max-width:220px;margin-top:4px;margin-left:auto;font:500 12px/1.35 var(--font-body);color:var(--on-accent);opacity:.85}

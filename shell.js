@@ -70,9 +70,30 @@
     <button class="tb-members" id="tbMembers" data-shell="members">Members</button>
     <button class="tb-ic tb-dots" id="flDots" aria-haspopup="menu" aria-expanded="false" aria-controls="flMenu" aria-label="Menu: profile, settings and help">${ic('dots')}</button>
     <div class="flmenu" id="flMenu" role="menu" aria-labelledby="flDots" hidden></div>`);
+  /* The sport chips sit in their own row under the bar, outside it, so only the bar itself (about 70px) stays at the top
+     while scrolling. Home, Live and the sport pages show the row; Predictions and the Lab have their own sport filters,
+     so the row is left out there and while a player profile is open; every other page folds it into a Sports menu in the
+     bar (data-chrome on <html>: full, bare or menu). */
   const row = document.createElement('div'); row.className = 'tb-row2';
   row.innerHTML = `<div class="tb-sports" id="tbSports" role="toolbar" aria-label="Sports">${CHIPS.map(([k, l, sp, lg]) => `<button class="tbs" data-k="${k}" data-sport="${sp}"${lg ? ` data-lg="${lg}"` : ''}>${l}</button>`).join('')}</div>`;
-  topIn.after(row); if (syncEl) row.appendChild(syncEl);
+  top.after(row); if (syncEl) row.appendChild(syncEl);
+  el('tbNav').insertAdjacentHTML('beforeend', `<span class="tb-sp-w"><button class="tbn tb-spbtn" id="tbSpBtn" aria-haspopup="true" aria-expanded="false" aria-controls="tbSpPop">Sports<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="tb-sppop" id="tbSpPop" role="group" aria-label="Sports" hidden>${CHIPS.map(([k, l, sp, lg]) => `<button class="tbs" data-k="${k}" data-sport="${sp}"${lg ? ` data-lg="${lg}"` : ''}>${ic(k, 18)}${l}</button>`).join('')}</div></span>`);
+  const spBtn = el('tbSpBtn'), spPop = el('tbSpPop');
+  const spOpen = on => { spPop.hidden = !on; spBtn.setAttribute('aria-expanded', on); if (on) spPop.querySelector('button')?.focus() };
+  spBtn.addEventListener('click', () => spOpen(spPop.hidden));
+  document.addEventListener('click', ev => { if (!spPop.hidden && !ev.target.closest?.('.tb-sp-w')) spOpen(false); else if (ev.target.closest?.('#tbSpPop .tbs')) setTimeout(() => spOpen(false), 0) });
+  spPop.addEventListener('keydown', ev => {
+    const all = [...spPop.querySelectorAll('button')], i = all.indexOf(document.activeElement);
+    if (ev.key === 'Escape') { ev.preventDefault(); spOpen(false); return spBtn.focus() }
+    const j = /Down|Right/.test(ev.key) ? (i + 1) % all.length : /Up|Left/.test(ev.key) ? (i - 1 + all.length) % all.length : -1;
+    if (j >= 0) { ev.preventDefault(); all[j].focus() }
+  });
+  spPop.addEventListener('focusout', ev => { if (!spPop.hidden && !ev.relatedTarget?.closest?.('.tb-sp-w')) spOpen(false) });
+  // the bar stays at the top while scrolling (wide screens); pages that keep something sticky below it read --top-h
+  const topH = () => root.style.setProperty('--top-h', (matchMedia('(min-width:821px)').matches ? top.offsetHeight : 0) + 'px');
+  new ResizeObserver(topH).observe(top); addEventListener('resize', topH); topH();
+  let stuckT = 0; addEventListener('scroll', () => { if (stuckT) return; stuckT = requestAnimationFrame(() => { stuckT = 0; top.classList.toggle('stuck', scrollY > 4) }) }, { passive: true });
   el('tbSearch').addEventListener('click', () => { const on = !top.classList.contains('search-open'); top.classList.toggle('search-open', on); el('tbSearch').setAttribute('aria-expanded', on); if (on) search?.querySelector('input')?.focus() });
 
   // College football and College basketball are the Football and Basketball pages with the college league chosen first
@@ -202,6 +223,11 @@
     tidyRail();
     const k = current(), n = liveCount(), onSport = !pages()?.current() && !root.classList.contains('hub-on');
     root.classList.toggle('sport-on', onSport);
+    const pg = pages()?.current(), v = (() => { try { return S.stack?.[S.stack.length - 1] } catch (e) { return null } })();
+    const profile = !!v && /player$/.test(v.type || '') && !!document.getElementById('sheet')?.classList.contains('open');
+    const chrome = profile || pg === 'predictions' || pg === 'lab' ? 'bare' : !pg || pg === 'live' ? 'full' : 'menu';
+    if (root.dataset.chrome !== chrome) { root.dataset.chrome = chrome; if (chrome !== 'menu') spOpen(false) }
+    spBtn.classList.toggle('on', chrome === 'menu' && onSport);
     mark([...el('tbNav').querySelectorAll('.tbn')], el('tbNav').querySelector(`.tbn[data-k="${k}"]`));
     const chip = onSport ? el('tbSports').querySelector(`.tbs[data-k="${chipKey()}"]`) : null; mark([...el('tbSports').querySelectorAll('.tbs')], chip);
     el('tbMembers').classList.toggle('on', k === 'members');
@@ -217,6 +243,7 @@
   document.addEventListener('click', () => setTimeout(sync, 0));
   document.addEventListener('fl:me', () => { if (!menu.hidden) drawMenu() });
   if (rail) new MutationObserver(() => { tidyRail(); queueMicrotask(sync) }).observe(rail, { childList: true });
+  { const sh = document.getElementById('sheet'); if (sh) new MutationObserver(() => queueMicrotask(sync)).observe(sh, { attributes: true, attributeFilter: ['class'] }) }
   addEventListener('resize', sync);
   sync();
   /* Drawn icons are decoration: an <svg> with no role, label or <title> is hidden from screen readers, so a reader never
