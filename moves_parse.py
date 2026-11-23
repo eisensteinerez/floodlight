@@ -157,6 +157,49 @@ def contract_of(s):
     return c[0].upper() + c[1:] if c and c not in ("contract", "a contract") else ""
 
 
+NUM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+WORD_NUM = {v: k for k, v in NUM_WORDS.items()}
+DEAL = re.compile(r"\b(?:to|on|for) (?:a|an)\s+((?:[^.;]|(?<=\d)\.(?=\d))*?\b(?:contracts? extensions?|extensions?|contracts?|deals?))\b", re.I)
+MONEY = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?(?:\s*(?:million|billion)|[mMkK]\b)?")
+
+
+def contract_terms(s):
+    """What one sentence says about the contract, and nothing it does not: {"summary", "length", "money", "type", "text"}.
+    Only the words of a contract phrase count ("to a two-year, $10 million contract", "on a one-year deal",
+    "to a 10-day contract", "to a rest-of-season contract", "worth $120 million"), so "the 10-day injured list"
+    is not a contract. An empty dict when the sentence says nothing about the deal."""
+    s = re.sub(r"\btwpo\b", "two", str(s or ""), flags=re.I)
+    m = DEAL.search(s)
+    if not m:
+        return {}
+    phrase, low = m.group(1), m.group(1).lower()
+    length = ""
+    y = re.search(r"\b(\d{1,2}|" + "|".join(NUM_WORDS) + r")[- ]years?\b", low)
+    d = re.search(r"\b(\d{1,2}|ten)[- ]day\b", low)
+    if y:
+        n = int(y.group(1)) if y.group(1).isdigit() else NUM_WORDS[y.group(1)]
+        length = f"{WORD_NUM.get(n, n)}-year" if n > 0 else ""
+    elif d:
+        length = "10-day" if d.group(1) == "ten" else f"{int(d.group(1))}-day"
+    elif re.search(r"rest[- ]of[- ](?:the[- ])?season", low) or re.search(r"\bfor the rest of the season\b", s, re.I):
+        length = "rest-of-season"
+    elif re.search(r"\bmulti-?year\b", low):
+        length = "multiyear"
+    kind = ("two-way" if re.search(r"\btwo[- ]way\b", low) else "Exhibit 10" if re.search(r"\bexhibit[- ]10\b", low)
+            else "minor league" if re.search(r"\bminor[- ]league\b", low) else "reserve/future" if re.search(r"reserve/futures?", low)
+            else "non-guaranteed" if re.search(r"\bnon-?guaranteed\b", low) else "")
+    ext = bool(re.search(r"\bextension", low))
+    money = MONEY.search(phrase) or re.search(r"\bworth (?:up to )?(" + MONEY.pattern + ")", s)
+    money = (money.group(1) if money and money.re is not MONEY else money.group(0) if money else "").strip()
+    money = re.sub(r"\s*([mM])$", " million", re.sub(r"\s*([kK])$", " thousand", money)) if money else ""
+    if not (length or kind or ext or money):
+        return {}
+    noun = "contract extension" if ext else "contract"
+    summary = " ".join(x for x in (length, kind, noun) if x)
+    summary = summary[0].upper() + summary[1:]
+    return {"summary": summary + (f", {money}" if money else ""), "length": length, "money": money, "type": kind or ("extension" if ext else ""), "text": phrase}
+
+
 def classify(s):
     """(kind, the words that name the players, the words after them) for one sentence."""
     low = s.lower()
@@ -339,6 +382,10 @@ def public(e):
     """The event as the page gets it."""
     side = e.get("side")
     keep = {k: e.get(k) for k in ("id", "lg", "date", "team", "kind", "label", "group", "sentence", "text", "contract", "other", "conf", "checks", "player", "notes")}
+    if e["kind"] != "trade":
+        terms = contract_terms(e.get("sentence"))
+        if terms:
+            keep["terms"] = terms
     if e["kind"] == "trade":
         keep.update({k: e.get(k) for k in ("players_in", "players_out", "assets_in", "assets_out", "three_team", "others")})
         if side:

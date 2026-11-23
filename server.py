@@ -1044,6 +1044,13 @@ def _mlb_moves(days=21):
         out.append({"id": str(t.get("id") or len(out)), "date": t.get("date") or t.get("effectiveDate"), "text": text[:600], "code": t.get("typeCode") or "", "kind": t.get("typeDesc") or "",
                     "player": {"id": str(person.get("id") or ""), "name": person.get("fullName") or ""} if person.get("id") else None,
                     "from": side(t.get("fromTeam")), "to": side(t.get("toTeam"))})
+        try:   # the contract, only when the sentence states it ("to a minor league contract")
+            import moves_parse
+            terms = moves_parse.contract_terms(text)
+            if terms:
+                out[-1]["terms"] = terms
+        except Exception:
+            pass
     out.sort(key=lambda m: m["date"], reverse=True)
     return out[:600]
 
