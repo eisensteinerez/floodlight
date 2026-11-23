@@ -583,7 +583,7 @@ async function load(name, kind, o = {}) {
   try {
     const p = await api(`${kind}?sport=${S.sport}&name=${encodeURIComponent(name)}${o.stat ? '&stat=' + encodeURIComponent(o.stat) : ''}`);
     if (seq !== loadSeq) return;
-    p.kind = kind; S.p = p; S.venue = 'all'; S.comp = 'all'; S.res = 'all'; S.minMin = 0; S.maxMin = 0; S.season = 'all'; S.rest = 'all'; S.range = 'l10';
+    p.kind = kind; S.p = p; S.venue = 'all'; S.comp = 'all'; S.res = 'all'; S.minMin = 0; S.maxMin = 0; S.season = 'all'; S.rest = 'all'; S.range = 'l10'; S.ttab = 'overview';
     // season label and days of rest before each game, for the filters
     p.games.forEach((g, i) => { const d = new Date(String(g.date).slice(0, 10) + 'T12:00:00'), y = d.getFullYear(), m = d.getMonth();
       g.season = ['nba', 'nhl'].includes(p.sport) ? (m >= 7 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`) : p.sport === 'nfl' ? String(m >= 6 ? y : y - 1) : p.sport === 'soccer' ? (m >= 6 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`) : String(y);
@@ -681,25 +681,39 @@ function render() {
   const posted = postedFor(k), yn = (o, u) => yes ? (S.side === 'over' ? 'Yes' : 'No') : (S.side === 'over' ? o : u);
   const stats = [...p.stats].filter(s => s.n >= 3), has = new Map(); for (const x of p.lines) if (!has.has(x.k) || (x.book === 'prizepicks' && x.kind === 'standard')) has.set(x.k, x.line);
   if (p.kind !== 'team') stats.sort((a, b) => has.has(b.k) - has.has(a.k));
+  S.readTop = null; const rd = read(gs, meter, bp);   // worked out first, so its verdict can sit beside the line controls
   $('#view').innerHTML = `<div class="ws"><div class="ws-l">${hero(gs, meter)}<div class="tiles" id="s-hit" role="group" aria-label="Hit rates">${tiles(gs)}</div></div><div class="ws-r">
     <div class="stats" role="group" aria-label="Stat">${stats.map(s => `<button class="qf${s.k === k ? ' on' : ''}" data-k="${s.k}">${esc(s.l)}${has.has(s.k) && !isYes(s.k) ? `<span class="qv num">${fmt(has.get(s.k))}</span>` : ''}</button>`).join('')}</div>
     <div class="linebar">${yes ? '' : `<div class="lc"><span class="lbl">Line</span><button data-step="-1" aria-label="Lower the line">−</button><input id="line" class="num" type="number" inputmode="decimal" step="0.5" value="${S.line}" aria-label="Line"><button data-step="1" aria-label="Raise the line">+</button></div>`}
       <div class="seg ou"><button class="o${S.side === 'over' ? ' on' : ''}" data-side="over">${yes ? 'Yes' : 'Over'}</button><button class="u${S.side === 'under' ? ' on' : ''}" data-side="under">${yes ? 'No' : 'Under'}</button></div>
       ${posted.length ? `<div class="lines">${posted.map(o => `<button class="lchip${o.line === S.line ? ' on' : ''}" data-line="${o.line}"><b>${esc(BK[o.book] || String(o.book).slice(0, 3).toUpperCase())}</b><span class="num">${yes ? pc(o.pOver) : lineTxt(o.line)}</span>${o.kind && o.kind !== 'standard' ? ` <small>${esc(o.kind)}</small>` : ''}${!yes && o.pOver != null ? ` <small>${pc(o.pOver)} over</small>` : ''}</button>`).join('')}</div>` : ''}
       <p class="sum">${esc(yn('Over', 'Under'))} ${yes ? '' : lineTxt(S.line) + ' '}${esc(label(k).toLowerCase())}: <b>${R.n ? `${R.hit} of ${R.n - R.push}` : 'no games'}</b>${R.avg != null && !yes ? ` · average <b class="num">${f1(R.avg)}</b> · median <b class="num">${fmt(R.med)}</b>` : ''}${bp != null ? ` · the books give the ${esc(yn('over', 'under').toLowerCase())} <b class="num">${pc(S.side === 'over' ? bp : 1 - bp)}</b>` : ''}</p></div>
+      ${S.readTop ? `<p class="readmini"><span>The read</span><b>${S.readTop.lean}</b>${S.readTop.like ? `<em class="${S.readTop.up}">${S.readTop.like}</em>` : ''}<span class="num">${pc(S.readTop.p)} · fair ${S.readTop.fair} · projects ${f1(S.readTop.proj)}</span>${S.p.kind !== 'team' || (S.ttab || 'overview') === 'overview' ? '<a href="#s-read">Why</a>' : ''}</p>` : ''}
     <div id="s-chart"><div id="chart">${chart(shown)}</div></div></div></div>
-    ${profile(shown)}
-    ${(x => x ? sec(3, 'The read', 's-read') + x : '')(read(gs, meter, bp))}
-    ${(x => x ? sec(4, 'Line shopping', 's-lines') + x : '')(insights(shown, posted))}
-    ${(x => x ? sec(5, 'Season and matchups', 's-season') + x : '')(seasonMap(gs) + duels(gs))}
-    ${sec(6, 'Splits', 's-splits')}${filters()}
-    <div class="grid3">${splits(gs)}</div>
-    ${sec(7, p.kind === 'team' ? 'Every market' : 'Every prop', 's-props')}<div class="card">${propTable()}</div>
-    ${p.kind === 'team' ? teamExtras() : ''}
-    ${sec(8, 'Game log', 's-log')}<div class="card">${gameLog(shown)}</div>`;
+    ${p.kind === 'team' ? teamTabs() : ''}
+    ${lower(gs, shown, meter, bp, posted, rd)}`;
   mini(meter); after();
   tellPage({ view: p.kind, sport: p.sport, name: p.name, k, label: label(k), line: S.line, side: S.side, yes, heat: meter == null ? null : Math.round(meter * 100), photo: p.photo || '', team: p.team || '' });
   const on = document.querySelector('.stats .qf.on'); if (on) { const box = on.parentElement; if (on.offsetLeft + on.offsetWidth > box.scrollLeft + box.clientWidth || on.offsetLeft < box.scrollLeft) box.scrollLeft = Math.max(0, on.offsetLeft - 40) }
+}
+/* A team page is long, so below the workspace it is split into tabs: Overview, Trends, Splits, Markets, Roster and
+   Game log. A player page keeps every section in one scroll. */
+const TTABS = [['overview', 'Overview'], ['trends', 'Trends'], ['splits', 'Splits'], ['markets', 'Markets'], ['roster', 'Roster'], ['log', 'Game log']];
+function teamTabs() { const cur = S.ttab || 'overview';
+  return `<div class="ttabs" role="tablist" aria-label="Team sections">${TTABS.map(([k, l]) => `<button type="button" role="tab" id="tt-${k}" aria-selected="${cur === k}" aria-controls="ttp" tabindex="${cur === k ? 0 : -1}" data-ttab="${k}">${l}</button>`).join('')}</div>` }
+function lower(gs, shown, meter, bp, posted, rd) {
+  const team = S.p.kind === 'team', cur = S.ttab || 'overview', on = k => !team || cur === k; let n = 2;
+  const part = (k, t, id, body) => on(k) && body ? sec(++n, t, id) + body : '';
+  const h = [on('overview') ? profile(shown) : '',
+    part('overview', 'The read', 's-read', rd),
+    team && on('overview') ? teamStats() : '',
+    part(team ? 'markets' : 'overview', 'Line shopping', 's-lines', insights(shown, posted)),
+    part(team ? 'trends' : 'overview', 'Season and matchups', 's-season', seasonMap(gs) + duels(gs)),
+    part('splits', 'Splits', 's-splits', filters() + `<div class="grid3">${splits(gs)}</div>`),
+    part('markets', team ? 'Every market' : 'Every prop', 's-props', `<div class="card">${propTable()}</div>`),
+    team && on('roster') ? sec(++n, 'Roster', 's-roster') + (teamRoster() || '<div class="card"><p class="sub">No roster was found for this team.</p></div>') : '',
+    part('log', 'Game log', 's-log', `<div class="card">${gameLog(shown)}</div>`)].join('');
+  return team ? `<div id="ttp" role="tabpanel" aria-labelledby="tt-${cur}">${h || '<div class="card"><p class="sub">Nothing to show here for this team yet.</p></div>'}</div>` : h;
 }
 const sec = (n, t, id) => `<div class="sec" id="${id}"><i>${String(n).padStart(2, '0')}</i><b>${esc(t)}</b></div>`;
 // the slim bar that follows you down the page: who, the pick, the meter, and jumps to each section
@@ -860,6 +874,7 @@ function read(gs, meter, bp) {
   if (k !== 'min' && mins.length >= 10) { const m5 = avg(mins.slice(0, 5)), mAll = avg(mins.slice(0, 30)); if (mAll && Math.abs(m5 - mAll) / mAll >= .1) add(m5 > mAll === over ? 'up' : 'down', `Playing ${m5 > mAll ? 'more' : 'less'} lately: <b>${Math.round(m5)} minutes</b> a game over the last five, ${Math.round(mAll)} before that.`) }
   if (bp != null) { add(edge > .04 ? 'up' : edge < -.04 ? 'down' : 'flat', `The books price the ${sideTxt} at <b>${pc(imp)}</b>; the Lab makes it ${pc(meter)}, a gap of ${edge >= 0 ? '+' : '−'}${Math.abs(Math.round(edge * 100))} points.`) }
   if (vals.length < 12) add('flat', `Only ${vals.length} games to go on, so treat every number here as rough.`);
+  S.readTop = { lean, like, up: edge == null ? null : edge >= .035 ? 'up' : edge <= -.035 ? 'down' : '', p: meter, fair: american(meter), proj };
   return `<div class="card read ${strength ? (meter > .5 ? 'pos' : 'neg') : ''}">
     <div class="read-v"><span>The read${like ? ` · <em class="${edge >= .035 ? 'up' : edge <= -.035 ? 'down' : ''}">${like}</em>` : ''}</span><strong>${lean}</strong>
       <div class="read-n"><div><b class="num">${pc(meter)}</b><small>estimated chance</small></div><div><b class="num">${american(meter)}</b><small>fair price</small></div><div><b class="num">${f1(proj)}</b><small>projection</small></div><div><b class="num">${J.fair != null ? lineTxt(J.fair) : '–'}</b><small>fair line</small></div>${edge != null ? `<div><b class="num ${edge >= .035 ? 'up' : edge <= -.035 ? 'down' : ''}">${edge >= 0 ? '+' : '−'}${Math.abs(Math.round(edge * 100))}</b><small>edge vs books, pts</small></div>` : ''}<div><b>${esc(J.conf || '–')}</b><small>confidence · ${J.n || 0} games</small></div></div>
@@ -981,16 +996,19 @@ function gameLog(shown) {
     <td><span class="${g.res === 'W' ? 'up' : g.res === 'L' ? 'down' : 'flat'}">${esc(g.res)}</span> ${esc(g.score)}</td>${team ? '' : `<td>${g.min == null ? '–' : Math.round(g.min)}</td>`}
     ${keys.map(k => { const v = g.v[k], t = isYes(k) && v != null ? (v ? '✓' : '·') : fmt(v); if (k !== S.k || v == null) return `<td>${t}</td>`; const h = hitCls(v, S.line, S.side); return `<td class="fc ${h === 'hit' ? 'cell-h' : h === 'miss' ? 'cell-m' : ''}">${t}</td>` }).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
-function teamExtras() {
+function teamStats() {
   const p = S.p, cats = {};
   for (const x of p.seasonStats || []) (cats[x.cat] = cats[x.cat] || []).push(x);
   const statCard = Object.keys(cats).length ? `<div class="card"><div class="chh"><b>Season stats</b><span>${esc([p.statsSeason, 'league rank where known'].filter(Boolean).join(' · '))}</span></div>
     <div class="scroll" style="max-height:420px">${Object.entries(cats).map(([c, xs]) => `<div class="lbl" style="margin:12px 0 7px">${esc(c)}</div>
     <div class="sgrid">${xs.slice(0, 18).map(x => `<div><div class="l">${esc(x.l)}</div><div class="v num">${esc(x.v)}</div>${x.pg ? `<div class="rk">${esc(x.pg)} per game</div>` : ''}${x.rank ? `<div class="rk">${esc(x.rank)} in the league</div>` : ''}</div>`).join('')}</div>`).join('')}</div></div>` : '';
-  const ros = (p.roster || []).length ? `<div class="card"><div class="chh"><b>Roster</b><span>tap a player to open them here</span></div>
+  return statCard ? `<div style="margin-top:12px">${statCard}</div>` : '';
+}
+function teamRoster() {
+  const p = S.p;
+  return (p.roster || []).length ? `<div class="card"><div class="chh"><b>Roster</b><span>tap a player to open them here</span></div>
     <div class="roster">${p.roster.map(r => `<button class="rp" data-player="${esc(r.name)}"><span class="av">${r.photo ? `<img src="${esc(r.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>
       <span class="rn"><b>${esc(r.name)}</b><small>${esc([r.num && '#' + r.num, r.pos].filter(Boolean).join(' · '))}${r.out ? ` · <em>${esc(r.out)}</em>` : ''}</small></span></button>`).join('')}</div></div>` : '';
-  return statCard || ros ? `<div class="${statCard && ros ? 'grid2' : ''}" style="margin-top:12px">${ros}${statCard}</div>` : '';
 }
 
 /* ---------- hot props ---------- */
@@ -1018,6 +1036,9 @@ function tabs() { document.querySelectorAll('#tabs button').forEach(b => b.class
 /* ---------- events ---------- */
 $('#sf').addEventListener('submit', e => { e.preventDefault(); const n = $('#q').value.trim(); if (n) load(n, S.tab === 'team' ? 'team' : 'player') });
 $('#sports').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.sport = b.dataset.sp; store.set('lab.sport', S.sport); drawSports(); if (S.tab !== 'board') { S.p = null } render() });
+document.addEventListener('click', e => { const t = e.target.closest('[data-ttab]'); if (!t) return; S.ttab = t.dataset.ttab; render(); document.getElementById('tt-' + S.ttab)?.focus(); const tb = document.querySelector('.ttabs'); if (tb && tb.getBoundingClientRect().top < 0) tb.scrollIntoView({ block: 'start' }) });
+document.addEventListener('keydown', e => { const t = e.target.closest?.('[data-ttab]'); if (!t || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return; e.preventDefault();
+  const i = TTABS.findIndex(x => x[0] === t.dataset.ttab), j = e.key === 'Home' ? 0 : e.key === 'End' ? TTABS.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + TTABS.length) % TTABS.length; document.getElementById('tt-' + TTABS[j][0])?.click() });
 $('#tabs').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; S.tab = t.dataset.t; tabs(); $('#msg').innerHTML = ''; render() });
 $('#recent').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.sport = b.dataset.s; load(b.dataset.n, b.dataset.t) });
 function setBack(nn) { const tot = pool(S.k).length; S.back = Math.max(1, Math.min(tot, nn)); S.range = S.back >= tot ? 'all' : S.back === 5 ? 'l5' : S.back === 10 ? 'l10' : S.back === 20 ? 'l20' : 'n'; const y = scrollY; render(); scrollTo(0, y) }
