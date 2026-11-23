@@ -14,6 +14,7 @@ nothing. Free: no AI, no paid service.
 
   python3 site_grader.py run      grade and save (what the workflow runs)
   python3 site_grader.py show     print the merged record's counts without grading or saving
+  python3 site_grader.py send     send the saved copy to the server again (after a deploy, once the new server is up)
 """
 import os
 import sys
@@ -99,6 +100,18 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
     if not gradebook.can_seal():
         print("Add the DISCORD_BOT_TOKEN secret to the repository (Settings > Secrets and variables > Actions) to grade the site here.")
+        sys.exit(0)
+    if cmd == "send":
+        if not FILE.exists():
+            sys.exit(0)
+        for i in range(4):
+            try:
+                gradebook._http(gradebook.SERVER, FILE.read_bytes(), timeout=90)
+                print("site grader: sent the saved record to the server")
+                break
+            except Exception as e:
+                print(f"site grader: the server didn't take the record ({type(e).__name__}: {e}); trying again in a minute")
+                time.sleep(60)
         sys.exit(0)
     setup()
     srv, gh = load()

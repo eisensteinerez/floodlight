@@ -1621,11 +1621,12 @@ def grading_absorb(got, by):
 
 def grading_restore():
     """After a deploy or restart, take GitHub's copy back in, so picks locked before the restart are never lost."""
-    time.sleep(20)
-    got = gradebook.mirror()
-    if got:
-        n = grading_absorb(got, "github")
-        print(f"grading: took GitHub's copy of the record ({n} picks changed)")
+    for wait in (20, 120, 300):     # GitHub's copy can take a few minutes to show after a push
+        time.sleep(wait)
+        got = gradebook.mirror()
+        if got:
+            n = grading_absorb(got, "github")
+            print(f"grading: took GitHub's copy of the record ({n} picks changed)")
 
 
 # ---------- parlays: what a member is tracking, and their record ----------
