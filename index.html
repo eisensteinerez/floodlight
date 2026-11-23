@@ -1528,16 +1528,16 @@ let sumSeq = 0;
 async function loadPickedEvent(id){
   const p = S.picks.find(x => String(x.id) === String(id)); if (!p) return null;
   if (p.src === 'fm' && p.fmId) { openFMMatch(p.fmId); return 'fm' }
-  const d = new Date(p.date), slug = p.slug || 'all';
+  const d = new Date(p.date), slug = p.slug || 'all'; let read = 0;
   for (const day of [d, new Date(+d - DAY), new Date(+d + DAY)]) {
     try {
-      const j = await getJSON(`${BASE}/${slug}/scoreboard?dates=${ymd(day)}`);
+      const j = await getJSON(`${BASE}/${slug}/scoreboard?dates=${ymd(day)}`); read++;
       const ev = (j.events || []).find(x => String(x.id) === String(id));
       const m = ev && norm(ev, slug);
       if (m) { S.extra.set(m.id, m); return m }
     } catch {}
   }
-  return null;
+  return read ? null : 'offline';   // the schedule answered and the game is not on it, or nothing answered at all
 }
 let selBusy = null;
 async function select(id){
@@ -1546,7 +1546,8 @@ async function select(id){
     selBusy = id; $('sheet').classList.add('open'); $('sheet').innerHTML = `<div class="sheet-body">${flSkeleton()}</div>`;
     const m = await loadPickedEvent(id).finally(() => { selBusy = null });
     if (m === 'fm') return;
-    if (!m) { $('announce').textContent = "Couldn't load that match."; $('sheet').innerHTML = `<div class="sheet-body">${flErrorState("Couldn't load that match", 'It may have been removed, or the connection dropped.', 'closesheet')}</div>`; return }
+    if (m === 'offline') { $('sheet').innerHTML = `<div class="sheet-body">${flErrorState("Couldn't reach the schedule", 'Check your connection, then open the match again.', 'closesheet', 'Close')}</div>`; return }
+    if (!m) { $('announce').textContent = 'This match is no longer available.'; $('sheet').innerHTML = `<div class="sheet-body">${flErrorState('This match is no longer available', 'The provider has taken it off the schedule, or it is a game that has expired.', 'closesheet', 'Close')}</div>`; return }
   }
   if (viewBlocked({ type: 'match' })) return;
   S.sel = id; S.summary = null; S.stack = [{type:'match', id}]; S.tblSeason = null;
@@ -3730,7 +3731,14 @@ function setBig(on){
   if (S.stack.length || S.sel) renderSheet();
   if (on) window.scrollTo({ top: 0 });
 }
-function closeSheet(quiet){   // quiet: closed by the site itself (a page or sport change), not by the user, so nothing is announced
+// The site's one spoken-status line is read once and then emptied, so an old message ("Following Arsenal", a goal) never
+// sits in the page for a screen reader to find later on Parlays or Members. Changing page empties it at once.
+(() => { const a = $('announce'); if (!a) return; let t = 0;
+  new MutationObserver(() => { clearTimeout(t); if (a.textContent) t = setTimeout(() => { a.textContent = '' }, 7000) }).observe(a, { childList: true, characterData: true, subtree: true });
+  document.addEventListener('fl:page', () => { clearTimeout(t); a.textContent = '' }) })();
+// Closing a match, a player, a team or any other panel says nothing: focus going back to where the reader was is the
+// signal. Only a match that has gone away is announced ("This match is no longer available"), see select().
+function closeSheet(quiet){
   const leagueRoot = S.stack.length === 1 && S.stack[0].type === 'league';
   if (S.big) setBig(false);
   S.sel = null; S.summary = null;
@@ -3740,7 +3748,6 @@ function closeSheet(quiet){   // quiet: closed by the site itself (a page or spo
   // closing a match inside a league goes back to that league; closing the league page itself empties the panel
   if (!leagueRoot && S.sport === 'soccer' && scopeLeague() && matchMedia('(min-width:821px)').matches) return openLeague(scopeLeague());
   S.stack = []; syncStage(); $('sheet').innerHTML = emptySheet();
-  if (!quiet) $('announce').textContent = 'Match closed';
 }
 function leagueData(v){
   const key = `${v.id}|${v.season}`;
