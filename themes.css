@@ -164,6 +164,21 @@ html[data-theme] body::after{display:none}
 .pg-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 24px;padding-top:8px}
 .pg-title{font:var(--display-weight) clamp(44px,6.6vw,76px)/.95 var(--font-display)!important;letter-spacing:var(--display-track)!important;margin:0}
 .pg-sub{margin:8px 0 0;font:500 17px/1.4 var(--font-body);color:var(--text-2);max-width:64ch}
+/* page help: shown in full once, then behind a "?" in the heading (flHelp in pages.js) */
+.pg-acts{display:flex;align-items:center;gap:10px;margin-left:auto}
+.hlp-q{display:inline-grid;place-items:center;flex:none;width:40px;height:40px;border-radius:50%;border:1px solid var(--border-2);background:transparent;color:var(--text-2);font:700 17px/1 var(--font-body);cursor:pointer;transition:color .15s var(--ease,ease),border-color .15s var(--ease,ease),background .15s var(--ease,ease)}
+.hlp-q:hover{color:var(--text);border-color:var(--accent)}
+.hlp-q[aria-expanded="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.hlp-q:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media (pointer:coarse){.hlp-q{width:44px;height:44px}}
+.hlp{display:grid;gap:10px;padding:18px 20px}
+.hlp[hidden]{display:none}
+.hlp-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hlp-h{margin:0;font:700 15px/1.3 var(--font-body);letter-spacing:0}
+.hlp-h:focus{outline:none}
+.hlp-b{display:grid;gap:8px;color:var(--text-2);font:400 14px/1.55 var(--font-body);max-width:78ch}
+.hlp-b p{margin:0}
+.hlp-b ul{margin:0;padding-left:18px;display:grid;gap:4px}
 /* pills and chips */
 .pl{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 12px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-2);font:600 13px/1 var(--font-body);color:var(--text-2);white-space:nowrap}
 .pl.solid{background:var(--accent-fill);color:var(--on-accent);border-color:transparent}
