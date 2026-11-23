@@ -45,6 +45,8 @@
     if (o.game) {   // a game: the hub's opener knows every sport's page
       window.flHub?.show?.(); const g = o.game;
       const b = document.createElement('button'); b.hidden = true; b.dataset.hub = `${g.sport}|${g.lg || ''}|${g.id}`; document.getElementById('hub')?.appendChild(b); b.click(); b.remove(); return }
+    if (o.page === 'trends') return window.flLab?.trends?.({ sport: o.filters?.sport, filters: o.filters });
+    if (o.page === 'transfers' && o.move && window.flTransfers?.showMove) return window.flTransfers.showMove(o.move);
     if (o.page) {
       window.flPages?.show?.(o.page);
       if (o.page === 'predictions' && o.pick) { const c = await wait(`#pg-predictions [data-pdk="${CSS.escape(o.pick)}"]`); if (c) { if (!c.querySelector('.pd-ev')) c.querySelector('.pd-open')?.click(); c.scrollIntoView({ block: 'center' }); c.querySelector('.pd-open')?.focus({ preventScroll: true }) } else window.toast?.('That pick is no longer on the board.') }

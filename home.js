@@ -367,7 +367,7 @@
       : WIRE.failed ? state('transfers', 'The moves didn’t load', 'The league lists didn’t answer.', retry('wire'))
       : !rows.length ? state('transfers', 'No moves this week', 'None of your leagues has listed a trade or signing lately.')
       : rows.map(t => `<div class="rw"><span class="hm-move" aria-hidden="true">${face(t.from?.logo, t.from?.short || t.from?.name || '–', 'avx av-sm')}${ico('arrow', 14)}${face(t.to?.logo, t.to?.short || t.to?.name || '–', 'avx av-sm')}</span>
-          <span class="rw-t"><b>${esc(t.player?.name || t.lead?.name || '')}</b><small>${esc([t.league, [t.from?.short || t.from?.name, t.to?.short || t.to?.name].filter(Boolean).join(' to '), day(t.when)].filter(Boolean).join(' · '))}</small></span><span class="pl">${esc(t.label)}</span></div>`).join('');
+          <span class="rw-t"><b>${esc(t.player?.name || t.lead?.name || '')}</b><small>${esc([t.league, t.says?.line || [t.from?.short || t.from?.name, t.to?.short || t.to?.name].filter(Boolean).join(' to '), day(t.when)].filter(Boolean).join(' · '))}</small></span><span class="pl">${esc(t.label)}</span></div>`).join('');
     return `<section class="card hm-c3" aria-label="Transfer wire"><div class="sec-h"><h2>Transfer wire</h2><button type="button" class="lk" data-shell="transfers">All moves</button></div><div class="hm-rows">${body}</div></section>`;
   }
   function labCard() {
@@ -482,7 +482,7 @@
     // 5 a transfer: one involving a team you follow, else the latest trade, else the latest signing
     const F = favList(), yours = t => [t.from, t.to, t.lead].some(x => x && F.some(f => (f.name || '').toLowerCase() === String(x.name || '').toLowerCase()));
     const mv = (WIRE.rows || []).find(yours) || (WIRE.rows || []).find(t => t.type === 'trade' || t.type === 'transfer') || (WIRE.rows || [])[0];
-    if (mv && Date.now() - mv.when < 4 * 864e5) out.push({ i: 'transfers', shell: 'transfers', t: `<b>${esc(mv.label)}:</b> ${esc(mv.player?.name || mv.lead?.name || '')}${mv.to?.name ? `, to ${esc(mv.to.short || mv.to.name)}` : mv.from?.name ? `, from ${esc(mv.from.short || mv.from.name)}` : ''}.`,
+    if (mv && Date.now() - mv.when < 4 * 864e5) out.push({ i: 'transfers', shell: 'transfers', t: mv.says?.line ? `<b>${esc(mv.label)}:</b> ${esc(mv.player?.name || mv.lead?.name || '')}. ${esc(mv.says.line.replace(/\.$/, ''))}.` : `<b>${esc(mv.label)}:</b> ${esc(mv.player?.name || mv.lead?.name || '')}${mv.to?.name ? `, to ${esc(mv.to.short || mv.to.name)}` : mv.from?.name ? `, from ${esc(mv.from.short || mv.from.name)}` : ''}.`,
       why: yours(mv) ? 'Involves a team you follow' : mv.type === 'trade' || mv.type === 'transfer' ? `The latest ${mv.type} in ${mv.league || 'your leagues'}` : `The latest move in ${mv.league || 'your leagues'}` });
     // 6 where to watch: national TV games still to start
     const tv = pre.filter(g => g.tvNat).sort((x, y) => pts(y) - pts(x) || x.date - y.date).slice(0, 2).sort((x, y) => x.date - y.date);
