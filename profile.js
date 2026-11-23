@@ -132,7 +132,7 @@
     const big = !!window.S?.big;
     return `<div class="pf-nav"><nav class="pf-crumbs" aria-label="Breadcrumb"><ol>${items}</ol></nav>
       <div class="pf-nav-go">${fromSearch ? `<button type="button" class="bt sm ghost" data-pfcrumb="search">${ic('left', 16)}Back to search results</button>` : ''}
-        <button type="button" class="bt sm ghost" data-act="expand" aria-pressed="${big}">${big ? 'Close full page' : 'Open full player page'}</button></div></div>`;
+        <button type="button" class="bt sm ghost" data-act="expand">${big ? 'Close full page' : 'Open full player page'}</button></div></div>`;
   }
 
   /* ---------- the header card: the compact overview ----------
@@ -161,9 +161,9 @@
     const chipHTML = lead.length ? `<ul class="pfh-chips">${lead.map(c => `<li class="pl">${esc(c)}</li>`).join('')}${more.length ? `<li><details class="pfh-more"><summary class="pl">More bio</summary><ul class="pfh-chips">${more.map(c => `<li class="pl">${esc(c)}</li>`).join('')}</ul></details></li>` : ''}</ul>` : '';
     // follow, compare, add to board
     const fol = following(o);
-    const acts = o.id && o.name ? `<div class="pfh-acts">${window.flTransfers?.follow && !o.noFollow ? `<button type="button" class="bt sm${fol ? '' : ' ghost'}" data-pfact="follow" aria-pressed="${fol}">${ic(fol ? 'check' : 'bell', 16)}${fol ? 'Following' : 'Follow'}</button>` : ''}
-      ${lab && window.flLab?.compare ? `<button type="button" class="bt sm ghost" data-pfact="compare">${ic('compare', 16)}Compare</button>` : ''}
-      ${lab && window.flBoards ? `<button type="button" class="bt sm ghost" data-pfact="board">${ic('plus', 16)}Add to board</button>` : ''}</div>` : '';
+    const acts = o.id && o.name ? `<div class="pfh-acts">${window.flTransfers?.follow && !o.noFollow ? `<button type="button" class="bt sm${fol ? '' : ' ghost'}" data-pfact="follow" aria-pressed="${fol}" aria-label="Follow ${esc(o.name)}">${ic(fol ? 'check' : 'bell', 16)}${fol ? 'Following' : 'Follow'}</button>` : ''}
+      ${lab && window.flLab?.compare ? `<button type="button" class="bt sm ghost" data-pfact="compare" aria-label="Compare ${esc(o.name)} with another player">${ic('compare', 16)}Compare</button>` : ''}
+      ${lab && window.flBoards ? `<button type="button" class="bt sm ghost" data-pfact="board" aria-label="Add to board: ${esc(o.name)}">${ic('plus', 16)}Add to board</button>` : ''}</div>` : '';
     // the headline numbers: each one once, with its rank and percentile
     const tiles = stats.length ? `<div class="pfh-stats">${stats.map(s => { const rl = s.n != null ? F().rankLine(s.rank, s.n, s.pc) : (s.rank || '');
       return `<div class="tile"><span class="lb">${esc(s.label)}</span><b class="num">${esc(s.value)}</b>${s.unit ? `<small class="pfh-u">${esc(s.unit)}</small>` : ''}${rl ? `<em>${esc(rl)}</em>` : ''}</div>` }).join('')}</div>` : '';
