@@ -380,7 +380,8 @@
   window.flPages?.add('boards', { title: 'Research boards', render: boardsPage, fresh: true, onHide() { BV.edit = BV.del = null; BV.err = '' } });
 
   window.flLab = { open, recent: () => L.recent, boards: () => L.boards,
-    compare: (a = {}) => { if (denied()) return window.flPages.show('lab'); if (show()) openTools('compare', { sport: a.sport, name: a.name, stat: a.stat }) },
+    // a saved comparison reopens with both players and its choices: { sport, a, b, stat, statB, win, preset, mode, venue, vs }
+    compare: (a = {}) => { if (denied()) return window.flPages.show('lab'); if (show()) openTools('compare', a.a && a.b ? { sport: a.sport, a: a.a, b: a.b, stat: a.stat, statB: a.statB, win: a.win, preset: a.preset, mode: a.mode, venue: a.venue, vs: a.vs } : { sport: a.sport, name: a.name, stat: a.stat }) },
     trends: (a = {}) => { if (denied()) return window.flPages.show('lab'); if (show()) openTools('trends', { sport: a.sport }) } };
   window.flPages?.add('lab', { title: 'The Lab', render,
     onShow(el) { if (denied() !== !$('labAsk')) render(el); if (L.engine === 'classic') { try { const r = $('rs'); if (r) { r.hidden = false; S.rs.open = true } } catch (e) {} } drawTry(); drawCast(); drawBoards(); if (L.picks == null) loadPicks() } });
