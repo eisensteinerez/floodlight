@@ -30,7 +30,8 @@
   /* ---------- percentile: where a number ranks, red to green ---------- */
   function pctile(p, o = {}) {
     const v = Math.max(0, Math.min(100, Math.round(p))), hue = Math.round(v * 1.25);   // 0 red · 125 green
-    return `<div class="vz-pct" style="--p:${v}%;--h:${hue}" data-tip="${esc(`${o.label || ''} ${v}th percentile`)}"><span class="vz-pct-l">${esc(o.label || '')}</span><span class="vz-pct-t"><i></i></span><b class="num">${v}</b><small>${v >= 95 ? 'Top 5%' : v >= 90 ? 'Top 10%' : v >= 75 ? 'Top 25%' : ''}</small></div>`;
+    const P = window.flFmt ? window.flFmt.pct(v, { low: o.low }) : { line: v + ' percentile', tail: '' };
+    return `<div class="vz-pct" style="--p:${v}%;--h:${hue}" data-tip="${esc(`${o.label ? o.label + ': ' : ''}${P.line}`)}"><span class="vz-pct-l">${esc(o.label || '')}</span><span class="vz-pct-t"><i></i></span><b class="num">${v}</b><small>${esc(o.low ? '' : P.tail)}</small></div>`;
   }
   /* ---------- story card: one big number and a sentence ---------- */
   function story(o) {
@@ -187,44 +188,56 @@
   }, true);
 
 
-  /* ---------- player board: the "stats and ranks" page for every sport ----------
-     rows: [{ label, short, val, rank, n, pc (0-100, 100 = best), spark: [last games, oldest first] }]
-     o: { color, peers ('NBA players'), season, note, radar: [short labels to put on the radar] }
-     One moment per screen: the radar. Around it, quiet: three stat stories, percentile bars, then the sortable table. */
+  /* ---------- player board: the "stats and ranks" view for every sport ----------
+     rows: [{ label, short, val, rank, n, pc (0-100, 100 = best), spark: [last games, oldest first], low: { good, noun } when fewer is better }]
+     o: { color, peers ('NBA players'), season, note, radar: [short labels to put on the radar], parts: ['stories','radar','bars','table'] }
+     Every rank and percentile is said one way (fmt.js): "66th of 384 · 83rd percentile", "83rd percentile · Top 17%",
+     and for a stat where fewer is better, "87th percentile for ball security · Fewer turnovers than 87% of NBA players".
+     Which parts show follows the profile's view (Summary: the three strongest; Standard: every stat as a bar and the
+     table; Advanced: the radar too) unless the page asks for its own parts. */
   const pcHue = pc => pc >= 50 ? `color-mix(in oklab,var(--win) ${Math.round((pc - 50) * 2)}%,var(--muted))` : `color-mix(in oklab,var(--loss) ${Math.round((50 - pc) * 2)}%,var(--muted))`;
-  const topTxt = pc => pc >= 50 ? `Top ${Math.max(1, 100 - pc)}%` : `Bottom ${Math.max(1, pc)}%`;
-  const ord = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]) };
+  const P_ = (pc, o) => window.flFmt ? window.flFmt.pct(pc, o) : { line: pc + ' percentile', head: pc + ' percentile', tail: '' };
+  const topTxt = pc => P_(pc).tail;
+  const ord = n => window.flFmt ? window.flFmt.ord(n) : n + 'th';
+  const rankLine = (r) => window.flFmt ? window.flFmt.rankLine(r.rank, r.n, r.pc) : '';
   function radarBig(items, col, peers) {
     const N = items.length; if (N < 3) return '';
     const R = 118, C = 160, pt = (i, f) => { const a = -Math.PI / 2 + i * 2 * Math.PI / N; return [C + Math.cos(a) * R * f, C + Math.sin(a) * R * f] };
     const ring = f => items.map((_, i) => pt(i, f).map(x => x.toFixed(1)).join(',')).join(' ');
     const poly = items.map((x, i) => pt(i, Math.max(.04, x.pc / 100)).map(v => v.toFixed(1)).join(',')).join(' ');
     const id = 'pbg' + Math.random().toString(36).slice(2, 7);
-    return `<svg class="pb-radar-svg" viewBox="0 0 320 320" role="img" aria-label="${esc(`Percentile against ${peers}: ` + items.map(x => `${x.label} ${x.pc}`).join(', '))}">
+    return `<svg class="pb-radar-svg" viewBox="0 0 320 320" role="img" aria-label="${esc(`Percentile against ${peers}: ` + items.map(x => `${x.label} ${ord(x.pc)}`).join(', '))}">
       <defs><radialGradient id="${id}" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="${col}" stop-opacity=".15"/><stop offset="1" stop-color="${col}" stop-opacity=".55"/></radialGradient></defs>
       ${[.25, .5, .75, 1].map(f => `<polygon class="pb-ring${f === .5 ? ' mid' : ''}" points="${ring(f)}"/>`).join('')}
       ${items.map((_, i) => { const [x, y] = pt(i, 1); return `<line class="pb-spoke" x1="${C}" y1="${C}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>` }).join('')}
       <polygon class="pb-area" points="${poly}" fill="url(#${id})" stroke="${col}"/>
       ${items.map((x, i) => { const [px, py] = pt(i, Math.max(.04, x.pc / 100)), [lx, ly] = pt(i, 1.2);
-        return `<g class="pb-v" data-tip="${esc(`${x.label}: ${x.val} · ${ord(x.pc)} percentile`)}" tabindex="0"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="12" class="pb-hit"/><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${col}"/>
+        return `<g class="pb-v" data-tip="${esc(`${x.label}: ${x.val} · ${P_(x.pc, { low: x.low }).line}`)}" tabindex="0"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="12" class="pb-hit"/><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${col}"/>
           <text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" dy=".35em" text-anchor="${Math.abs(lx - C) < 8 ? 'middle' : lx > C ? 'start' : 'end'}">${esc(x.short)}</text></g>` }).join('')}</svg>`;
+  }
+  function boardParts(o) {
+    if (o.parts) return o.parts;
+    const m = window.flProfile?.mode?.() || 'standard';
+    // each stat appears once per view: as a bar, or as a table row, never both
+    return m === 'summary' ? ['stories'] : m === 'standard' ? ['bars'] : ['radar', 'bars'];
   }
   function playerBoard(rows, o = {}) {
     rows = (rows || []).filter(r => r && r.pc != null && isFinite(r.pc)); if (!rows.length) return '';
-    const col = o.color || 'var(--accent)', peers = o.peers || 'the league';
-    const best = rows.slice().sort((a, b) => b.pc - a.pc).slice(0, 3);
-    const stories = best.map(r => `<article class="pb-story" style="--c:${pcHue(r.pc)}"><b class="num">${esc(r.val)}</b><span>${esc(r.label)}</span>
-      <p>${esc(topTxt(r.pc))} of ${esc(peers)}${r.rank ? `, ${ord(r.rank)} of ${r.n}` : ''}</p></article>`).join('');
-    const rad = radarBig((o.radar ? rows.filter(r => o.radar.includes(r.short)) : rows).slice(0, 8), col, peers);
-    const bars = rows.slice().sort((a, b) => b.pc - a.pc).map(r => `<li style="--p:${r.pc}%;--c:${pcHue(r.pc)}"><span>${esc(r.label)}</span><i aria-hidden="true"><em></em></i><b class="num">${r.pc}</b><small>${esc(topTxt(r.pc))}</small></li>`).join('');
-    const table = `<div class="pb-tbl" role="region" aria-label="Every stat with league rank" tabindex="0"><table class="vz-sort"><thead><tr>
+    const col = o.color || 'var(--accent)', peers = o.peers || 'the league', parts = new Set(boardParts(o));
+    const sorted = rows.slice().sort((a, b) => b.pc - a.pc);
+    const say = r => P_(r.pc, { low: r.low, peers });
+    const stories = parts.has('stories') ? `<div class="pb-stories">${sorted.slice(0, 3).map(r => `<article class="pb-story" style="--c:${pcHue(r.pc)}"><b class="num">${esc(r.val)}</b><span>${esc(r.low ? r.label.replace(/\s*\(fewer is better\)/i, '') : r.label)}</span>
+      <p>${esc(r.low ? say(r).line : rankLine(r) || say(r).line)}</p>${r.low ? `<small>${esc(say(r).tail)}</small>` : !r.rank ? '' : `<small>${esc(say(r).tail)} of ${esc(peers)}</small>`}</article>`).join('')}</div>` : '';
+    const rad = parts.has('radar') ? radarBig((o.radar ? rows.filter(r => o.radar.includes(r.short)) : rows).slice(0, 8), col, peers) : '';
+    const bars = parts.has('bars') ? sorted.map(r => { const P = say(r); return `<li style="--p:${r.pc}%;--c:${pcHue(r.pc)}"><span>${esc(r.label.replace(/\s*\(fewer is better\)/i, ''))}<b class="num pb-val">${esc(r.val)}</b></span><i aria-hidden="true"><em></em></i>
+      <small>${esc(r.low ? P.line : `${r.rank ? ord(r.rank) + ' of ' + r.n + ' · ' : ''}${P.line}`)}${r.low ? `<span class="pb-low">${esc(P.tail)}</span>` : ''}</small></li>` }).join('') : '';
+    const table = parts.has('table') ? `<div class="pb-tbl" role="region" aria-label="Every stat with league rank" tabindex="0"><table class="vz-sort"><thead><tr>
       <th scope="col" tabindex="0" data-sort="0" aria-sort="none">Stat</th><th scope="col" tabindex="0" data-sort="1" class="r">Value</th><th scope="col" tabindex="0" data-sort="2" class="r">Rank</th><th scope="col" tabindex="0" data-sort="3" aria-sort="descending">Percentile</th><th scope="col">Last 10</th></tr></thead><tbody>
-      ${rows.slice().sort((a, b) => b.pc - a.pc).map(r => `<tr><td data-k="${esc(r.label)}">${esc(r.label)}</td><td class="r num" data-k="${parseFloat(r.val) || 0}">${esc(r.val)}</td><td class="r num" data-k="${r.rank || 9999}">${r.rank ? `${ord(r.rank)}<small> of ${r.n}</small>` : '–'}</td>
-        <td data-k="${r.pc}"><span class="pb-cell" style="--p:${r.pc}%;--c:${pcHue(r.pc)}"><i aria-hidden="true"><em></em></i><b class="num">${r.pc}</b></span></td><td>${r.spark?.length > 1 ? spark(r.spark, { label: r.label + ', last ' + r.spark.length + ' games', w: 76, h: 22 }) : ''}</td></tr>`).join('')}</tbody></table></div>`;
-    const six = window.flProfile?.statTiles(rows, peers);   // the six headline tiles: value, league rank, percentile bar
-    return `<div class="pb">${o.note ? `<p class="pb-note">${esc(o.note)}</p>` : ''}${six || `<div class="pb-stories">${stories}</div>`}
-      <div class="pb-grid">${rad ? `<figure class="pb-radar"><figcaption>Against ${esc(peers)}${o.season ? `, ${esc(o.season)}` : ''}</figcaption>${rad}<small>Percentile, 100 is best. Hover a point for the number.</small></figure>` : ''}
-        <section class="pb-bars" aria-label="Percentile by stat"><h5>Where ${esc(o.name || 'he')} ranks</h5><ul>${bars}</ul></section></div>${table}</div>`;
+      ${sorted.map(r => `<tr><td data-k="${esc(r.label)}">${esc(r.label)}</td><td class="r num" data-k="${parseFloat(r.val) || 0}">${esc(r.val)}</td><td class="r num" data-k="${r.rank || 9999}">${r.rank ? `${ord(r.rank)}<small> of ${r.n}</small>` : '–'}</td>
+        <td data-k="${r.pc}"><span class="pb-cell" style="--p:${r.pc}%;--c:${pcHue(r.pc)}" role="img" aria-label="${esc(say(r).head)}"><i aria-hidden="true"><em></em></i><b class="num" aria-hidden="true">${ord(r.pc)}</b></span><small class="pb-tail">${esc(r.low ? (r.low.noun ? `Fewer ${r.low.noun} than ${r.pc}%` : `Lower than ${r.pc}%`) : say(r).tail)}</small></td><td>${r.spark?.length > 1 ? spark(r.spark, { label: r.label + ', last ' + r.spark.length + ' games', w: 76, h: 22 }) : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
+    const grid = rad || bars ? `<div class="pb-grid${rad && bars ? '' : ' one'}${rad && !bars ? ' solo' : ''}">${rad ? `<figure class="pb-radar"><figcaption>Against ${esc(peers)}${o.season ? `, ${esc(o.season)}` : ''}</figcaption>${rad}<small>Percentile, 100 is best. Hover a point for the number.</small></figure>` : ''}
+        ${bars ? `<section class="pb-bars" aria-label="Percentile by stat"><h5>Every stat against ${esc(peers)}</h5><ul>${bars}</ul></section>` : ''}</div>` : '';
+    return `<div class="pb">${o.note ? `<p class="pb-note">${esc(o.note)}</p>` : ''}${stories}${grid}${table}</div>`;
   }
   // any table.vz-sort sorts by a header click (or Enter), numbers by their data-k
   document.addEventListener('click', ev => {

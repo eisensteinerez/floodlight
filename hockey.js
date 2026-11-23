@@ -675,18 +675,27 @@ function hkPlayerHero(v, back){
   const stats = (goalie ? [[['wins'], 'Wins'], [['goalsAgainstAverage', 'avgGoalsAgainst'], 'GAA'], [['savePct', 'savePercentage'], 'Save %'], [['shutouts'], 'Shutouts']]
     : [[['goals'], 'Goals'], [['assists'], 'Assists'], [['points'], 'Points'], [['plusMinus'], '+/-']]).map(([ns, lbl]) => ({ label: lbl, value: sv(ns) }));
   const season = seasonOf(hkStatCat(v))?.season?.displayName || '';
-  return flProfile.hero({ back, sport: l.key === 'nhl' || /nhl/.test(l.path || '') ? 'nhl' : '', heatSport: 'nhl', id: v.id, name: a?.displayName, color: col,
+  const nhl = l.key === 'nhl' || /nhl/.test(l.path || ''), inj = a?.injuries?.[0];
+  return flProfile.hero({ back, sport: nhl ? 'nhl' : '', heatSport: 'nhl', lab: nhl ? 'nhl' : '', id: v.id, name: a?.displayName, color: col, tabs: true,
+    sportName: 'Hockey', league: l.short || l.name, leagueKey: v.lg, teamName: t?.displayName || '',
+    avail: !a ? null : inj ? { text: inj.status || 'Injured', tone: /out|reserve/i.test(inj.status || '') ? 'out' : 'warn', what: inj.details?.type || '' } : a.status?.name ? { text: a.status.name, tone: /active/i.test(a.status.name) ? 'ok' : 'warn' } : null,
+    next: t?.id && l.path ? { path: 'hockey/' + l.path, teamId: t.id } : null,
     face: `<img class="face espn-shot" src="${esc(a?.headshot?.href || hkShot(v.id, l.path))}" alt="" ${hkFaceErr}>`,
     teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-hkteam="${esc(t.id)}" data-hkl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
     number: a?.displayJersey, position: a?.position?.displayName,
     chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.hand?.displayValue ? (goalie ? 'Catches ' : 'Shoots ') + a.hand.displayValue.toLowerCase() : '', a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace] : [],
-    status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span>` : '',
     stats, caption: esc(season) });
 }
 function hkPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
   if (!v.bio) return hkLoading();
-  if (v.tab === 'stats') {
+  const extra = flProfile.extra(v); if (extra != null) return extra;
+  if (v.tab === 'career') {
+    const cats = (v.stats?.categories || []).filter(c => c.statistics?.length);
+    if (!cats.length) return `<div class="note">No career numbers for this player yet.</div>`;
+    return `<div class="pf-pane-h"><h2 class="sr-only">Career</h2>${flProfile.modeBar()}</div>` + cats.map(c => flProfile.career(v, { avg: c, title: c.displayName || c.name || 'Career' })).join('') + `<p class="srcnote">Every season ESPN keeps for this player. Hover a column for its meaning.</p>`;
+  }
+  if (v.tab === 'overview' || v.tab === 'stats') {
     const cats = (v.stats?.categories || []).filter(c => c.statistics?.length);
     if (!cats.length) return `<div class="note">No stats for this player yet.</div>`;
     const pfRecent = flProfile.recent(v, flProfile.espnSeries(v.log, /^G/.test(v.bio?.position?.abbreviation || '') ? [['SV', 'Saves', 'saves'], ['GA', 'Goals against', 'goals against'], ['SA', 'Shots faced', 'shots']] : [['PTS', 'Points', 'points'], ['G', 'Goals', 'goals'], ['A', 'Assists', 'assists'], ['S', 'Shots', 'shots']]), { span: 'Season' });
@@ -699,10 +708,7 @@ function hkPlayerPane(v){
       const trend = per != null && l10 != null ? (l10 > per * 1.1 ? `Up lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)} for the season` : l10 < per * .9 ? `Quieter lately: ${l10.toFixed(2)} a game over the last ${sp.length}, against ${per.toFixed(2)}` : `Steady: ${l10.toFixed(2)} a game over the last ${sp.length}`) : (cur.season?.displayName || '');
       return `<article class="pb-story"><b class="num">${esc(val)}</b><span>${esc(k === 'G' ? 'Goals' : k === 'A' ? 'Assists' : k === 'PTS' ? 'Points' : k === 'SOG' ? 'Shots on goal' : k === 'W' ? 'Wins' : k)}</span>${sp.length > 1 ? flViz.spark(sp, { label: k + ', last ' + sp.length + ' games', w: 120, h: 26 }) : ''}<p>${esc(trend)}</p></article>` }).join('');
     const top = glance ? `<div class="pb"><div class="pb-stories">${glance}</div></div>` : '';
-    return pfRecent + top + cats.map(c => `<div class="sub-h"><h5>${esc(c.displayName || c.name)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${(c.labels || []).map((x, i) => `<th title="${esc(c.displayNames?.[i] || c.descriptions?.[i] || '')}">${esc(x)}</th>`).join('')}</tr></thead><tbody>
-      ${c.statistics.slice().reverse().map(s => `<tr><td class="t">${esc(s.season?.displayName || '')} <small>${esc((s.teamSlug || '').split('-').pop())}</small></td>${(s.stats || []).map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}
-      ${c.totals?.length ? `<tr class="tot"><td class="t">Career</td>${c.totals.map(x => `<td>${esc(x)}</td>`).join('')}</tr>` : ''}</tbody></table></div>`).join('')
-      + `<p class="srcnote">Every season ESPN keeps for this player. Hover a column for its meaning.</p>`;
+    return `<div class="pf-pane-h"><h2 class="sr-only">Overview</h2>${flProfile.modeBar()}</div>` + pfRecent + top + `<p class="pf-next-step lb">Season by season, with search and export, under <button type="button" class="lk" data-pftab="career">Career</button>.</p>`;
   }
   if (v.tab === 'log') {
     const g = v.log; if (!g?.seasonTypes?.length) return `<div class="note">No games logged this season.</div>`;
@@ -732,7 +738,7 @@ function hkNhlHero(v, back){
   const ht = p?.heightInInches ? `${Math.floor(p.heightInInches / 12)}′${p.heightInInches % 12}″` : '';
   const stats = !f ? [] : (goalie ? [['wins', 'Wins'], ['goalsAgainstAvg', 'GAA', 2], ['savePctg', 'Save %', 3], ['shutouts', 'Shutouts']] : [['goals', 'Goals'], ['assists', 'Assists'], ['points', 'Points'], ['plusMinus', '+/-']])
     .map(([k, l, d]) => ({ label: l, value: f[k] == null ? '–' : d ? (+f[k]).toFixed(d).replace(/^0\./, '.') : f[k] }));
-  return flProfile.hero({ back, sport: 'nhl', id: v.id, name: p ? `${hkTxt(p.firstName)} ${hkTxt(p.lastName)}` : '', color: col,
+  return flProfile.hero({ back, sport: 'nhl', lab: 'nhl', id: v.id, name: p ? `${hkTxt(p.firstName)} ${hkTxt(p.lastName)}` : '', color: col, tabs: true, sportName: 'Hockey', league: 'NHL', leagueKey: 'nhl',
     face: `<img class="face espn-shot" src="${esc(p?.headshot || SIL)}" alt="" ${hkFaceErr}>`,
     team: p?.teamLogo ? `<span class="pfh-team"><img src="${esc(p.teamLogo)}" alt=""><span>${esc(hkTxt(p.fullTeamName) || p.currentTeamAbbrev || '')}</span></span>` : '',
     number: p?.sweaterNumber, position: p ? ({ C: 'Centre', L: 'Left wing', R: 'Right wing', D: 'Defence', G: 'Goalie' }[p.position] || p.position || '') : '',
@@ -780,7 +786,7 @@ const HK_FS_KEYS = [['matches_played', 'GP'], ['goals', 'G'], ['assists', 'A'], 
 function hkFsPlayerHero(v, back){
   // the shared profile header (profile.js), as the NHL player pages use
   const p = v.p, col = '#' + fmColor(p?.teamName || v.slug); v.color = col;
-  return flProfile.hero({ back, sport: '', heatSport: 'none', id: v.id, name: p?.name, color: col,
+  return flProfile.hero({ back, sport: '', heatSport: 'none', id: v.id, name: p?.name, color: col, tabs: true, sportName: 'Hockey',
     face: `<img class="face espn-shot" src="${esc(p?.photo || SIL)}" alt="" ${hkFaceErr}>`,
     team: p?.teamId ? `<span class="pfh-team"><button class="linkbtn" data-hkteam="${esc(p.teamId)}" data-hkslug="${esc(p.teamSlug)}" data-hkl="${esc(v.lg)}">${esc(p.teamName || p.teamSlug)}</button></span>` : '',
     position: p?.position, chips: p ? [p.age ? 'Age ' + p.age : '', p.born ? 'Born ' + p.born : '', p.height, p.weight, p.flag ? p.flag.toUpperCase() : ''] : [] });
@@ -847,9 +853,9 @@ function hkRenderSheet(v){
   let hero, tabs, body;
   if (v.type === 'hkgame') { hero = hkHero(v.e, back); tabs = hkGameTabs(v); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = hkPane(v) }
   else if (v.type === 'hkteam') { hero = hkTeamHero(v, back); tabs = [['roster', 'Roster'], ['sched', 'Schedule'], ['stats', 'Team stats'], ['stand', 'Standings']]; body = hkTeamPane(v) }
-  else if (v.type === 'hkplayer') { hero = hkPlayerHero(v, back); tabs = [['stats', 'Stats'], ['log', 'Game log'], ['splits', 'Splits']]; body = hkPlayerPane(v) }
-  else if (v.type === 'hknhlp') { hero = hkNhlHero(v, back); tabs = [['stats', 'Career'], ['log', 'Game log']]; body = hkNhlPane(v) }
-  else { hero = hkFsPlayerHero(v, back); tabs = [['stats', 'Season stats'], ['log', 'Recent games']]; body = hkFsPlayerPane(v) }
+  else if (v.type === 'hkplayer') { hero = hkPlayerHero(v, back); tabs = flProfile.tabs([['overview', 'Overview'], ['log', 'Game log'], ['splits', 'Splits'], ['career', 'Career']]); if (!tabs.some(t => t[0] === v.tab)) v.tab = 'overview'; body = hkPlayerPane(v) }
+  else if (v.type === 'hknhlp') { hero = hkNhlHero(v, back); tabs = flProfile.tabs([['stats', 'Career'], ['log', 'Game log']]); body = flProfile.extra(v) ?? hkNhlPane(v) }
+  else { hero = hkFsPlayerHero(v, back); tabs = flProfile.tabs([['stats', 'Season stats'], ['log', 'Recent games']]); body = flProfile.extra(v) ?? hkFsPlayerPane(v) }
   S.curTabs = tabs;
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${hero}${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel" style="--tc:${esc(v.color || 'var(--accent)')}">${body}</div></div>`;

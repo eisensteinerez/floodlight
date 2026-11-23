@@ -458,7 +458,7 @@ async function tnPlayerEspn(v){
 }
 function tnPlayerHero(v, back){
   const p = v.p, es = v.espn, b = v.espnBio, fav = S.fav.some(f => f.id === 'tn-' + v.id);
-  return flProfile.hero({ back, sport: 'tennis', id: v.id, name: p?.name, color: 'var(--accent)', cls: 'tn-phero',
+  return flProfile.hero({ back, sport: 'tennis', id: v.id, name: p?.name, color: 'var(--accent)', cls: 'tn-phero', tabs: true, noFollow: true, sportName: 'Tennis',
     face: `<img class="face espn-shot" src="${esc(es?.photo || p?.photo || SIL)}" data-alt="${esc(es?.photo && p?.photo ? p.photo : '')}" alt="" ${tnFaceErr}>`,
     team: p?.country ? `<span class="pfh-team">${es?.flag ? `<img class="tn-flag" src="${esc(es.flag)}" alt="">` : ''}<span>${esc(p.country)}</span></span>` : '',
     status: p?.injury ? `<span class="stat-badge injured">${esc(p.injury)}</span>` : '',
@@ -576,7 +576,7 @@ function tnRenderSheet(v){
   const sheet = $('sheet'), back = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
   let hero, tabs, body;
   if (v.type === 'tngame') { hero = tnHero(v, back); tabs = tnGameTabs(v); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = tnPane(v) }
-  else { hero = tnPlayerHero(v, back); tabs = [['overview', 'Overview'], ['stats', 'Stats'], ['splits', 'Splits'], ['log', 'Matches'], ['titles', 'Titles']]; body = tnPlayerPane(v) }
+  else { hero = tnPlayerHero(v, back); tabs = flProfile.tabs([['overview', 'Overview'], ['stats', 'Stats'], ['splits', 'Splits'], ['log', 'Matches'], ['titles', 'Titles']]); body = flProfile.extra(v) ?? tnPlayerPane(v) }
   S.curTabs = tabs;
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${hero}${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel" style="--tc:var(--accent)">${body}</div></div>`;

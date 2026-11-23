@@ -1181,6 +1181,8 @@ document.addEventListener('error', ev => {
 <script src="predict.js"></script>
 <script src="whatif.js"></script>
 <script src="sportfx.js"></script>
+<script src="fmt.js"></script>
+<script src="admin.js"></script>
 <script src="statfx.js"></script>
 <script>
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
@@ -2422,7 +2424,7 @@ function goBack(){
 
 function renderInfo(v){
   const sheet = $('sheet');
-  const tabs = v.type === 'team'
+  let tabs = v.type === 'team'
     ? [['overview','Overview'],['calendar','Calendar'],['squad','Squad'],['xi','Predicted XI'],['transfers','Transfers'],['fixtures','Fixtures'],['news','News'],['table','Table']]
     : v.type === 'league' ? leagueTabs(v)
     : v.type === 'fmteam' ? [['calendar','Calendar'],['squad','Squad'],['fixtures','Fixtures'],['table','Table'],['transfers','Transfers']]
@@ -2432,7 +2434,8 @@ function renderInfo(v){
   S.curTabs = tabs;
   const backBtn = S.stack.length > 1 ? `<button class="back" data-act="back" aria-label="Back">${BACK}Back</button>` : '<span></span>';
   const heroHTML = v.type === 'pmatch' ? pmHero(v, backBtn) : v.type === 'fmteam' ? fmTeamHero(v, backBtn) : v.type === 'team' ? teamHero(v, backBtn) : v.type === 'league' ? leagueHero(v, backBtn) : v.type === 'tc' ? tcHero(backBtn) : playerHero(v, backBtn);
-  const body = v.type === 'pmatch' ? pmPane(v) : v.type === 'fmteam' ? (v.data?.error ? `<div class="note">Couldn't find this team on FotMob.</div>` : !v.fmTeam ? `<div class="skel" style="height:260px"></div>` : fmTeamPane(v))
+  if (v.type === 'player' && window.flProfile) { tabs = flProfile.tabs(tabs); S.curTabs = tabs; const x = flProfile.extra(v); if (x != null) v.pfExtra = x; else delete v.pfExtra }   // Awards and Transactions tabs (profile.js)
+  const body = v.pfExtra != null ? v.pfExtra : v.type === 'pmatch' ? pmPane(v) : v.type === 'fmteam' ? (v.data?.error ? `<div class="note">Couldn't find this team on FotMob.</div>` : !v.fmTeam ? `<div class="skel" style="height:260px"></div>` : fmTeamPane(v))
     : v.type === 'league' ? leaguePane(v) : v.type === 'tc' ? tcPane(v) : !v.data ? `<div class="skel" style="height:260px"></div>` : v.data.error ? `<div class="note">Couldn't load this ${v.type}. Check your connection and try again.</div>`
     : v.type === 'team' ? teamPane(v) : playerPane(v);
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
@@ -2837,7 +2840,7 @@ function playerHero(v, back){
     : ss.slice(0, 4).map(x => ({ label: x.displayName.replace('Starts-Substitute Appearances', 'Starts (sub)'), value: x.displayValue }));
   const caption = fmSt.length ? `${esc(f.mainLeague.name || '')} ${esc(f.mainLeague.season || '')}` : ss.length ? esc(a.statsSummary.displayName || '') : '';
   const card = name ? `<fl-tilt class="tcard" style="--tc:${v.color}"><span class="tcard-top"><b class="num">${esc(jersey || '')}</b><i>${esc(a?.position?.abbreviation || (pos || '').split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase())}</i></span>${face(name, club, v.tmp?.photo || (f ? FMP(f.id) : ''), 'face')}<span class="tcard-n">${esc(name.split(' ').slice(-1)[0])}</span><span class="tcard-f">${t ? `<img src="${esc(logoOf(t))}" alt="">` : f?.team?.crest ? `<img src="${esc(f.team.crest)}" alt="">` : ''}${a?.flag?.href ? `<img src="${esc(a.flag.href)}" alt="">` : ''}</span><i class="tcard-shine"></i></fl-tilt>` : `<img class="face" src="${SIL}" alt="">`;
-  return flProfile.hero({ back, sport: 'soccer', id: v.id, name: name || '', color: v.color, cls: 'pfh-soccer', face: card,
+  return flProfile.hero({ back, sport: 'soccer', id: v.id, name: name || '', color: v.color, cls: 'pfh-soccer', face: card, tabs: true, noFollow: true, sportName: 'Soccer', league: f?.mainLeague?.name || '',
     team: teamBtn, number: jersey, position: pos, status,
     extra: name ? `<div class="tact"><button class="favbtn" data-act="pfav" aria-pressed="${isFavPlayer(v.id)}">${isFavPlayer(v.id) ? '★ Following' : '☆ Follow'}</button></div>${playerFacts(v)}` : '', stats, caption });
 }
@@ -3237,7 +3240,7 @@ function psRow(x){
   const p90 = x.per90 == null || x.format === 'percent' || x.format === 'kph' ? '' : x.format === 'meter' ? (x.per90 / 1000).toFixed(1) + ' km' : (+x.per90).toFixed(2);
   return `<div class="ps-box ${cls}"><span class="ps-t">${esc(x.title)}</span><b class="num">${esc(psVal(x))}</b>
     <span class="ps-sub num">${p90 ? esc(p90) + ' per 90' : '&nbsp;'}</span>
-    ${pc == null ? '' : `<span class="ps-pc ${cls}" role="img" aria-label="${pc} percentile"><span class="trk"><i style="width:${Math.max(4, pc)}%"></i></span><em class="num">${pc}</em></span>`}</div>`;
+    ${pc == null ? '' : `<span class="ps-pc ${cls}" role="img" aria-label="${flFmt.ord(pc)} percentile"><span class="trk"><i style="width:${Math.max(4, pc)}%"></i></span><em class="num">${pc}</em></span>`}</div>`;
 }
 function pStatsPane(v){
   const f = v.fm;

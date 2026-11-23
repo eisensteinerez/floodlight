@@ -39,7 +39,7 @@ const am2dec = a => a == null || isNaN(+a) || !+a ? null : +a > 0 ? 1 + +a / 100
 const decAm = d => !d || d <= 1 ? '–' : d >= 2 ? '+' + Math.round((d - 1) * 100) : '−' + Math.round(100 / (d - 1));
 const bbNum = x => { const n = parseFloat(String(x ?? '').replace(/[^\d.-]/g, '')); return isNaN(n) ? null : n };
 const bbFix = (x, d = 1) => x == null || isNaN(x) ? '–' : (+x).toFixed(d);
-const bbOrd = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]) };
+const bbOrd = n => flFmt.ord(n);   // the one ordinal formatter (fmt.js)
 
 /* ---------- loading games ---------- */
 function bbNormEspn(ev, l){
@@ -644,7 +644,7 @@ function bbRankIn(pool, id, key, low){
 }
 function openBbPlayer(id, lgKey){
   const l = BBL[lgKey] || BBL.nba; if (!id) return;
-  if (viewBlocked({ type: 'bbplayer' })) return; pushView({ type: 'bbplayer', id: String(id), lg: l.key, tab: 'stats' });
+  if (viewBlocked({ type: 'bbplayer' })) return; pushView({ type: 'bbplayer', id: String(id), lg: l.key, tab: 'overview' });
   const v = S.stack[S.stack.length - 1], re = () => S.stack.includes(v) && renderSheet();
   Promise.allSettled([cj(`${BBW}/${l.path}/athletes/${id}`), cj(`${BBW}/${l.path}/athletes/${id}/stats`), cj(`${BBW}/${l.path}/athletes/${id}/gamelog`), cj(`${BBW}/${l.path}/athletes/${id}/splits`)]).then(([b, s, g, sp]) => {
     v.bio = val(b)?.athlete; v.stats = val(s); v.log = val(g); v.splits = val(sp); if (!v.bio) v.err = true;
@@ -660,49 +660,59 @@ function bbPlayerHero(v, back){
   const col = hex(t?.color) && lum(hex(t.color)) > .03 ? hex(t.color) : '#3D6FD9'; v.color = col;
   const av = v.stats?.categories?.find(c => c.name === 'averages'), last = av?.statistics?.[av.statistics.length - 1];
   const sv = n => { const i = av?.names?.indexOf(n); return i >= 0 ? last?.stats?.[i] : null };
-  const hl = last ? [['avgPoints', 'Points', 'offensive.avgPoints'], ['avgRebounds', 'Rebounds', 'general.avgRebounds'], ['avgAssists', 'Assists', 'offensive.avgAssists'], ['fieldGoalPct', 'FG %', 'offensive.fieldGoalPct']].map(([n, lbl, key]) => {
-    const r = bbRankIn(v.pool, v.id, key); return { label: lbl, value: sv(n), rank: r ? `${bbOrd(r.rank)} in ${l.name}` : '' } }) : [];
+  // the headline numbers, each said once: value, "per game", then "66th of 384 · 83rd percentile"
+  const hl = last ? [['avgPoints', 'Points', 'offensive.avgPoints', 'per game'], ['avgRebounds', 'Rebounds', 'general.avgRebounds', 'per game'], ['avgAssists', 'Assists', 'offensive.avgAssists', 'per game'], ['fieldGoalPct', 'Field goal %', 'offensive.fieldGoalPct', '']].map(([n, lbl, key, unit]) => {
+    const r = bbRankIn(v.pool, v.id, key); return { label: lbl, value: sv(n), unit, rank: r?.rank, n: r ? r.n : null, pc: r?.pc } }) : [];
   const sport = /college/.test(l.path) ? 'cbb' : l.key === 'wnba' ? 'wnba' : 'nba';
-  return flProfile.hero({ back, sport, heatSport: sport === 'cbb' ? '' : sport, id: v.id, name: a?.displayName, color: col,
-    face: `<img class="face espn-shot" src="${esc(a?.headshot?.href || bbShot(v.id, l.path))}" alt="" onerror="this.onerror=null;this.src=SIL">`,
-    teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
+  const inj = a?.injuries?.[0];
+  return flProfile.hero({ back, sport, heatSport: sport === 'cbb' ? '' : sport, lab: sport === 'cbb' ? '' : sport, id: v.id, name: a?.displayName, color: col, tabs: true,
+    sportName: 'Basketball', league: l.short || l.name, leagueKey: l.key, teamName: t?.displayName || '', photo: a?.headshot?.href || bbShot(v.id, l.path),
+    face: `<img class="face espn-shot" src="${esc(a?.headshot?.href || bbShot(v.id, l.path))}" alt="" width="112" height="112" onerror="this.onerror=null;this.src=SIL">`,
+    teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" width="22" height="22" onerror="this.remove()"><button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
     number: a?.displayJersey, position: a?.position?.displayName,
-    chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace, a.college?.name] : [],
-    status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span>` : '',
-    stats: hl, caption: last ? `${esc(last.season?.displayName || '')} per game${v.pool ? ` · ranked among ${esc(l.name)} players with enough games` : ''}` : '' });
+    avail: !a ? null : inj ? { text: inj.status || 'Injured', tone: /out/i.test(inj.status || '') ? 'out' : 'warn', what: [inj.details?.type, inj.details?.returnDate ? 'expected back ' + new Date(inj.details.returnDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''].filter(Boolean).join(', ') } : a.status?.name ? { text: a.status.name, tone: /active/i.test(a.status.name) ? 'ok' : 'warn' } : null,
+    next: t?.id ? { path: 'basketball/' + l.path, teamId: t.id } : null,
+    chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayExperience, a.displayWeight, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace, a.college?.name] : [],
+    stats: hl, caption: last ? `${esc(last.season?.displayName || '')} season${v.pool ? ` · ranked among ${esc(l.name)} players with enough games` : ''}` : '' });
+}
+// the ranked stats, once, for the Overview (Standard and Advanced views) and the All stats tab
+function bbBoardRows(v){
+  if (!v.pool) return null;
+  const gl = v.log, lab = gl?.labels || [], evs = (gl?.seasonTypes || []).flatMap(st => st.categories.filter(c => c.type === 'event').flatMap(c => c.events || [])).slice(0, 10).reverse();
+  const col = { PTS: 'PTS', REB: 'REB', AST: 'AST', STL: 'STL', BLK: 'BLK', TO: 'TO', '3PM': '3PT', 'FG%': 'FG%', 'FT%': 'FT%', MIN: 'MIN', PF: 'PF' };
+  const sparkOf = ab => { const k = lab.indexOf(col[ab]); if (k < 0) return null; return evs.map(e => parseFloat(String(e.stats?.[k] ?? '').split('-')[0])).filter(x => isFinite(x)) };
+  return BB_RANK.map(([key, label, ab, low]) => ({ key, label, ab, low, r: bbRankIn(v.pool, v.id, key, low) })).filter(x => x.r)
+    .map(x => ({ label: x.label, short: x.ab, val: bbFix(x.r.val, /%/.test(x.ab) ? 1 : x.ab === 'DD2' ? 0 : 1), rank: x.r.rank, n: x.r.n, pc: x.r.pc, qualified: x.r.qualified, spark: sparkOf(x.ab), low: x.low ? { good: 'ball security', noun: 'turnovers' } : null }));
+}
+function bbBoard(v, parts){
+  const l = BBL[v.lg], rows = bbBoardRows(v); if (!rows) return bbLoading(120); if (!rows.length) return '';
+  const av = v.stats?.categories?.find(c => c.name === 'averages'), last = av?.statistics?.[av.statistics.length - 1];
+  return flViz.playerBoard(rows, { color: v.color || '#3D6FD9', peers: `${l.name} players`, season: last?.season?.displayName || '', name: (v.bio?.displayName || '').split(' ').slice(-1)[0], parts,
+    radar: ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%'], note: rows[0] && !rows[0].qualified ? 'Not enough games yet to rank with the regulars, so treat these as rough.' : '' });
 }
 function bbPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
   if (!v.bio) return bbLoading();
-  const l = BBL[v.lg];
-  if (v.tab === 'stats') {
-    const av = v.stats?.categories?.find(c => c.name === 'averages'), last = av?.statistics?.[av.statistics.length - 1];
-    if (!last) return `<div class="note">No stats for this player yet.</div>`;
-    let h = '';
-    if (!v.pool) h += bbLoading(120);
-    else {
-      const rows = BB_RANK.map(([key, label, ab, low]) => ({ key, label, ab, low, r: bbRankIn(v.pool, v.id, key, low) })).filter(x => x.r);
-      if (rows.length) {
-        const me = v.pool.find(p => p.id === v.id);
-        const items = rows.filter(x => ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%'].includes(x.ab)).map(x => ({ title: x.ab, value: x.r.pc / 100 }));
-        const rad = items.length >= 3 ? radarSVG({ items }, v.color || '#3D6FD9') : '';
-        const strong = rows.filter(x => x.r.pc >= 80 && x.r.qualified).sort((a, b) => b.r.pc - a.r.pc).slice(0, 5), weak = rows.filter(x => x.r.pc <= 25 && x.r.qualified).sort((a, b) => a.r.pc - b.r.pc).slice(0, 4);
-        const chip = x => `<li><span>${esc(x.label)}</span><b class="num">${bbFix(x.r.val, /%/.test(x.ab) ? 1 : x.ab === 'DD2' ? 0 : 1)}</b><small>${bbOrd(x.r.rank)} of ${x.r.n}</small></li>`;
-        // last 10 games per stat, from the game log, for the sparklines
-        const gl = v.log, lab = gl?.labels || [], evs = (gl?.seasonTypes || []).flatMap(st => st.categories.filter(c => c.type === 'event').flatMap(c => c.events || [])).slice(0, 10).reverse();
-        const col = { PTS: 'PTS', REB: 'REB', AST: 'AST', STL: 'STL', BLK: 'BLK', TO: 'TO', '3PM': '3PT', 'FG%': 'FG%', 'FT%': 'FT%', MIN: 'MIN', PF: 'PF' };
-        const sparkOf = ab => { const k = lab.indexOf(col[ab]); if (k < 0) return null; return evs.map(e => parseFloat(String(e.stats?.[k] ?? '').split('-')[0])).filter(x => isFinite(x)) };
-        h += flViz.playerBoard(rows.map(x => ({ label: x.label, short: x.ab, val: bbFix(x.r.val, /%/.test(x.ab) ? 1 : x.ab === 'DD2' ? 0 : 1), rank: x.r.rank, n: x.r.n, pc: x.r.pc, spark: sparkOf(x.ab) })), {
-          color: v.color || '#3D6FD9', peers: `${l.name} players`, season: last.season?.displayName || '', name: (v.bio?.displayName || '').split(' ').slice(-1)[0],
-          radar: ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%'], note: rows[0] && !rows[0].r.qualified ? 'Not enough games yet to rank with the regulars, so treat these as rough.' : '' });
-      }
-    }
-    // full season table: every row ESPN returns (regular season by year)
+  const l = BBL[v.lg], extra = flProfile.extra(v); if (extra != null) return extra;
+  const av = v.stats?.categories?.find(c => c.name === 'averages'), last = av?.statistics?.[av.statistics.length - 1];
+  if (v.tab === 'overview' || v.tab === 'stats' && !last) {
+    if (!last) return `<div class="note">No stats for this player this season yet.</div>`;
+    const md = flProfile.mode(), series = flProfile.espnSeries(v.log, [['PTS', 'Points', 'points'], ['REB', 'Rebounds', 'rebounds'], ['AST', 'Assists', 'assists'], ['3PT', '3-pointers', 'threes'], ['MIN', 'Minutes', 'minutes']]);
+    const recent = flProfile.recent(v, series, { span: 'Season' });
+    // trends: the last ten against the season averages, from the same two sources the page shows
+    const sIdx = k => av.labels?.indexOf(k), season = k => { const i = sIdx(k); return i >= 0 ? parseFloat(String(last.stats[i]).split('-')[0]) : NaN };
+    const tr = flProfile.trends(series.filter(s => s.k !== 'MIN').map(s => ({ label: s.label.toLowerCase(), season: season(s.k), recent: s.games.reduce((a, g) => a + g.v, 0) / (s.games.length || 1), n: s.games.length })), { name: v.bio?.displayName });
+    const more = md === 'summary' ? `<p class="pf-next-step lb">Want every stat with its rank? Switch to Standard, or open <button type="button" class="lk" data-pftab="stats">All stats</button>.</p>`
+      : bbBoard(v, md === 'advanced' ? ['radar', 'bars'] : ['bars']);
+    return `<div class="pf-pane-h"><h2 class="sr-only">Overview</h2>${flProfile.modeBar()}</div>${recent}${tr}${more}`;
+  }
+  if (v.tab === 'career') {
     const tot = v.stats?.categories?.find(c => c.name === 'totals'), misc = v.stats?.categories?.find(c => c.name === 'miscellaneous');
-    const table = (c, title) => c ? `<div class="sub-h"><h5>${esc(title)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th>${c.labels.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>
-      ${c.statistics.slice().reverse().map(s => `<tr><td class="t">${esc(s.season?.displayName || '')} <small>${esc((s.teamSlug || '').split('-').pop())}</small></td>${s.stats.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
-    const recent = flProfile.recent(v, flProfile.espnSeries(v.log, [['PTS', 'Points', 'points'], ['AST', 'Assists', 'assists'], ['REB', 'Rebounds', 'rebounds'], ['3PT', '3-pointers', 'threes'], ['MIN', 'Minutes', 'minutes']]), { span: 'Season' });
-    return recent + h + flProfile.careerTable(av, 'Career per game', 'PTS') + table(tot, 'Career totals') + table(misc, 'Miscellaneous');
+    if (!av?.statistics?.length) return `<div class="note">No career numbers for this player yet.</div>`;
+    return `<div class="pf-pane-h"><h2 class="sr-only">Career</h2>${flProfile.modeBar()}</div>` + flProfile.career(v, { avg: av, tot, misc, title: 'Career', trendCol: 'PTS', note: 'Regular season, from ESPN. Playoff seasons are not in this feed.' });
+  }
+  if (v.tab === 'stats') {
+    return bbBoard(v, ['radar', 'table']) + `<p class="srcnote">Rank and percentile compare per-game numbers with ${esc(l.name)} players who played at least 40% of the busiest player's games; 100 is best. For turnovers, fewer is better, so a high percentile means good ball security.</p>`;
   }
   if (v.tab === 'log') {
     const g = v.log; if (!g?.seasonTypes?.length) return `<div class="note">No games logged this season.</div>`;
@@ -732,7 +742,7 @@ function bbFsPlayerHero(v, back){
   const d = v.rk && S.bb.leaders?.[v.rk], me = d?.players.find(x => x.id === v.id);
   const stats = me ? [['PTS', 'Points a game'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['EFF', 'Efficiency']].map(([k, l]) => { const r = bbFsRank(d, v.id, k); return { label: l, value: bbFix(me.avg[k]), rank: r ? `${bbOrd(r.rank)} of ${r.n}` : '' } })
     : cur ? [['Points a game', cur.pts], ['Rebounds', cur.reb], ['Assists', cur.ast], ['Games', cur.gp]].map(([label, value]) => ({ label, value: value ?? '–' })) : [];
-  return flProfile.hero({ back, sport: '', heatSport: 'none', id: v.id, name: p?.name, color: col,
+  return flProfile.hero({ back, sport: '', heatSport: 'none', id: v.id, name: p?.name, color: col, sportName: 'Basketball', league: bbName(v.lg), leagueKey: v.lg, tabs: true,
     face: `<img class="face espn-shot" src="${esc(p?.photo || SIL)}" alt="" onerror="this.onerror=null;this.src=SIL">`,
     team: p?.teamId ? `<span class="pfh-team"><button class="linkbtn" data-bbteam="${esc(p.teamId)}" data-bbslug="${esc(p.teamSlug)}" data-bbl="${esc(v.lg)}">${esc(p.teamName || p.teamSlug)}</button></span>` : '',
     position: p?.position, chips: p ? [p.age ? 'Age ' + p.age : '', p.born ? 'Born ' + p.born : '', p.height, p.weight, p.flag ? p.flag.toUpperCase() : ''] : [],
@@ -867,8 +877,8 @@ function bbRenderSheet(v){
   let hero, tabs, body;
   if (v.type === 'bbgame') { hero = bbHero(v.e, back); tabs = bbGameTabs(v); if (!tabs.some(t => t[0] === v.tab)) v.tab = tabs[0][0]; body = bbPane(v) }
   else if (v.type === 'bbteam') { hero = bbTeamHero(v, back); tabs = [['roster', 'Roster'], ['sched', 'Schedule'], ['stats', 'Team stats'], ['stand', 'Standings']]; body = bbTeamPane(v) }
-  else if (v.type === 'bbplayer') { hero = bbPlayerHero(v, back); tabs = [['stats', 'Stats & ranks'], ['log', 'Game log'], ['splits', 'Splits']]; body = bbPlayerPane(v) }
-  else { hero = bbFsPlayerHero(v, back); tabs = [['stats', 'Stats & ranks'], ['log', 'Recent games']]; body = bbFsPlayerPane(v) }
+  else if (v.type === 'bbplayer') { hero = bbPlayerHero(v, back); tabs = flProfile.tabs([['overview', 'Overview'], ['log', 'Game log'], ['splits', 'Splits'], ['career', 'Career'], ['stats', 'All stats']]); body = bbPlayerPane(v) }
+  else { hero = bbFsPlayerHero(v, back); tabs = flProfile.tabs([['stats', 'Overview'], ['log', 'Recent games']]); body = flProfile.extra(v) ?? bbFsPlayerPane(v) }
   S.curTabs = tabs;
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
   sheet.innerHTML = `<div class="sheet-body">${hero}${tabsHTML(tabs, v.tab)}<div class="pane" id="pane" role="tabpanel" style="--tc:${esc(v.color || 'var(--accent)')}">${body}</div></div>`;

@@ -16,6 +16,15 @@
   const D = { at: 0, health: null, corr: null, alerts: null, flags: null, err: '', t: 0 };
   const admin = () => typeof S !== 'undefined' && S.me && (S.me.role === 'admin' || S.me.rank === 'owner' || S.me.rank === 'admin');
   const ago = ts => window.flPlayers?.ago(ts) || '';
+  // owner-only sections and buttons show only in Admin mode (admin.js); the correction form lives in the owner drawer
+  const editing = () => admin() && !!window.flAdmin?.on?.();
+  window.flAdmin?.tool?.({ id: 'corrections', title: 'Add a correction', when: () => window.flPages?.current?.() === 'status',
+    html: () => `<form class="ds-form" data-dsadd>
+          <label class="fl-f">What was corrected<input class="inp" name="subject" maxlength="120" required autocomplete="off" placeholder="For example: NFL Week 12 start times"></label>
+          <label class="fl-f">What happened and what it changed<textarea class="inp" name="text" maxlength="600" required rows="3"></textarea></label>
+          <label class="fl-f">Shown<input class="inp" name="before" maxlength="80" autocomplete="off"></label><label class="fl-f">Correct<input class="inp" name="after" maxlength="80" autocomplete="off"></label>
+          <label class="fl-f">Affected<input class="inp" name="affected" maxlength="200" autocomplete="off" placeholder="For example: 4 predictions"></label>
+          <button class="bt" type="submit">Publish the correction</button><p class="lb" role="alert" data-dsmsg></p></form>` });
   const get = u => fetch(u, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))));
 
   async function load() {
@@ -59,7 +68,7 @@
   }
   const corrRow = e => `<li class="ds-corr"><p><b>${esc(e.subject)}</b> <span class="lb">${esc(new Date(e.at * 1000).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }))}${e.source === 'automatic' ? ' · found by the automatic check' : ''}</span></p>
     <p>${esc(e.text)}</p>${e.before || e.after || e.affected ? `<p class="lb">${[e.before && e.after ? `Shown: ${esc(e.before)} · Correct: ${esc(e.after)}` : '', e.affected ? `Affected: ${esc(e.affected)}` : ''].filter(Boolean).join(' · ')}</p>` : ''}
-    ${admin() ? `<button type="button" class="bt sm ghost" data-dsrm="${esc(e.id)}">Remove<span class="sr-only"> the correction: ${esc(e.subject)}</span></button>` : ''}</li>`;
+    ${editing() ? `<button type="button" class="bt sm ghost" data-dsrm="${esc(e.id)}">Remove<span class="sr-only"> the correction: ${esc(e.subject)}</span></button>` : ''}</li>`;
 
   function draw() {
     const el = $('pg-status'); if (!el || el.hidden) return;
@@ -71,18 +80,13 @@
       <section class="card ds-card" aria-labelledby="dsFeeds"><div class="sec-h"><h2 id="dsFeeds">Sources</h2><span class="lb" role="status">${!h && !D.at ? 'Checking…' : worst.length ? `${worst.length} of ${feeds.length} need a look` : feeds.some(f => f.state === 'live') ? 'Everything that has been read is answering' : feeds.length ? 'Nothing has been read yet' : ''}</span></div>
         ${feeds.length ? `<ul class="ds-list">${feeds.map(feedRow).join('')}</ul>` : `<p class="lb">${D.at ? 'No status yet.' : 'Checking…'}</p>`}</section>
       <section class="card ds-card" aria-labelledby="dsRoster"><div class="sec-h"><h2 id="dsRoster">Player teams</h2><span class="lb">Every page takes a player’s team from these roster reads</span></div>${rosterBlock(h?.rosters)}</section>
-      ${admin() && D.flags ? `<section class="card ds-card" aria-labelledby="dsFlags"><div class="sec-h"><h2 id="dsFlags">Players being checked</h2><span class="lb">Only admins see this</span></div>
+      ${editing() && D.flags ? `<section class="card ds-card" aria-labelledby="dsFlags"><div class="sec-h"><h2 id="dsFlags">Players being checked</h2><span class="lb">Admin mode</span></div>
         ${D.flags.length ? `<ul class="ds-subs">${D.flags.slice(0, 60).map(p => `<li><span><b>${esc(p.name)}</b> · ${esc(p.teamName || 'no team')} · ${esc(p.league)}<br><small class="lb">${esc(p.flags.map(f => f.text).join(' '))}</small></span>${pill(p.status === 'verified' ? 'live' : 'partial')}</li>`).join('')}</ul>` : '<p class="lb">No player’s team is in question.</p>'}</section>` : ''}
-      ${admin() && D.alerts ? `<section class="card ds-card" aria-labelledby="dsAlerts"><div class="sec-h"><h2 id="dsAlerts">Owner alerts</h2><span class="lb">Sent to Discord when an alert channel is set</span></div>
+      ${editing() && D.alerts ? `<section class="card ds-card" aria-labelledby="dsAlerts"><div class="sec-h"><h2 id="dsAlerts">Owner alerts</h2><span class="lb">Sent to Discord when an alert channel is set</span></div>
         ${D.alerts.length ? `<ul class="ds-subs">${D.alerts.slice(0, 30).map(a => `<li><span>${esc(a.text)}</span><small class="lb">${esc(ago(a.at))}</small></li>`).join('')}</ul>` : '<p class="lb">No alerts. The checks run every ten minutes.</p>'}</section>` : ''}
       <section class="card ds-card" id="corrections" aria-labelledby="dsCorr"><div class="sec-h"><h2 id="dsCorr">Corrections</h2><span class="lb">When something Floodlight showed was wrong, the fix is listed here</span></div>
         ${D.corr == null ? '<p class="lb">Loading the correction log…</p>' : D.corr.length ? `<ul class="ds-corrs">${D.corr.map(corrRow).join('')}</ul>` : '<p class="lb">No corrections so far. When a fix changes something the site showed, such as a player’s team or a graded pick, it is listed here with the date and what it affected.</p>'}
-        ${admin() ? `<details class="ds-add"><summary>Add a correction</summary><form class="ds-form" data-dsadd>
-          <label class="fl-f">What was corrected<input class="inp" name="subject" maxlength="120" required autocomplete="off" placeholder="For example: NFL Week 12 start times"></label>
-          <label class="fl-f">What happened and what it changed<textarea class="inp" name="text" maxlength="600" required rows="3"></textarea></label>
-          <label class="fl-f">Shown<input class="inp" name="before" maxlength="80" autocomplete="off"></label><label class="fl-f">Correct<input class="inp" name="after" maxlength="80" autocomplete="off"></label>
-          <label class="fl-f">Affected<input class="inp" name="affected" maxlength="200" autocomplete="off" placeholder="For example: 4 predictions"></label>
-          <button class="bt" type="submit">Publish the correction</button><p class="lb" role="alert" data-dsmsg></p></form></details>` : ''}</section>`;
+</section>`;
   }
 
   document.addEventListener('click', ev => {
@@ -94,7 +98,7 @@
     const f = ev.target.closest('[data-dsadd]'); if (!f) return; ev.preventDefault();
     const body = Object.fromEntries(new FormData(f)), msg = f.querySelector('[data-dsmsg]');
     fetch('/api/admin/corrections', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => { if (!ok) { msg.textContent = d.error || 'It wasn’t saved. Try again.'; return } load() })
+      .then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => { if (!ok) { msg.textContent = d.error || 'It wasn’t saved. Try again.'; return } f.reset(); window.flAdmin?.say?.('Correction published.'); load() })
       .catch(() => { msg.textContent = 'It wasn’t saved. Check your connection and try again.' });
   });
 

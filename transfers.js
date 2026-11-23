@@ -272,15 +272,16 @@
       <button type="button" class="bt tw-alert" data-twfollow="${esc(JSON.stringify(f))}" aria-pressed="${on}">${ic(on ? 'check' : 'bell', 18)}${on ? 'Following my teams' : 'Alert me on my teams'}</button>
       ${T.msg ? `<p class="tw-msg" role="status">${esc(T.msg)}</p>` : ''}</section>`;
   }
-  function datesAdmin(l, st) {
-    if (!admin()) return '';
-    return `<details class="card tw-dates"${T.dateOpen ? ' open' : ''}><summary>Owner tools: key dates for ${esc(l.name)}${st.list.length ? '' : ' (none entered yet)'}</summary>
-      <p class="lb">These dates drive the banner. For a window, enter both days. For a single day, such as a trade deadline, leave the closing day empty.</p>
+  // the key dates are set in the owner drawer (admin.js), never in the page: an owner sees the page as members do
+  function datesTool() {
+    const l = LG[T.lg], st = status(T.lg);
+    return `<p class="lb">These dates drive the ${esc(l.name)} banner on the Transfer window. For a window, enter both days. For a single day, such as a trade deadline, leave the closing day empty.</p>
       ${st.list.length ? `<ul class="tw-dlist">${st.list.map(x => `<li><span><b>${esc(x.label)}</b> ${esc(longDay(x.start))}${x.end ? ` to ${esc(longDay(x.end))}` : ''}</span><button type="button" class="bt sm ghost" data-twdrm="${esc(x.id)}" aria-label="Remove ${esc(x.label)}, ${esc(longDay(x.start))}">Remove</button></li>`).join('')}</ul>` : `<p class="lb">No dates entered for ${esc(l.name)} yet.</p>`}
       <form class="tw-dform" data-twdform><label class="fl-f"><span>What it is</span><select class="inp" name="label">${l.words.map(w => `<option>${esc(w)}</option>`).join('')}</select></label>
         <label class="fl-f"><span>Day, or opening day</span><input class="inp" type="date" name="start" required></label><label class="fl-f"><span>Closing day (windows only)</span><input class="inp" type="date" name="end"></label>
-        <button class="bt" type="submit">Add date</button><p class="tw-msg" role="status">${esc(T.dateMsg)}</p></form></details>`;
+        <button class="bt" type="submit">Add date</button><p class="tw-msg" role="status">${esc(T.dateMsg)}</p></form>`;
   }
+  window.flAdmin?.tool?.({ id: 'keydates', title: () => `Key dates: ${LG[T.lg]?.name || ''}`, when: () => window.flPages?.current?.() === 'transfers', html: datesTool });
   function busiest(items, lg) {
     const m = new Map(); for (const it of items) { for (const [t, n] of it.ins || []) { if (!t?.id && !t?.name) continue; const k = t.id || t.name, x = m.get(k) || { t, i: 0, o: 0 }; x.i += n; m.set(k, x) } for (const [t, n] of it.outs || []) { if (!t?.id && !t?.name) continue; const k = t.id || t.name, x = m.get(k) || { t, i: 0, o: 0 }; x.o += n; m.set(k, x) } }
     const rows = [...m.values()].sort((a, b) => (b.i + b.o) - (a.i + a.o) || b.i - a.i).slice(0, 6);
@@ -314,10 +315,11 @@
     el.innerHTML = `<header class="pg-head"><h1 class="pg-title" tabindex="-1">Transfer window</h1><p class="pg-sub">Trades, signings and the portal, league by league.</p></header>
       <div class="tw-tabs"><div class="cx-row scroll" role="radiogroup" aria-label="League">${LEAGUES.map(x => `<button type="button" class="cx" role="radio" aria-checked="${x.k === T.lg}" tabindex="${x.k === T.lg ? 0 : -1}" data-twlg="${x.k}">${esc(x.name)}</button>`).join('')}</div>
         <span class="lb">${l.college ? 'College tabs show the transfer portal' : l.src ? `Moves from ${esc(l.src)}` : ''}</span></div>
-      ${banner(l, d, st)}${datesAdmin(l, st)}
+      ${banner(l, d, st)}
       <div class="tw-cols${side ? '' : ' one'}"><section class="card tw-latest" aria-label="Latest moves"><div class="sec-h"><h2>Latest moves</h2>${chips}</div>${legend}${teamBar}${moves}</section>${side ? `<aside class="vst tw-side">${side}</aside>` : ''}</div>`;
   }
   function render(el) { el.innerHTML = ''; draw(); refresh() }
+  const _draw = draw; draw = function () { _draw(); document.dispatchEvent(new Event('fl:admin-refresh')) };
   function refresh(force) { const lg = T.lg; Promise.all([load(lg, force), loadDates(force)]).then(() => { if (T.lg === lg && window.flPages?.current?.() === 'transfers') draw() }) }
 
   /* ---------- opening a team or a player's own page ---------- */
@@ -577,5 +579,21 @@
   window.flPages?.add('transfers', { title: 'Transfer window', render, onShow });
   // openMove(id): the drawer over whatever is showing; showMove(id): the Transfer window page with that move open
   const showMove = id => window.flPages?.show('transfers', 'move=' + id);
-  window.flTransfers = { latest, movesCard, openMove, showMove, LEAGUES, status, _read: { fromEspn, fromEvents, fromMlb, fromSoccer } };
+  // a player's moves as plain rows, newest first, for the profile's "What changed" card and Transactions tab
+  const tName = t => t ? (t.name || t.short || '') : '';
+  function moves(sport, name, id) {
+    const lg = { nba: 'nba', nfl: 'nfl', mlb: 'mlb' }[sport]; if (!lg || !name) return [];
+    const d = T.data[lg]; if (!d?.at) { movesCard(sport, name, id); return [] }
+    return (d.items || []).filter(x => mine(x, name, id)).sort((a, b) => b.when - a.when).slice(0, 12).map(x => { const w = says(x);
+      return { id: x.id, when: x.when, step: stepOf(x), line: w.line, sub: w.sub, between: between(x), from: tName(x.from), to: tName(x.to) || (x.type !== 'waiver' && !x.noclub && !x.internal ? tName(x.lead) : '') } });
+  }
+  // following a player from the profile: the same list as teams and leagues here, saved to the account when signed in
+  function followPlayer(f) {
+    if (window.flAccess && !window.flAccess.has('alerts')) return { error: 'Alerts are switched off for your account. Ask your admin for access.' };
+    T.follows = follows(f) ? T.follows.filter(x => followKey(x) !== followKey(f)) : [...T.follows, f].slice(-200);
+    store.set('fl.follows', T.follows);
+    try { if (window.S?.me && typeof api === 'function') api('/api/me/prefs', { follows: T.follows }).then(d => { if (d.user) S.me = d.user }).catch(() => {}) } catch (e) {}
+    return { on: follows(f) };
+  }
+  window.flTransfers = { latest, movesCard, moves, openMove, showMove, LEAGUES, status, follow: followPlayer, following: follows, _read: { fromEspn, fromEvents, fromMlb, fromSoccer } };
 })();

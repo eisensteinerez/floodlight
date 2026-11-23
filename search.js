@@ -522,5 +522,5 @@
     ev.preventDefault(); ev.stopImmediatePropagation();
     if (document.activeElement === input && !box.hidden) { hide(); input.blur(); document.querySelector('.top')?.classList.remove('search-open') } else openSearch();
   }, true);
-  window.flSearch = { query, go, parse, recent: () => G.recent, open: openSearch };
+  window.flSearch = { query, go, parse, recent: () => G.recent, open: openSearch, last: () => G.last?.raw || '' };
 })();
