@@ -3255,3 +3255,5 @@ h3.hm-brief-h{margin:0;font:700 17px/1.25 var(--font-body);color:var(--text)}
 #stAlerts .st-rows{grid-template-columns:minmax(0,1fr)}
 .st-drw{min-width:0;overflow-x:auto}
 @media (max-width:420px){.al-t thead th{font-size:11px;letter-spacing:0;padding-inline:0}.al-t td{padding:0}.al-t th[scope="row"]{padding-left:0;font-size:13px;overflow-wrap:anywhere}}
+/* the setup and sign-in headings take focus so screen readers hear each step; the ring is only for keyboard targets */
+:is(#obTitle,#faH,.ac-dlg h2)[tabindex="-1"]:focus{outline:none}
