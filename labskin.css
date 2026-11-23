@@ -248,7 +248,7 @@
 :root[data-theme] .mini nav a{font:600 13px/1 var(--font-body);color:var(--muted);padding:10px 12px;border-radius:var(--radius-pill)}
 :root[data-theme] .mini nav a:hover{color:var(--text);background:var(--surface-2)}
 :root[data-theme] .mini .lc button{width:36px;height:36px}
-:root[data-theme] body.embed .mini{display:none}
+:root[data-theme] body.embed:not(.fl-follow) .mini{display:none}   /* inside the site the bar shows once the site says where the frame is scrolled (fl-follow) */
 
 @media (max-width:1020px){:root[data-theme] .ws{grid-template-columns:1fr}:root[data-theme] .tiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
 @media (max-width:820px){:root[data-theme] .wrap{padding:0 16px 60px}:root[data-theme] .tiles{grid-template-columns:repeat(3,minmax(0,1fr))}:root[data-theme] .card{padding:18px;border-radius:var(--radius-tile)}:root[data-theme] .hero{padding:20px}

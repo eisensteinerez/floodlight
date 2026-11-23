@@ -288,12 +288,25 @@
   addEventListener('message', ev => {
     const f = frame(); if (!f || ev.origin !== location.origin || ev.source !== f.contentWindow || !ev.data) return;
     const d = ev.data;
-    if (d.lab === 'height') { f.style.height = Math.max(320, d.h + 8) + 'px'; $('labSkl').hidden = true }
+    if (d.lab === 'height') { f.style.height = Math.max(320, d.h + 8) + 'px'; $('labSkl').hidden = true; if (!scrollF) scrollF = requestAnimationFrame(tellScroll) }
     if (d.lab === 'ready') { L.ready = true; f.contentWindow.postMessage({ flTheme: root.dataset.theme, flMotion: root.dataset.motion || '' }, location.origin) }
+    if (d.lab === 'scrollTo') { const r = f.getBoundingClientRect(); window.scrollTo({ top: Math.max(0, scrollY + r.top + (+d.y || 0) - siteTop()), behavior: root.dataset.motion === 'reduce' || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); return }
     if (d.lab === 'loaded') remember(d.name, { sport: d.sport, name: d.name, team: d.kind === 'team' });
     if (d.lab === 'state') { L.cur = d; if (d.view !== 'player' && d.view !== 'team' && d.view !== 'board') L.saving = false;
       tool(d.view === 'board' ? 'props' : d.view === 'team' ? 'matchup' : L.tool === 'trends' && d.view === 'player' ? 'trends' : null); drawHead() }
   });
+  /* The frame doesn't scroll; this page does. Tell the frame where its visible top is (below the site's bar), so the
+     Lab's own section bar can follow the reader down a long player or team page. */
+  function siteTop() {   // the bottom of whatever stays pinned at the top of the site
+    let el = document.querySelector('.tb-brand'), h = 0;
+    while (el && el !== document.body) { const p = getComputedStyle(el).position; if (p === 'fixed' || p === 'sticky') { h = Math.max(0, el.getBoundingClientRect().bottom); break } el = el.parentElement }
+    return h;
+  }
+  let scrollF = 0;
+  const tellScroll = () => { scrollF = 0; const f = $('labFrame'); if (!f || !L.ready || L.engine !== 'lab' || $('labFrameBox')?.hidden) return;
+    try { f.contentWindow.postMessage({ flScroll: Math.round(siteTop() - f.getBoundingClientRect().top) }, location.origin) } catch (e) {} };
+  addEventListener('scroll', () => { if (!scrollF) scrollF = requestAnimationFrame(tellScroll) }, { passive: true });
+  addEventListener('resize', () => { if (!scrollF) scrollF = requestAnimationFrame(tellScroll) });
   document.addEventListener('fl:theme', () => { const f = frame(); if (L.ready && f?.contentWindow) f.contentWindow.postMessage({ flTheme: root.dataset.theme, flMotion: root.dataset.motion || '' }, location.origin) });
   document.addEventListener('fl:hub', () => { if (L.loaded && window.flPages.current() === 'lab') { drawTry(); if (L.picks == null) loadPicks() } });
 

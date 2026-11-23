@@ -85,6 +85,7 @@
       return { key: `${sport}:${c.id || ev.id}`, sport, path, lg, short, league: ev.league?.abbreviation || c.league?.abbreviation || (sport === 'soccer' ? (ev.season?.slug || '') : short),
         lgName: sport === 'soccer' ? (c.competitionType?.text || '') : short, id: String(sport === 'tennis' ? c.id : ev.id), date: new Date(c.date || ev.date), state: st.state || 'pre',
         clock: st.shortDetail || st.detail || '', detail: st.shortDetail || st.detail || '', final: st.shortDetail || 'Final', a, b, weight, leaders,
+        sit: c.situation ? { text: c.situation.downDistanceText || c.situation.shortDownDistanceText || '', poss: String(c.situation.possession || ''), red: !!c.situation.isRedZone, last: c.situation.lastPlay?.text || '' } : null,
         tv: c.broadcasts?.[0]?.names?.[0] || c.geoBroadcasts?.[0]?.media?.shortName || '', venue: c.venue?.fullName || ev.venue?.displayName || '', draw, goals, note: /postpon|cancel|delay/i.test(st.description || '') ? st.description : '' };
     });
   }

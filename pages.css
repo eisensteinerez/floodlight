@@ -1694,3 +1694,26 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-ev{padding:4px 26px 22px;border-
 /* ---------- Team check: the books' team and the stats' team disagree ---------- */
 .ev-warn{margin:0 0 12px;padding:10px 12px;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);line-height:1.45}
 .ev-warn b{color:var(--text)}
+
+/* ---------- Match centre: the header that stays on screen, the section bar, possession and the latest play ---------- */
+.gx-poss{display:inline-flex;align-items:center}
+.gx-poss i{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 25%,transparent)}
+.gx-now{margin:0;text-align:center;font:500 14px/1.4 var(--font-body);color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.gx-now .lb{font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px;margin-right:6px}
+.gx-nav{margin:0 -28px -16px;border-top:1px solid var(--border)}
+.gx-nav ul{list-style:none;margin:0;padding:0 20px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;justify-content:center}
+.gx-nav ul::-webkit-scrollbar{display:none}
+.gx-sheet .gx-nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-bottom:3px solid transparent;font:600 14px/1 var(--font-body);color:var(--text-2);text-decoration:none;white-space:nowrap}
+.gx-sheet .gx-nav a:hover{color:var(--text)}
+.gx-sheet .gx-nav a[aria-current="true"]{color:var(--text);border-bottom-color:var(--accent)}
+.gx-sheet .gx-nav a:focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:-4px;border-radius:6px}
+.gx-body [id^="gxs-"] h3[tabindex="-1"]:focus{outline:none}
+/* tightened once the body is scrolled: the score, the clock and the bar stay; the period table and venue fold away */
+.gx-tight .gx-head{padding-top:10px;padding-bottom:12px;gap:8px}
+.gx-tight .gx-lines,.gx-tight .gx-meta,.gx-tight .gx-team small.lb{display:none}
+.gx-tight .gx-crest:not(.sm){width:30px;height:30px}
+.gx-tight .gx-sc{font-size:clamp(26px,3.4vw,36px)}
+.gx-tight .gx-title{font-size:16px}
+.gx-tight .gx-nav{margin-bottom:-12px}
+@media (max-width:860px){.gx-nav{margin:0 -16px -12px}.gx-nav ul{justify-content:flex-start;padding:0 8px}.gx-tight .gx-bar .gx-lg .lb{display:none}}
+.gx-head{grid-template-columns:minmax(0,1fr)}.gx-head>*{min-width:0}
