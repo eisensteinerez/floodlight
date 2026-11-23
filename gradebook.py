@@ -51,6 +51,8 @@ def set_result(e, result, actual="", why="", by="server", source="", calc="", no
     """Put a result on a pick. A real result already there is changed only by a re-check, and the change is kept.
     closing: the last line and price before the start, saved with the first grade and not changed by a re-check."""
     now = now or time.time()
+    if e.get("adminLock") and not str(by or "").startswith("admin"):
+        return False                # an administrator's correction is final: automatic re-checks never undo it
     if isinstance(closing, dict) and not e.get("closing"):
         e["closing"] = {k: closing.get(k) for k in ("line", "side", "market", "price", "at")}
     old = e.get("result")
@@ -71,6 +73,30 @@ def set_result(e, result, actual="", why="", by="server", source="", calc="", no
     else:
         e.pop("why", None)
     return True
+
+
+RESULTS = ("won", "lost", "push", "void")
+
+
+def correct(e, result, actual="", why="", by="admin", now=None):
+    """An administrator corrects a grade. The receipt is never touched; the old and new result, the stat, who and why
+    are added to the pick's correction history, and the pick is locked against automatic re-grading. Returns the
+    correction, or None when nothing changed."""
+    now = now or time.time()
+    if result not in RESULTS:
+        raise ValueError("A grade is hit, miss, push or void.")
+    why = str(why or "").strip()
+    if len(why) < 8:
+        raise ValueError("Say why the grade is wrong (a few words, shown in the public correction log).")
+    old, old_actual = e.get("result"), e.get("actual")
+    if old == result and (old_actual or "") == (actual or ""):
+        return None
+    c = {"from": old or None, "to": result, "fromActual": old_actual, "toActual": actual or old_actual or "", "at": int(now), "by": f"admin:{by}"[:60],
+         "why": why[:200], "admin": True}
+    e.setdefault("corrections", []).append(c)
+    e.update({"result": result, "actual": actual or old_actual or "", "graded": int(now), "by": f"admin:{by}"[:60], "source": "Administrator correction", "adminLock": True})
+    e.pop("why", None)
+    return c
 
 
 # ---------- the receipt: what was published, frozen ----------
@@ -153,10 +179,11 @@ def merge_entry(a, b):
     elif rb in DEFINITE and ra not in DEFINITE:
         pick = b
     elif ra in DEFINITE and rb in DEFINITE:
-        pick = max((a, b), key=lambda x: (len(x.get("corrections") or []), -(x.get("graded") or 0)))
+        # an administrator's correction wins, then the copy re-checked more often
+        pick = max((a, b), key=lambda x: (bool(x.get("adminLock")), len(x.get("corrections") or []), -(x.get("graded") or 0)))
     elif ra or rb:
         pick = a if ra else b
-    for k in ("result", "actual", "graded", "by", "source", "calc", "why", "corrections", "final", "exact", "stats", "rechecked"):
+    for k in ("result", "actual", "graded", "by", "source", "calc", "why", "corrections", "final", "exact", "stats", "rechecked", "adminLock"):
         out.pop(k, None)
         if pick is not None and k in pick:
             out[k] = pick[k]

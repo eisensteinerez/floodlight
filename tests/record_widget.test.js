@@ -44,12 +44,24 @@ let n = 0; const t = async (name, fn) => { reset(); await fn(); n++; console.log
     assert.equal(H.graded(H.all([], Hs.props)[0]), false);
     assert.match(text(H.widget()), /No graded picks yet/);
   });
-  await t('with graded picks: record, hit rate held until 20, units and ROI, closing line, calibration, record by', () => {
+  await t('under 25 graded picks: "Early results", the record only, no performance figures', () => {
     Hs.rows = []; Hs.props = [prop(), prop({ result: 'lost', state: 'lost', actual: '20' }), prop({ result: 'void', state: 'void' }), prop({ start: now + 3600, state: 'published', result: null })];
     const s = text(H.widget());
-    assert.match(s, /Record 1–1/); assert.match(s, /2 of 20 graded needed/); assert.match(s, /Units/); assert.match(s, /ROI/); assert.match(s, /Closing line/);
-    assert.match(s, /Calibration by probability range/); assert.match(s, /Record by/); assert.match(s, /1 pick is waiting/);
+    assert.match(s, /Early results\. 2 graded picks so far/); assert.match(s, /Record 1–1/); assert.match(s, /2 of 25 before figures are shown/); assert.match(s, /1 pick is waiting/);
+    assert.doesNotMatch(s, /Units|ROI|Hit rate|Calibration/);
     const S = H.summary(H.all([], Hs.props)); assert.equal(S.n, 2); assert.equal(S.void, 1); assert.equal(S.waiting, 1);
+    assert.equal(H.tier(24), 'early'); assert.equal(H.tier(25), 'small'); assert.equal(H.tier(99), 'small'); assert.equal(H.tier(100), 'full');
+  });
+  await t('25 to 99 graded: every figure, under a small-sample warning', () => {
+    Hs.rows = []; Hs.props = Array.from({ length: 30 }, (_, i) => prop({ key: 'k' + i, result: i % 3 ? 'won' : 'lost', state: i % 3 ? 'won' : 'lost' }));
+    const s = text(H.widget());
+    assert.match(s, /Small sample\. 30 graded picks/); assert.match(s, /Hit rate 67%/); assert.match(s, /Units/); assert.match(s, /Closing line/);
+    assert.match(s, /Calibration by probability range/); assert.match(s, /Record by/);
+  });
+  await t('100 or more graded: full reporting, no warning', () => {
+    Hs.rows = []; Hs.props = Array.from({ length: 100 }, (_, i) => prop({ key: 'k' + i, result: i % 2 ? 'won' : 'lost', state: i % 2 ? 'won' : 'lost' }));
+    const s = text(H.widget());
+    assert.doesNotMatch(s, /Small sample|Early results/); assert.match(s, /Hit rate 50%/);
   });
   await t('the sport filter is applied to the same rows', () => {
     Hs.rows = []; Hs.props = [prop(), prop({ sport: 'nhl', result: 'lost', state: 'lost' })];
