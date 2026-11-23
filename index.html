@@ -1184,6 +1184,7 @@ document.addEventListener('error', ev => {
 <script src="fmt.js"></script>
 <script src="admin.js"></script>
 <script src="statfx.js"></script>
+<script src="morph.js"></script>
 <script>
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const BASE2 = 'https://site.api.espn.com/apis/v2/sports/soccer';
@@ -1577,7 +1578,8 @@ async function loadSummary(){
   } catch { if (seq === sumSeq) S.summary = { error: true } }
   if (S.stack[S.stack.length-1]?.type === 'match') renderSheet();
 }
-function refreshSheetHero(){ if (S.stack[S.stack.length-1]?.type !== 'match') return; const h = document.querySelector('.hero'); if (h) h.outerHTML = hero(S.events.get(S.sel)) }
+// the score refresh patches the header in place, so its close and expand buttons are never rebuilt under the reader
+function refreshSheetHero(){ if (S.stack[S.stack.length-1]?.type !== 'match') return; const h = document.querySelector('#sheet .hero'); if (!h) return; if (window.flMorph) flMorph.one(h, hero(S.events.get(S.sel))); else h.outerHTML = hero(S.events.get(S.sel)) }
 
 function hero(e){
   const sum = S.summary; const showScore = e.state !== 'pre';
@@ -1592,7 +1594,7 @@ function hero(e){
   return `<div class="hero mh${e.state === 'in' ? ' is-live' : ''}" style="--hc:${e.hc};--ac:${e.ac}">
     <div class="mh-fx" aria-hidden="true"><b>${esc(e.home.abbr || '')}</b><b>${esc(e.away.abbr || '')}</b></div>
     <div class="hero-top"><div class="lgname">${e.league.logo?`<img src="${esc(e.league.logo)}" width="16" height="16" alt="">`:''}<span>${esc(e.league.name)}${e.note?' · '+esc(e.note):''}</span></div>
-      <button class="icon-btn expand" data-act="expand" aria-pressed="${!!S.big}" aria-label="${S.big ? 'Exit large view' : 'View larger'}" title="${S.big ? 'Exit large view' : 'View larger'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <button class="icon-btn expand" data-act="expand" aria-pressed="${!!S.big}" aria-label="${S.big ? 'Shrink match centre' : 'Expand match centre'}" title="${S.big ? 'Shrink match centre' : 'Expand match centre'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close match centre" title="Close match centre"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="board">
       <div class="side">${e.home.logo?`<img src="${esc(e.home.logo)}" alt="">`:''}<strong><button class="linkbtn" data-team="${esc(e.home.id)}" data-lg="${esc(e.summarySlug||e.slug)}">${esc(e.home.full||e.home.name)}</button></strong>${form(e.home.form)}</div>
       <div class="score">${showScore
@@ -1639,10 +1641,12 @@ function renderSheet(){
   S.curTabs = TB;
   const sheet = $('sheet');
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
-  sheet.innerHTML = `<div class="sheet-body">${hero(e)}
+  // the same match redrawn (a live refresh, a tab change) is patched in place; another match or panel is drawn fresh
+  const same = window.flMorph && S.fxPage === 'm' + e.id && sheet.querySelector(':scope > .sheet-body > .hero');
+  (same ? html => flMorph(sheet, html) : html => { sheet.innerHTML = html })(`<div class="sheet-body">${hero(e)}
     <div class="tabs" role="tablist">${TB.map(([k,l])=>`<button class="tab${S.tab===k?' on':''}" role="tab" aria-selected="${S.tab===k}" data-tab="${k}" tabindex="${S.tab===k?0:-1}" aria-controls="pane">${tabIco(k)}<span>${l}</span></button>`).join('')}</div>
-    <div class="pane" id="pane" role="tabpanel" data-pane="${S.tab}" style="--hc:${e.hc};--ac:${e.ac}">${pane(e)}</div></div>`;
-  sheet.querySelector('.sheet-body').scrollTop = scroll;
+    <div class="pane" id="pane" role="tabpanel" data-pane="${S.tab}" aria-label="${esc((TB.find(t => t[0] === S.tab) || [])[1] || 'Match')}" style="--hc:${e.hc};--ac:${e.ac}">${pane(e)}</div></div>`);
+  if (!same) sheet.querySelector('.sheet-body').scrollTop = scroll;
   fxEnter(sheet, 'm' + e.id, S.tab);
   wiPaint();
   if (S.focusTab) { sheet.querySelector('.tab.on')?.focus(); S.focusTab = false }
