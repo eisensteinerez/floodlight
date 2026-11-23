@@ -3,7 +3,10 @@
    a trend, a prediction's evidence, a parlay draft, a game, a set of filters. An item says what it is and how to reopen it:
      { kind: 'player'|'team'|'compare'|'trend'|'pred'|'parlay'|'game'|'filters'|'props'|'note',
        key: one string per exact view, label, sub, photo, photo2,
-       open: { lab } | { compare } | { trend } | { game: { sport, lg, id } } | { parlay: true } | { page, ...args } }
+       open: { lab } | { compare } | { trend } | { game: { sport, lg, id } } | { parlay: true } | { page, ...args }
+             | { route: '#/page/arg', filters } }
+   Resuming filters: an item with open.filters reopens its page and fires 'fl:resume' { page, filters } on document,
+   so the page can put back every filter exactly as it was (Prop Explorer, Predictions, Trends, Live).
    The same key replaces the older entry. Pinned items stay at the top and are never pushed out. History is kept in this
    browser only (40 items) and can be cleared from Home. flRecent.open(item) is also how saved boards reopen things. */
 (() => {
@@ -27,7 +30,7 @@
   }
   const drop = key => { if (!R.some(x => x.key === key)) return; R = R.filter(x => x.key !== key); save() };
   const pin = (key, on) => { const x = R.find(y => y.key === key); if (!x) return; if (on ?? !x.pinned) x.pinned = true; else delete x.pinned; save(); return !!x.pinned };
-  const clear = () => { R = R.filter(x => x.pinned); save() };
+  const clear = all => { R = all ? [] : R.filter(x => x.pinned); save() };
   const list = () => [...R].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.at - a.at);
 
   // the words a card leads with, by kind
@@ -47,8 +50,11 @@
       const b = document.createElement('button'); b.hidden = true; b.dataset.hub = `${g.sport}|${g.lg || ''}|${g.id}`; document.getElementById('hub')?.appendChild(b); b.click(); b.remove(); return }
     if (o.page === 'trends') return window.flLab?.trends?.({ sport: o.filters?.sport, filters: o.filters });
     if (o.page === 'transfers' && o.move && window.flTransfers?.showMove) return window.flTransfers.showMove(o.move);
+    if (o.route && /^#\/[a-z-]+(\/[^\s]*)?$/.test(o.route)) { location.hash = o.route; if (o.filters) setTimeout(() => document.dispatchEvent(new CustomEvent('fl:resume', { detail: { page: o.page || o.route.split('/')[1], filters: o.filters } })), 0); return }
     if (o.page) {
       window.flPages?.show?.(o.page);
+      // a page that keeps filters gets them back exactly as they were (it listens for fl:resume)
+      if (o.filters) setTimeout(() => document.dispatchEvent(new CustomEvent('fl:resume', { detail: { page: o.page, filters: o.filters } })), 0);
       if (o.page === 'predictions' && o.pick) { const c = await wait(`#pg-predictions [data-pdk="${CSS.escape(o.pick)}"]`); if (c) { if (!c.querySelector('.pd-ev')) c.querySelector('.pd-open')?.click(); c.scrollIntoView({ block: 'center' }); c.querySelector('.pd-open')?.focus({ preventScroll: true }) } else window.toast?.('That pick is no longer on the board.') }
       if (o.page === 'predictions' && o.filters?.sport) (await wait(`#pg-predictions [data-pdsport="${CSS.escape(o.filters.sport)}"]`))?.click();
       if (o.page === 'transfers' && o.move) window.flTransfers?.openMove?.(o.move);

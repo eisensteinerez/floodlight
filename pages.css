@@ -2598,3 +2598,27 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .gx-body{display:flex;flex-direction:column}.gx-body>*{flex:none;min-width:0}
 /* long tool links on Predictions wrap instead of running past a 320px card */
 .pd-more .cx{white-space:normal;text-align:left;max-width:100%;height:auto;min-height:44px;padding-block:8px}
+
+/* ==========================================================================
+   Return-daily features: Home greeting, last-known stamps, Continue research badges, Your day, Your week,
+   private competitions, the alerts inbox and Settings › Alerts. Theme tokens only; every control is 44px or larger.
+   ========================================================================== */
+/* Home: the personal greeting above "Tonight in 60 seconds" */
+.hm-greet{display:grid;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.hm-greet h2{margin:0;font:700 clamp(22px,2.4vw,28px)/1.15 var(--font-display);letter-spacing:0;text-transform:none}
+.hm-greet .hm-bl{grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:2px 12px}
+.hm-greet .hm-bi b.num{color:var(--accent);font-weight:800}
+.hm-greet-go{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0}
+.hm-greet-go .lk{margin-block:0}
+h3.hm-brief-h{margin:0;font:700 17px/1.25 var(--font-body);color:var(--text)}
+/* "Last updated 9:42 AM", shown with the last reading whenever a provider is slow or down */
+.hm-stamp{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:0;font:500 13px/1.45 var(--font-body);color:var(--text-2)}
+.hm-stamp b{color:var(--text);font-weight:700}
+.hm-stamp .bt{min-height:44px}
+.hm-stamp-top{padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface-2)}
+/* Continue research: what changed since your last visit */
+.rc-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.rc-badge{min-height:24px;padding:0 8px;font-size:12px;gap:4px;color:var(--text)}
+.rc-badge.rc-inj{border-color:var(--bad)}
+.rc-open time{color:var(--muted);font-size:12px}
+
