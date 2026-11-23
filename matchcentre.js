@@ -106,11 +106,13 @@
     const ser = (raw.seasonseries || [])[0];
     const series = ser ? { title: ser.title || ser.seriesLabel || 'Series', summary: ser.summary || '', games: (ser.events || []).filter(e => String(e.id) !== String(g.id)).map(e => { const h = (e.competitors || []).find(c => c.homeAway === 'home') || {}, w = (e.competitors || []).find(c => c.homeAway === 'away') || {};
       return { date: e.date ? new Date(e.date) : null, done: e.status === 'post' || e.statusType?.completed, h: h.team?.abbreviation || h.team?.displayName || '', w: w.team?.abbreviation || w.team?.displayName || '', hs: h.score ?? '', ws: w.score ?? '' } }).sort((x, y) => (y.date || 0) - (x.date || 0)).slice(0, 5) } : null;
-    const tv = [...new Set((raw.broadcasts || []).map(x => x.media?.shortName || x.station || x.media?.name).filter(Boolean))].slice(0, 4);
+    // the summary's own channel list, written out and sorted (national, local, streaming); the scoreboard's when it has none
+    const watch = window.flTV && raw.broadcasts?.length ? window.flTV.of({ broadcasts: raw.broadcasts }) : g.watch || null;
+    const tv = watch ? watch.all.slice(0, 4) : [...new Set((raw.broadcasts || []).map(x => x.media?.name || x.media?.shortName || x.station).filter(Boolean))].slice(0, 4);
     const stats = (() => { const T = raw.boxscore?.teams || [], of = t => T.find(x => String(x.team?.id) === t.id)?.statistics || [], A = of(a), B = of(b);
       return A.map(s => ({ label: s.label || s.name, a: s.displayValue, b: B.find(x => x.name === s.name)?.displayValue })).filter(s => s.label && s.a != null && s.b != null).slice(0, 8) })();
     return { slug: raw.header?.league?.slug || '', sport, halves: sport === 'basketball' && /college/.test(g.path || ''), a, b, state, detail: st.shortDetail || st.detail || '', desc: st.description || '', date: comp.date ? new Date(comp.date) : g.date, plays, pts, scoreOk, changes, ties, bigA, bigB, bigRuns, nowRun, wps,
-      periods: Math.max(a.lines.length, b.lines.length), leaders: { a: leadersOf(a), b: leadersOf(b) }, xi: { a: xi(a), b: xi(b) }, five: { a: five(a), b: five(b) }, hurt: { a: hurt(a), b: hurt(b) }, form: { a: form(a), b: form(b) }, series, tv,
+      periods: Math.max(a.lines.length, b.lines.length), leaders: { a: leadersOf(a), b: leadersOf(b) }, xi: { a: xi(a), b: xi(b) }, five: { a: five(a), b: five(b) }, hurt: { a: hurt(a), b: hurt(b) }, form: { a: form(a), b: form(b) }, series, tv, watch,
       venue: raw.gameInfo?.venue?.fullName || g.venue || '', crowd: raw.gameInfo?.attendance || 0, stats,
       sit: raw.situation ? { text: raw.situation.downDistanceText || raw.situation.shortDownDistanceText || '', poss: String(raw.situation.possession || ''), red: !!raw.situation.isRedZone, last: raw.situation.lastPlay?.text || '' } : null };
   }
@@ -370,14 +372,20 @@
       ${N.line ? `<p class="gx-now"><span class="lb">Latest</span> ${esc(N.line.slice(0, 220))}</p>` : ''}
       ${lines}
       ${secs.length > 2 ? `<nav class="gx-nav" aria-label="Sections of this game"><ul>${secs.map(([k, l], i) => `<li><a href="#gxs-${k}" data-gxgo="${k}"${i === 0 ? ' aria-current="true"' : ''}>${esc(l)}</a></li>`).join('')}</ul></nav>` : ''}
-      <p class="gx-meta lb">${state === 'pre' ? '' : [d?.venue || g.venue, d?.crowd ? `${d.crowd.toLocaleString()} there` : '', (d?.tv?.length ? d.tv : g.tv ? [g.tv] : []).length ? `TV (US listing): ${esc((d?.tv?.length ? d.tv : [g.tv]).join(', '))}` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('')}</p>
+      <p class="gx-meta lb">${state === 'pre' ? '' : [d?.venue || g.venue, d?.crowd ? `${d.crowd.toLocaleString()} there` : '', watchLine(g, d) ? `${esc(watchLine(g, d))} (US listing)` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('')}</p>
     </header>`;
   }
+  // "National TV: USA Network, Telemundo · Streaming: Peacock" (US listing)
+  function watchLine(g, d) {
+    const w = d?.watch || g.watch;
+    if (!w) { const tv = d?.tv?.length ? d.tv : g.tv ? [g.tv] : []; return tv.join(', ') }
+    return [['national', 'National TV'], ['local', 'Local TV'], ['streaming', 'Streaming'], ['other', 'Also listed']].filter(([k]) => w[k]?.length).map(([k, l]) => `${l}: ${w[k].slice(0, 3).join(', ')}`).join(' · ');
+  }
   function startCard(g, d) {
-    const when = d?.date || g.date, tv = d?.tv?.length ? d.tv : g.tv ? [g.tv] : [], venue = d?.venue || g.venue;
+    const when = d?.date || g.date, tv = watchLine(g, d), venue = d?.venue || g.venue;
     return `<section class="card gx-card gx-start" id="gxs-start" data-gxk="start" aria-labelledby="gxStartH"><div class="sec-h"><h3 id="gxStartH">Before the start</h3></div>
       <dl class="gx-facts"><div><dt>Starts</dt><dd>${esc(day(when))}, ${esc(hm(when))} <span class="gx-cd num" data-gxto="${+when}">${esc(until(+when))}</span></dd></div>
-      ${venue ? `<div><dt>Venue</dt><dd>${esc(venue)}</dd></div>` : ''}${tv.length ? `<div><dt>Watch</dt><dd>${esc(tv.join(', '))} <span class="lb">(US listing)</span></dd></div>` : ''}</dl>
+      ${venue ? `<div><dt>Venue</dt><dd>${esc(venue)}</dd></div>` : ''}${tv ? `<div><dt>Watch</dt><dd>${esc(tv)} <span class="lb">(US listing)</span></dd></div>` : ''}</dl>
       <p class="lb">The score, momentum and key moments appear here once it starts.</p></section>`;
   }
   function paint() {

@@ -28,6 +28,12 @@
     return trail.ml != null && trail.ml >= .65;
   }
   const ONLY = [['all', 'Every game'], ['close', 'Close'], ['ot', 'Overtime'], ['upset', 'Upsets']];
+  /* Where to watch: national TV, local TV (a team's regional network or station), streaming, free, subscription, or not
+     known. broadcast.js sorts each game's channels from the feed's own market and type, so a regional network or a
+     team's app is never counted as national. */
+  const WATCH = window.flTV?.FILTERS || [['any', 'Any']];
+  const watchOk = g => !window.flTV || window.flTV.test(L.watch, g.watch);
+  const nat = g => !!g.tvNat, onAir = g => !!(g.watch ? g.watch.all.length : g.tv);
   const ONLY_F = { all: () => true, close: isClose, ot: isOT, upset };
   // when each game's score last changed, seen from this tab; the "just scored" sort and tag read it
   const scored = new Map(), lastScore = new Map();
@@ -45,7 +51,7 @@
   const comp = g => g.sport === 'soccer' ? (g.lgName || lgNamed(g.league) || 'Soccer') : g.short || g.sport;
   const mine = g => { try { return !!(window.flHome?.isMine?.(g) || window.flHome?.watching?.(g.key)) } catch { return false } };
   function pop(g) {   // how much a game is likely to matter to most people: league weight, ranks, TV, a top soccer league; youth and friendlies sink
-    const c = comp(g); let p = (g.weight || 3) * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 6 : 0) + (mine(g) ? 60 : 0);
+    const c = comp(g); let p = (g.weight || 3) * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (nat(g) ? 6 : onAir(g) ? 2 : 0) + (mine(g) ? 60 : 0);
     if (g.sport === 'soccer') p += TOP_SOCCER.test(c) && !YOUTH.test(c) ? 30 : 0;
     if (YOUTH.test(c) || YOUTH.test(`${g.a.full} ${g.b.full}`)) p -= 35;
     return p;
@@ -53,8 +59,8 @@
   const evenness = g => g.a.ml != null && g.b.ml != null ? Math.abs(g.a.ml - g.b.ml) : g.state === 'in' ? gap(g) / 10 + .5 : 9;
   const SORTS = { soon: (a, b) => a.date - b.date, pop: (a, b) => pop(b) - pop(a), close: (a, b) => (a.state === 'in' && b.state === 'in' ? gap(a) - gap(b) : evenness(a) - evenness(b)) || a.date - b.date,
     ranked: (a, b) => (!!(b.a.rank || b.b.rank) - !!(a.a.rank || a.b.rank)) || (Math.min(a.a.rank || 99, a.b.rank || 99) - Math.min(b.a.rank || 99, b.b.rank || 99)) || a.date - b.date,
-    tv: (a, b) => (!!b.tv - !!a.tv) || pop(b) - pop(a), mine: (a, b) => (mine(b) - mine(a)) || a.date - b.date, just: (a, b) => (scored.get(b.key) || 0) - (scored.get(a.key) || 0) };
-  const SORT_NAMES = [['big', 'By competition'], ['soon', 'Starting soonest'], ['pop', 'Most popular'], ['close', 'Closest matchup'], ['ranked', 'Ranked teams first'], ['tv', 'On TV first'], ['mine', 'My teams first']];
+    tv: (a, b) => (nat(b) - nat(a)) || (onAir(b) - onAir(a)) || pop(b) - pop(a), mine: (a, b) => (mine(b) - mine(a)) || a.date - b.date, just: (a, b) => (scored.get(b.key) || 0) - (scored.get(a.key) || 0) };
+  const SORT_NAMES = [['big', 'By competition'], ['soon', 'Starting soonest'], ['pop', 'Most popular'], ['close', 'Closest matchup'], ['ranked', 'Ranked teams first'], ['tv', 'National TV first'], ['mine', 'My teams first']];
   const PER = 5, FLAT = 24;
   function plural(n, one, many) { return `${n} ${n === 1 ? one : many}` }
   // a section of cards or rows; an id keeps focus when it redraws
@@ -78,9 +84,12 @@
       const my = take(list.filter(mine).sort(SORTS.soon), 12);
       if (my.length) h += block('mine', 'My teams', my, { why: 'teams and games you follow' });
       const top = take([...list].filter(g => pop(g) >= 75).sort(SORTS.pop), 4);
-      if (top.length) h += block('top', 'Top games', top, { why: 'biggest leagues, ranked teams and TV' });
-      const tv = take([...list].filter(g => g.tv).sort(SORTS.pop), 4);
-      if (tv.length) h += block('tv', 'On TV', tv, { why: 'with a national broadcast listed' });
+      if (top.length) h += block('top', 'Top games', top, { why: 'biggest leagues, ranked teams and national TV' });
+      // two honest groups: a US national network, and anything else listed (a team's regional network, a local station, a stream)
+      const tv = take([...list].filter(nat).sort(SORTS.pop), 4);
+      if (tv.length) h += block('tv', 'National TV', tv, { why: 'on a US national network' });
+      const avail = take([...list].filter(g => !nat(g) && onAir(g)).sort(SORTS.pop), 4);
+      if (avail.length) h += block('watch', 'Available to watch', avail, { why: 'local TV or streaming, often only in the teams’ home areas' });
       if (show === 'next') { const soon = take(list.filter(g => g.date - Date.now() < 3600e3).sort(SORTS.soon), 6); if (soon.length) h += block('hour', 'Starting in the next hour', soon) }
       h += `<h2 class="lv-allh">All competitions</h2>`;
     }

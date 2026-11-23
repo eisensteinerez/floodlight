@@ -60,7 +60,7 @@
   /* the standard card: crest and name either side, score or start time in the middle */
   window.flCard = function (o) {
     return `<button class="m mx ${o.state === 'in' ? 'is-live' : o.state === 'post' ? 'is-final' : 'is-pre'}${o.cls ? ' ' + o.cls : ''}" ${o.attrs || ''} style="${colours(o)}" aria-label="${esc(o.label || '')}">
-      <span class="mx-top">${badge(o)}${o.lg ? `<span class="mx-lg">${esc(o.lg)}</span>` : ''}${o.tv ? `<span class="mx-tv">${TV}${esc(o.tv)}</span>` : ''}</span>
+      <span class="mx-top">${badge(o)}${o.lg ? `<span class="mx-lg">${esc(o.lg)}</span>` : ''}${o.tv ? `<span class="mx-tv" title="${esc(o.tv)}">${TV}<span class="mx-tvn">${esc(o.tv)}</span></span>` : ''}</span>
       <span class="mx-main">${side(o.a)}${middle(o)}${side(o.b)}</span>${o.extra ? `<span class="mx-x">${o.extra}</span>` : ''}</button>`;
   };
 

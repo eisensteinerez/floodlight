@@ -149,8 +149,10 @@ button:focus-visible,input:focus-visible,a:focus-visible,select:focus-visible{ou
 .mx-badge.live i{position:relative;width:6px;height:6px;border-radius:50%;background:var(--live-fill,var(--live))}
 .mx-badge.live i::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--live-fill,var(--live));animation:flPing 1.6s ease-out infinite}
 .mx-lg{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 12px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mx-tvn{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.mx-top .mx-lg{flex-shrink:0;max-width:48%}
 .mx-lg img{width:16px;height:16px;object-fit:contain;flex:none}
-.mx-tv{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:5px;font:500 12px/1 var(--f-body);color:var(--muted);white-space:nowrap}
+.mx-tv{margin-left:auto;flex:0 1 auto;min-width:0;max-width:60%;display:inline-flex;align-items:center;gap:5px;font:500 12px/1 var(--f-body);color:var(--muted);white-space:nowrap}
 .mx-main{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px}
 .mx-t{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;text-align:center}
 .mx-logo{width:44px;height:44px;object-fit:contain;flex:none;transition:transform .25s var(--ease)}
