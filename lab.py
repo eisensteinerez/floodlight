@@ -31,6 +31,7 @@ import discord_bot as bot
 import players
 import teamcheck
 import labfight   # UFC and boxing fighters in the same shape as a player
+import markets    # the verified market service: which lines are open right now
 
 PASS_HOURS = 12
 TICKET_MIN = 15
@@ -247,17 +248,21 @@ def player(sport, name, stat="", q_team=""):
                           "comp": g.get("comp") or "", "res": g.get("res") or "", "score": g.get("score") or "", "min": _r(g.get("min"), 1), "v": v})
     stats = [{"k": k, "l": sd["l"], "n": sum(1 for g in games if k in g["v"])} for k, sd in defs.items()]
     stats = [s for s in stats if s["n"]]
-    lines = []
+    lines, gone = [], []
     try:
-        n = bot.norm(p["name"])
-        for x in bot.dfs_lines(sport).get("lines") or []:
+        n, dl = bot.norm(p["name"]), bot.dfs_lines(sport)
+        for x in dl.get("lines") or []:
             if bot.norm(x.get("player")) == n:
                 k = bot.stat_key(sport, x.get("stat"))
                 if k:
                     lines.append({"k": k, "line": x["line"], "book": x.get("book"), "kind": x.get("kind") or "standard", "pOver": x.get("pOver"),
-                                  "opp": x.get("opp") or "", "start": x.get("start") or "", "team": x.get("team") or ""})
-    except Exception:
-        pass
+                                  "opp": x.get("opp") or "", "start": x.get("start") or "", "team": x.get("team") or "", "mid": x.get("mid") or "", "status": x.get("status") or ""})
+        # only the lines the verified market service has open (markets.py): the same checks as the board
+        book_team0 = next((x["team"] for x in lines if x.get("team")), "")
+        lines, gone = markets.check_lines(sport, p["name"], teamcheck.canon(sport, book_team0) or book_team0, p.get("fid") or "", lines, fetched=dl.get("fetched"), errors=dl.get("errors"))
+    except Exception as e:
+        print(f"lab: lines for {name}: {type(e).__name__}: {e}")
+        lines = []
     ex = _extras(sport, p, name.strip())
     rec = players.get(p["fid"], False) if p.get("fid") else None
     if rec and rec.get("teamId"):   # the crest of the record's team, not of whatever the player's own page says
@@ -272,20 +277,28 @@ def player(sport, name, stat="", q_team=""):
             "crest": img_url(ex.get("crest")), "pos": " · ".join(x for x in (ex.get("num") and "#" + ex["num"], ex.get("pos")) if x), "next": nxt,
             "want": bot.stat_key(sport, stat) if stat else None, "teamOk": ok, "teamNote": team_note, "bookTeam": book_team,
             "fid": p.get("fid") or "", "registry": players.view(players.get(p["fid"], False)) if p.get("fid") else None,
-            "seasonStart": bot.season_start(sport).isoformat(), "stats": stats, "games": games, "lines": lines, "at": int(time.time())}
+            "seasonStart": bot.season_start(sport).isoformat(), "stats": stats, "games": games, "lines": lines, "linesGone": gone[:12], "at": int(time.time())}
 
 
-def board(sport, count=24):
+def board(sport, count=24, tz=None):
+    """The board every page reads: the posted lines ranked by recent hit rate, checked by the verified market service
+    (markets.py). Only open markets are in rows; the rest are in removed with their status and reason."""
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
     # "at" is when the books were actually read; the board is kept for 15 minutes, and the pages show its age
     b = bot.memo(("labboard", sport), 900, lambda: dict(bot.props_board(sport, None, count, None if sport == "soccer" else _deeper), at=int(time.time())))
-    # a row whose game has begun is dropped here too (the board is kept for 15 minutes); the page checks every row again
-    now = time.time()
-    rows = [x for x in (dict(_row(sport, r), **_who(sport, r)) for r in b["rows"]) if not _began(x.get("start"), now)]
+    rows = board_rows(sport, b)
+    v = markets.refresh(sport, rows, fetched=b.get("fetched") or b.get("at"), errors=b.get("errors"), tz=tz or markets.LEAGUE_TZ)
+    return {"sport": sport, "rows": v["rows"], "removed": v["removed"], "counts": v["counts"], "providers": v["providers"], "schedule": v["schedule"],
+            "injuries": v["injuries"], "checked": b["lines"], "errors": b["errors"], "at": b.get("at"), "fetched": b.get("fetched"), "ttl": 900, "verified": True}
+
+
+def board_rows(sport, b):
+    """The board's rows with the player record's team on each (players.py), before the market checks."""
+    rows = [dict(_row(sport, r), **_who(sport, r)) for r in b["rows"]]
     if sport in players.SPORTS:
         players.check_board(sport, [(players.get(r.get("fid"), False) if r.get("fid") else None, r.get("team")) for r in b["rows"]])
-    return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"], "at": b.get("at"), "ttl": 900}
+    return rows
 
 
 def _began(start, now):

@@ -44,7 +44,7 @@ SPORT_NAME = {"nba": "NBA", "wnba": "WNBA", "nfl": "NFL", "nhl": "NHL", "mlb": "
               "soccer": "Soccer", "tennis": "Tennis", "ufc": "UFC", "all": "All sports"}
 D = {"file": Path(__file__).resolve().parent / ".floodlight-cache" / "health.json", "now": time.time, "send": None,
      "propbook": None, "record": None, "players": None, "fetch": None}
-S = {"feeds": {}, "alerts": [], "sent": {}, "starts": {}, "photos": {}}
+S = {"feeds": {}, "alerts": [], "sent": {}, "starts": {}, "photos": {}, "incidents": []}
 _lock = threading.RLock()
 
 
@@ -52,7 +52,7 @@ def setup(**deps):
     D.update({k: v for k, v in deps.items() if v is not None})
     with _lock:
         saved = storage.load(D["file"], {}) or {}
-        for k in ("alerts", "sent", "starts"):
+        for k in ("alerts", "sent", "starts", "incidents"):
             S[k] = saved.get(k) or S[k]
     if deps.get("loop", True):
         threading.Thread(target=_loop, daemon=True, name="health").start()
@@ -64,7 +64,8 @@ def _now():
 
 def save():
     with _lock:
-        storage.save(D["file"], {"alerts": S["alerts"][-200:], "sent": S["sent"], "starts": dict(list(S["starts"].items())[-3000:])})
+        storage.save(D["file"], {"alerts": S["alerts"][-200:], "sent": S["sent"], "starts": dict(list(S["starts"].items())[-3000:]),
+                                 "incidents": S["incidents"][-100:]})
 
 
 # ---------- what each request was ----------
@@ -105,7 +106,11 @@ def ok(feed, sport="all", err="", n=None):
         return
     with _lock:
         r = _rec(feed, sport)
-        r.update(ok=_now(), okAt=_now(), fails=0, n=n if n is not None else r.get("n"), err=err or "")
+        if r.get("down"):   # an outage just ended: it goes into the public incident list
+            S["incidents"].append({"feed": feed, "label": FEEDS[feed][0], "sport": sport or "all", "name": SPORT_NAME.get(sport, str(sport).upper()),
+                                   "from": r["down"], "to": _now(), "err": plain(r.get("err") or "")})
+            S["incidents"] = S["incidents"][-100:]
+        r.update(ok=_now(), okAt=_now(), fails=0, n=n if n is not None else r.get("n"), err=err or "", down=None, firstFail=None)
 
 
 def fail(feed, sport="all", err="", n=None):
@@ -113,7 +118,9 @@ def fail(feed, sport="all", err="", n=None):
         return
     with _lock:
         r = _rec(feed, sport)
-        r.update(fail=_now(), err=str(err)[:160], fails=(r.get("fails") or 0) + 1)
+        r.update(fail=_now(), err=str(err)[:160], fails=(r.get("fails") or 0) + 1, firstFail=r.get("firstFail") or _now())
+        if r["fails"] >= 2 and not r.get("down"):   # two failures in a row count as an outage
+            r["down"] = r["firstFail"]
 
 
 def plain(err):
@@ -168,7 +175,18 @@ def status():
                   else "delayed" if states <= {"live", "delayed"} and "delayed" in states and len(states) == 1 else "partial")
             last = max((s["at"] or 0 for s in sports), default=0) or None
             out.append({"feed": feed, "label": label, "every": every, "state": st, "at": last, "sports": sports})
-    return {"now": now, "feeds": out}
+    return {"now": now, "feeds": out, "incidents": incidents(now=now)}
+
+
+def incidents(days=30, now=None):
+    """Outages of a source: the ones still going ("open") and the ones resolved in the last `days` days, newest first.
+    An outage starts at the first of two or more failures in a row and ends at the next good answer."""
+    now = now or _now()
+    with _lock:
+        live = [{"feed": f, "label": FEEDS[f][0], "sport": sp, "name": SPORT_NAME.get(sp, sp.upper()), "from": r["down"], "to": None, "err": plain(r.get("err") or "")}
+                for f, by in S["feeds"].items() if f in FEEDS for sp, r in by.items() if r.get("down")]
+        done = [dict(i) for i in S["incidents"] if i["to"] >= now - days * 86400]
+    return {"open": sorted(live, key=lambda i: -i["from"]), "resolved": sorted(done, key=lambda i: -i["to"])[:30]}
 
 
 # ---------- pages report what they see ----------

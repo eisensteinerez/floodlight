@@ -40,8 +40,15 @@
       fid: r.fid || '', teamName: r.teamName || '', teamStatus: r.teamStatus || 'unknown', bookTeam: r.bookTeam || '', prev: r.prev || null, flags: r.flags || [], hold: !!r.hold,
       start: start && !isNaN(start) ? start : null, game: [r.team, r.opp].filter(Boolean).join(' v '), gameKey: `${sport}:${[r.team, r.opp].filter(Boolean).sort().join('|') || r.player}`,
       books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), h10, avg: S ? S.avg : r.avg, smp: S, mu: J.mu, sd: J.sd,
-      games: games.slice(0, 60), offers: r.offers || [], neff: J.neff };   // the games and prices behind the reading, for the evidence panel   // mu and sd: what the reading expects, used to follow the pick live
+      games: games.slice(0, 60), offers: r.offers || [], neff: J.neff,   // the games and prices behind the reading, for the evidence panel   // mu and sd: what the reading expects, used to follow the pick live
+      // the verified market service's record (markets.py): ids, status, the provider's real read time, the game it belongs to
+      ...mrec(r) };
   }
+  const ms = v => v == null || v === '' ? null : typeof v === 'number' ? (v > 1e11 ? v : v * 1000) : (Date.parse(v) || null);
+  const mrec = r => r.mid ? { mid: r.mid, marketId: r.mid, providerMarketId: r.providerMarketId || '', eventId: r.eventId || '', playerId: r.playerId || r.fid || '', teamId: r.teamId || '', oppId: r.oppId || '',
+    league: r.league || '', status: r.status || 'awaiting_verification', statusLabel: r.statusLabel || '', removalReason: r.removalReason || '', verifiedAt: ms(r.verifiedAt), firstSeen: ms(r.firstSeen),
+    closingLine: r.closingLine ?? null, openLine: r.openLine ?? null, lineFrom: r.lineFrom ?? null, lineAt: ms(r.lineAt), oppName: r.oppName || '', home: r.home ?? null, eventDay: r.eventDay || '',
+    tz: r.tz || '', matchup: r.matchup || 'schedule', hot: !!r.hot, l5r: r.l5 ?? null, l10r: r.l10 ?? null, l20r: r.l20 ?? null } : { status: '' };
   /* A board that answered is also kept in this browser for a few hours, so the next visit can show the last reading at
      once (marked with its age) while a fresh one loads, and a failed check falls back to it instead of an empty page. */
   const KEEP = 3 * 3600e3;
@@ -51,8 +58,10 @@
   /* A prop whose player record is being checked (two rosters, a sportsbook that disagrees, a game the player's team
      isn't in) is held back from every list, Predictions, Home, the Lab and parlays alike, and listed apart with the
      reason: nothing questionable is published as a pick. */
-  const shape = (d, sport, got) => { const at = d.at ? d.at * 1000 : got, all = (d.rows || []).map(r => propPick(r, sport)).filter(Boolean).map(p => ({ ...p, at }));
-    return { sport, picks: all.filter(p => !p.hold), held: all.filter(p => p.hold), checked: d.checked || 0, note: d.note || '', errors: d.errors || {}, at, got } };
+  // at: a pick's price time is its provider's real read (verifiedAt), never the time this page asked
+  const shape = (d, sport, got) => { const at = d.at ? d.at * 1000 : got, all = (d.rows || []).map(r => propPick(r, sport)).filter(Boolean).map(p => ({ ...p, at: p.verifiedAt || at }));
+    return { sport, picks: all.filter(p => !p.hold), held: all.filter(p => p.hold), checked: d.checked || 0, note: d.note || '', errors: d.errors || {}, at, got,
+      verified: !!d.verified, removed: d.removed || [], counts: d.counts || {}, providers: d.providers || {}, schedule: d.schedule || null, injuries: d.injuries || null } };
   function kept(sport) { const v = disk.get(sport); if (!v) return null; try { return { ...shape(v.d, sport, v.got), kept: true } } catch { return null } }
   function board(sport, force) {
     const c = cache.get(sport);
@@ -69,7 +78,10 @@
   /* Home, the Lab's lists and parlays only ever get lines whose game has a start time still ahead: a line with no
      start (Sleeper posts none) or one whose game began is never a current pick. Predictions reads the boards itself
      (have()) and runs the full checks against the league schedule (market.js). */
-  const upcoming = (picks, now = Date.now()) => picks.filter(p => p.start && +p.start > now);
+  /* Since the verified market service (markets.py, markets.js), a pick is current only while market.js gate() says
+     open: the server marked it open, its game has a start still ahead, it belongs to a scheduled event, and its provider
+     re-read it recently. A board from an older server (no market ids) falls back to the start-time check alone. */
+  const upcoming = (picks, now = Date.now()) => picks.filter(p => p.mid ? window.flMarket?.gate(p, { now }).status === 'open' : p.start && +p.start > now);
   async function props(sports, force, onPart) {
     const res = await Promise.all((sports || SPORTS.map(s => s[0])).map(s => board(s, force).then(r => { try { onPart?.(r) } catch (e) {} return r })));
     return { picks: upcoming(res.flatMap(r => r.picks)), by: Object.fromEntries(res.map(r => [r.sport, r])), denied: res.length > 0 && res.every(r => r.status === 401 || r.status === 403) };
@@ -84,11 +96,14 @@
     for (const p of upcoming(picks)) { const over = p.side === 'over' ? p.heat : 100 - p.heat, cur = best.get(p.sport + p.name); if (!cur || Math.abs(over - 50) > Math.abs(cur.heat - 50)) best.set(p.sport + p.name, { ...p, heat: over }) }
     return [...best.values()];
   }
-  const hot = (picks, n = 3) => players(picks).filter(p => p.heat >= 60).sort((a, b) => b.heat - a.heat).slice(0, n);
+  // "running hot" is decided once, by the server (markets.py is_hot), so Home, the Lab and Prop Explorer always agree
+  const isHot = p => p.mid ? !!p.hot : p.heat >= 60;
+  const hot = (picks, n = 3) => { const best = new Map(); for (const p of upcoming(picks)) if (isHot(p)) { const k = p.sport + p.name, c = best.get(k); if (!c || (p.l10r ?? p.l10 ?? 0) > (c.l10r ?? c.l10 ?? 0)) best.set(k, p) }
+    return [...best.values()].sort((a, b) => (b.l10r ?? b.l10 ?? 0) - (a.l10r ?? a.l10 ?? 0) || (b.l5r ?? b.l5 ?? 0) - (a.l5r ?? a.l5 ?? 0) || b.heat - a.heat).slice(0, n) };
   const cold = (picks, n = 2) => players(picks).filter(p => p.heat < 40).sort((a, b) => a.heat - b.heat).slice(0, n);
   const ranked = picks => upcoming(picks).filter(p => p.edge != null).sort((a, b) => b.edge - a.edge || b.ours - a.ours);
   // opening a pick in the Lab: the player, the stat and the line it was read at
   const labArgs = p => ({ sport: p.sport, player: p.name, stat: p.k, line: p.line, side: p.side });
 
-  window.flEdge = { SPORTS, board, props, have, all, held, hot, cold, ranked, players, labArgs, fmt, upcoming };
+  window.flEdge = { SPORTS, board, props, have, all, held, hot, cold, ranked, players, labArgs, fmt, upcoming, isHot, propPick };
 })();
