@@ -70,6 +70,8 @@ html.fl-noresearch .rs-open{display:none!important}
   let mode = 'login', forgot = false, invite = null;   // invite: what /api/invite said about the link that was opened
   function card(user, err) {
     const pending = user && user.role === 'pending';
+    // sign-in, sign-up and recovery live in auth.js; this file keeps the paused-account card
+    if (window.flAuth && !pending && !(invite && invite.error)) return window.flAuth.card(user, err);
     if (pending) return `<div class="flg-card" id="flgCard"><h2 class="flg-h">Not open yet</h2><p>Signed in as <strong>${esc(user.username)}</strong>.</p>
         <div class="flg-ok">Your account is paused or still waiting for an admin to switch it on. Ask your admin, then check again.</div>
         <button class="btn" data-g="check">Check again</button>
@@ -99,9 +101,43 @@ html.fl-noresearch .rs-open{display:none!important}
         ${mode === 'login' ? '<button type="button" class="flg-forgot" data-g="forgot">Forgot password?</button>' : ''}
         <div class="flg-err" role="alert">${esc(err || '')}</div></div>`;
   }
+  /* public pages a signed-out visitor can read: plans and the policies (pricing.js, legal.js) */
+  const PUBLIC = /^#\/(pricing|legal)(?:\/([a-z-]+))?$/;
+  function publicPage() {
+    const m = PUBLIC.exec(location.hash); if (!m) return false;
+    ready(() => {
+      let g = document.getElementById('flGate');
+      if (!g) { g = document.createElement('div'); g.id = 'flGate'; document.body.prepend(g) }
+      delete g.dataset.landing;   // the landing page is drawn again when the visitor leaves Plans or a policy
+      g.innerHTML = `<div class="flg-land flg-pub"><nav class="flg-nav"><a class="flg-brand flg-home" href="#">${LOGO}Floodlight</a><a href="#/auth/login" data-g="login">Log in</a></nav>
+        <main class="flg-pub-main" id="flgPub" tabindex="-1"></main>${FOOT}</div>`;
+      const el = g.querySelector('#flgPub');
+      if (m[1] === 'pricing') window.flPricing?.render(el, { standalone: true }); else window.flLegal?.render(el, m[2]);
+      document.title = (m[1] === 'pricing' ? 'Plans' : 'Policies') + ' · Floodlight';
+      el.focus({ preventScroll: true }); scrollTo({ top: 0 });
+    });
+    return true;
+  }
+  const FOOT = `<footer class="flg-foot"><span>Floodlight · research, not a sportsbook. 18+ (21+ where required). Hit rates show past results, not guarantees.</span>
+    <nav aria-label="Policies"><a href="#/pricing">Plans</a> <a href="#/legal/terms">Terms</a> <a href="#/legal/privacy">Privacy</a> <a href="#/legal/cookies">Cookies</a> <a href="#/legal/refunds">Refunds</a> <a href="#/legal/contact">Contact</a></nav></footer>`;
+  let signedOut = false;
+  window.flGateRedraw = () => gate(null, '', true);
+  addEventListener('hashchange', () => {
+    if (!signedOut) return;
+    if (/^#\/auth\/(verify|magic|reset)\//.test(location.hash) && window.flAuth?.route({}, { gated: true })) return gate(null, '', true);
+    if (/^#\/auth\/(login|signup|magic|forgot|username)$/.test(location.hash)) { window.flAuth?.route({}, { gated: true }); return gate(null, '', true) }
+    if (!publicPage()) gate(null);
+  });
+  // inside the signed-out page, links to Plans and the policies change the address instead of opening an app page
+  document.addEventListener('click', ev => {
+    const t = ev.target.closest?.('#flGate [data-page]'); if (!t || !signedOut) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    location.hash = '#/' + t.dataset.page + (t.dataset.arg ? '/' + t.dataset.arg : '');
+  }, true);
   /* The landing page (landing.js) is drawn once; the sign-in card is redrawn into its dialog (#flgSlot).
      The dialog opens by itself for an invite link, an account waiting to be switched on, or an error. */
   function gate(user, err, show) {
+    if (!user && signedOut && publicPage()) return;
     ready(() => {
       let g = document.getElementById('flGate');
       if (!g) { g = document.createElement('div'); g.id = 'flGate'; document.body.prepend(g) }
@@ -117,7 +153,7 @@ html.fl-noresearch .rs-open{display:none!important}
   document.addEventListener('click', async ev => {
     const b = ev.target.closest('[data-g]'); if (!b || !b.closest('#flGate')) return;
     const a = b.dataset.g;
-    if (a === 'login' || a === 'signup') { ev.preventDefault(); mode = a; forgot = false; if (invite) { invite = null; history.replaceState(null, '', location.pathname) } return gate(null, '', true) }
+    if (a === 'login' || a === 'signup') { ev.preventDefault(); if (PUBLIC.test(location.hash)) history.replaceState(null, '', location.pathname); if (window.flAuth) { window.flAuth.set(a); return gate(null, '', true) } mode = a; forgot = false; if (invite) { invite = null; history.replaceState(null, '', location.pathname) } return gate(null, '', true) }
     if (a === 'forgot') { forgot = true; return gate(null, '', true) }
     if (a === 'back') { forgot = false; return gate(null, '', true) }
     if (a === 'logout') { await call('/api/auth/logout', {}).catch(() => {}); return gate(null) }
@@ -144,12 +180,16 @@ html.fl-noresearch .rs-open{display:none!important}
     const join = /^#\/join\/([\w-]{8,})$/.exec(location.hash);
     if (join && !d.user) {
       try { invite = { ...(await call('/api/invite?token=' + encodeURIComponent(join[1]))), token: join[1] } } catch (e) { invite = { error: e.message } }
-      mode = 'signup'; return gate(null);
+      if (!invite.error) window.flAuth?.invite(invite);
+      window.flAuth?.route(d, { gated: true });
+      signedOut = true; mode = 'signup'; return gate(null);
     }
     if (join) history.replaceState(null, '', location.pathname);
     if (!d.gated) return open(d.user);
     if (d.user && d.user.role && d.user.role !== 'pending') return open(d.user);
-    gate(d.user);
+    signedOut = !d.user;
+    if (signedOut && window.flAuth) window.flAuth.route(d, { gated: true });
+    gate(d.user, '', signedOut && /^#\/auth\//.test(location.hash));
   }
   start();
 })();
