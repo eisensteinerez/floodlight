@@ -55,7 +55,7 @@
   const nameCls = t => { if (!abOf(t)) return ''; const L = Math.max(0, ...String(t.name ?? '').split(/\s+/).map(w => w.length)); return ` has-ab nm-${Math.min(14, Math.max(3, L))}` };
   /* the longest word in a team name, so a theme can size names to fit their column (Stadium Gold does) */
   const nl = n => Math.max(4, ...String(n || '').split(/\s+/).map(w => w.length));
-  const side = (t, extra = '') => `<span class="mx-t${t.lose ? ' lose' : ''}${t.win ? ' win' : ''}">${logo(t, 'mx-logo')}<span class="mx-n${nameCls(t)}" style="--nl:${nl(t.name)}">${t.rank ? `<em>${esc(t.rank)}</em>` : ''}${nameHtml(t)}</span>${t.record ? `<small>${esc(t.record)}</small>` : ''}${extra}</span>`;
+  const side = (t, extra = '') => `<span class="mx-t${t.lose ? ' lose' : ''}${t.win ? ' win' : ''}">${logo(t, 'mx-logo')}<span class="mx-n${nameCls(t)}" style="--nl:${nl(t.name)}">${t.rank ? `<em class="mx-rk" title="Ranked ${esc(String(t.rank).replace(/^#/, ''))}"><span class="sr-only">ranked </span>#${esc(String(t.rank).replace(/^#/, ''))}</em>` : ''}${nameHtml(t)}</span>${t.record ? `<small class="mx-rec" title="Season record"><span class="sr-only">record </span>${esc(t.record)}</small>` : ''}${extra}</span>`;
 
   /* the standard card: crest and name either side, score or start time in the middle */
   window.flCard = function (o) {

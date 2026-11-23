@@ -1867,3 +1867,22 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .py-gh .rw-t small{font-size:12px}
 /* the game line under each pick stays readable on the accent ticket in every theme */
 :root[data-theme] .py-ticket .rw-t small,:root[data-theme] .py-ticket .rw-t small *{color:color-mix(in oklab,var(--on-accent) 80%,transparent)}
+
+/* ---------- Sport pages: where you are, leagues with nothing on, ranks and records (slate.js, cards.js) ---------- */
+.rail-more{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}
+.rail-more>summary{list-style:none;cursor:pointer}.rail-more>summary::-webkit-details-marker{display:none}
+.rail-more>summary .dot{font-weight:700;transition:transform .2s}
+.rail-more[open]>summary .dot{transform:rotate(45deg)}
+:root[data-theme] .rail-more>summary b.rm-n{background:transparent;border:1px solid var(--border-2);color:var(--text-2)}
+.rm-note{margin:2px 10px 6px;font-size:12px;color:var(--muted)}
+.rail-more h5{margin:12px 10px 6px;font:600 12px/1 var(--font-body);color:var(--muted)}
+.chips .chip-x{display:none}.chips.show-more .chip-x{display:flex}
+:root[data-theme] .chip-more{border-style:dashed}
+:root[data-theme] .chips .chip.chip-more b,:root[data-theme] .chips .chip.chip-more b:is(*){background:transparent;color:inherit;border:1px solid currentColor}
+/* the line above the page heading: Basketball › NBA */
+:root[data-theme] .livebar>.sp-crumb{flex-basis:100%;margin:0 0 -8px;font:600 14px/1.2 var(--font-body);color:var(--text-2);letter-spacing:.01em;text-transform:none}
+:root[data-theme] .livebar>.sp-crumb span{color:var(--muted)}
+/* a rank is a small tag and a record sits in brackets, so neither reads as a score */
+:root[data-theme] .mx-n em.mx-rk{display:inline-block;font:600 11px/1 var(--font-body);font-style:normal;letter-spacing:0;padding:3px 5px;margin-right:6px;border-radius:var(--radius-pill);border:1px solid var(--border-2);color:var(--text-2);vertical-align:.15em;font-variant-numeric:tabular-nums;-webkit-text-fill-color:currentColor;background:none}
+:root[data-theme] .mx-t small.mx-rec{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.mx-t small.mx-rec::before{content:"("}.mx-t small.mx-rec::after{content:")"}
