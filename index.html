@@ -3714,6 +3714,10 @@ const STAGE = new Set(['team', 'fmteam', 'player', 'tc', 'match']);
 // Team, player and transfer-centre pages take the whole stage; matches and a league beside its fixtures stay as a side panel.
 function syncStage(){
   const v = S.stack[S.stack.length - 1], sh = document.querySelector('.shell'), auto = !!v && STAGE.has(v.type) && matchMedia('(min-width:821px)').matches;
+  // a game opened from a long schedule takes over the page; closing it puts the reader back where they were in the list
+  const was = sh.classList.contains('stage'), will = (!!S.big || auto) && !!v;
+  if (!was && will) S.listY = window.scrollY;
+  if (was && !will && S.listY != null) { const y = S.listY; S.listY = null; requestAnimationFrame(() => window.scrollTo({ top: y })) }
   sh.classList.toggle('sheet-wide', !!S.big || auto); sh.classList.toggle('stage', (!!S.big || auto) && !!v); sh.classList.toggle('stage-match', auto && v.type === 'match'); sh.classList.toggle('stage-auto', auto);
 }
 function setBig(on){
@@ -3721,7 +3725,7 @@ function setBig(on){
   if (S.stack.length || S.sel) renderSheet();
   if (on) window.scrollTo({ top: 0 });
 }
-function closeSheet(){
+function closeSheet(quiet){   // quiet: closed by the site itself (a page or sport change), not by the user, so nothing is announced
   const leagueRoot = S.stack.length === 1 && S.stack[0].type === 'league';
   if (S.big) setBig(false);
   S.sel = null; S.summary = null;
@@ -3731,7 +3735,7 @@ function closeSheet(){
   // closing a match inside a league goes back to that league; closing the league page itself empties the panel
   if (!leagueRoot && S.sport === 'soccer' && scopeLeague() && matchMedia('(min-width:821px)').matches) return openLeague(scopeLeague());
   S.stack = []; syncStage(); $('sheet').innerHTML = emptySheet();
-  $('announce').textContent = 'Match closed';
+  if (!quiet) $('announce').textContent = 'Match closed';
 }
 function leagueData(v){
   const key = `${v.id}|${v.season}`;
@@ -4848,7 +4852,7 @@ document.addEventListener('click', ev => {
     else if (LG[f]) { S.scope = f; if (f !== before) { S.lgMode = 'upcoming'; store.set('fl.lgMode', 'upcoming') } }   // picking a league starts on its upcoming games
     store.set('fl.filter', S.filter); store.set('fl.scope', S.scope); render(); window.scrollTo({top:0});
     if (scopeLeague() && S.scope !== before) openLeague(scopeLeague());
-    else if (!S.scope && S.stack[0]?.type === 'league') closeSheet();
+    else if (!S.scope && S.stack[0]?.type === 'league') closeSheet(true);
     return }
   if (t.dataset.date) { leaveMarket(); const [y, m, d] = t.dataset.date.split('-').map(Number); return goToDate(new Date(y, m - 1, d, 12)) }
   if (t.dataset.pname) { hideResults(); return openPlayerByName(t.dataset.pname) }
@@ -4964,6 +4968,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 })();
 </script>
 <script src="predfilter.js"></script>
+<script src="slate.js"></script>
 <script src="football.js"></script>
 <script src="basketball.js"></script>
 <script src="baseball.js"></script>
@@ -4990,6 +4995,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="alerts.js"></script>
 <script src="matchcentre.js"></script>
 <script src="labpage.js"></script>
+<script src="labtools.js"></script>
 <script src="evidence.js"></script>
 <script src="predictions.js"></script>
 <script src="history.js"></script>
@@ -5002,6 +5008,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="onboard.js"></script>
 <script src="me.js"></script>
 <script src="guide.js"></script>
+<script src="search.js"></script>
 <script type="module">
 // Predicted lineups: Claude researches recent team news with web search, using the viewer's own API key.
 // The SDK is only downloaded the first time someone asks for a predicted lineup.

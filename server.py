@@ -53,6 +53,7 @@ import storage
 import discord_bot
 import lab
 import record
+import propbook
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -90,7 +91,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "history.js",
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "history.js", "search.js",
                 "stadium-wide.webp", "stadium-pitch.webp"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
@@ -989,7 +990,7 @@ _acct_lock = threading.Lock()
 SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
              "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list, "favThemes": list,
-             "homeOff": list, "watch": list}   # Home: the sections a member has hidden, and the games on their watchlist   # saved Lab boards, saved prediction slips, favorite sports, time zone
+             "homeOff": list, "homeOrder": list, "watch": list}   # Home: the sections a member has hidden, and the games on their watchlist   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -1046,12 +1047,39 @@ def _mlb_moves(days=21):
     out.sort(key=lambda m: m["date"], reverse=True)
     return out[:600]
 
+def _espn_teams(path):
+    """The league's teams, so a sentence that names another team ("from Dallas") can be matched to it."""
+    try:
+        d = fetch(f"https://site.api.espn.com/apis/site/v2/sports/{path}/teams", 86400, as_json=True) or {}
+    except Exception:
+        return []
+    out = []
+    for lgx in (d.get("sports") or [{}])[0].get("leagues") or []:
+        for x in lgx.get("teams") or []:
+            t = x.get("team") or {}
+            logo = next((l.get("href") for l in t.get("logos") or [] if l.get("href")), "")
+            out.append({"id": str(t.get("id") or ""), "name": t.get("displayName") or "", "location": t.get("location") or "", "nickname": t.get("name") or "",
+                        "abbr": t.get("abbreviation") or "", "short": t.get("shortDisplayName") or t.get("name") or "", "logo": logo, "color": t.get("color") or ""})
+    return out
+
+SOURCE_LINK = {"nba": "https://www.espn.com/nba/transactions", "nfl": "https://www.espn.com/nfl/transactions", "mlb": "https://www.mlb.com/transactions"}
+
 def league_moves(lg):
     src, path = MOVE_SRC[lg]
     if not src:
         return {"league": lg, "source": "", "moves": []}
     try:
-        return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": _espn_moves(path) if src == "espn" else _mlb_moves()}
+        if src == "espn":
+            import moves_parse
+            rows = _espn_moves(path)
+            # one event per player per sentence, read on the server (moves_parse.py); the raw rows stay for older pages
+            out = {"league": lg, "source": "ESPN", "status": "Official", "link": SOURCE_LINK.get(lg, ""), "moves": rows}
+            try:
+                out["events"] = [moves_parse.public(e) for e in moves_parse.events(lg, rows, _espn_teams(path))]
+            except Exception as e:   # the page falls back to reading the raw rows itself
+                print("moves_parse failed:", lg, repr(e))
+            return out
+        return {"league": lg, "source": "MLB", "status": "Official", "link": SOURCE_LINK.get(lg, ""), "moves": _mlb_moves()}
     except Exception as e:
         print(f"moves {lg}: {e}", file=sys.stderr)
         return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": [], "error": "The moves list did not answer. It will be tried again shortly."}
@@ -1239,7 +1267,7 @@ def service_for(path):
         return "profiles"
     if path.startswith(("/api/tm/transfers/", "/api/transfers/")):
         return "transfers"
-    if path in ("/api/forecast/list", "/api/record", "/api/parlays") or path.startswith("/api/picks/"):
+    if path in ("/api/forecast/list", "/api/record", "/api/props/record", "/api/props/seen", "/api/parlays") or path.startswith("/api/picks/"):
         return "predictions"
     if path.startswith(("/api/dfs/", "/api/forecast/")):
         return "lab"
@@ -1694,7 +1722,7 @@ def clean_prefs(raw, old):
         if k in raw and isinstance(raw[k], typ):
             v = raw[k]
             if typ is list:
-                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes", "homeOff") and isinstance(x, str) and len(x) <= 24)][:200]
+                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes", "homeOff", "homeOrder") and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
                 if k == "color":
@@ -1907,6 +1935,11 @@ class Handler(SimpleHTTPRequestHandler):
             if GATED and not user:
                 return self.send_auth(401, {"error": "Log in first."})
             return self.send_auth(*add_feedback(body, user))
+        if u.path == "/api/props/seen":   # the props the Predictions page showed, locked in for grading (propbook.py)
+            if GATED and not (user and has(user, "predictions")):
+                return self.send_auth(200, {"ok": True, "added": 0})
+            items = body.get("props") if isinstance(body.get("props"), list) else []
+            return self.send_auth(200, {"ok": True, "added": propbook.seen(items)})
         if u.path == "/api/forecast/track":
             if not can_research(user):
                 return self.send_auth(200, {"ok": True, "added": 0})
@@ -2075,6 +2108,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(200, {"awards": awards_for(q["sport"], q["id"])})
             if u.path == "/api/record":   # Floodlight's own graded predictions (record.py)
                 return self.send_json({"entries": record.entries(), "summary": record.summary(), "now": int(time.time())}, max_age=60)
+            if u.path == "/api/props/record":   # every prop the Predictions page showed, locked before the start and graded (propbook.py)
+                return self.send_json({"entries": propbook.entries(since=time.time() - 120 * 86400), "now": int(time.time())}, max_age=60)
             if u.path == "/api/forecast/get":
                 keys = [k for k in q.get("keys", "").split(",") if re.fullmatch(r"(soccer|football):[A-Za-z0-9_-]{1,24}", k)][:40]
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
@@ -2289,6 +2324,9 @@ if __name__ == "__main__":
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
                      users=lambda: _users, cache_dir=CACHE_DIR)
     record.setup(fetch=fetch, fm_matchstats=fm_matchstats, forecaster=forecaster, cache_dir=CACHE_DIR)
+    import pick_grade   # the Discord pick grader grades the site's props too
+    pick_grade.D["fetch"] = fetch
+    propbook.setup(cache_dir=CACHE_DIR, board=lab.board, grade=pick_grade.grade_prop, mlb=propbook.mlb_grade(discord_bot))
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
                           odds=odds, dfs=dfs, record=record, forecaster=forecaster, fm_team=fm_team, cache_dir=CACHE_DIR)

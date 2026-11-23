@@ -143,14 +143,19 @@ async function renderFootball(){
     S.fb.counts = {}; for (const k of keys) { const d = S.fb.data[cachedId(k)]; if (d) S.fb.counts[k] = { n: d.events.length, live: d.events.filter(e => e.state === 'in').length } }
     fbRail();
     const live = list.filter(e => e.state === 'in').length;
+    const slate = window.flSlate, big = !!slate && slate.isBig(list.length) && !q && (S.fb.filter || 'all') === 'all';
+    if (slate) slate.repaint.fb = paint;
     const days = new Map(); for (const e of list) { const k = e.date.toDateString(); if (!days.has(k)) days.set(k, []); days.get(k).push(e) }
     const navs = key !== 'all' ? `<div class="datebar"><button class="dnav" data-fbact="wk" data-to="-1" aria-label="Previous week">‹</button>
         <button class="dtoggle" data-fbact="wk" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(meta.label || 'This week')}${wk ? '' : ' · this week'}</span></button>
         <button class="dnav" data-fbact="wk" data-to="1" aria-label="Next week">›</button></div>` : '';
-    const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ['fav', '★ My teams'], ...(FBL[key]?.college || key === 'all' ? [['top25', 'Top 25']] : [])].map(([k, l]) => `<button class="qf" data-fbfilter="${k}" aria-pressed="${(S.fb.filter || 'all') === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}</div>`;
+    const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ...(FBL[key]?.college || key === 'all' ? [['top25', 'Top 25']] : []), ['fav', '★ My teams']].map(([k, l]) => `<button class="qf" data-fbfilter="${k}" aria-pressed="${(S.fb.filter || 'all') === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}</div>`;
     el.innerHTML = navs + chips + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} game${list.length === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span>
       ${key !== 'all' && !FBL[key].tsdb ? `<button class="btn ghost lginfo" data-fbact="lginfo">Standings${FBL[key].college ? ', rankings' : ''} & odds</button>` : ''}</div>`
-      + (list.length ? [...days].map(([k, l]) => `<div class="group"><div class="group-h day-h"><strong>${esc(new Date(k).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }))}</strong></div><div class="cards">${l.map(fbCard).join('')}</div></div>`).join('')
+      // a big slate (a college Saturday): top games first, days that fold, and each day's games a dozen at a time
+      + (list.length ? (big ? window.flSlate.topHTML(window.flSlate.top(list, { close: 8, p: e => S.odds.get(e.id)?.ml?.home?.p ?? null }), fbCard) : '')
+        + [...days].map(([k, l]) => slate ? slate.group(`fb|${key}|${wk ? wk.type + '-' + wk.week : 'now'}|${k}`, `<strong>${esc(new Date(k).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }))}</strong>`, l, fbCard, big)
+          : `<div class="group"><div class="group-h day-h"><strong>${esc(new Date(k).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }))}</strong></div><div class="cards">${l.map(fbCard).join('')}</div></div>`).join('')
         : `<div class="empty-state"><strong>${sets.some(d => d.error) ? "Couldn't load games" : 'No games'}</strong>${sets.some(d => d.error) ? 'Check your connection and try again.' : key === 'ufl' ? 'The UFL plays in spring (March to June). Use the arrows to look back at last season.' : 'Nothing scheduled for this week. Use the arrows to change week.'}</div>`)
       + (key === 'cfl' ? `<p class="srcnote">CFL games come from TheSportsDB's free feed, which can miss some games and has no player stats.</p>` : '');
   };
@@ -857,7 +862,7 @@ async function fbSearch(q){
 function setSport(sp){
   S.sport = sp; store.set('fl.sport', sp);
   document.documentElement.dataset.sport = sp;
-  closeSheet(); S.page = 'matches'; render();
+  closeSheet(true); S.page = 'matches'; render();
 }
 document.addEventListener('click', ev => {
   const t = ev.target.closest('button[data-sport],[data-fblg],[data-fbview],[data-fbgame],[data-fbteam],[data-fbplayer],[data-fbact],[data-fbfilter],[data-fbpicklg]'); if (!t) return;

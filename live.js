@@ -5,30 +5,77 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ic = (n, s) => window.flShell?.ic?.(n, s) || '';
   const SPORTS = [['all', 'All sports'], ['soccer', 'Soccer'], ['football', 'Football'], ['basketball', 'Basketball'], ['baseball', 'Baseball'], ['hockey', 'Hockey'], ['tennis', 'Tennis'], ['ufc', 'UFC']];
-  const L = { sport: 'all', show: 'live', timer: 0, view: (() => { try { return localStorage.getItem('fl.liveView') === 'compact' ? 'compact' : 'cards' } catch { return 'cards' } })() };
+  /* The reader's choices are kept in this browser, so leaving Live and coming back finds the page as it was. */
+  const KEEP = 'fl.liveF';
+  const kept = (() => { try { return JSON.parse(localStorage.getItem(KEEP) || '{}') } catch { return {} } })();
+  const L = { sport: kept.sport || 'all', show: kept.show || 'live', only: kept.only || 'all', sort: kept.sort || 'big', day: 0, timer: 0, view: (() => { try { return localStorage.getItem('fl.liveView') === 'compact' ? 'compact' : 'cards' } catch { return 'cards' } })() };
+  const keep = () => { try { localStorage.setItem(KEEP, JSON.stringify({ sport: L.sport, show: L.show, only: L.only, sort: L.sort })) } catch {} };
   const hub = () => window.flHub;
   const hubAttr = g => `data-live="${esc(g.sport)}|${esc(g.lg || '')}|${esc(g.id)}"`;
 
+  /* what the filters read, all from the scoreboard */
+  const CLOSE = { football: 8, basketball: 6, hockey: 1, soccer: 1, baseball: 2 };
+  const gap = g => Math.abs((+g.a.score || 0) - (+g.b.score || 0));
+  const isClose = g => g.state === 'in' && CLOSE[g.sport] != null && g.a.score !== '' && gap(g) <= CLOSE[g.sport];
+  const isOT = g => g.state !== 'pre' && /\b(OT|\d?OT|overtime|extra time|ET|AET|SO|shootout|penalties|pens)\b/i.test(`${g.clock} ${g.final}`);
+  function upset(g) {   // a ranked side behind a lower-ranked or unranked one, or the market's clear favourite behind
+    if (g.state === 'pre' || g.a.score === '') return false;
+    const lead = +g.a.score > +g.b.score ? g.a : +g.b.score > +g.a.score ? g.b : null; if (!lead) return false;
+    const trail = lead === g.a ? g.b : g.a;
+    if (trail.rank && (!lead.rank || lead.rank > trail.rank)) return true;
+    return trail.ml != null && trail.ml >= .65;
+  }
+  const ONLY = [['all', 'Every game'], ['close', 'Close'], ['ot', 'Overtime'], ['upset', 'Upsets']];
+  const ONLY_F = { all: () => true, close: isClose, ot: isOT, upset };
+  // when each game's score last changed, seen from this tab; the "just scored" sort and tag read it
+  const scored = new Map(), lastScore = new Map();
+  function track() { const now = Date.now(); for (const g of hub()?.games() || []) { if (g.state === 'pre') continue; const k = `${g.a.score}-${g.b.score}`, was = lastScore.get(g.key); if (was != null && was !== k) scored.set(g.key, now); lastScore.set(g.key, k) } }
+  const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : `${m} min ago` };
+  const dayLabel = o => o === 0 ? 'Today' : o === -1 ? 'Yesterday' : o === 1 ? 'Tomorrow' : '';
+
   function render(el) {
-    const H = hub(), games = H?.games() || [], ready = !!H?.at();
-    const ufcLive = (H?.ufc() || []).filter(e => e.state === 'in');
-    const inSport = g => L.sport === 'all' || g.sport === L.sport;
+    const H = hub(), games = H?.games() || [], ready = !!H?.at(), today = L.day === 0;
+    const ufcLive = today ? (H?.ufc() || []).filter(e => e.state === 'in') : [];
+    const inSport = g => L.sport === 'all' || g.sport === L.sport, only = ONLY_F[L.only] || ONLY_F.all;
     const live = games.filter(g => g.state === 'in'), next = games.filter(g => g.state === 'pre').sort((a, b) => a.date - b.date), done = games.filter(g => g.state === 'post').sort((a, b) => b.date - a.date);
     const count = k => live.filter(g => k === 'all' || g.sport === k).length + (k === 'all' || k === 'ufc' ? ufcLive.length : 0);
-    const set = L.show === 'live' ? live : L.show === 'next' ? next : done, list = set.filter(inSport);
-    const groups = new Map(); for (const g of list) { const k = g.short || g.sport; (groups.get(k) || groups.set(k, []).get(k)).push(g) }
-    const ufcBlock = L.show === 'live' && (L.sport === 'all' || L.sport === 'ufc') ? ufcLive.map(e => `<button type="button" class="card hit lv-ufc" data-livego="ufc"><span class="pl live"><i></i>Live</span><span class="rw-t"><b>${esc(e.name)}</b><small>${esc(e.live ? `${e.live.a.name} v ${e.live.b.name} · ${e.live.detail}` : 'Fight night under way')}</small></span>${ic('arrow', 18)}</button>`).join('') : '';
-    const none = L.show === 'live' ? ['Nothing is live right now', next.filter(inSport)[0] ? `Next up: ${next.filter(inSport)[0].a.name} v ${next.filter(inSport)[0].b.name} at ${next.filter(inSport)[0].date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : 'Nothing else is scheduled today in this sport.', 'next', 'See what is up next']
-      : L.show === 'next' ? ['Nothing more to start today', 'Every game on today’s board has started or finished.', 'live', 'See what is live'] : ['Nothing has finished yet', 'Results from today’s games collect here.', 'live', 'See what is live'];
-    el.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Live</h1><p class="pg-sub">Every game in play, in every sport. Scores update on their own.</p></div>
-        <div class="seg" role="radiogroup" aria-label="Show">${[['live', `Live${live.length + ufcLive.length ? ` · ${live.length + ufcLive.length}` : ''}`], ['next', 'Up next'], ['done', 'Finished']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${L.show === k}" data-liveshow="${k}">${l}</button>`).join('')}</div></header>
+    // another day has nothing live: show what that day holds
+    const show = !today && L.show === 'live' ? (L.day < 0 ? 'done' : 'next') : L.show;
+    const set = show === 'live' ? live : show === 'next' ? next : done;
+    let list = set.filter(inSport).filter(only);
+    if (show === 'live' && L.sort === 'just') list = [...list].sort((a, b) => (scored.get(b.key) || 0) - (scored.get(a.key) || 0));
+    if (show === 'live' && L.sort === 'close') list = [...list].sort((a, b) => gap(a) - gap(b));
+    const groups = new Map();
+    if (show === 'live' && L.sort !== 'big') groups.set(L.sort === 'just' ? 'Most recent score first' : 'Closest first', list);
+    else for (const g of list) { const k = g.short || g.sport; (groups.get(k) || groups.set(k, []).get(k)).push(g) }
+    const ufcBlock = show === 'live' && L.only === 'all' && (L.sport === 'all' || L.sport === 'ufc') ? ufcLive.map(e => `<button type="button" class="card hit lv-ufc" data-livego="ufc"><span class="pl live"><i></i>Live</span><span class="rw-t"><b>${esc(e.name)}</b><small>${esc(e.live ? `${e.live.a.name} v ${e.live.b.name} · ${e.live.detail}` : 'Fight night under way')}</small></span>${ic('arrow', 18)}</button>`).join('') : '';
+    // just finished: today's games that ended in the last two hours stay in view under the live ones
+    const recent = today && show === 'live' && L.only === 'all' ? done.filter(inSport).filter(g => Date.now() - g.date < 5 * 3600e3).slice(0, 4) : [];
+    const sName = (SPORTS.find(x => x[0] === L.sport) || [])[1] || '';
+    const filtered = L.sport !== 'all' || L.only !== 'all';
+    const none = L.only !== 'all' ? [`No ${{ close: 'close games', ot: 'games in overtime', upset: 'upsets' }[L.only]} ${show === 'live' ? 'right now' : show === 'next' ? 'to come' : 'among the results'}`, L.only === 'close' ? 'A game counts as close when the margin is within a score or two for its sport.' : L.only === 'ot' ? 'Games that go to overtime, extra time or a shootout show here.' : 'A ranked team or the market’s clear favourite behind shows here.', 'only:all', 'Show every game']
+      : show === 'live' ? ['Nothing is live right now', next.filter(inSport)[0] ? `Next up: ${next.filter(inSport)[0].a.name} v ${next.filter(inSport)[0].b.name} at ${next.filter(inSport)[0].date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : 'Nothing else is scheduled today in this sport.', 'show:next', 'See what is up next']
+      : show === 'next' ? [today ? 'Nothing more to start today' : `Nothing scheduled ${dayLabel(L.day).toLowerCase()}`, today ? 'Every game on today’s board has started or finished.' : 'Pick another day above.', today ? 'show:live' : 'day:0', today ? 'See what is live' : 'Back to today']
+      : [today ? 'Nothing has finished yet' : 'No results for this day', today ? 'Results from today’s games collect here.' : 'Pick another day above.', today ? 'show:live' : 'day:0', today ? 'See what is live' : 'Back to today'];
+    const at = H?.at?.() || 0;
+    const card = g => window.flCard({ ...cardFacts(g), attrs: hubAttr(g), extra: just(g) });
+    el.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Live${today ? '' : ` · ${dayLabel(L.day)}`}</h1><p class="pg-sub">${today ? 'Every game in play, in every sport. Scores update on their own.' : L.day < 0 ? 'Yesterday’s results, in every sport.' : 'Tomorrow’s schedule, in every sport.'}</p></div>
+        <div class="lv-head-r"><div class="seg" role="radiogroup" aria-label="Day">${[-1, 0, 1].map(o => `<button type="button" role="radio" aria-checked="${L.day === o}" class="${L.day === o ? 'on' : ''}" tabindex="${L.day === o ? 0 : -1}" data-liveday="${o}">${dayLabel(o)}</button>`).join('')}</div>
+        ${today ? `<div class="seg" role="radiogroup" aria-label="Show">${[['live', `Live${live.length + ufcLive.length ? ` · ${live.length + ufcLive.length}` : ''}`], ['next', 'Up next'], ['done', 'Finished']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${L.show === k}" class="${L.show === k ? 'on' : ''}" tabindex="${L.show === k ? 0 : -1}" data-liveshow="${k}">${l}</button>`).join('')}</div>` : ''}</div></header>
+      <p class="lv-upd lb" aria-live="off">${at ? `<span class="dot-live" aria-hidden="true"></span><span>Updated <span data-lvago="${at}">${ago(at)}</span> · ${today ? (window.flSaver?.() ? 'data saver: refreshes every 2 minutes' : 'refreshes every 30 seconds') : 'scores for this day'}</span>` : 'Loading the scoreboards…'}</p>
       <div class="lv-opts"><div class="seg" role="radiogroup" aria-label="View">${[['cards', 'Cards'], ['compact', 'Compact']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${L.view === k}" class="${L.view === k ? 'on' : ''}" tabindex="${L.view === k ? 0 : -1}" data-liveview="${k}">${l}</button>`).join('')}</div>
         <label class="lv-sp"><input class="sw" type="checkbox" role="switch" id="lvSpoil" ${window.flMC?.spoilAll() ? 'checked' : ''}> Spoiler-free <span class="lb">hide scores until I reveal them</span></label></div>
       <div class="cx-row scroll" role="group" aria-label="Sport">${SPORTS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${L.sport === k}" data-livesport="${k}">${esc(l)}${count(k) ? `<b class="lv-n num" aria-label="${count(k)} live">${count(k)}</b>` : ''}</button>`).join('')}</div>
+      <div class="lv-filt"><div class="cx-row" role="group" aria-label="Show only">${ONLY.map(([k, l]) => `<button type="button" class="cx sm" aria-pressed="${L.only === k}" data-liveonly="${k}">${esc(l)}</button>`).join('')}</div>
+        ${show === 'live' ? `<label class="fl-f lv-sort"><span class="sr-only">Order</span><select class="inp sm" id="lvSort">${[['big', 'By competition'], ['just', 'Just scored first'], ['close', 'Closest first']].map(([k, l]) => `<option value="${k}"${L.sort === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}</div>
+      ${filtered ? `<p class="lv-scope" role="status"><b>${esc([sName && L.sport !== 'all' ? sName : 'All sports', L.only !== 'all' ? { close: 'close games', ot: 'games in overtime', upset: 'upsets' }[L.only] : ''].filter(Boolean).join(', '))}</b> · ${list.length + (L.sport === 'ufc' ? ufcLive.length : 0)} shown<button type="button" class="lk" data-livereset>Show everything</button></p>` : ''}
       ${!ready ? `<div class="g4">${'<div class="skl hm-card-skl"></div>'.repeat(8)}</div>`
-        : !list.length && !ufcBlock ? `<div class="card emp">${ic('live', 30)}<b>${none[0]}</b><p>${esc(none[1])}</p><button type="button" class="bt ghost" data-liveshow="${none[2]}">${none[3]}</button></div>`
-        : `${ufcBlock}${[...groups].map(([k, gs]) => `<section class="lv-g" aria-label="${esc(k)}"><div class="sec-h"><h2>${esc(k)}</h2><span class="lb">${gs.length} game${gs.length === 1 ? '' : 's'}</span></div>${L.view === 'compact' ? `<div class="card lv-rows">${gs.map(row).join('')}</div>` : `<div class="g4 hm-cards">${gs.map(g => window.flCard({ ...cardFacts(g), attrs: hubAttr(g) })).join('')}</div>`}</section>`).join('')}`}`;
+        : !list.length && !ufcBlock ? `<div class="card emp">${ic('live', 30)}<b>${none[0]}</b><p>${esc(none[1])}</p><button type="button" class="bt ghost" data-livego2="${none[2]}">${none[3]}</button></div>`
+        : `${ufcBlock}${[...groups].map(([k, gs]) => `<section class="lv-g" aria-label="${esc(k)}"><div class="sec-h"><h2>${esc(k)}</h2><span class="lb">${gs.length} game${gs.length === 1 ? '' : 's'}</span></div>${L.view === 'compact' ? `<div class="card lv-rows">${gs.map(row).join('')}</div>` : `<div class="g4 hm-cards">${gs.map(card).join('')}</div>`}</section>`).join('')}`}
+      ${recent.length ? `<section class="lv-g lv-recent" aria-label="Just finished"><div class="sec-h"><h2>Just finished</h2><button type="button" class="lk" data-liveshow="done">All results</button></div>${L.view === 'compact' ? `<div class="card lv-rows">${recent.map(row).join('')}</div>` : `<div class="g4 hm-cards">${recent.map(card).join('')}</div>`}</section>` : ''}`;
   }
+  // a tag on a game whose score changed in the last few minutes, unless its score is hidden
+  const just = g => { const t = scored.get(g.key); return t && Date.now() - t < 5 * 60000 && g.state === 'in' && !window.flMC?.spoil(g.key) ? `<span class="pl lv-just">Scored ${ago(t)}</span>` : '' };
   // the same card Home draws
   const TINT = 'var(--muted)';
   const cardFacts = g => ({ id: 'lv' + g.key, hc: g.a.color || TINT, ac: g.b.color || TINT, label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
@@ -37,23 +84,29 @@
   // the compact view: one line a game, for scanning a long night
   const row = g => { const sp = g.state !== 'pre' && window.flMC?.spoil(g.key), t = (x, o) => `<span class="lv-t${!sp && g.state === 'post' && o.winner ? ' lose' : ''}">${x.logo ? `<img src="${esc(x.logo)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : '<i></i>'}<span>${x.rank ? `<em>${esc(x.rank)}</em> ` : ''}${esc(x.name)}</span>${g.state === 'pre' ? '' : `<b class="num">${sp ? '–' : esc(x.score)}</b>`}</span>`;
     return `<button type="button" class="lv-row${g.state === 'in' ? ' is-live' : ''}" ${hubAttr(g)} aria-label="${esc(`${g.a.full || g.a.name} ${g.state === 'pre' || sp ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}${sp ? ', score hidden' : ''}`)}">
-      <span class="lv-when num${g.state === 'in' ? ' on' : ''}">${g.state === 'pre' ? esc(g.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : sp ? (g.state === 'in' ? 'Live' : 'Final') : esc(g.state === 'in' ? g.clock : g.final || 'Final')}</span>
+      <span class="lv-when num${g.state === 'in' ? ' on' : ''}">${g.state === 'pre' ? esc(g.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : esc(g.state === 'in' ? g.clock || 'Live' : sp ? 'Final' : g.final || 'Final')}</span>
       <span class="lv-ts">${t(g.a, g.b)}${t(g.b, g.a)}</span>${g.tv ? `<span class="lb lv-tv">${esc(g.tv)}</span>` : ''}</button>` };
   const page = () => document.getElementById('pg-live');
-  const redraw = () => { const el = page(); if (!el || el.hidden) return; const a = document.activeElement, key = el.contains(a) ? a.id === 'lvSpoil' ? '#lvSpoil' : ['data-live', 'data-livesport', 'data-liveshow', 'data-liveview'].map(k => a.hasAttribute(k) ? `[${k}="${CSS.escape(a.getAttribute(k))}"]` : '').find(Boolean) : null;
+  const redraw = () => { const el = page(); if (!el || el.hidden) return; const a = document.activeElement, key = el.contains(a) ? a.id === 'lvSpoil' ? '#lvSpoil' : ['data-live', 'data-livesport', 'data-liveshow', 'data-liveview', 'data-liveonly', 'data-liveday'].map(k => a.hasAttribute(k) ? `[${k}="${CSS.escape(a.getAttribute(k))}"]` : '').find(Boolean) : null;
     render(el); if (key) el.querySelector(key)?.focus({ preventScroll: true }) };
-  document.addEventListener('fl:hub', redraw); document.addEventListener('fl:spoil', redraw);
-  document.addEventListener('change', ev => { if (ev.target.id === 'lvSpoil') window.flMC?.setSpoilAll(ev.target.checked) });
+  document.addEventListener('fl:hub', () => { track(); redraw() }); document.addEventListener('fl:hubday', redraw); document.addEventListener('fl:spoil', redraw);
+  document.addEventListener('change', ev => { if (ev.target.id === 'lvSpoil') window.flMC?.setSpoilAll(ev.target.checked); if (ev.target.id === 'lvSort') { L.sort = ev.target.value; keep(); redraw(); document.getElementById('lvSort')?.focus() } });
   document.addEventListener('click', ev => {
     const el = page(); if (!el || el.hidden || !el.contains(ev.target)) return;
-    const s = ev.target.closest('[data-livesport]'); if (s) { L.sport = s.dataset.livesport; return redraw() }
-    const w = ev.target.closest('[data-liveshow]'); if (w) { L.show = w.dataset.liveshow; redraw(); return el.querySelector(`[data-liveshow="${L.show}"]`)?.focus() }
+    const s = ev.target.closest('[data-livesport]'); if (s) { L.sport = s.dataset.livesport; keep(); return redraw() }
+    const o = ev.target.closest('[data-liveonly]'); if (o) { L.only = o.dataset.liveonly; keep(); redraw(); return el.querySelector(`[data-liveonly="${L.only}"]`)?.focus() }
+    if (ev.target.closest('[data-livereset]')) { L.sport = 'all'; L.only = 'all'; keep(); redraw(); return el.querySelector('[data-livesport="all"]')?.focus() }
+    const dy = ev.target.closest('[data-liveday]'); if (dy) { setDay(+dy.dataset.liveday); return el.querySelector(`[data-liveday="${L.day}"]`)?.focus() }
+    const g2 = ev.target.closest('[data-livego2]'); if (g2) { const [k, v] = g2.dataset.livego2.split(':'); if (k === 'only') L.only = v; else if (k === 'show') L.show = v; else if (k === 'day') return setDay(+v); keep(); return redraw() }
+    const w = ev.target.closest('[data-liveshow]'); if (w) { L.show = w.dataset.liveshow; keep(); redraw(); return el.querySelector(`[data-liveshow="${L.show}"]`)?.focus() }
     const v = ev.target.closest('[data-liveview]'); if (v) { L.view = v.dataset.liveview; try { localStorage.setItem('fl.liveView', L.view) } catch {} redraw(); return el.querySelector(`[data-liveview="${L.view}"]`)?.focus() }
     const u = ev.target.closest('[data-livego]'); if (u) { window.flPages.hide(); return document.querySelector('.tbs[data-sport="ufc"]')?.click() }
     const g = ev.target.closest('[data-live]'); if (!g) return;
     const [sport, lg, id] = g.dataset.live.split('|'); window.flPages.hide(); hub()?.open({ sport, lg, id });
   });
+  function setDay(o) { L.day = o; const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + o); hub()?.setDay?.(d); redraw() }
+  setInterval(() => { const el = page(); if (!el || el.hidden) return; el.querySelectorAll('[data-lvago]').forEach(t => { const x = ago(+t.dataset.lvago); if (t.textContent !== x) t.textContent = x }) }, 15000);
   window.flPages?.add('live', { title: 'Live', render, fresh: true,
-    onShow() { hub()?.today(); clearInterval(L.timer); L.timer = setInterval(() => { if (!document.hidden) hub()?.load(true) }, 30000) },
-    onHide() { clearInterval(L.timer) } });
+    onShow() { if (L.day) setDay(L.day); else hub()?.today(); clearInterval(L.timer); L.timer = setInterval(() => { if (!document.hidden && !L.day && !(window.flSaver?.() && Date.now() - (hub()?.at() || 0) < 12e4)) hub()?.load(true) }, 30000) },
+    onHide() { clearInterval(L.timer); if (L.day) hub()?.today() } });
 })();

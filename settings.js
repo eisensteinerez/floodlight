@@ -17,6 +17,10 @@
   ];
   const SIZES = [[0.9, 'Small'], [1, 'Default'], [1.15, 'Large'], [1.3, 'Extra large']];
   const BRIGHT = [['dim', 'Dimmed'], ['', 'Normal'], ['bright', 'Bright']];
+  const sizeTxt = i => `${SIZES[i][1]} · ${Math.round(SIZES[i][0] * 100)}%`;
+  // data saver: live pages refresh every two minutes instead of every 30 seconds (home.js, live.js, matchcentre.js read it)
+  window.flSaver = () => look().saver === true;
+  const RESET = { confirm: false };
 
   /* ---------- the theme ---------- */
   const current = () => root.dataset.theme;
@@ -59,49 +63,164 @@
   /* ---------- the live preview: the real page, with today's real games, in any theme ----------
      It is the app itself in a frame, started with ?flpreview=<theme>. A preview frame takes its theme from the address,
      saves nothing, and ignores clicks, so trying a theme here never changes yours. Changing the theme or the page sends
-     the frame a message instead of reloading it, so the same games stay on screen and only the theme changes. */
+     the frame a message instead of reloading it, so the same games stay on screen and only the theme changes.
+     Two frames can sit side by side to compare two themes, and the card can fill the window. Each frame reports how far
+     it has got (page open, games loaded, drawn), so the wait shows real progress. A reader who keeps scores hidden can
+     show them in the preview only, so every theme is compared on the same scoreboard; nothing else changes. */
   const PAGES = [['home', 'Home'], ['live', 'Live'], ['lab', 'The Lab'], ['predictions', 'Predictions']];
-  const SIZE = { desktop: [1280, 800], phone: [390, 760] };
-  const PV = { theme: null, page: 'home', device: 'desktop', frame: null, ready: false, ro: null };
+  const SIZE = { desktop: [1280, 800], tablet: [820, 1080], phone: [390, 760] }, BORDER = { desktop: 1, tablet: 6, phone: 6 };
+  const DEVICES = [['desktop', 'Desktop'], ['tablet', 'Tablet'], ['phone', 'Phone']];
+  const STEPS = ['Opening the page', 'Loading today’s games', 'Ready'];
+  const PV = { theme: null, cmp: '', page: 'home', device: 'desktop', full: false, scores: false, panes: [], ro: null, back: null };
+  const spoilOn = () => { try { const s = JSON.parse(localStorage.getItem('fl.spoil') || 'null'); return !!(s && (s.all || s.hide?.length)) } catch { return false } };
+  const FULL_IC = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${on ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg>`;
+
   function pvControls() {
     const el = document.getElementById('stPvCtl'); if (!el) return; const cur = current(), th = PV.theme || cur;
+    if (PV.cmp === th) PV.cmp = '';
     const seg = (name, label, opts, val) => `<div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([k, l]) => `<button type="button" role="radio" aria-checked="${val === k}" class="${val === k ? 'on' : ''}" tabindex="${val === k ? 0 : -1}" data-pv${name}="${k}">${esc(l)}</button>`).join('')}</div>`;
+    const sp = spoilOn();
     el.innerHTML = `<div class="st-h"><h2 id="stPvH">Preview on your real pages</h2></div>
       <p class="lb">Today’s real games and picks, drawn in any theme. Looking at a theme here does not change yours until you press Use.</p>
-      <div class="cx-row scroll" role="radiogroup" aria-label="Theme to preview">${THEMES.map(([id, name]) => `<button type="button" class="cx" role="radio" aria-checked="${th === id}" tabindex="${th === id ? 0 : -1}" data-pvtheme="${id}">${esc(name)}${id === cur ? '<span class="lb pv-yours">yours</span>' : ''}</button>`).join('')}</div>
-      <div class="pv-row">${seg('page', 'Page', PAGES, PV.page)}${seg('device', 'Screen size', [['desktop', 'Desktop'], ['phone', 'Phone']], PV.device)}
-        <button type="button" class="bt pv-use" data-theme-pick="${th}"${th === cur ? ' disabled' : ''}>${th === cur ? `${esc(nameOf(th))} is your theme` : `Use ${esc(nameOf(th))}`}</button></div>`;
+      <div class="pv-bar">
+        <div class="cx-row scroll" role="radiogroup" aria-label="Theme to preview">${THEMES.map(([id, name]) => `<button type="button" class="cx" role="radio" aria-checked="${th === id}" tabindex="${th === id ? 0 : -1}" data-pvtheme="${id}">${esc(name)}${id === cur ? '<span class="pv-yours">yours</span>' : ''}</button>`).join('')}</div>
+        <div class="pv-row">${seg('page', 'Page', PAGES, PV.page)}${seg('device', 'Screen size', DEVICES, PV.device)}
+          <label class="pv-cmp"><span>Side by side with</span><select class="inp sm" data-pvcmp><option value="">No second theme</option>${THEMES.filter(([id]) => id !== th).map(([id, name]) => `<option value="${id}"${PV.cmp === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>
+          <span class="pv-acts"><button type="button" class="bt ghost" data-pvfull aria-pressed="${PV.full}">${FULL_IC(PV.full)}${PV.full ? 'Exit full screen' : 'Full screen'}</button>
+          <button type="button" class="bt pv-use" data-theme-pick="${th}"${th === cur ? ' disabled' : ''}>${th === cur ? `${esc(nameOf(th))} is your theme` : `Use ${esc(nameOf(th))}`}</button></span></div>
+        ${sp ? `<label class="pv-sc"><input class="sw" type="checkbox" role="switch" data-pvscores${PV.scores ? ' checked' : ''}><span><b>Show scores in the preview</b><span class="lb">Spoiler-free is on, so scores are hidden. This shows them inside the preview only.</span></span></label>` : ''}
+      </div>`;
+    pvScores(); PV.panes.forEach(P => { P.wrap.querySelector('.pv-cap').innerHTML = cap(P.theme) });
+  }
+
+  /* ---------- how readable each theme is, measured from its own colours ----------
+     Each theme's tokens are read off a hidden element that carries data-theme-preview, then flattened onto the theme's
+     background in a 1×1 canvas (so see-through surfaces count as they look), and compared with the WCAG formula. */
+  let SCORES = null;
+  function measure() {
+    const c = document.createElement('canvas'); c.width = c.height = 1; const x = c.getContext('2d', { willReadFrequently: true });
+    const flat = cols => { x.clearRect(0, 0, 1, 1); for (const s of cols) { x.fillStyle = '#000'; x.fillStyle = s; x.fillRect(0, 0, 1, 1) } return [...x.getImageData(0, 0, 1, 1).data].slice(0, 3) };
+    const lum = rgb => { const f = v => (v /= 255) <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; return .2126 * f(rgb[0]) + .7152 * f(rgb[1]) + .0722 * f(rgb[2]) };
+    const ratio = (a, b) => { const [h, l] = [lum(a), lum(b)].sort((m, n) => n - m); return (h + .05) / (l + .05) };
+    return THEMES.map(([id, name]) => {
+      const p = document.createElement('span'); p.dataset.themePreview = id; p.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;visibility:hidden';
+      const i = document.createElement('i'); p.appendChild(i); document.body.appendChild(p);
+      const raw = k => getComputedStyle(p).getPropertyValue(k).trim();
+      const col = k => { i.style.color = `var(${k})`; return getComputedStyle(i).color };
+      const stops = k => { const r = raw(k); return /gradient/.test(r) ? (r.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/gi) || []) : [col(k)] };
+      const bg = col('--bg'), surf = col('--surface'), B = flat([bg]), Sf = flat([bg, surf]);
+      const ctaBg = raw('--cta-bg') ? stops('--cta-bg') : [col('--accent')], ctaFg = flat([bg, raw('--cta-fg') ? col('--cta-fg') : col('--on-accent')]);
+      const row = {
+        id, name,
+        body: ratio(flat([bg, col('--text')]), B),
+        small: Math.min(ratio(flat([bg, surf, col('--muted')]), Sf), ratio(flat([bg, col('--muted')]), B)),
+        accent: Math.min(ratio(flat([bg, col('--accent')]), B), ratio(flat([bg, surf, col('--accent')]), Sf)),
+        button: Math.min(...ctaBg.map(s => ratio(ctaFg, flat([bg, s])))),
+      };
+      p.remove(); row.low = Math.min(row.body, row.small, row.accent, row.button); return row;
+    });
+  }
+  const grade = r => r >= 7 ? 'AAA' : r >= 4.5 ? 'AA' : r >= 3 ? 'Large text only' : 'Too low';
+  function pvScores() {
+    const el = document.getElementById('stPvScores'); if (!el) return;
+    try { SCORES = SCORES || measure() } catch (e) { el.hidden = true; return }
+    const shown = [PV.theme || current(), PV.cmp].filter(Boolean);
+    const cell = r => `<td><span class="num">${r.toFixed(1)}:1</span> <span class="pv-g g-${grade(r).split(' ')[0].toLowerCase()}">${grade(r)}</span></td>`;
+    el.innerHTML = `<h3 id="stPvSH">Readability in each theme</h3>
+      <p class="lb">Contrast between each theme’s text and the colour behind it. 4.5:1 is the minimum for normal text (WCAG AA) and 7:1 is the higher AAA level. The lowest pair sets the overall grade.</p>
+      <div class="pv-tw" role="region" aria-labelledby="stPvSH" tabindex="0"><table class="pv-ct">
+        <thead><tr><th scope="col">Theme</th><th scope="col">Overall</th><th scope="col">Body text</th><th scope="col">Small labels</th><th scope="col">Links and highlights</th><th scope="col">Buttons</th></tr></thead>
+        <tbody>${SCORES.map(s => `<tr class="${shown.includes(s.id) ? 'on' : ''}"><th scope="row">${esc(s.name)}${shown.includes(s.id) ? ' <span class="lb">in the preview</span>' : ''}</th>${cell(s.low)}${cell(s.body)}${cell(s.small)}${cell(s.accent)}${cell(s.button)}</tr>`).join('')}</tbody></table></div>`;
+  }
+
+  const cap = th => `${esc(nameOf(th))}${th === current() ? ' <span class="lb">yours</span>' : ''}`;
+  function step(P, n) {
+    if (P.step >= n) return; P.step = n; const w = P.box.querySelector('.pv-wait');
+    if (w) { w.querySelector('progress').value = n; w.querySelector('.pv-step').textContent = `${STEPS[n - 1]}${n < 3 ? '…' : ''}` }
+    if (n === 3) { clearTimeout(P.timer); P.box.classList.add('ready') }
+  }
+  function pane(theme) {
+    const wrap = document.createElement('figure'); wrap.className = 'pv-pane';
+    wrap.innerHTML = `<figcaption class="pv-cap">${cap(theme)}</figcaption><div class="pv-box"><div class="pv-wait" role="status"><span class="pv-step lb">${STEPS[0]}…</span><progress max="3" value="1" aria-label="Preview loading"></progress></div></div>`;
+    const box = wrap.querySelector('.pv-box'), f = document.createElement('iframe'), P = { theme, wrap, box, f, step: 1, timer: 0 };
+    f.className = 'pv-frame'; f.title = `Preview of the page in ${nameOf(theme)}`; f.setAttribute('tabindex', '-1');
+    f.src = `${location.pathname}?flpreview=${encodeURIComponent(theme)}&flpage=${PV.page}&flscores=${PV.scores ? 1 : 0}`;
+    f.addEventListener('load', () => { step(P, 2); pvSay(P); P.timer = setTimeout(() => step(P, 3), 6000) });   // drawn, or six seconds, whichever comes first
+    box.appendChild(f); return P;
   }
   function pvFit() {
-    const box = document.getElementById('stPvBox'), f = PV.frame; if (!box || !f) return;
-    const [w, h] = SIZE[PV.device], k = Math.min(1, ((box.parentElement.clientWidth - 2 * parseFloat(getComputedStyle(box.parentElement).paddingLeft || 0)) - (PV.device === 'phone' ? 12 : 2)) / w);   // measured from the card, not the box, which is sized from this
-    f.width = w; f.height = h; f.style.width = w + 'px'; f.style.height = h + 'px'; f.style.transform = `scale(${k})`;
-    box.dataset.device = PV.device; box.style.height = Math.round(h * k) + 'px'; box.style.setProperty('--pv-w', Math.round(w * k) + 'px');
+    const stage = document.getElementById('stPvStage'); if (!stage || !PV.panes.length) return;
+    const [w, h] = SIZE[PV.device], b = BORDER[PV.device], n = getComputedStyle(stage).flexDirection === 'column' ? 1 : PV.panes.length, gap = n > 1 ? parseFloat(getComputedStyle(stage).columnGap) || 16 : 0;
+    let k = Math.min(1, ((stage.clientWidth - gap * (n - 1)) / n - 2 * b) / w);
+    if (PV.full) k = Math.min(k, (innerHeight - stage.getBoundingClientRect().top + (document.querySelector('.pv-card')?.scrollTop || 0) - 48) / h);   // the whole page fits the window
+    k = Math.max(k, .12);
+    for (const P of PV.panes) {
+      const f = P.f; f.width = w; f.height = h; f.style.width = w + 'px'; f.style.height = h + 'px'; f.style.transform = `scale(${k})`;
+      P.box.dataset.device = PV.device; P.box.style.width = Math.round(w * k) + 2 * b + 'px'; P.box.style.height = Math.round(h * k) + 2 * b + 'px';
+    }
   }
-  const pvSay = () => { try { PV.frame?.contentWindow?.postMessage({ flPreview: { theme: PV.theme || current(), page: PV.page } }, location.origin) } catch (e) {} };
+  const pvSay = P => { try { P.f.contentWindow?.postMessage({ flPreview: { theme: P.theme, page: PV.page, scores: PV.scores } }, location.origin) } catch (e) {} };
   function pvStart() {
-    const box = document.getElementById('stPvBox'); if (!box || PV.frame) return;
-    const f = document.createElement('iframe'); f.className = 'pv-frame'; f.title = 'Preview of the page in the chosen theme'; f.setAttribute('tabindex', '-1'); f.loading = 'lazy';
-    f.src = `${location.pathname}?flpreview=${encodeURIComponent(PV.theme || current())}&flpage=${PV.page}`;
-    f.addEventListener('load', () => { PV.ready = true; box.classList.add('ready'); pvSay() });
-    box.innerHTML = '<div class="pv-wait"><span class="pd-spin" aria-hidden="true"></span><span class="lb">Drawing the page…</span></div>'; box.appendChild(f); PV.frame = f; PV.ready = false; box.classList.remove('ready'); pvFit();
-    PV.ro?.disconnect(); PV.ro = new ResizeObserver(pvFit); PV.ro.observe(box.parentElement);
+    const stage = document.getElementById('stPvStage'); if (!stage || PV.panes.length) return;
+    stage.innerHTML = ''; pvSync();
+    PV.ro?.disconnect(); PV.ro = new ResizeObserver(() => pvFit()); PV.ro.observe(stage);
   }
-  function pvStop() { PV.ro?.disconnect(); PV.frame?.remove(); PV.frame = null; PV.ready = false }
+  // one frame per theme shown; a theme that changes is sent as a message, a second theme gets its own frame
+  function pvSync() {
+    const stage = document.getElementById('stPvStage'); if (!stage) return;
+    const want = [PV.theme || current(), PV.cmp].filter(Boolean);
+    while (PV.panes.length > want.length) { const P = PV.panes.pop(); clearTimeout(P.timer); P.wrap.remove() }
+    want.forEach((th, i) => { let P = PV.panes[i]; if (!P) { P = pane(th); PV.panes.push(P); stage.appendChild(P.wrap) } else if (P.theme !== th) { P.theme = th; P.f.title = `Preview of the page in ${nameOf(th)}`; pvSay(P) } else pvSay(P); P.wrap.querySelector('.pv-cap').innerHTML = cap(th) });
+    stage.classList.toggle('two', want.length > 1); pvFit();
+  }
+  function pvStop() { PV.ro?.disconnect(); PV.panes.forEach(P => { clearTimeout(P.timer); P.wrap.remove() }); PV.panes = []; if (PV.full) pvFull(false) }
+  addEventListener('message', ev => { if (ev.origin !== location.origin || !ev.data?.flPreviewReady) return; const P = PV.panes.find(p => p.f.contentWindow === ev.source); if (P) step(P, 3) });
+
+  // full screen: the card fills the window and holds focus until Escape or Exit full screen
+  function pvFull(on) {
+    const card = document.querySelector('.pv-card'); if (!card) return; PV.full = on;
+    card.classList.toggle('full', on); root.classList.toggle('pv-lock', on);
+    if (on) { PV.back = document.activeElement; card.setAttribute('role', 'dialog'); card.setAttribute('aria-modal', 'true'); addEventListener('resize', pvFit) }
+    else { card.removeAttribute('role'); card.removeAttribute('aria-modal'); removeEventListener('resize', pvFit) }
+    pvControls(); if (!PV.panes.length) pvStart(); else pvFit();
+    const b = card.querySelector('[data-pvfull]'); (on ? b : (PV.back?.isConnected ? PV.back : b))?.focus({ preventScroll: !on });
+  }
+  document.addEventListener('keydown', ev => {
+    if (!PV.full) return; const card = document.querySelector('.pv-card.full'); if (!card) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); pvFull(false); return }
+    if (ev.key !== 'Tab') return;
+    const f = [...card.querySelectorAll('button:not([disabled]),select,input,[tabindex="0"]')].filter(e => e.offsetParent !== null); if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus() } else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus() }
+    else if (!card.contains(document.activeElement)) { ev.preventDefault(); first.focus() }
+  });
+
   document.addEventListener('click', ev => {
+    if (ev.target.closest?.('[data-pvfull]')) { pvFull(!PV.full); return }
     const t = ev.target.closest?.('[data-pvtheme],[data-pvpage],[data-pvdevice]'); if (!t) return;
     if (t.dataset.pvtheme) PV.theme = t.dataset.pvtheme; else if (t.dataset.pvpage) PV.page = t.dataset.pvpage; else PV.device = t.dataset.pvdevice;
     const key = ['pvtheme', 'pvpage', 'pvdevice'].find(k => t.dataset[k]), val = t.dataset[key];
-    pvControls(); pvFit(); if (PV.frame) pvSay(); else pvStart();
+    pvControls(); if (PV.panes.length) pvSync(); else pvStart();
     document.querySelector(`[data-${key}="${CSS.escape(val)}"]`)?.focus({ preventScroll: true });
   });
-  /* inside a preview frame: follow the messages, ignore the pointer and keyboard, save nothing */
+  document.addEventListener('change', ev => {
+    const t = ev.target;
+    if (t.matches?.('[data-pvcmp]')) { PV.cmp = t.value; pvControls(); if (PV.panes.length) pvSync(); else pvStart(); document.querySelector('[data-pvcmp]')?.focus({ preventScroll: true }) }
+    else if (t.matches?.('[data-pvscores]')) { PV.scores = t.checked; PV.panes.forEach(pvSay) }
+  });
+
+  /* inside a preview frame: follow the messages, ignore the pointer and keyboard, save nothing, and say when it is drawn */
   if (window.FL_PREVIEW) {
     const go = page => { try { if (page === 'home') window.flHub?.show(); else window.flPages?.show(page, undefined, { fromHash: true }) } catch (e) {} };
     const first = (/[?&]flpage=([a-z]+)/.exec(location.search) || [])[1] || 'home'; let at = first;
-    addEventListener('load', () => setTimeout(() => go(first), 0));
+    const drawn = () => { try { parent.postMessage({ flPreviewReady: true }, location.origin) } catch (e) {} };
+    addEventListener('load', () => setTimeout(() => {
+      go(first);
+      if (window.flHub?.games?.()?.length) setTimeout(drawn, 120); else { document.addEventListener('fl:hub', () => setTimeout(drawn, 120), { once: true }); setTimeout(drawn, 5000) }
+    }, 0));
     addEventListener('message', ev => { if (ev.origin !== location.origin || ev.source !== window.parent) return; const m = ev.data?.flPreview; if (!m) return;
       if (m.theme && Object.prototype.hasOwnProperty.call(T, m.theme) && m.theme !== current()) window.flApplyTheme(m.theme);
+      if ('scores' in m) window.flMC?.previewScores?.(m.scores);
       if (m.page && m.page !== at && PAGES.some(p => p[0] === m.page)) { at = m.page; go(m.page) } });
     for (const type of ['click', 'submit', 'dblclick', 'contextmenu', 'keydown', 'pointerdown', 'mousedown']) addEventListener(type, ev => { if (type === 'keydown' && /^(Arrow|Page|Home|End| )/.test(ev.key)) return; ev.preventDefault(); ev.stopImmediatePropagation() }, true);
   }
@@ -109,10 +228,10 @@
 
   function render(el) {
     const cur = current(), p = prefs(), si = sizeIndex(), br = root.dataset.bright || '';
-    if (!el.querySelector('#stMain')) { pvStop(); el.innerHTML = `<div id="stMain" class="vst"></div><section class="card feature st-card pv-card" aria-labelledby="stPvH"><div id="stPvCtl" class="vst"></div><div class="pv-box" id="stPvBox"><button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button></div></section>` }
+    if (!el.querySelector('#stMain')) { pvStop(); el.innerHTML = `<div id="stMain" class="vst"></div><section class="card feature st-card pv-card" aria-labelledby="stPvH"><div id="stPvCtl" class="vst"></div><div class="pv-stage" id="stPvStage"><button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button></div><div id="stPvScores" class="pv-scores"></div></section>` }
     if (PV.theme == null) PV.theme = cur;
     pvControls();
-    el.querySelector('#stMain').innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks and reads on this device.</p></div></header>
+    el.querySelector('#stMain').innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks, reads and alerts you.</p><p class="lb st-where">${typeof S !== 'undefined' && S.me ? 'Your theme and favorite themes follow your account. Everything else on this page is kept on this device only.' : 'Everything on this page is kept on this device. Sign in and your theme follows you to other devices too.'}</p></div></header>
       <div class="card feature st-card">
         <p class="st-crumb">Settings › Appearance</p>
         <div class="st-h"><h2 id="stThemeH">Theme</h2><span class="st-saved" id="stSaved" role="status" aria-live="polite"></span></div>
@@ -123,7 +242,7 @@
         </div>
         <div class="st-rows">
           <div class="st-row"><div class="st-l"><label for="stSize">Text size</label><small>Makes everything on the page larger or smaller.</small></div>
-            <div class="st-c st-size"><span class="st-a" aria-hidden="true">A</span><input id="stSize" type="range" min="0" max="${SIZES.length - 1}" step="1" value="${si}" aria-valuetext="${SIZES[si][1]}"><span class="st-a big" aria-hidden="true">A</span><span class="chip st-val" id="stSizeV">${SIZES[si][1]}</span></div></div>
+            <div class="st-c st-size"><span class="st-a" aria-hidden="true">A</span><input id="stSize" type="range" min="0" max="${SIZES.length - 1}" step="1" value="${si}" aria-valuetext="${sizeTxt(si)}"><span class="st-a big" aria-hidden="true">A</span><span class="chip st-val num" id="stSizeV">${sizeTxt(si)}</span></div></div>
           <div class="st-row"><div class="st-l"><span id="stBrL">Brightness</span><small>Dims or lifts the whole page without changing the theme.</small></div>
             <div class="st-c seg st-seg" role="radiogroup" aria-labelledby="stBrL">${BRIGHT.map(([v, l]) => `<button type="button" role="radio" aria-checked="${br === v}" class="${br === v ? 'on' : ''}" data-bright-pick="${v}">${l}</button>`).join('')}</div></div>
           <div class="st-row"><div class="st-l"><label for="prefMotion">Reduce motion</label><small>Turns off pulsing, flicker and grow-in animations.</small></div>
@@ -133,7 +252,16 @@
           <div class="st-row"><div class="st-l"><label for="prefAlerts">Announce goals</label><small>Reads out a goal in a match you have open, for screen readers.</small></div>
             <div class="st-c"><input class="sw" type="checkbox" role="switch" id="prefAlerts" ${ls.get('fl.alerts', 'true') !== 'false' ? 'checked' : ''}></div></div>
         </div>
-      </div>${window.flAlerts?.card() || ''}${window.flOnboard?.settingsCard() || ''}`;
+        <div class="st-foot"><button type="button" class="bt ghost sm" data-streset="look">Reset text, brightness and motion</button></div>
+      </div>${window.flAlerts?.card() || ''}
+      <section class="card feature st-card" aria-labelledby="stDataH"><p class="st-crumb">Settings › Data</p><div class="st-h"><h2 id="stDataH">Data</h2></div>
+        <div class="st-rows"><div class="st-row"><div class="st-l"><label for="stSaver">Data saver</label><small>Live scores, Home and the match centre refresh every 2 minutes instead of every 30 seconds. Uses less data and battery. Kept on this device.</small></div>
+          <div class="st-c"><input class="sw" type="checkbox" role="switch" id="stSaver" ${look().saver ? 'checked' : ''}></div></div></div></section>
+      ${window.flOnboard?.settingsCard() || ''}
+      <section class="card st-card st-reset" aria-labelledby="stResetH"><div class="st-h"><h2 id="stResetH">Restore all defaults</h2></div>
+        <p class="lb">Puts the theme, text size, brightness, motion, contrast, alerts and data saver on this device back to how they started. Teams you follow, your watchlist and saved slips are kept.</p>
+        ${RESET.confirm ? `<div class="st-confirm" role="group" aria-label="Confirm"><b>Restore every setting on this page?</b><button type="button" class="bt sm" data-streset="all-yes">Restore defaults</button><button type="button" class="bt ghost sm" data-streset="all-no">Keep my settings</button></div>`
+          : '<div><button type="button" class="bt ghost sm" data-streset="all">Restore all defaults…</button></div>'}</section>`;
   }
   function sync() { const el = document.getElementById('pg-settings'); if (!el || el.hidden) return; const f = document.activeElement, pick = f?.dataset?.themePick, id = f?.id; render(el);
     if (pick) el.querySelector(`[data-theme-pick="${current()}"]`)?.focus(); else if (id) document.getElementById(id)?.focus() }
@@ -149,9 +277,19 @@
     const j = ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : /Right|Down/.test(ev.key) ? (i + 1) % n : (i - 1 + n) % n;
     ev.preventDefault(); all[j].focus(); all[j].click();
   });
-  document.addEventListener('input', ev => { if (ev.target.id !== 'stSize') return; const i = +ev.target.value; ev.target.setAttribute('aria-valuetext', SIZES[i][1]); document.getElementById('stSizeV').textContent = SIZES[i][1];
+  document.addEventListener('input', ev => { if (ev.target.id !== 'stSize') return; const i = +ev.target.value; ev.target.setAttribute('aria-valuetext', sizeTxt(i)); document.getElementById('stSizeV').textContent = sizeTxt(i);
     if (typeof S !== 'undefined') { S.prefs.size = SIZES[i][0]; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } saved() });
-  document.addEventListener('change', ev => { if (/^pref(Motion|Contrast|Alerts)$/.test(ev.target.id) && ev.target.closest('#pg-settings')) saved() });
+  document.addEventListener('change', ev => { if (/^pref(Motion|Contrast|Alerts)$/.test(ev.target.id) && ev.target.closest('#pg-settings')) saved();
+    if (ev.target.id === 'stSaver') { setLook({ saver: ev.target.checked }); saved() } });
+  /* resets: one section, or every setting on the page (asked once, in place) */
+  function resetLook() { if (typeof S !== 'undefined') { S.prefs.size = 1; S.prefs.motion = false; S.prefs.contrast = false; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } ls.set('fl.alerts', 'true'); setBright('') }
+  document.addEventListener('click', ev => {
+    const r = ev.target.closest?.('[data-streset]'); if (!r) return; const k = r.dataset.streset, el = document.getElementById('pg-settings');
+    if (k === 'look') { resetLook(); saved(); return el?.querySelector('[data-streset="look"]')?.focus() }
+    if (k === 'all') { RESET.confirm = true; sync(); return el?.querySelector('[data-streset="all-yes"]')?.focus() }
+    if (k === 'all-no') { RESET.confirm = false; sync(); return el?.querySelector('[data-streset="all"]')?.focus() }
+    if (k === 'all-yes') { RESET.confirm = false; resetLook(); setLook({ saver: false }); window.flAlerts?.reset?.(); setTheme('night-match'); saved(); el?.querySelector('#stResetH')?.setAttribute('tabindex', '-1'); el?.querySelector('#stResetH')?.focus(); const s = document.getElementById('stSaved'); if (s) s.textContent = 'Defaults restored' }
+  });
 
   /* ---------- favorite themes: starred on the profile page, then one press away in the three-dot menu ---------- */
   const localFavs = () => { try { const a = JSON.parse(ls.get('fl.favThemes', '[]')); return Array.isArray(a) ? a : [] } catch { return [] } };
@@ -169,8 +307,8 @@
   // the menu's Theme item lands on the picker itself
   function onShow(el, arg) {
     // the preview starts by itself once it scrolls into view, and is taken down when Settings is left
-    if (!PV.frame && 'IntersectionObserver' in window) { const box = el.querySelector('#stPvBox'); if (box) { const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); if (window.flPages.current() === 'settings') pvStart() } }, { rootMargin: '200px' }); io.observe(box) } }
+    if (!PV.panes.length && 'IntersectionObserver' in window) { const box = el.querySelector('#stPvStage'); if (box) { const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); if (window.flPages.current() === 'settings') pvStart() } }, { rootMargin: '200px' }); io.observe(box) } }
     if (arg !== 'theme') return; setTimeout(() => { el.querySelector('#stThemeH')?.scrollIntoView({ block: 'center' }); el.querySelector('[data-theme-pick][aria-checked="true"]')?.focus({ preventScroll: true }) }, 40) }
-  window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true, onHide() { pvStop(); const b = document.getElementById('stPvBox'); if (b) { b.classList.remove('ready'); b.style.height = ''; b.innerHTML = `<button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button>` } } });
+  window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true, onHide() { pvStop(); const b = document.getElementById('stPvStage'); if (b) { b.classList.remove('two'); b.innerHTML = `<button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button>` } } });
   document.addEventListener('fl:hub', () => { const el = document.getElementById('pg-settings'); if (el && !el.hidden && !el.querySelector('.thp.real') && sample() && !el.contains(document.activeElement)) sync() }, { once: false });
 })();

@@ -8,7 +8,7 @@
   const ic = (n, s) => window.flShell?.ic?.(n, s) || '';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const M = { d: null, err: '', loading: false, q: '', filter: 'all', sort: 'name', dir: 1, sel: null, picked: new Set(), menu: null, invite: null, ask: null,
-    note: '', temp: null, logAll: false, busy: false };
+    note: '', temp: null, logAll: false, busy: false, pend: null };   // pend: { key, off } a member's service changes, previewed before saving
   const RANK = { owner: 'Owner', admin: 'Admin', member: 'Member' }, RANK_N = { owner: 0, admin: 1, member: 2 };
   const STATUS = { active: 'Active', paused: 'Paused', invited: 'Invited', expired: 'Invite expired' }, STATUS_N = { active: 0, invited: 1, expired: 2, paused: 3 };
   const el = () => document.getElementById('pg-members');
@@ -89,31 +89,35 @@
     const chip = (k, label, n) => `<button type="button" class="cx sm" data-mb="filter" data-v="${k}" data-k="f-${k}" aria-pressed="${M.filter === k}">${label}<span class="num mb-n">${n}</span></button>`;
     const th = (k, label, cls = '') => `<th scope="col" class="${cls}" aria-sort="${M.sort === k ? (M.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="mb-sort" data-mb="sort" data-v="${k}" data-k="s-${k}">${label}<i aria-hidden="true">${M.sort === k ? (M.dir > 0 ? '↑' : '↓') : ''}</i></button></th>`;
     const pickable = list.filter(r => r.kind === 'member' && !r.self && !r.locked), allPicked = pickable.length > 0 && pickable.every(r => M.picked.has(r.key));
+    const small = all.length <= 2;   // just the owner, or one more: no tiles, filters or bulk controls to wade through
+    M.bulkOk = all.filter(r => r.kind === 'member' && !r.self && !r.locked).length >= 2; if (!M.bulkOk) M.picked.clear();
+    const svcNames = d.services.map(s => s[1]);
     host.innerHTML = `
       <header class="pg-head"><div><h1 class="pg-title">Members</h1><p class="pg-sub">Everyone gets every service by default</p></div>
         <button type="button" class="bt" data-mb="invite-open" data-k="invite-open" aria-expanded="${!!M.invite}">${ic('plus', 18)}Invite member</button></header>
       ${inviteCard()}
-      <div class="g4 mb-tiles">${tile(people.length, 'Members', people.length === 1 ? 'Just you so far' : `${people.filter(r => r.status === 'active').length} active`)}
+      ${roleGuide(svcNames)}
+      ${small ? `<p class="mb-sum">${[people.length === 1 ? 'Just you so far.' : `${people.length} members.`, pending ? `${pending} invite${pending === 1 ? '' : 's'} waiting.` : '', custom ? `${custom} with custom access.` : `Everyone has all ${svcNames.length} services.`].filter(Boolean).join(' ')}</p>` : `<div class="g4 mb-tiles">${tile(people.length, 'Members', people.length === 1 ? 'Just you so far' : `${people.filter(r => r.status === 'active').length} active`)}
         ${tile(people.length - custom, 'With all services', people.length ? `${Math.round((people.length - custom) / people.length * 100)}% of members` : 'No members yet')}
         ${tile(custom, 'Custom access', custom ? 'At least one service off' : 'Nobody is limited')}
-        ${tile(pending, 'Invites pending', pending ? 'Waiting to be accepted' : 'No open invites')}</div>
+        ${tile(pending, 'Invites pending', pending ? 'Waiting to be accepted' : 'No open invites')}</div>`}
       ${policyCard()}
       <p class="sr-only" role="status" aria-live="polite">${esc(M.note)}</p>
       ${M.note ? `<p class="mb-note" aria-hidden="true">${esc(M.note)}</p>` : ''}
       ${M.temp ? `<div class="tile mb-temp"><div><b>Temporary password for ${esc(M.temp.name)}</b><code class="num">${esc(M.temp.password)}</code><small class="lb">Pass it on yourself. They are logged out everywhere until they use it.</small></div><button type="button" class="bt ghost sm" data-mb="temp-done" data-k="temp-done">Done</button></div>` : ''}
-      <div class="mb-main${sel ? ' has-sel' : ''}">
+      <div class="mb-main${sel ? ' has-sel' : ''}${all.length === 1 && !sel ? ' solo' : ''}">
         <section class="card mb-list" aria-label="Member list">
-          <div class="mb-bar"><label class="fl-f mb-search"><span class="sr-only">Search members</span><input class="inp" id="mbQ" type="search" placeholder="Search by name, username or email" value="${esc(M.q)}" autocomplete="off"></label>
-            <div class="cx-row" role="group" aria-label="Show">${chip('all', 'All', all.length)}${chip('staff', 'Owners and admins', all.filter(r => r.rank !== 'member').length)}${chip('custom', 'Custom access', custom)}${chip('paused', 'Paused', people.filter(r => r.status === 'paused').length)}${chip('invited', 'Invited', d.invites.length)}</div></div>
+          ${small ? '' : `<div class="mb-bar"><label class="fl-f mb-search"><span class="sr-only">Search members</span><input class="inp" id="mbQ" type="search" placeholder="Search by name, username or email" value="${esc(M.q)}" autocomplete="off"></label>
+            ${small ? '' : `<div class="cx-row" role="group" aria-label="Show">${chip('all', 'All', all.length)}${chip('staff', 'Owners and admins', all.filter(r => r.rank !== 'member').length)}${chip('custom', 'Custom access', custom)}${chip('paused', 'Paused', people.filter(r => r.status === 'paused').length)}${chip('invited', 'Invited', d.invites.length)}</div>`}</div>`}
           ${M.picked.size ? `<div class="tile mb-bulk" role="group" aria-label="Actions for the selected members"><b class="num">${M.picked.size} selected</b>
             <div class="cx-row"><button type="button" class="bt ghost sm" data-mb="bulk" data-v="pause" data-k="b-pause">Pause</button><button type="button" class="bt ghost sm" data-mb="bulk" data-v="resume" data-k="b-resume">Resume</button><button type="button" class="bt ghost sm" data-mb="bulk" data-v="reset" data-k="b-reset">Reset to all access</button><button type="button" class="bt ghost sm" data-mb="bulk" data-v="remove" data-k="b-remove">Remove</button><button type="button" class="lk" data-mb="bulk" data-v="clear" data-k="b-clear">Clear</button></div></div>` : ''}
-          ${list.length ? `<div class="tbx-wrap"><table class="tbx mb-tbl"><caption class="sr-only">Members, their role, what they can open, and when they were last here</caption>
+          ${list.length ? `<div class="tbx-wrap"><table class="tbx mb-tbl${M.bulkOk ? '' : ' no-pick'}"><caption class="sr-only">Members, their role, what they can open, and when they were last here</caption>
             <thead><tr><th scope="col" class="mb-ck"><input type="checkbox" class="mb-box" data-mb="pick-all" data-k="pick-all" aria-label="Select every member shown" ${allPicked ? 'checked' : ''} ${pickable.length ? '' : 'disabled'}></th>
               ${th('name', 'Member')}${th('role', 'Role')}${th('access', 'Access')}${th('status', 'Status')}${th('seen', 'Last seen')}<th scope="col" class="r"><span class="sr-only">More actions</span></th></tr></thead>
             <tbody>${list.map(row).join('')}</tbody></table></div>`
             : `<div class="emp">${ic('search', 28)}<b>${all.length ? 'Nobody matches' : 'No members yet'}</b><p>${all.length ? 'Clear the search or pick another filter.' : 'Invite the first member with the button above.'}</p>${all.length ? '<button type="button" class="bt ghost" data-mb="clear-filter" data-k="clear-filter">Show everyone</button>' : ''}</div>`}
         </section>
-        ${sel ? detail(sel) : `<aside class="card mb-detail mb-none" aria-label="Member details"><div class="emp">${ic('members', 28)}<b>Pick a member</b><p>Choose someone from the list to see what they can open and change it.</p></div></aside>`}
+        ${sel ? detail(sel) : all.length === 1 ? '' : `<aside class="card mb-detail mb-none" aria-label="Member details"><div class="emp">${ic('members', 28)}<b>Pick a member</b><p>Choose someone from the list to see what they can open and change it.</p></div></aside>`}
       </div>
       ${logCard()}${feedbackCard()}`;
     const back = keepSel || (M.refocus && !M.ask ? `[data-k="${CSS.escape(M.refocus)}"]` : null); if (back && !M.ask) M.refocus = null;
@@ -131,6 +135,27 @@
       <td data-l="Status">${statusPill(r)}</td>
       <td data-l="Last seen" class="num">${r.kind === 'invite' ? `Sent ${ago(r.created).toLowerCase()}` : ago(r.seen)}</td>
       <td class="r mb-act"><button type="button" class="ib" data-mb="menu" data-v="${esc(r.key)}" data-k="m-${esc(r.key)}" aria-haspopup="menu" aria-expanded="${M.menu === r.key}" aria-label="Actions for ${esc(r.name)}">${ic('dots', 20)}</button></td></tr>`;
+  }
+
+  /* Roles and services, explained once at the top: what each role can do, and the services "every service" means. */
+  function roleGuide(svc) {
+    return `<details class="card mb-guide"><summary>What owners, admins and members can do, and the ${svc.length} services</summary>
+      <dl class="mb-gd"><div><dt>Owner</dt><dd>Everything: invites, services, roles, removing anyone, and the rule for new members. Only an owner can change another owner.</dd></div>
+        <div><dt>Admin</dt><dd>Invites members, switches their services on and off, pauses or removes them. Can’t change or remove an owner.</dd></div>
+        <div><dt>Member</dt><dd>Uses the services switched on for them. Can’t open this page.</dd></div></dl>
+      <p class="lb">The ${svc.length} services: ${svc.map(esc).join(', ')}. Owners and admins always have all of them.</p></details>`;
+  }
+  /* before a member's services change: what they will be able to open, and what they lose, then Save or Cancel */
+  function preview(r) {
+    if (M.pend?.key !== r.key) return '';
+    const S_ = M.d.services, was = new Set(r.m.off), now = M.pend.off;
+    const lose = S_.filter(s => now.has(s[0]) && !was.has(s[0])).map(s => s[1]), gain = S_.filter(s => !now.has(s[0]) && was.has(s[0])).map(s => s[1]), keep = S_.filter(s => !now.has(s[0])).map(s => s[1]);
+    if (!lose.length && !gain.length) return '';
+    return `<div class="mb-prev" role="region" aria-labelledby="mbPrevH"><h4 id="mbPrevH">Preview for ${esc(r.name)}</h4>
+      <p>${keep.length ? `They will be able to open <b>${keep.map(esc).join(', ')}</b>.` : '<b>They won’t be able to open any service.</b>'}</p>
+      ${lose.length ? `<p class="mb-lose">They lose ${lose.map(esc).join(', ')}. ${lose.length === 1 ? 'It disappears' : 'These disappear'} from their menu the next time a page loads.</p>` : ''}
+      ${gain.length ? `<p>They gain ${gain.map(esc).join(', ')}.</p>` : ''}
+      <div class="cx-row"><button type="button" class="bt sm" data-mb="pend-save" data-k="pend-save">Save changes</button><button type="button" class="bt ghost sm" data-mb="pend-cancel" data-k="pend-cancel">Cancel</button></div></div>`;
   }
 
   /* what the row menu offers for one row */
@@ -197,10 +222,11 @@
         <button type="button" class="ib mb-d-x" data-mb="close" data-k="d-close" aria-label="Close details">${ic('x', 18)}</button></div>
       <div class="cx-row mb-d-tags"><span class="pl${r.custom && !staff ? '' : ' solid'}">${!r.custom || staff ? ic('check', 14) : ''}${access(r)}</span>${statusPill(r)}<span class="pl">${RANK[r.rank]}</span></div>
       ${why ? `<p class="lb mb-why">${why}</p>` : ''}
-      <h3 class="mb-h3" id="mbSvcH">Services</h3>
-      <ul class="mb-svcs" aria-labelledby="mbSvcH">${d.services.map(([k, n, desc]) => { const off = !staff && m.off.includes(k);
+      <h3 class="mb-h3" id="mbSvcH" tabindex="-1">Services</h3>
+      <ul class="mb-svcs" aria-labelledby="mbSvcH">${d.services.map(([k, n, desc]) => { const off = !staff && (M.pend?.key === r.key ? M.pend.off.has(k) : m.off.includes(k));
         return `<li><label class="mb-svc" for="mbS-${k}"><b>${esc(n)}</b><small class="lb">${esc(desc)}</small></label><input class="sw" type="checkbox" role="switch" id="mbS-${k}" data-mb="svc" data-v="${k}" ${off ? '' : 'checked'} ${staff || lock ? 'disabled' : ''}></li>` }).join('')}</ul>
-      ${staff ? '<p class="lb">Owners and admins always have every service.</p>' : `<button type="button" class="bt ghost wide" data-mb="reset" data-k="d-reset" ${r.custom ? '' : 'disabled'}>Reset to all access</button>`}
+      ${preview(r)}
+      ${staff ? '<p class="lb">Owners and admins always have every service.</p>' : M.pend?.key === r.key ? '' : `<button type="button" class="bt ghost wide" data-mb="reset" data-k="d-reset" ${r.custom ? '' : 'disabled'}>Reset to all access</button>`}
       <h3 class="mb-h3" id="mbRoleH">Role</h3>
       <div class="mb-roles" role="radiogroup" aria-labelledby="mbRoleH">${ranks.map(k => `<button type="button" role="radio" class="cx sm" aria-checked="${r.rank === k}" tabindex="${r.rank === k ? 0 : -1}" data-mb="rank" data-v="${k}" ${lock || r.self ? 'disabled' : ''}>${RANK[k]}</button>`).join('')}</div>
       <p class="lb">${{ owner: 'Owners can do everything, including changing other owners and the rule for new members.', admin: 'Admins manage members and their services, but can’t change or remove owners.', member: 'Members use the services that are switched on for them.' }[r.rank]}</p>
@@ -237,7 +263,7 @@
 
   /* ---------- doing things ---------- */
   function select(key) {
-    M.sel = M.sel === key ? null : key; closeMenu(); draw();
+    M.sel = M.sel === key ? null : key; M.pend = null; closeMenu(); draw();
     if (M.sel && matchMedia('(max-width:1100px)').matches) { const p = document.getElementById('mbDetail'); p?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth' }); p?.focus({ preventScroll: true }) }
   }
   async function copy(text) { try { await navigator.clipboard.writeText(text); return true } catch (e) { return false } }
@@ -298,6 +324,9 @@
     if (a === 'copy-link') { M.invite.copied = await copy(M.invite.link); M.note = M.invite.copied ? 'Invite link copied.' : 'Select the link and copy it by hand.'; return draw() }
     if (a === 'temp-done') { M.temp = null; return draw() }
     if (a === 'log-more') { M.logAll = !M.logAll; return draw() }
+    if (a === 'pend-cancel') { M.pend = null; draw(); return el()?.querySelector('#mbSvcH')?.focus() }
+    if (a === 'pend-save') { const r = find(M.sel), p = M.pend; if (!r || !p) return; M.pend = null; const n = M.d.services.length - p.off.size;
+      return act({ op: 'services', username: r.m.username, off: [...p.off] }, `Saved. ${r.name} can open ${n} of ${M.d.services.length} services.`) }
     if (a === 'fb-clear') return act({ op: 'feedback-clear', id: v }, 'Note cleared.');
   });
   document.addEventListener('change', ev => {
@@ -305,8 +334,8 @@
     const a = t.dataset.mb, v = t.dataset.v;
     if (a === 'pick') { t.checked ? M.picked.add(v) : M.picked.delete(v); return draw() }
     if (a === 'pick-all') { shown().filter(r => r.kind === 'member' && !r.self && !r.locked).forEach(r => t.checked ? M.picked.add(r.key) : M.picked.delete(r.key)); return draw() }
-    if (a === 'svc') { const r = find(M.sel); if (!r) return; const off = new Set(r.m.off); t.checked ? off.delete(v) : off.add(v); const name = M.d.services.find(s => s[0] === v)?.[1] || v;
-      return act({ op: 'services', username: r.m.username, off: [...off] }, `${name} switched ${t.checked ? 'on' : 'off'} for ${r.name}.`) }
+    if (a === 'svc') { const r = find(M.sel); if (!r) return; if (M.pend?.key !== r.key) M.pend = { key: r.key, off: new Set(r.m.off) }; t.checked ? M.pend.off.delete(v) : M.pend.off.add(v);
+      if ([...M.pend.off].sort().join() === [...r.m.off].sort().join()) M.pend = null; M.refocus = null; draw(); return el()?.querySelector('#mbS-' + CSS.escape(v))?.focus() }
     if (a === 'policy-all') return act({ op: 'policy', allNew: t.checked, start: M.d.policy.start }, t.checked ? 'New members get every service.' : 'New members now start with the services ticked below.');
     if (a === 'policy-start') { const s = new Set(M.d.policy.start); t.checked ? s.add(v) : s.delete(v); return act({ op: 'policy', allNew: false, start: [...s] }, 'Starting services saved.') }
   });

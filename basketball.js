@@ -139,6 +139,8 @@ async function renderBasketball(){
       && (S.bb.filter !== 'live' || e.state === 'in') && (S.bb.filter !== 'top25' || e.home.rank || e.away.rank) && (S.bb.filter !== 'fav' || S.fav.some(f => f.sport === 'basketball' && (f.tid === e.home.id || f.tid === e.away.id))));
     bbRail();
     const live = list.filter(e => e.state === 'in').length;
+    const slate = window.flSlate, big = !!slate && slate.isBig(list.length) && !q && (S.bb.filter || 'all') === 'all';
+    if (slate) slate.repaint.bb = paint;
     const day = new Date(); day.setDate(day.getDate() + off);
     const groups = new Map(); for (const e of list) { if (!groups.has(e.lg)) groups.set(e.lg, []); groups.get(e.lg).push(e) }
     const order = BB_LEAGUES.map(l => l.key);
@@ -147,7 +149,9 @@ async function renderBasketball(){
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ...(ranked || S.bb.filter === 'top25' ? [['top25', 'Top 25']] : []), ['fav', '★ My teams']].map(([k, l]) => `<button class="qf" data-bbfilter="${k}" aria-pressed="${S.bb.filter === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}</div>`;
     const lgBtn = key !== 'all' ? `<button class="btn ghost lginfo" data-bbact="league">Standings, results & fixtures</button>` : '';
     el.innerHTML = navs + chips + `<div class="livebar"><h2>${esc(key === 'all' ? (off === 0 ? 'Today' : day.toLocaleDateString([], { weekday: 'long' })) : BBL[key].name)}</h2><span class="count">${list.length} game${list.length === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span>${lgBtn}</div>`
-      + (list.length ? [...groups].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).map(([k, l]) => `<div class="group"><div class="group-h">${bbLogo(k) ? `<img src="${esc(bbLogo(k))}" alt="">` : ''}<strong>${esc(BBL[k].name)}</strong><span>· ${esc(BBL[k].area)}</span>${key === 'all' ? `<button class="linkbtn bb-more" data-bblg="${k}">All ${esc(bbName(k))} games ›</button>` : ''}</div><div class="cards">${l.map(bbCard).join('')}</div></div>`).join('')
+      // a big college day: top games first, then each league's games a dozen at a time
+      + (list.length ? (big ? slate.topHTML(slate.top(list.filter(e => BBL[e.lg]?.college || e.home.rank || e.away.rank), { close: 6, p: e => S.bb.pred?.get(e.id)?.pH ?? null }), bbCard) : '')
+        + [...groups].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).map(([k, l]) => `<div class="group sl-grp" data-slgrp="bb|${off}|${k}"><div class="group-h">${bbLogo(k) ? `<img src="${esc(bbLogo(k))}" alt="">` : ''}<strong>${esc(BBL[k].name)}</strong><span>· ${esc(BBL[k].area)}</span>${key === 'all' ? `<button class="linkbtn bb-more" data-bblg="${k}">All ${esc(bbName(k))} games ›</button>` : ''}</div>${slate && big ? slate.cards(`bb|${off}|${k}`, l, bbCard) : `<div class="cards">${l.map(bbCard).join('')}</div>`}</div>`).join('')
         : `<div class="empty-state"><strong>${d.fsDown && d.espnDown ? "Couldn't load games" : 'No games'}</strong>${d.fsDown && d.espnDown ? 'Check your connection and try again.' : key !== 'all' ? `${esc(BBL[key].name)} has no games on this day. Use the arrows, or open standings, results & fixtures.${key === 'bal' ? ' The BAL plays in spring (March to June).' : key === 'bcla' ? ' BCL Americas runs from about November to April.' : key === 'wnba' ? ' The WNBA season runs May to October.' : ''}` : 'Try another day.'}</div>`)
       + (d.fsDown ? `<p class="srcnote">The local server isn't answering, so only the NBA, WNBA and NBL are shown. Start it with <code>python3 server.py --lan</code>.</p>` : '');
   };

@@ -281,7 +281,7 @@
     V.gamesFor = key; V.gamesLoading = true; draw();
     const games = await C.scoreboard(V.lg, dayKey(), force);
     if (V.gamesFor !== key) return;
-    V.games = games.filter(g => g.state === 'pre' && !g.off && +g.date > Date.now()).sort((a, b) => a.date - b.date); V.gamesLoading = false;
+    const readAt = Date.now(); V.games = games.filter(g => g.state === 'pre' && !g.off && +g.date > Date.now()).map(g => ({ ...g, readAt })).sort((a, b) => a.date - b.date); V.gamesLoading = false;
     if (!V.games.some(g => g.eid === V.exp)) V.exp = V.games[0]?.eid || '';
     draw();
   }
@@ -311,7 +311,7 @@
         <div class="py-mrow"><span class="lb">Total ${L.unit}<small>${note(tt)}</small></span><div class="cx-row">${btn(C.fromGame(g, 'total', 'over', tt.v), `Over ${fmt(tt.v)}`)}${btn(C.fromGame(g, 'total', 'under', tt.v), `Under ${fmt(tt.v)}`)}${step('total', tt.v, 'Total line')}</div></div></div>`;
     }
     return `<div class="py-g${open ? ' open' : ''}"><button type="button" class="py-gh" aria-expanded="${open}" data-pygame="${g.eid}" data-fk="g-${g.eid}">${g.away.logo || g.home.logo ? `<span class="py-logos" aria-hidden="true">${[soccer ? g.home : g.away, soccer ? g.away : g.home].map(t => t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.remove()">` : '').join('')}</span>` : ''}
-      <span class="rw-t"><b>${esc(title)}</b><small>${esc([soccer ? g.league : '', when(g.date)].filter(Boolean).join(' · '))}</small></span>${mine ? `<span class="pl">${mine} added</span>` : ''}${ic(open ? 'minus' : 'plus', 18)}</button>${body}</div>`;
+      <span class="rw-t"><b>${esc(title)}</b><small>${esc([soccer ? g.league : '', when(g.date)].filter(Boolean).join(' · '))}</small></span>${mine ? `<span class="pl">${mine} added</span>` : ''}${ic(open ? 'minus' : 'plus', 18)}</button>${open && mine ? `<p class="py-same sm" role="note">${ic('help', 14)}<span>You already have a pick from this game. A second one moves with it: if one loses, the other often does too.</span></p>` : ''}${body}</div>`;
   }
   function gamesTab() {
     const chips = `<div class="cx-row scroll" role="radiogroup" aria-label="League">${LEAGUES.map(k => `<button type="button" class="cx" role="radio" aria-checked="${V.lg === k}" tabindex="${V.lg === k ? 0 : -1}" data-pylg="${k}" data-fk="lgc-${k}">${esc(C.LG[k].name)}</button>`).join('')}</div>
@@ -336,17 +336,27 @@
   function ticket() {
     const legs = V.draft.legs, n = legs.length, c = n ? C.combine(legs, C.start0) : null, mk = n ? C.combine(legs, l => l.market0) : null;
     const late = legs.filter(l => l.start < Date.now());
-    return `<section class="card py-ticket${n ? ' has' : ''}" id="pyTicket" tabindex="-1" aria-label="The parlay you are building"><div class="sec-h"><h2>Your parlay</h2>${n ? `<span class="pl">${plural(n, 'pick')}</span>` : ''}</div>
+    // where "the books" number comes from, and how old it is
+    const priced = legs.filter(l => l.market0 != null), srcs = [...new Set(priced.map(l => l.msrc).filter(Boolean))], oldest = Math.min(...priced.map(l => l.mAt || Date.now()));
+    const srcTxt = priced.length ? `${srcs.length ? srcs.join(', ') : 'the books'}, read ${new Date(oldest).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${priced.length < n ? ` · ${n - priced.length} ${n - priced.length === 1 ? 'pick has' : 'picks have'} no price` : ''}` : 'No book posts a price for these picks';
+    // two picks from one game
+    const games = new Map(); for (const l of legs) games.set(l.gameKey, (games.get(l.gameKey) || 0) + 1); const same = [...games].filter(([, k]) => k > 1).length;
+    // why Lock it in is off, said beside it
+    const why = V.saving ? 'Saving…' : late.length ? `${late[0].game || late[0].text} has started. Take it out to lock in the rest.` : '';
+    return `<section class="card py-ticket${n ? ' has' : ''}" id="pyTicket" tabindex="-1" aria-label="The parlay you are building"><div class="sec-h"><h2>${n === 1 ? 'Your tracked pick' : 'Your parlay'}</h2>${n ? `<span class="pl">${plural(n, 'pick')}</span>` : ''}</div>
+      ${n === 1 ? '<p class="py-hint">One pick is tracked on its own. Add a second to make it a parlay.</p>' : ''}
       ${n ? `<ul class="py-dl">${legs.map(l => `<li><span class="rw-t"><b>${esc(l.text)}</b><small>${esc(`${l.game ? l.game + ' · ' : ''}${l.start < Date.now() ? 'Already started' : when(l.start)}`)}</small></span><button type="button" class="ib py-rm" data-pyrm="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Take out ${esc(l.text)}">${ic('x', 16)}</button></li>`).join('')}</ul>
-        <div class="py-tt"><div><span class="py-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num py-tbig">${c ? pct(c.p) + '%' : '–'}</b></div>
-          <div class="py-tm"><span class="py-k">Books say</span><b class="num">${mk ? pct(mk.p) + '%' : '–'}</b></div></div>
-        ${c?.linked && pct(c.lo) !== pct(c.hi) ? `<p class="py-hint">Some picks are from the same game, so they move together. The true chance sits between ${pct(c.lo)}% and ${pct(c.hi)}%.</p>` : ''}
+        <div class="py-tt"><div><span class="py-k">${n === 1 ? 'Chance it hits' : n === 2 ? 'Chance both hit' : `Chance all ${n} hit`}</span><b class="num py-tbig">${c ? pct(c.p) + '%' : '–'}</b></div>
+          <div class="py-tm"><span class="py-k">Books say</span><b class="num">${mk ? pct(mk.p) + '%' : '–'}</b><small class="py-src">${esc(srcTxt)}</small></div></div>
+        ${same ? `<p class="py-same" role="note">${ic('help', 16)}<span><b>${same === 1 ? 'Two or more picks come from one game.' : `${same} games have more than one pick.`}</b> They tend to win or lose together, so the chance is a range${c?.linked && pct(c.lo) !== pct(c.hi) ? `: between ${pct(c.lo)}% and ${pct(c.hi)}%` : ''}, not one number. Books usually price a same-game parlay below the multiplied odds.</span></p>` : ''}
         <div class="py-fields"><label class="fl-f"><span>Name (optional)</span><input class="inp" id="pyName" data-fk="name" maxlength="80" placeholder="Sunday four-leg" value="${esc(V.draft.name)}" autocomplete="off"></label>
           <label class="fl-f"><span>Odds you got (optional)</span><input class="inp num" id="pyOdds" data-fk="odds" inputmode="text" placeholder="+450" value="${esc(V.draft.odds)}" autocomplete="off" aria-describedby="pyOddsH"></label>
           <label class="fl-f"><span>Stake, in units (optional)</span><input class="inp num" id="pyStake" data-fk="stake" inputmode="decimal" placeholder="1" value="${esc(V.draft.stake)}" autocomplete="off"></label></div>
-        <p class="py-hint" id="pyOddsH">American odds, like +450 or -120. With them, your record counts units won and lost. Floodlight never places a bet.</p>
+        <p class="py-hint" id="pyOddsH">American odds, like +450 or -120. With them, your record counts units won and lost.</p>
+        <p class="py-notbet">${ic('help', 16)}<span><b>This tracks a parlay. It doesn’t place one.</b> Floodlight never takes money or sends anything to a sportsbook. Place a bet with your book if you want one, then log the odds here.</span></p>
         ${late.length ? `<p class="py-err" role="alert">${esc(late[0].game || late[0].text)} has started, so it can't go in. Take it out to save the rest.</p>` : ''}${V.err ? `<p class="py-err" role="alert">${esc(V.err)}</p>` : ''}
-        <div class="py-acts"><button type="button" class="bt wide py-lock" data-py="lock" data-fk="lock"${V.saving || late.length ? ' disabled' : ''}>${ic('save', 18)}${V.saving ? 'Locking in…' : 'Lock it in'}</button><button type="button" class="bt ghost py-clr" data-py="empty" data-fk="empty">Clear</button></div>
+        <div class="py-acts"><button type="button" class="bt wide py-lock" data-py="lock" data-fk="lock"${V.saving || late.length ? ' disabled' : ''}${why ? ' aria-describedby="pyWhy"' : ''}>${ic('save', 18)}${V.saving ? 'Locking in…' : n === 1 ? 'Track this pick' : 'Lock it in'}</button><button type="button" class="bt ghost py-clr" data-py="empty" data-fk="empty">Clear</button></div>
+        ${why ? `<p class="py-why" id="pyWhy">${esc(why)}</p>` : ''}
         <p class="py-hint">Once it is locked in, the picks can't be changed. ${window.S?.me ? 'It is kept with your account.' : 'It is kept in this browser. Log in to keep it with your account.'}</p>`
         : `<p class="py-empty">Nothing added yet. Choose a game or a player line${matchMedia('(max-width:1100px)').matches ? ' above' : ' on the left'} to start.</p>`}</section>`;
   }
