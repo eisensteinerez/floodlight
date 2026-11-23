@@ -124,6 +124,71 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     assert.ok(await p.evaluate(() => JSON.parse(localStorage.getItem('fl.slip') || '[]').some(l => l.name === 'Rudy Gobert')));
   });
 
+  await t('saved boards: a line flags its move, boards reorder, duplicate, archive, share a read-only link and save as an image', async () => {
+    const p = await page(); const shared = {};
+    await p.context().route(/\/api\/boards\/(share|unshare)$/, r => { const b = JSON.parse(r.request().postData() || '{}'); if (r.request().url().endsWith('/unshare')) { delete shared[b.id]; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }) }
+      shared.abc12345 = { by: 'erez', name: b.board.name, items: b.board.items.filter(i => i.kind !== 'note'), notes: b.board.items.filter(i => i.kind === 'note').map(i => i.label), at: Math.round(Date.now() / 1000) }; r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'abc12345', at: 1 }) }) });
+    await p.context().route(/\/api\/boards\/shared\?/, r => { const id = new URL(r.request().url()).searchParams.get('id'); r.fulfill({ status: shared[id] ? 200 : 404, contentType: 'application/json', body: JSON.stringify(shared[id] || { error: 'This board is no longer shared.' }) }) });
+    await p.evaluate(() => { window.S && (S.me = { username: 'erez', prefs: {} }) });
+    // save Edwards over 24.5 (the feed now has 25.5: the line moved against the over) and Hurts with a game that has started
+    await p.evaluate(now => { window.flBoards.add({ kind: 'player', key: 'player:nba:Anthony Edwards:pts', label: 'Anthony Edwards', sub: 'Points', sport: 'nba', name: 'Anthony Edwards', k: 'pts', line: 24.5, side: 'over', start: now + 7200e3 }, 'Tonight’s NBA');
+      window.flBoards.add({ kind: 'player', key: 'player:nfl:Jalen Hurts:pyds', label: 'Jalen Hurts', sub: 'Passing yards', sport: 'nfl', name: 'Jalen Hurts', k: 'pyds', line: 215.5, side: 'over', start: now - 60e3 }, 'Weekend NFL');
+      window.flBoards.make('My research') }, now);
+    await p.evaluate(() => window.flPages.show('boards')); await p.waitForSelector('.bd-card'); await p.waitForTimeout(1500);
+    const txt = await p.textContent('#pg-boards');
+    assert.match(txt, /Line moved to 25\.5\..*Saved at 24\.5\. The over is now harder to hit/);
+    assert.match(txt, /Closed\. The game has started/);
+    for (const s of ['Favorite players', 'Best unders', 'Fantasy roster', 'Injury watch']) assert.ok(txt.includes(s), `missing the ready-made name ${s}`);
+    const names = () => p.$$eval('#pg-boards .bd > .bd-list > .bd-card h2', hs => hs.map(h => h.textContent));
+    assert.deepStrictEqual(await names(), ['My research', 'Weekend NFL', 'Tonight’s NBA']);
+    // reorder from the More menu, keyboard focus stays on the moved board's control
+    const more = async id => { await p.focus(`[data-bdmore="${id}"]`); await p.keyboard.press('Enter'); await p.waitForSelector(`[data-bdmore="${id}"]:is(details[open] > *)`) };   // the More menu, opened from the keyboard
+    await more(await p.evaluate(() => window.flBoards.list()[0].id));
+    await p.click('.bd-more[open] [data-bd="down"]'); await p.waitForTimeout(150);
+    assert.deepStrictEqual(await names(), ['Weekend NFL', 'My research', 'Tonight’s NBA']);
+    assert.match(await p.evaluate(() => document.activeElement.textContent), /Move (down|up)/);
+    await p.keyboard.press('Escape');
+    assert.strictEqual(await p.$$eval('.bd-more[open]', d => d.length), 0, 'Escape closes the More menu');
+    assert.match(await p.evaluate(() => document.activeElement.textContent), /^More/);
+    // duplicate and archive
+    const nba = await p.evaluate(() => window.flBoards.list().find(b => b.name === 'Tonight’s NBA').id);
+    await more(nba); await p.click(`.bd-more[open] [data-bd="dup"]`); await p.waitForTimeout(150);
+    assert.ok((await names()).includes('Tonight’s NBA (copy)'));
+    const dup = await p.evaluate(() => window.flBoards.list().find(b => b.name === 'Tonight’s NBA (copy)').id);
+    await more(dup); await p.click(`.bd-more[open] [data-bd="archive"]`); await p.waitForTimeout(150);
+    assert.ok(!(await names()).includes('Tonight’s NBA (copy)'));
+    assert.match(await p.textContent('.bd-archd summary'), /Archived boards \(1\)/);
+    // save as image downloads a PNG
+    await more(nba);
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click(`.bd-more[open] [data-bd="image"]`)]);
+    assert.match(dl.suggestedFilename(), /^tonight-s-nba\.png$/);
+    // share: a read-only link, then the link opens the copy
+    await p.click(`[data-bd="share"][data-id="${nba}"]`); await p.waitForSelector(`#bdl-${nba}`);
+    const link = await p.inputValue(`#bdl-${nba}`); assert.match(link, /#\/board\/abc12345$/);
+    await shot(p, 'boards-1440');
+    await p.evaluate(() => window.flPages.show('board', 'abc12345')); await p.waitForSelector('#pg-board .bd-it'); await p.waitForTimeout(300);
+    const sh = await p.textContent('#pg-board');
+    assert.match(sh, /Shared board · read-only/); assert.match(sh, /Tonight’s NBA/); assert.match(sh, /Shared by erez/); assert.match(sh, /Line moved to 25\.5/);
+    assert.ok(!(await p.$('#pg-board [data-bdrm], #pg-board [data-bd]')), 'a shared board has no edit controls');
+    await shot(p, 'shared-board-1440');
+    // stop sharing: the link no longer opens
+    await p.evaluate(() => window.flPages.show('boards')); await p.waitForSelector(`[data-bd="unshare"][data-id="${nba}"]`).catch(() => p.click(`[data-bd="share"][data-id="${nba}"]`));
+    if (!(await p.$(`[data-bd="unshare"][data-id="${nba}"]`))) await p.click(`[data-bd="share"][data-id="${nba}"]`);
+    await p.click(`[data-bd="unshare"][data-id="${nba}"]`); await p.waitForTimeout(200);
+    assert.deepStrictEqual(shared, {});
+    assert.deepStrictEqual(p.errors, []);
+  });
+
+  await t('saved boards: the free plan keeps one board and says how to get more', async () => {
+    const p = await page();
+    await p.evaluate(() => { window.flPlan = { can: f => f !== 'boards_unlimited' }; window.flBoards.make('Favorite players') });
+    assert.strictEqual(await p.evaluate(() => window.flBoards.make('Best unders')), null);
+    await p.evaluate(() => window.flPages.show('boards')); await p.waitForSelector('.bd-lim');
+    assert.match(await p.textContent('.bd-lim'), /The free plan keeps one board/);
+    assert.ok(!(await p.$('#bdNew')), 'no way to start a second board on the free plan');
+    assert.deepStrictEqual(p.errors, []);
+  });
+
   await t('phone: the explorer folds into cards, nothing runs off the screen', async () => {
     for (const w of [320, 390]) {
       const p = await page(w, 800); await explorer(p); await p.evaluate(() => document.querySelector('.px-sum').scrollIntoView()); await shot(p, `explorer-${w}`);
