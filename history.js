@@ -26,16 +26,28 @@
     ['started', 'Game started', 'Being played'], ['pending', 'Pending result', 'Over, waiting for the box score or final'], ['won', 'Hit', ''], ['lost', 'Miss', ''],
     ['push', 'Push', 'Landed on the line, or a tie'], ['void', 'Void', 'Did not play, or postponed'], ['unknown', 'Not graded', 'The result could not be found for certain'], ['corrected', 'Corrected', 'The result changed after a re-check']];
   const STATE_NAME = Object.fromEntries(STATES.map(([k, l]) => [k, l]));
-  const Hs = { rows: null, props: null, upcoming: [], status: null, at: 0, err: '', propErr: '', loading: false, sport: 'all', kind: 'all', res: 'all', days: 30, shown: 40, by: 'sport', open: new Set() };
-  const get = url => Promise.race([fetch(url, { credentials: 'same-origin' }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || String(r.status)); return d }), new Promise((_, no) => setTimeout(() => no(new Error('It took too long to answer.')), 20000))]);
-  async function load(force) {
-    if (Hs.loading || (!force && Hs.at && Date.now() - Hs.at < 60000)) return; Hs.loading = true; draw();
-    await Promise.all([
-      get('/api/record?receipts=1').then(d => { Hs.rows = d.entries || []; Hs.upcoming = d.upcoming || []; Hs.err = '' }, e => { Hs.err = e.message || 'It did not load.' }),
-      get('/api/props/record?receipts=1').then(d => { Hs.props = d.entries || []; Hs.propErr = '' }, e => { Hs.props = Hs.props || []; Hs.propErr = e.message || 'It did not load.' }),
-      get('/api/grading/status').then(d => { Hs.status = d }, () => {})]);
-    if (!Hs.err) Hs.at = Date.now();
-    Hs.loading = false; draw();
+  const Hs = { rows: null, props: null, upcoming: [], status: null, at: 0, err: '', propErr: '', statusErr: '', loading: false, wBy: 'sport', sport: 'all', kind: 'all', res: 'all', days: 30, shown: 40, by: 'sport', open: new Set() };
+  const get = url => Promise.race([fetch(url, { credentials: 'same-origin' }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || String(r.status)); return d }), new Promise((_, no) => setTimeout(() => no(new Error('It took too long to answer.')), 45000))]);
+  /* ---------- the record service ----------
+     One request and one shape for every place that shows the record: this page and Predictions' "How we have done".
+     Both read Hs through load(); a second caller while a read is running gets the same promise. A failed read is tried
+     once more by itself before anything says it failed, and the grader's status (counts only, a cheap request) is enough
+     to show the right empty state when the full record is slow. Every answer is announced with the fl:record event. */
+  let inflight = null;
+  const once = () => Promise.all([
+    get('/api/record?receipts=1').then(d => { Hs.rows = d.entries || []; Hs.upcoming = d.upcoming || []; Hs.err = '' }, e => { Hs.err = e.message || 'It did not load.' }),
+    get('/api/props/record?receipts=1').then(d => { Hs.props = d.entries || []; Hs.propErr = '' }, e => { Hs.props = Hs.props || []; Hs.propErr = e.message || 'It did not load.' }),
+    get('/api/grading/status').then(d => { Hs.status = d; Hs.statusErr = '' }, e => { Hs.statusErr = e.message || 'It did not load.' })]);
+  function load(force) {
+    if (inflight) return inflight;
+    if (!force && Hs.at && Date.now() - Hs.at < 60000) return Promise.resolve(Hs);
+    Hs.loading = true; draw();
+    inflight = once().then(() => Hs.err ? new Promise(ok => setTimeout(ok, 3000)).then(once) : null).then(() => {
+      if (!Hs.err) Hs.at = Date.now();
+      Hs.loading = false; inflight = null; draw();
+      try { document.dispatchEvent(new CustomEvent('fl:record')) } catch (e) {}
+      return Hs });
+    return inflight;
   }
 
   /* ---------- one shape for both records ---------- */
@@ -47,14 +59,21 @@
     const mFirst = first?.market && typeof first.market[e.pick] === 'number' ? first.market[e.pick] : null;
     // closing line for a match: did the market's chance for our pick rise between our first forecast and kick-off?
     const clv = mFirst != null && mk != null && Math.abs(mk - mFirst) >= 0.005 && first?.pick === e.pick ? { beat: mk > mFirst, moved: `Market ${pct(mFirst)}% to ${pct(mk)}%` } : null;
-    return { kind: 'match', key: e.key, t: e.ko, made: e.made || first?.at || null, sport: e.sport === 'soccer' ? 'Soccer' : LG[e.lg] || 'Football', providers: [mk == null ? 'No price saved' : 'Sportsbooks'],
+    const move = mFirst != null && mk != null && first?.pick === e.pick ? (mk - mFirst) * 100 : null;   // closing-line move, in points of chance for our pick
+    return { kind: 'match', key: e.key, t: e.ko, made: e.made || first?.at || null, move, sport: e.sport === 'soccer' ? 'Soccer' : LG[e.lg] || 'Football', providers: [mk == null ? 'No price saved' : 'Sportsbooks'],
       market: e.pick === 'draw' ? 'Match result: draw' : 'Match result: win', ours: e.top, mkt: mk, edge: mk == null ? null : pct(e.top) - pct(mk), conf: e.conf || '', result: e.result || null,
       state: e.state || (e.result || 'pending'), clv, clvNote: clv?.moved || '', price: null,
       title: e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`, sub: `${e.home} ${fin || 'v'} ${e.away}`, actual: fin, why: e.why || '', raw: e };
   }
+  // how far the market moved for our side between publication and the close, at the same line, in points of chance
+  function propMove(e) {
+    const a = e.first, b = e.close; if (!a || !b || ['published', 'locked'].includes(e.state) || a.line !== b.line || a.market == null || b.market == null) return null;
+    const mb = b.side === e.side ? b.market : 1 - b.market, ma = a.side === e.side ? a.market : 1 - a.market;
+    return (mb - ma) * 100;
+  }
   function fromProp(e) {
     const over = e.side === 'over', what = e.yes ? `${e.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(e.line)} ${String(e.label).toLowerCase()}`;
-    return { kind: 'prop', key: e.key, t: e.start, made: e.made || null, sport: PROP_SPORT[e.sport] || e.sport, providers: (e.books || []).map(b => BOOK[b] || b).filter(Boolean), market: e.label,
+    return { kind: 'prop', key: e.key, t: e.start, made: e.made || null, move: propMove(e), sedge: e.sedge ?? null, sport: PROP_SPORT[e.sport] || e.sport, providers: (e.books || []).map(b => BOOK[b] || b).filter(Boolean), market: e.label,
       ours: e.ours, mkt: e.market, edge: e.edge, conf: e.conf || '', result: e.result || null, state: e.state || (e.result || 'pending'), price: e.first?.price ?? null,
       clv: e.clv && e.clv.beat != null && !['published', 'locked'].includes(e.state) ? e.clv : null, clvNote: e.clv?.moved || '',   // the close is only known after the lock
       title: `${e.player} ${what.charAt(0).toLowerCase() + what.slice(1)}`, sub: [e.team, e.opp].filter(Boolean).join(' v '), actual: e.actual || '', why: e.why || '', raw: e };
@@ -66,7 +85,8 @@
       title: e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`, sub: `${e.home} v ${e.away}`, actual: '', why: '', raw: { ...e, upcoming: true } };
   }
   const all = (matches, props, upcoming) => [...(matches || []).map(fromMatch), ...(props || []).map(fromProp), ...(upcoming || []).map(fromUpcoming)].sort((a, b) => b.t - a.t);
-  const graded = e => e.result === 'won' || e.result === 'lost';
+  // a hit or a miss whose start has passed: a pick for a game still to come is never counted, whatever it says
+  const graded = e => (e.result === 'won' || e.result === 'lost') && !!e.t && e.t * 1000 <= Date.now();
   /* "Locked before start": the pick's first reading was saved before the game began, it was locked with those numbers,
      and the result was put on it by the grader (server or GitHub) from the final score or box score, not typed in. */
   const AUTO = new Set(['server', 'github']);
@@ -82,9 +102,9 @@
     const vs = priced.length ? (priced.filter(e => e.result === 'won').length / priced.length - priced.reduce((a, e) => a + e.mkt, 0) / priced.length) * 100 : null;
     const cl = rows.filter(e => e.clv), beat = cl.filter(e => e.clv.beat).length;
     const paid = g.map(e => ({ e, d: dec(e.price, e.mkt) })).filter(x => x.d), units = paid.reduce((a, x) => a + (x.e.result === 'won' ? x.d - 1 : -1), 0);
-    const edged = g.filter(e => typeof e.edge === 'number');
-    return { n: g.length, won, lost: g.length - won, push: rows.filter(e => e.result === 'push').length, void: rows.filter(e => e.result === 'void').length,
-      unknown: rows.filter(e => e.result === 'unknown').length, rate: g.length ? won / g.length : null, said: g.length ? g.reduce((a, e) => a + (e.ours || 0), 0) / g.length : null,
+    const edged = g.filter(e => typeof e.edge === 'number'), over = e => !!e.t && e.t * 1000 <= Date.now(), mv = rows.filter(e => typeof e.move === 'number' && over(e));
+    return { n: g.length, won, lost: g.length - won, push: rows.filter(e => e.result === 'push' && over(e)).length, void: rows.filter(e => e.result === 'void' && over(e)).length,
+      unknown: rows.filter(e => e.result === 'unknown' && over(e)).length, moveN: mv.length, move: mv.length ? mv.reduce((a, e) => a + e.move, 0) / mv.length : null, rate: g.length ? won / g.length : null, said: g.length ? g.reduce((a, e) => a + (e.ours || 0), 0) / g.length : null,
       vs, priced: priced.length, clvN: cl.length, clv: cl.length ? beat / cl.length : null, staked: paid.length, units: paid.length ? units : null, roi: paid.length ? units / paid.length : null,
       edge: edged.length ? edged.reduce((a, e) => a + e.edge, 0) / edged.length : null };
   }
@@ -104,6 +124,51 @@
   const rateCell = r => r.n >= 10 ? `<b>${pct(r.rate)}%</b>` : r.n ? `<span class="lb" title="${r.n} graded: too few to rate">${r.won} of ${r.n}</span>` : '–';
   const ago = t => { const s = Math.max(0, Math.round(Date.now() / 1000 - t)); return s < 90 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago` };
   const when = t => new Date(t * 1000).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
+  /* ---------- "How we have done": the same record and the same sums, short, for the Predictions page ----------
+     Never a loading failure when the truth is "nothing graded yet": with no graded pick it says so and counts the picks
+     waiting for their games. A failure is shown only when the record and the grader's status both did not answer. */
+  const WAIT = new Set(['published', 'locked', 'started', 'pending']);
+  const WBY = [['sport', 'Sport'], ['market', 'Market'], ['provider', 'Provider'], ['conf', 'Confidence']];
+  const isWaiting = e => !e.result && WAIT.has(e.state);
+  function summary(rows) {
+    const S = stats(rows), g = rows.filter(e => graded(e) && e.ours != null);
+    const cal = CAL.map(([lo, hi, label]) => { const xs = g.filter(e => e.ours * 100 >= lo && e.ours * 100 < hi), n = xs.length, won = xs.filter(e => e.result === 'won').length;
+      return { label, n, won, said: n ? xs.reduce((a, e) => a + e.ours, 0) / n : null, rate: n ? won / n : null } }).filter(b => b.n);
+    return { ...S, waiting: rows.filter(isWaiting).length, cal };
+  }
+  const waitingFromStatus = st => !st ? null : ['matches', 'props'].reduce((a, k) => a + [...WAIT].reduce((b, x) => b + ((st[k] || {})[x] || 0), 0), 0);
+  // ok: (row) -> bool, the Predictions page's sport filter. Returns the section's HTML.
+  function widget(ok = () => true) {
+    const head = `<div class="sec-h"><h2 id="hw-h">How we have done</h2></div>`;
+    if (!Hs.rows && !Hs.status) {
+      if (Hs.loading || inflight || !Hs.err) return `<section class="card pd-res-card hw" aria-labelledby="hw-h" aria-busy="true">${head}<i class="skl" style="height:18px;width:80%;display:block"></i></section>`;
+      return `<section class="card pd-res-card hw" aria-labelledby="hw-h">${head}<p class="lb" role="status">We couldn’t reach the pick record just now. The record itself is safe on the server and on GitHub.</p><button type="button" class="bt sm ghost" data-hw="reload" data-fk="hw-retry">Try again</button></section>`;
+    }
+    const rows = all(Hs.rows, Hs.props, Hs.upcoming).filter(ok), S = summary(rows);
+    const waiting = Hs.rows ? S.waiting : waitingFromStatus(Hs.status) || 0;
+    const link = `<button type="button" class="lk" data-page="history" data-fk="hist">Open Pick history</button>`;
+    if (!S.n) return `<section class="card pd-res-card hw hw-zero" aria-labelledby="hw-h">${head}<p class="hw-big">No graded picks yet</p>
+      <p>${waiting ? `${waiting} ${waiting === 1 ? 'prediction is' : 'predictions are'} currently locked.` : 'Each prediction is saved with its original numbers when it is published.'} Results will appear after ${waiting === 1 ? 'its game finishes' : 'their games finish'}.</p>
+      ${S.push || S.void || S.unknown ? `<p class="lb">${[S.push && `${S.push} push`, S.void && `${S.void} void`, S.unknown && `${S.unknown} not graded`].filter(Boolean).join(', ')}: listed in Pick history, never counted as hits or misses.</p>` : ''}${waiting || rows.length ? link : ''}</section>`;
+    const rateOk = S.n >= MIN_RATE, by = WBY.find(x => x[0] === Hs.wBy) ? Hs.wBy : 'sport', groups = BY[by][1](rows).slice(0, 6);
+    const cell = (k, v, sub) => `<div class="tile inset"><span class="lb">${k}</span><b class="fig num">${v}</b>${sub ? `<small class="lb">${sub}</small>` : ''}</div>`;
+    return `<section class="card pd-res-card hw" aria-labelledby="hw-h">${head}
+      <div class="pd-tiles hw-tiles">
+        ${cell('Record', `${S.won}–${S.lost}${S.push ? `–${S.push}` : ''}`, `hits–misses${S.push ? '–pushes' : ''}${S.void ? ` · ${S.void} void` : ''}`)}
+        ${cell('Hit rate', rateOk ? pct(S.rate) + '%' : '–', rateOk ? `we said ${pct(S.said)}%${S.n < SMALL ? ' · small sample' : ''}` : `${S.n} of ${MIN_RATE} graded needed`)}
+        ${cell('Units', S.units == null ? '–' : signed(S.units), S.units == null ? 'no prices saved' : `ROI ${signed(S.roi * 100)}% over ${S.staked}`)}
+        ${cell('Closing line', S.move == null ? '–' : signed(S.move) + ' pts', S.move == null ? 'once a line moves' : `average move for our side${S.clvN ? `, beat ${pct(S.clv)}% of ${S.clvN}` : ''}`)}</div>
+      ${S.cal.length ? `<details class="hw-d"><summary data-fk="hw-cal">Calibration by probability range</summary><div class="tbx-wrap"><table class="tbx hs-tbl"><thead><tr><th scope="col">We said</th><th scope="col" class="r">Picks</th><th scope="col" class="r">Average</th><th scope="col" class="r">It hit</th></tr></thead>
+        <tbody>${S.cal.map(b => `<tr><th scope="row">${esc(b.label)}</th><td class="r num">${b.n}</td><td class="r num">${pct(b.said)}%</td><td class="r num">${b.n >= 10 ? pct(b.rate) + '%' : `<span class="lb">${b.won} of ${b.n}</span>`}</td></tr>`).join('')}</tbody></table></div>
+        <p class="lb">A range shows its hit rate from 10 graded picks.</p></details>` : ''}
+      <div class="hw-by"><label class="fl-f hw-sel"><span>Record by</span><select class="inp" data-hwby data-fk="hw-by">${WBY.map(([k, l]) => `<option value="${k}"${k === by ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        ${groups.length ? `<div class="tbx-wrap"><table class="tbx hs-tbl"><thead><tr><th scope="col">${esc(BY[by][0])}</th><th scope="col" class="r">Hit–miss</th><th scope="col" class="r">Hit rate</th><th scope="col" class="r">Units</th></tr></thead>
+          <tbody>${groups.map(r => `<tr><th scope="row">${esc(r.k)}</th><td class="r num">${r.won}–${r.lost}</td><td class="r num">${rateCell(r)}</td><td class="r num">${r.units == null ? '–' : signed(r.units)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="lb">Nothing graded in this group yet.</p>'}</div>
+      <p class="lb">${S.waiting ? `${S.waiting} ${S.waiting === 1 ? 'pick is' : 'picks are'} waiting for ${S.waiting === 1 ? 'its game' : 'their games'} and not counted. ` : ''}Only finished games are graded.</p>${link}</section>`;
+  }
+  document.addEventListener('change', ev => { const sel = ev.target.closest?.('[data-hwby]'); if (!sel) return; Hs.wBy = sel.value; try { document.dispatchEvent(new CustomEvent('fl:record')) } catch (e) {} });
+  document.addEventListener('click', ev => { if (ev.target.closest?.('[data-hw="reload"]')) load(true) });
 
   function breakdown(rows) {
     const [first, fn] = BY[Hs.by], xs = fn(rows);
@@ -231,5 +296,5 @@
     ev.preventDefault(); Hs.by = ks[n]; draw(); document.querySelector(`#pg-history [data-hsby="${ks[n]}"]`)?.focus();
   });
   window.flPages?.add('history', { title: 'Pick history', render, onShow() { load() } });
-  window.flHistory = { stats, state: Hs, all, graded, verified, lockBadge, BY, MIN_RATE };
+  window.flHistory = { stats, state: Hs, all, graded, verified, lockBadge, BY, MIN_RATE, load, summary, widget };
 })();

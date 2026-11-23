@@ -117,7 +117,56 @@ def _clean(p, now):
             "label": label or k, "line": line, "side": side, "yes": bool(p.get("yes")), "ours": round(ours, 3),
             "market": None if market is None else round(market, 3), "conf": str(p.get("conf") or "")[:12], "start": int(start), "books": books,
             "price": int(p["price"]) if isinstance(p.get("price"), int) and not isinstance(p.get("price"), bool) and 100 <= abs(p["price"]) <= 5000 else None,
-            "proj": _num(p.get("proj"), -1000, 100000), "hit": _num(p.get("hit"), 0, 1), "n": int(p["n"]) if isinstance(p.get("n"), int) and 0 < p["n"] < 400 else None}
+            "proj": _num(p.get("proj"), -1000, 100000), "hit": _num(p.get("hit"), 0, 1), "n": int(p["n"]) if isinstance(p.get("n"), int) and 0 < p["n"] < 400 else None,
+            **_extra(p)}
+
+
+def _ident(v, n=40):
+    v = str(v or "").strip()[:n]
+    return v if v and re.fullmatch(r"[A-Za-z0-9:._\- ]+", v) else None
+
+
+def _text(v, n=60):
+    v = re.sub(r"\s+", " ", str(v or "")).strip()[:n]
+    return v or None
+
+
+def _extra(p):
+    """The optional receipt fields the page knows about a prop (ids, supported edge, confidence range, injury and lineup)."""
+    lo, hi = _num(p.get("lo"), 0, 1), _num(p.get("hi"), 0, 1)
+    va = _num(p.get("verifiedAt"), 0, 1e13)
+    return {"event": _ident(p.get("event")), "playerId": _ident(p.get("playerId")), "teamId": _ident(p.get("teamId")), "oppId": _ident(p.get("oppId")),
+            "league": _ident(p.get("league"), 12), "marketId": _ident(p.get("marketId"), 60), "provider": _text(p.get("provider"), 40),
+            "sedge": None if _num(p.get("sedge"), -100, 100) is None else round(p["sedge"]),
+            "range": [round(lo, 3), round(hi, 3)] if lo is not None and hi is not None and lo <= hi else None,
+            "sources": [s for s in (_text(x, 40) for x in (p.get("sources") or [])[:8] if isinstance(p.get("sources"), list)) if s] or None,
+            "injury": _text(p.get("injury")), "lineup": _text(p.get("lineup")),
+            "verifiedAt": None if va is None else int(va / 1000 if va > 1e11 else va)}
+
+
+BOOK_NAME = {"prizepicks": "PrizePicks", "sleeper": "Sleeper", "underdog": "Underdog"}
+
+
+def make_receipt(key, p, read, backfilled=False):
+    """The prop as it was published, frozen (gradebook.receipt)."""
+    books = read.get("books") or p.get("books") or []
+    team, opp = p.get("team") or "", p.get("opp") or ""
+    return gradebook.receipt(
+        id=key, publishedAt=read.get("at"), event=p.get("event"), start=p.get("start"), league=p.get("league") or p.get("sport"),
+        player=p.get("player"), playerId=p.get("playerId"), team=team or None, teamId=p.get("teamId"), opp=opp or None, oppId=p.get("oppId"),
+        matchup=f"{team} vs {opp}" if team and opp else None, market=p.get("label"), marketId=p.get("marketId") or p.get("k"),
+        line=read.get("line", p.get("line")), side=read.get("side", p.get("side")), provider=p.get("provider") or ", ".join(BOOK_NAME.get(b, b) for b in books) or None,
+        price=read.get("price"), modelProb=read.get("ours"), marketProb=read.get("market"), rawEdge=read.get("edge"),
+        supportedEdge=p.get("sedge"), confidence=p.get("conf") or None, confRange=p.get("range"),
+        sources=p.get("sources") or ([BOOK_NAME.get(b, b) + " line" for b in books] + ["Floodlight Lab model"]),
+        injury=p.get("injury"), lineup=p.get("lineup"), verifiedAt=p.get("verifiedAt"), backfilled=backfilled)
+
+
+def ensure_receipt(e):
+    """A prop saved before receipts existed gets one made from its first reading, which was never changed, marked as such."""
+    if isinstance(e.get("receipt"), dict) or not e.get("first"):
+        return False
+    return gradebook.keep_receipt(e, make_receipt(e["key"], e, e["first"], backfilled=True))
 
 
 def seen(picks, now=None):
@@ -145,7 +194,9 @@ def seen(picks, now=None):
             e = BOOK.get(key)
             if not e:
                 BOOK[key] = {"key": key, **{x: p[x] for x in ("sport", "player", "team", "opp", "k", "label", "line", "side", "yes", "conf", "start")},
-                             "first": read, "close": read, "readings": [read]}
+                             "first": read, "close": read, "readings": [read], "receipt": make_receipt(key, p, read)}
+                if p.get("event"):
+                    BOOK[key]["event"] = p["event"]
                 new += 1
             elif not e.get("result") and now < e["start"] - gradebook.LOCK_BEFORE:
                 e["close"] = read
@@ -219,7 +270,7 @@ def grade_one(e, now=None, by="server", give_up=True):
     src = SOURCE.get(e["sport"], "ESPN game log and box score")
     if res and not failed:
         return gradebook.set_result(e, res, shown if res != "unknown" else "", (g.get("why") or (shown if res == "unknown" else ""))[:300],
-                                    by=by, source=src, calc=_calc(e, res, shown), now=now)
+                                    by=by, source=src, calc=_calc(e, res, shown), now=now, closing=e.get("close"))
     if give_up and now - e["start"] > GIVE_UP and not e.get("result"):
         return gradebook.set_result(e, "unknown", "", f"No result found within five days{f' ({shown})' if shown else ''}", by=by, now=now)
     e["tried"] = now
@@ -284,14 +335,18 @@ def entries(limit=2000, since=None, receipts=False, tests=False, now=None):
             r = {"state": gradebook.state(e["start"], e.get("result"), GRADE_AFTER.get(e["sport"], 3.5 * 3600), e.get("corrections"), now),
                  "made": f.get("at"), "graded": e.get("graded"), "by": e.get("by"), "corrected": bool(e.get("corrections"))}
             if receipts:
+                if ensure_receipt(e):
+                    _state["dirty"] = True
+                rc = e.get("receipt")
                 r.update({"first": f, "close": e.get("close"), "readings": e.get("readings") or [f], "source": e.get("source"), "calc": e.get("calc"),
-                          "corrections": e.get("corrections") or []})
+                          "corrections": e.get("corrections") or [], "receipt": rc, "receiptOk": gradebook.receipt_ok(rc), "grading": gradebook.grading(e)})
             if e.get("test"):
                 r["test"] = True
             out.append({**r, "key": e["key"], "sport": e["sport"], "player": e["player"], "team": e.get("team"), "opp": e.get("opp"), "k": e["k"],
                         "label": e["label"], "line": e["line"], "side": e["side"], "yes": e.get("yes"), "conf": e.get("conf"), "start": e["start"],
                         "ours": f.get("ours"), "market": f.get("market"), "edge": f.get("edge"), "books": f.get("books") or [],
-                        "result": e.get("result"), "actual": e.get("actual"), "why": e.get("why"), "clv": clv(e)})
+                        "result": e.get("result"), "actual": e.get("actual"), "why": e.get("why"), "clv": clv(e),
+                        "sedge": (e.get("receipt") or {}).get("supportedEdge"), "event": e.get("event")})
         return out
 
 

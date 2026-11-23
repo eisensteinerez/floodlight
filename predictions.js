@@ -23,8 +23,6 @@
   const MIN = [[0, 'Any'], [3, '3+'], [5, '5+'], [10, '10+']];
   const SORT = [['edge', 'Biggest'], ['conf', 'Most confident'], ['soon', 'Soonest']];
   const KIND = [['all', 'Props and match results'], ['prop', 'Player props only'], ['match', 'Match results only']];
-  const TRACK_SINCE = Date.UTC(2026, 10, 23, 12);   // grading rebuilt and running on its own (PR 54, 2026-11-23)
-  const FULL_AT = 20;                               // graded picks before the full performance module is shown
   const LIVE_FOR = 5 * 3600e3;   // a started prop stays in "Live" this long; nothing tells us when its game ends
   const STALE = 30 * 60000;      // a reading of the books older than this is marked stale (the server re-reads them every 15 minutes)
   const P = { sport: 'all', when: 'tonight', min: 0, sort: 'edge', props: null, matches: null, record: null, loading: false, at: 0, denied: false, all: false,
@@ -60,7 +58,7 @@
     const [props] = await Promise.all([
       window.flEdge ? window.flEdge.props(null, force, r => done(r.sport)) : Promise.resolve({ denied: false }),
       get('/api/forecast/list').then(d => { P.matches = (d.matches || []).map(matchPick); P.fcError = ''; P.fcStatus = 0; P.fcAt = Date.now() }, e => { P.matches = P.matches || []; P.fcError = e.message || 'It did not load.'; P.fcStatus = e.status || 0 }).then(() => done('fc')),
-      Promise.all([get('/api/record'), get('/api/props/record').catch(() => null)]).then(([d, pr]) => { P.record = d.entries || []; if (pr) P.propRec = pr.entries || []; P.recError = ''; P.recAt = Date.now() }, e => { P.record = P.record || []; P.recError = e.message || 'It did not load.' }).then(() => done('rec')),
+      recordLoad(force).then(() => done('rec')),
     ]);
     publish();
     P.denied = !!props.denied && (P.fcStatus === 401 || P.fcStatus === 403);
@@ -445,21 +443,24 @@
     el.innerHTML = alert + h;
   }
 
-  /* ---------- the slip ---------- */
-  // Legs from different games are independent, so their chances multiply. Legs from one game move together; for those
-  // only the limits are known: no higher than the least likely leg, no lower than the sum of chances minus (legs - 1).
+  /* ---------- the slip ----------
+     The combined chance comes from parlaycore (slipChance): picks from different games multiply; Low or Moderate links
+     (same game, same team, same player) give a rough range; Strong links (one player's stats that count the same plays,
+     a quarterback and his receiver, several overs or unders on one quarterback) are too tight for our rules of thumb, so
+     the slip says so and shows only the limits; picks that can't both hit give 0%. Each leg carries what relate() reads. */
+  const PL = ['type', 'lg', 'sport', 'player', 'team', 'opp', 'k', 'label', 'line', 'side', 'yes', 'start', 'gameKey', 'home', 'away', 'eid'];
+  function plOf(p) { try { const x = window.flParlay?.fromPick(p); return x ? Object.fromEntries(PL.filter(k => x[k] != null).map(k => [k, x[k]])) : null } catch (e) { return null } }
+  const corrLegs = legs => legs.map(l => ({ ...(l.pl || { type: 'other', lg: l.sport }), id: l.id, gameKey: l.pl?.gameKey || l.gameKey, ours0: l.ours, market0: l.market }));
   function combine(legs, key) {
-    const groups = new Map(); for (const l of legs) { if (l[key] == null) return null; groups.set(l.gameKey, [...(groups.get(l.gameKey) || []), l[key]]) }
-    let lo = 1, hi = 1, linked = false;
-    for (const ps of groups.values()) { if (ps.length === 1) { lo *= ps[0]; hi *= ps[0] } else { linked = true; lo *= Math.max(0, ps.reduce((a, b) => a + b, 0) - (ps.length - 1)); hi *= Math.min(...ps) } }
-    return { lo, hi, linked };
+    const C = window.flParlay, xs = corrLegs(legs); if (!C || !legs.length) return null;
+    return C.slipChance(xs, l => key === 'ours' ? l.ours0 : l.market0);
   }
-  const range = c => c.linked && pct(c.lo) !== pct(c.hi) ? `${pct(c.lo)}–${pct(c.hi)}%` : `${pct(c.linked ? c.hi : c.lo)}%`;
+  const range = c => !c ? '–' : c.kind === 'conflict' ? '0%' : pct(c.lo) === pct(c.hi) ? `${pct(c.lo)}%` : `${pct(c.lo)}–${pct(c.hi)}%`;
   function syncSlip() {   // legs keep the numbers they were added at, until the same pick is on the board again
     const live = new Map(allPicks().map(p => [p.id, p]));
     P.slip = P.slip.map(l => { const p = live.get(l.id); return p ? leg(p) : l }); store.set('fl.slip', P.slip);
   }
-  const leg = p => ({ id: p.id, name: p.name, text: p.text, short: p.short || `${p.name} ${p.text}`, ours: p.ours, market: p.market, gameKey: p.gameKey, game: p.game, sport: p.sport });
+  const leg = p => ({ id: p.id, name: p.name, text: p.text, short: p.short || `${p.name} ${p.text}`, ours: p.ours, market: p.market, gameKey: p.gameKey, game: p.game, sport: p.sport, pl: plOf(p) });
   function toggle(id) {
     const i = P.slip.findIndex(l => l.id === id);
     if (i >= 0) P.slip.splice(i, 1); else { const p = allPicks().find(x => x.id === id); if (!p) return; if (P.slip.length >= 12) return window.toast?.('A slip holds up to 12 picks'); P.slip.push(leg(p)) }
@@ -474,14 +475,23 @@
     const d = new Date(), name = `${P.slip.length} ${P.slip.length === 1 ? 'pick' : 'picks'} · ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     P.slips.unshift({ id: 's' + Date.now().toString(36), name, legs: P.slip.map(l => ({ ...l })), at: Date.now() }); P.slips = P.slips.slice(0, 30); saveSlips(); P.saved = Date.now(); draw();
   }
+  const CORR_ICON = { Low: 'help', Moderate: 'help', Strong: 'help', Conflicting: 'x' };
+  function corrNote(c, legs) {
+    if (!c?.corr?.label) return '';
+    const k = c.corr, by = new Map(legs.map(l => [l.id, l])), nm = x => by.get(x.id)?.short || x.player || '';
+    const pairs = k.qb ? [] : k.pairs.filter(x => x.label !== 'Low' || k.label === 'Low').slice(0, 2);   // one quarterback's stack is named in the sentence already
+    return `<div class="pd-corr ${k.label.toLowerCase()}" role="note" aria-label="${esc(k.head)}"><p class="pd-corr-h">${ic(CORR_ICON[k.label], 16)}<b>${esc(k.head)}</b>${k.label === 'Conflicting' ? `<span class="pl pd-corr-l">${esc(k.label)}</span>` : ''}</p><p>${esc(k.text)}</p>
+      ${pairs.length ? `<ul class="pd-corr-p">${pairs.map(x => `<li><span>${esc(nm(x.a))} + ${esc(nm(x.b))}</span><small>${esc(x.label)}: ${esc(x.why)}</small></li>`).join('')}</ul>` : ''}</div>`;
+  }
   function slipCard() {
     const n = P.slip.length, ours = n ? combine(P.slip, 'ours') : null, mk = n ? combine(P.slip, 'market') : null, noMk = P.slip.filter(l => l.market == null).length;
-    const games = [...new Set(P.slip.filter(l => P.slip.filter(x => x.gameKey === l.gameKey).length > 1).map(l => l.game))];
+    const kind = ours?.kind, big = !ours ? '–' : kind === 'limits' ? `${pct(ours.lo)}–${pct(ours.hi)}%` : range(ours);
+    const sub = kind === 'limits' ? 'Limits only: the link is too strong to model' : kind === 'adjusted' ? `A rough range. Multiplied: ${pct(ours.p)}%` : kind === 'conflict' ? 'These picks can’t all hit' : n > 1 ? 'Different games, so multiplied' : '';
     return `<section class="card pd-slip${n ? ' has' : ' none'}" aria-label="Your slip"><div class="sec-h"><h2>${n ? 'Your slip' : 'Your slip is empty'}</h2>${n ? `<span class="pl">${n} ${n === 1 ? 'pick' : 'picks'}</span>` : ''}</div>
       ${n ? `<ul class="pd-legs">${P.slip.map(l => `<li><span class="rw-t"><b>${esc(l.short)}</b><small>${esc(l.game || '')}</small></span><b class="num">${pct(l.ours)}%</b><button type="button" class="ib pd-rm" data-pdadd="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Remove ${esc(l.short)} from your slip">${ic('x', 16)}</button></li>`).join('')}</ul>
-        <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${range(ours)}</b></div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk ? range(mk) : '–'}</b></div></div>
-        <p class="pd-warn">${games.length ? `${ic('help', 16)}<span><b>Linked picks.</b> ${games.length === 1 ? `More than one pick comes from ${esc(games[0] || 'the same game')}` : 'Some picks come from the same games'}, so they move together and can't be multiplied. The range shows the limits the true chance sits between.</span>`
-          : n > 1 ? `<span>No two picks come from the same game, so the chances are multiplied together.</span>` : `<span>Add another pick to see the chance they all hit.</span>`}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}</p>
+        <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${big}</b>${sub ? `<small class="lb">${esc(sub)}</small>` : ''}</div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk && !noMk ? (mk.kind === 'limits' ? `${pct(mk.lo)}–${pct(mk.hi)}%` : range(mk)) : '–'}</b></div></div>
+        ${n > 1 ? corrNote(ours, P.slip) : ''}
+        ${(() => { const w = `${n === 1 ? '<span>Add another pick to see the chance they all hit.</span>' : !ours?.corr?.label ? '<span>No two picks come from the same game, so the chances are multiplied together.</span>' : ''}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}`; return w ? `<p class="pd-warn">${w}</p>` : '' })()}
         <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="track" data-fk="track">${ic('ticket', 18)}Track it live</button><button type="button" class="bt ghost pd-clear" data-pd="save" data-fk="save">Save slip</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
         <p class="pd-said" role="status">${P.saved ? `Saved. ${window.S?.me ? 'It is kept with your account.' : 'It is kept in this browser; log in to keep it with your account.'}` : ''}</p>`
         : `<p class="pd-empty">Add two or more picks to compare their combined chance.</p>`}
@@ -490,44 +500,17 @@
           : `<div class="pd-sv"><button type="button" class="pd-load" data-pdload="${s.id}" data-fk="load-${s.id}"><b>${esc(s.name)}</b><small>${c ? range(c) + ' at the time' : ''}</small></button><button type="button" class="ib pd-rm" data-pddel="${s.id}" data-fk="del-${s.id}" aria-label="Delete the saved slip ${esc(s.name)}">${ic('x', 16)}</button></div>` }).join('')}</div>` : ''}</section>`;
   }
 
-  /* ---------- how we have done ---------- */
-  const BUCKETS = [[0, 45, 'Under 45%'], [45, 55, '45–54%'], [55, 65, '55–64%'], [65, 75, '65–74%'], [75, 101, '75%+']];
-  // match forecasts and props in one shape (history.js), last 90 days
-  function results() {
-    const H = window.flHistory, since = Date.now() / 1000 - 90 * 86400;
-    const every = H ? H.all(P.record, P.propRec).filter(e => e.t >= since && (P.sport === 'all' || sportKey(e) === P.sport)) : [];
-    const rows = every.filter(e => H.graded(e) && e.ours), S = H ? H.stats(every) : {};
-    const buckets = BUCKETS.map(([lo, hi, label]) => { const xs = rows.filter(e => e.ours * 100 >= lo && e.ours * 100 < hi), n = xs.length;
-      return { label, n, said: n ? xs.reduce((a, e) => a + e.ours, 0) / n : null, hit: n ? xs.filter(e => e.result === 'won').length / n : null } });
-    return { n: rows.length, rate: S.rate ?? null, buckets, vs: S.vs ?? null, priced: S.priced || 0, clv: S.clv ?? null, clvN: S.clvN || 0, props: rows.filter(e => e.kind === 'prop').length,
-      waiting: every.filter(e => e.kind === 'prop' && !e.result).length };
+  /* ---------- how we have done ----------
+     The same record service, response and sums as Pick history (history.js): one request for both pages, so this
+     section can't say "did not load" while Pick history shows the record. With nothing graded it says so plainly. */
+  function recordLoad(force) {
+    const H = window.flHistory; if (!H) return Promise.resolve();
+    return H.load(force).then(Hs => { P.record = Hs.rows || P.record || []; P.propRec = Hs.props || P.propRec || []; P.recError = Hs.rows || Hs.status ? '' : Hs.err; P.recAt = Hs.at || P.recAt });
   }
   const SPORT_KEY = { NBA: 'nba', WNBA: 'wnba', NFL: 'nfl', NHL: 'nhl', MLB: 'mlb', Soccer: 'soccer' };
   const sportKey = e => SPORT_KEY[e.sport] || 'cfb';
-  function resultsCard() {
-    const R = results(), H = 120, col = v => v == null ? 0 : Math.max(3, Math.round(v * H));
-    // until 20 picks are graded, one quiet line instead of an empty chart (item 6)
-    if (R.n < FULL_AT) {
-      const since = new Date(Math.min(TRACK_SINCE, ...((window.flHistory ? window.flHistory.all(P.record, P.propRec) : []).map(e => e.t * 1000).filter(Boolean)))).toLocaleDateString([], { month: 'long', day: 'numeric' });
-      return `<section class="pd-track" aria-label="How we have done">${ic('clock', 16)}<p>${P.recError ? `The record did not load. <button type="button" class="lk" data-pd="reload" data-fk="rec-retry">Try again</button>`
-        : `Performance tracking started ${esc(since)}. ${R.n ? `${R.n} of ${FULL_AT} finished picks graded so far; the full record shows from ${FULL_AT}.` : 'Finished picks will appear here.'}${R.waiting ? ` <span class="lb">${R.waiting} waiting for a result.</span>` : ''}`}
-        ${R.n || R.waiting ? `<button type="button" class="lk" data-page="history" data-fk="hist">See Pick history</button>` : ''}</p></section>`;
-    }
-    const vsTxt = R.vs == null ? '–' : (R.vs > 0 ? '+' : R.vs < 0 ? '−' : '') + Math.abs(R.vs).toFixed(1);
-    return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
-      <p class="lb">When we said a pick would hit X% of the time, how often did it? ${R.props ? `Match forecasts and ${R.props} graded ${R.props === 1 ? 'prop' : 'props'}` : 'Match forecasts so far'}, last 90 days.</p>
-      <div class="pd-cal" role="img" aria-label="${esc(R.buckets.filter(b => b.n).map(b => `${b.label}: we said ${pct(b.said)}%, it hit ${pct(b.hit)}%, ${b.n} picks`).join('. '))}">${R.buckets.map(b => `<div class="pd-col${b.n ? '' : ' none'}" title="${esc(b.n ? `${b.label}: we said ${pct(b.said)}% on average, ${pct(b.hit)}% hit, ${b.n} ${b.n === 1 ? 'pick' : 'picks'}` : `${b.label}: no picks`)}">
-          <div class="pd-pair" style="height:${H + 22}px"><span class="said" style="height:${col(b.said)}px"><i class="num">${b.n ? pct(b.said) : ''}</i></span><span class="hit" style="height:${col(b.hit)}px"><i class="num">${b.n ? pct(b.hit) : ''}</i></span></div>
-          <b>${esc(b.label)}</b><small class="num">${b.n ? `${b.n} ${b.n === 1 ? 'pick' : 'picks'}` : 'none'}</small></div>`).join('')}</div>
-      <div class="pd-leg" aria-hidden="true"><span><i class="said"></i>We said</span><span><i class="hit"></i>It hit</span></div>
-      <details class="pd-tbl"><summary>See the numbers</summary><div class="tbx-wrap"><table class="tbx"><thead><tr><th scope="col">We said</th><th scope="col" class="r">Average</th><th scope="col" class="r">It hit</th><th scope="col" class="r">Picks</th></tr></thead>
-        <tbody>${R.buckets.map(b => `<tr><th scope="row">${esc(b.label)}</th><td class="r num">${b.n ? pct(b.said) + '%' : '–'}</td><td class="r num">${b.n ? pct(b.hit) + '%' : '–'}</td><td class="r num">${b.n}</td></tr>`).join('')}</tbody></table></div></details>
-      <div class="pd-tiles"><div class="tile inset"><span class="lb">Graded picks</span><b class="fig num">${R.n}</b></div><div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${R.n >= (window.flHistory?.MIN_RATE || 20) ? pct(R.rate) + '%' : '–'}</b>${R.n < (window.flHistory?.MIN_RATE || 20) ? `<small class="lb">shown from ${window.flHistory?.MIN_RATE || 20} graded</small>` : R.n < 50 ? '<small class="lb">small sample</small>' : ''}</div>
-        <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${vsTxt}</b><small class="lb">${R.vs == null ? 'no prices saved' : `points ${R.vs >= 0 ? 'ahead' : 'behind'}, over ${R.priced} priced ${R.priced === 1 ? 'pick' : 'picks'}`}</small></div>
-        <div class="tile inset"><span class="lb">Beat the closing line</span><b class="fig num">${R.clvN ? pct(R.clv) + '%' : '–'}</b><small class="lb">${R.clvN ? `of ${R.clvN} props where it moved` : 'once a prop line moves'}</small></div></div>
-      <p class="lb">“Against the market” is our hit rate minus the chance the prices gave the same picks. “Beat the closing line” counts props whose line or price moved our way before the start.${R.waiting ? ` ${R.waiting} ${R.waiting === 1 ? 'prop is' : 'props are'} still waiting for a result.` : ''}</p>
-      <button type="button" class="bt ghost wide" data-page="history" data-fk="hist">By sport, provider, market, edge and confidence</button></section>`;
-  }
+  function resultsCard() { return window.flHistory ? window.flHistory.widget(e => P.sport === 'all' || sportKey(e) === P.sport) : '' }
+  document.addEventListener('fl:record', () => { if (window.flPages.current() === 'predictions' && $('pdSide')) draw() });   // draw() keeps the keyboard's place and passes the lists drawSide needs
   function fadeCard(L) {
     const now = new Date(), cold = window.flEdge ? window.flEdge.cold((P.props?.picks || []).filter(p => stateOf(p, now) !== 'gone'), 3) : [];
     return `<section class="card pd-fade" aria-label="Fade list"><div class="sec-h"><h2>Fade list</h2><span class="lb">The coldest players tonight</span></div>
@@ -546,7 +529,7 @@
           <b class="num pd-foled">${p ? edgeTxt(p.edge) : '–'}</b><button type="button" class="ib sm" data-pdfollow="${esc(f.k)}" data-fk="unf-${esc(f.k)}" aria-label="Stop following ${esc(f.name)}, ${esc(f.text)}">${ic('x', 16)}</button></li>` }).join('')}</ul>
       <p class="lb">Alerts show on this page while Floodlight is open, and as browser notifications when Alerts are on in Settings.</p></section>`;
   }
-  function drawSide(L) { $('pdSide').innerHTML = slipCard() + followCard() + (P.pending.has('rec') && !P.record ? `<div class="pd-track" aria-hidden="true"><i class="skl" style="height:18px;width:80%"></i></div>` : resultsCard()) + fadeCard(L) }
+  function drawSide(L) { const el = $('pdSide'); if (el && L) el.innerHTML = slipCard() + followCard() + resultsCard() + fadeCard(L) }
 
   /* ---------- actions ---------- */
   function openPick(id) {
@@ -609,5 +592,5 @@
   window.flPages.add('predictions', { title: 'Predictions', render,
     onShow() { load(); clearInterval(P.timer); P.timer = setInterval(() => { if (window.flPages.current() !== 'predictions') return; if (Date.now() - P.at > 5 * 60000) load(true); else if (!document.activeElement?.closest?.('#pg-predictions select')) draw() }, 60000) },
     onHide() { clearInterval(P.timer); clearTimeout(P.retryT) } });
-  window.flPredictions = { combine, results, state: P, picks: allPicks, sources, load };   // not flPred: that is the match prediction card in predict.js
+  window.flPredictions = { combine, state: P, picks: allPicks, sources, load };   // not flPred: that is the match prediction card in predict.js
 })();
