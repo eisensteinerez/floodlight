@@ -1619,13 +1619,31 @@ def grading_absorb(got, by):
     return n
 
 
+def grading_handoff():
+    """On Render a deploy starts the new server while the old one still answers the site's address, and the new one
+    starts with an empty disk. Before this server opens its port, it asks the old one (through the public address,
+    which can only reach the old one at this point) for the record, the prop record and the forecasts made so far, so
+    a pick locked between GitHub's runs survives the deploy. Nothing answers on a first start; that is fine."""
+    if not HOSTED or not gradebook.can_seal() or os.environ.get("RECORD_HANDOFF", "1") == "0":
+        return 0
+    try:
+        got = gradebook.unseal(gradebook._http(gradebook.SERVER + "?handoff=1", timeout=20))
+    except Exception as e:
+        print(f"grading: no handoff from the previous server ({type(e).__name__})")
+        return 0
+    n = grading_absorb(got, "server") + forecaster.absorb(got.get("forecaster"))
+    print(f"grading: took the previous server's record and forecasts ({n} changed)")
+    return n
+
+
 def grading_restore():
     """After a deploy or restart, take GitHub's copy back in, so picks locked before the restart are never lost."""
-    time.sleep(20)
-    got = gradebook.mirror()
-    if got:
-        n = grading_absorb(got, "github")
-        print(f"grading: took GitHub's copy of the record ({n} picks changed)")
+    for wait in (20, 120, 300):     # GitHub's copy can take a few minutes to show after a push
+        time.sleep(wait)
+        got = gradebook.mirror()
+        if got:
+            n = grading_absorb(got, "github")
+            print(f"grading: took GitHub's copy of the record ({n} picks changed)")
 
 
 # ---------- parlays: what a member is tracking, and their record ----------
@@ -2157,7 +2175,10 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path == "/api/grading/state":   # the site record, sealed, for GitHub Actions to grade and keep (gradebook.py)
             if not gradebook.can_seal():
                 return self.send_json({"error": "no key"}, 404)
-            data = gradebook.seal(gradebook.bundle(record, propbook, "server"))
+            b = gradebook.bundle(record, propbook, "server")
+            if q.get("handoff") == "1":   # a new server taking over after a deploy also gets the forecasts made so far
+                b["forecaster"] = forecaster.handoff()
+            data = gradebook.seal(b)
             self.send_response(200)
             self.send_header("Content-Type", "application/octet-stream")
             self.send_header("Cache-Control", "no-store")
@@ -2531,6 +2552,7 @@ if __name__ == "__main__":
     health.setup(fetch=fetch, file=CACHE_DIR / "health.json", players=roster, propbook=lambda: list(propbook.BOOK.values()),
                  send=health.discord_sender(lambda m, p_, pl=None: discord_bot.discord(m, p_, pl, token=os.environ.get("DISCORD_BOT_TOKEN"))))
     threading.Thread(target=_player_upkeep, daemon=True, name="player-upkeep").start()
+    grading_handoff()   # before the port opens, so the public address still reaches the server being replaced
     threading.Thread(target=grading_restore, daemon=True, name="grading-restore").start()
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,

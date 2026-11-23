@@ -266,15 +266,15 @@
 .pd-note{margin:0}
 .pd-more{padding:22px 24px}
 
-:root[data-theme] .pd-slip{background:var(--accent);color:var(--on-accent);border-color:transparent;padding:26px 26px 22px;backdrop-filter:none}
-:root[data-theme] .pd-slip h2,.pd-slip .rw-t b,.pd-slip .rw-t small,.pd-slip .pd-k{color:var(--on-accent)}
-.pd-slip .pl{background:transparent;border-color:color-mix(in oklab,var(--on-accent) 45%,transparent);color:var(--on-accent)}
+:root[data-theme] .pd-slip.has{background:var(--accent);color:var(--on-accent);border-color:transparent;padding:26px 26px 22px;backdrop-filter:none}
+:root[data-theme] :is(.pd-slip.has h2,.pd-slip.has .rw-t b,.pd-slip.has .rw-t small,.pd-slip.has .pd-k){color:var(--on-accent)}
+.pd-slip.has .pl{background:transparent;border-color:color-mix(in oklab,var(--on-accent) 45%,transparent);color:var(--on-accent)}
 .pd-legs{list-style:none;margin:0;padding:0;display:grid}
 .pd-legs li{display:flex;align-items:center;gap:10px;min-height:52px;border-top:1px solid color-mix(in oklab,var(--on-accent) 22%,transparent)}
 .pd-legs li:first-child{border-top:0}
 .pd-legs .rw-t b,.pd-legs .rw-t small{white-space:normal}
 .pd-legs li > b{font:700 15px/1 var(--font-body)}
-.pd-slip .pd-rm{width:44px;height:44px;background:transparent;border-color:transparent;color:var(--on-accent)}
+.pd-slip.has .pd-rm{width:44px;height:44px;background:transparent;border-color:transparent;color:var(--on-accent)}
 .pd-total{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-top:14px;padding-top:16px;border-top:1px solid color-mix(in oklab,var(--on-accent) 30%,transparent)}
 .pd-k{display:block;font:500 13px/1.3 var(--font-body);margin-bottom:4px}
 .pd-big{display:block;font:var(--display-weight) clamp(40px,4.4vw,56px)/.95 var(--font-display)}
@@ -290,8 +290,8 @@
 .pd-sv{display:flex;align-items:center;gap:8px;min-height:48px}
 :root[data-theme] .pd-load{flex:1;min-width:0;display:grid;gap:2px;text-align:left;color:var(--on-accent);min-height:44px}
 .pd-load b{font:600 14px/1.25 var(--font-body)}.pd-load small{font:500 12px/1.2 var(--font-body);opacity:.85}
-:root[data-theme] .pd-slip .bt.danger,:root[data-theme] .pd-slip .bt.ghost{color:var(--on-accent);border-color:color-mix(in oklab,var(--on-accent) 55%,transparent)}
-:root[data-theme] .pd-slip :focus-visible{outline-color:var(--on-accent)}
+:root[data-theme] .pd-slip.has .bt.danger,:root[data-theme] .pd-slip.has .bt.ghost{color:var(--on-accent);border-color:color-mix(in oklab,var(--on-accent) 55%,transparent)}
+:root[data-theme] .pd-slip.has :focus-visible{outline-color:var(--on-accent)}
 
 .pd-res-card{display:grid;gap:14px}.pd-res-card .sec-h{margin:0}.pd-res-card p{margin:0}
 .pd-cal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-items:end;padding-top:6px}
@@ -1095,11 +1095,11 @@ html:root[data-theme="stadium-gold"] .pd-why li{min-height:36px;padding-inline:1
 html:root[data-theme="stadium-gold"] .pd-why li::before{content:"";flex:none;width:18px;height:18px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='8.5' fill='none' stroke='%23EDBE55' stroke-width='1.6'/%3E%3Cpath d='m6 10.4 2.7 2.7L14 7.6' fill='none' stroke='%23EDBE55' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
 html:root[data-theme="stadium-gold"] .pd-done{padding:8px 26px}
 /* the slip is the one gold card on the page */
-html:root[data-theme="stadium-gold"] .pd-slip{border:1px solid transparent;background:var(--slip-grad) padding-box,linear-gradient(135deg,#FFF6D6,#B98427) border-box;box-shadow:0 18px 50px rgba(233,184,75,.2),inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden}
-html:root[data-theme="stadium-gold"] .pd-slip::after{content:"";position:absolute;right:-22px;top:-34px;width:132px;height:110px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100'%3E%3Cg transform='rotate(-28 60 50)' fill='none' stroke='%23150F02' stroke-width='4' stroke-linejoin='round'%3E%3Cpath d='M14 26h92v16a9 9 0 0 0 0 18v16H14V60a9 9 0 0 0 0-18z'/%3E%3Cpath d='M40 30v42' stroke-dasharray='5 6'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;opacity:.14;transform:rotate(-8deg);pointer-events:none;z-index:0}
+html:root[data-theme="stadium-gold"] .pd-slip.has{border:1px solid transparent;background:var(--slip-grad) padding-box,linear-gradient(135deg,#FFF6D6,#B98427) border-box;box-shadow:0 18px 50px rgba(233,184,75,.2),inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden}
+html:root[data-theme="stadium-gold"] .pd-slip.has::after{content:"";position:absolute;right:-22px;top:-34px;width:132px;height:110px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100'%3E%3Cg transform='rotate(-28 60 50)' fill='none' stroke='%23150F02' stroke-width='4' stroke-linejoin='round'%3E%3Cpath d='M14 26h92v16a9 9 0 0 0 0 18v16H14V60a9 9 0 0 0 0-18z'/%3E%3Cpath d='M40 30v42' stroke-dasharray='5 6'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;opacity:.14;transform:rotate(-8deg);pointer-events:none;z-index:0}
 html:root[data-theme="stadium-gold"] .pd-slip > *{position:relative;z-index:1}
-html:root[data-theme="stadium-gold"] .pd-slip h2{font-size:30px}
-html:root[data-theme="stadium-gold"] .pd-empty{font:italic 500 17px/1.5 var(--font-body);max-width:26em}
+html:root[data-theme="stadium-gold"] .pd-slip.has h2{font-size:30px}
+html:root[data-theme="stadium-gold"] .pd-empty{font:italic 500 15px/1.5 var(--font-body);max-width:26em}
 html:root[data-theme="stadium-gold"] .pd-big,html:root[data-theme="stadium-gold"] .pd-mk b{font-style:italic}
 /* how we have done: a slate card, and the chart in the theme's two series colours */
 html:root[data-theme="stadium-gold"] .pd-res-card{border:1px solid transparent;background:var(--slate-panel) padding-box,var(--slate-edge) border-box}
@@ -1189,12 +1189,12 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 .pd-src summary{cursor:pointer;display:inline-flex;align-items:center;min-height:44px;font:600 13px/1 var(--font-body);color:var(--text-2)}
 .pd-src summary:hover{color:var(--text)}
 .pd-src[open]{padding-bottom:6px}.pd-src p{margin:12px 0 0;max-width:78ch}
-.pd-src .tbx th[scope="row"]{color:var(--text);font-weight:600;white-space:nowrap;border-bottom:1px solid var(--border);padding:12px}
-.pd-src .tbx tr:last-child th{border-bottom:0}
+:is(.pd-src,.pd-srcp) .tbx th[scope="row"]{color:var(--text);font-weight:600;white-space:nowrap;border-bottom:1px solid var(--border);padding:12px}
+:is(.pd-src,.pd-srcp) .tbx tr:last-child th{border-bottom:0}
 .pd-s-note{display:block;margin-top:3px;font:500 12px/1.35 var(--font-body);color:var(--text-2)}
 .pd-st{display:inline-flex;align-items:center;gap:6px;font:600 13px/1.2 var(--font-body);white-space:nowrap;color:var(--text-2)}
 .pd-st::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
-.pd-st.ok::before{background:var(--good)}.pd-st.failed{color:var(--text)}.pd-st.failed::before{background:var(--bad)}
+.pd-st.ok::before{background:var(--good)}.pd-st.failed{color:var(--text)}.pd-st.failed::before{background:var(--warning,var(--bad))}
 .pd-st.stale::before{background:transparent;border:2px solid var(--text-2);width:5px;height:5px}
 .pd-st.loading::before{animation:flPulse 1.6s infinite}
 .pd-alert{display:flex;align-items:center;gap:14px;padding:16px 20px;border-color:var(--border-2)}
@@ -1208,7 +1208,7 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 .pd-wait-h{color:var(--text-2)}
 .pd-tiles > i.skl{height:74px;display:block}
 @media (max-width:640px){.pd-fresh-top{align-items:flex-start}.pd-alert{flex-wrap:wrap}.pd-sk-e{display:none}}
-.pd-src .tbx td,.pd-src .tbx th{text-align:left}.pd-src .tbx .r{text-align:right}
+:is(.pd-src,.pd-srcp) .tbx td,:is(.pd-src,.pd-srcp) .tbx th{text-align:left}:is(.pd-src,.pd-srcp) .tbx .r{text-align:right}
 
 /* ---------- the match centre sheet (matchcentre.js) ---------- */
 :root.gx-on{overflow:hidden}
@@ -2358,3 +2358,67 @@ html:root[data-theme] .pf-sort{display:inline-flex;align-items:center;gap:4px;mi
 .pb-tbl .pb-tail{display:block;margin-top:3px;font-size:11.5px;color:var(--muted);white-space:nowrap}
 .pb-grid.solo .pb-radar{max-width:440px;margin-inline:auto;width:100%}
 .pb-grid.solo ~ .pb-tbl{max-height:none}
+/* ---------- Predictions, streamlined (review items 6, 12, 13, 21, 22, 26, 27) ---------- */
+/* one compact filter bar: Sport | Date | Edge | Sort, More filters, and the sources indicator at the end */
+.pd-filters{gap:8px}
+.pd-fbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.pd-fs{display:inline-flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface-2);padding-left:14px;min-height:44px}
+.pd-fs:focus-within{border-color:var(--border-2)}.pd-fs:has(select:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.pd-fs-l{font:500 13px/1 var(--font-body);color:var(--muted);white-space:nowrap}
+:root[data-theme] .pd-fs select.inp{width:auto;min-height:42px;border:0;background-color:transparent;padding-left:8px;font:600 14px/1 var(--font-body);color:var(--text);cursor:pointer}
+.pd-fs select.inp:focus-visible{outline:none}
+.pd-morebtn{min-height:44px;gap:6px}.pd-morebtn .pd-chev{transition:transform .18s var(--ease,ease)}.pd-morebtn[aria-expanded="true"] .pd-chev{transform:rotate(180deg)}
+.pd-morebtn .pd-n{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:var(--radius-pill);background:var(--pill-bg);color:var(--pill-fg);font:700 12px/1 var(--font-body)}
+.pd-fbar-end{margin-left:auto;display:inline-flex}
+.pd-stat{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 4px;background:none;border:0;color:var(--text-2);font:500 13px/1.3 var(--font-body);cursor:pointer;text-align:left}
+.pd-stat:hover{color:var(--text)}.pd-stat.warn{color:var(--text)}.pd-stat.warn .pd-dot.warn{border-color:var(--warning,var(--text-2))}
+.pd-stat span:not(.pd-dot):not(.pd-spin):not(.sr-only){text-decoration:underline dotted;text-underline-offset:3px}
+.pd-more-f{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface)}
+.pd-more-f[hidden]{display:none}
+.pd-chks{display:flex;flex-wrap:wrap;gap:4px 18px;border:0;margin:0;padding:0}
+.pd-chk{display:inline-flex;align-items:center;gap:8px;min-height:44px;font:500 14px/1.3 var(--font-body);color:var(--text);cursor:pointer}
+.pd-chk input{width:18px;height:18px;accent-color:var(--accent);margin:0}
+/* the sources panel the indicator opens, and the one-line delay note above the board */
+.pd-fresh[hidden]{display:none}
+.pd-srcp{display:grid;gap:12px;padding:18px 20px}
+.pd-srcp-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.pd-srcp-h .rw-t b,.pd-srcp-h .rw-t small{white-space:normal}.pd-srcp-h .rw-t small{color:var(--text-2);font-size:14px;line-height:1.45}
+.pd-srcp-m{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font:500 13px/1.4 var(--font-body);color:var(--text-2)}
+.pd-safe.ok{color:var(--success,var(--good))}.pd-safe.warn{color:var(--warning,var(--text))}
+.pd-srcp .lb{margin:0;max-width:78ch}
+.pd-delay{display:flex;align-items:center;gap:10px;margin:0 0 4px;padding:10px 12px 10px 14px;border-radius:var(--radius-tile);border:1px solid var(--border);background:var(--surface);font:500 14px/1.45 var(--font-body);color:var(--text-2)}
+.pd-delay > svg{flex:none;color:var(--warning,var(--text-2))}.pd-delay b{color:var(--text);font-weight:600}.pd-delay > span{flex:1;min-width:0}
+/* the game behind a pick, its availability and price time, its warnings */
+.pd-mu{font-variant-numeric:tabular-nums}
+.pd-ctx{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:2px 0 0;font:500 13px/1.4 var(--font-body);color:var(--muted)}
+.pd-av{color:var(--text-2)}.pd-av::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--success,var(--good))}
+.pd-av.questionable::before,.pd-av.doubtful::before,.pd-av.probable::before,.pd-av.day::before{background:var(--warning,var(--text-2))}
+.pd-av.out::before{background:var(--error,var(--bad))}.pd-av.out{color:var(--text)}
+.pd-warns{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0;padding:0}
+.pd-warns li{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:3px 10px;border-radius:var(--radius-pill);border:1px solid color-mix(in oklab,var(--warning,var(--text-2)) 45%,transparent);color:var(--text);font:600 12px/1.2 var(--font-body);cursor:help}
+.pd-warns li svg{color:var(--warning,var(--text-2));flex:none}
+.pd-warns .pd-wmore{border-style:dashed;border-color:var(--border-2);color:var(--text-2);font-weight:500;cursor:default}
+/* "Locked before start": the record kept the pick's first numbers from before the game and graded it on its own */
+.fl-lock{display:inline-flex;align-items:center;gap:4px;min-height:24px;padding:2px 9px;margin-left:6px;border-color:color-mix(in oklab,var(--success,var(--good)) 55%,transparent);color:var(--text);font:600 12px/1.2 var(--font-body);white-space:nowrap}
+.fl-lock svg{color:var(--success,var(--good))}
+.pd-resw{display:inline-flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:6px}.pd-resw .fl-lock{margin-left:0}
+.hs-res .fl-lock{margin:4px 0 0}
+/* the empty slip is a quiet dark card; it turns gold once a pick is added */
+.pd-slip.none{padding:18px 20px;display:grid;gap:4px}
+.pd-slip.none .sec-h{margin:0}.pd-slip.none h2{font-size:18px}
+.pd-slip.none .pd-empty{color:var(--text-2);font-size:14px}
+.pd-slip.none .pd-saved{border-top-color:var(--border);margin-top:10px}.pd-slip.none .pd-load{color:var(--text)}
+/* performance: one quiet line until 20 picks are graded */
+.pd-track{display:flex;gap:10px;align-items:flex-start;padding:12px 4px;font:500 14px/1.5 var(--font-body);color:var(--text-2)}
+.pd-track > svg{flex:none;margin-top:3px;color:var(--muted)}.pd-track p{margin:0}.pd-track .lk{margin-left:4px}
+@media (max-width:700px){
+  .pd-fbar{gap:8px}.pd-fs{flex:1 1 calc(50% - 8px);min-width:0}.pd-fs select.inp{flex:1;min-width:0}
+  .pd-morebtn{flex:none}.pd-fbar-end{margin-left:auto;min-width:0}.pd-stat{font-size:12px}
+  .pd-delay-x{display:none}.pd-delay{padding:8px 10px 8px 12px;font-size:13px}
+  .pd-srcp{padding:16px}.pd-srcp-h{flex-wrap:wrap}
+}
+@media (prefers-reduced-motion:reduce){.pd-morebtn .pd-chev{transition:none}}
+@media (max-width:1100px){.pd-track{order:4}}
+html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-ctx,.pd-warns){margin:0;padding:10px 26px 2px;background:rgba(0,0,0,.3)}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-warns{padding-top:6px;padding-bottom:6px}
+@media (max-width:560px){html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-ctx,.pd-warns){padding-inline:16px}}

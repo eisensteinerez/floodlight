@@ -3,9 +3,16 @@
 # merged record is kept in the record-data branch, encrypted with a key made from the bot token (site_grader.py).
 # Needs the DISCORD_BOT_TOKEN repository secret that the pick grader already uses.
 name: Grade site picks
+# GitHub's timer is best-effort and can skip many hours, so the job also runs on every push to main: that is the moment
+# Render starts a deploy that will wipe the server's disk, so the record is copied first and handed to the new server
+# once it is up (the "Hand the record to the new server" step). The new server also asks the old one for the record and
+# the forecasts before it opens its port (server.py grading_handoff), which covers picks locked after this run.
 on:
   schedule:
     - cron: "17 * * * *"
+    - cron: "47 * * * *"
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: write
@@ -41,3 +48,11 @@ jobs:
           git add site-record.enc
           git commit -qm "Site record $(date -u +%FT%TZ)"
           git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" record-data
+      - name: Hand the record to the new server
+        if: github.event_name == 'push'
+        run: |
+          sleep 420
+          python3 site_grader.py send
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          RECORD_DATA_DIR: data
