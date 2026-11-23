@@ -13,7 +13,7 @@
   const bg = document.createElement('div'); bg.className = 'cmdk-bg'; bg.hidden = true;
   bg.innerHTML = `<div class="cmdk" role="dialog" aria-modal="true" aria-label="Jump anywhere">
     <label class="cmdk-in"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="cmdkQ" type="text" placeholder="Jump to a game, team, fighter, sport or page…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="cmdkList" aria-autocomplete="list"><kbd>Esc</kbd></label>
+      <input id="cmdkQ" type="text" placeholder="Jump to a player, team, game, league or page…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="cmdkList" aria-autocomplete="list"><kbd>Esc</kbd></label>
     <div class="cmdk-list" id="cmdkList" role="listbox"></div>
     <div class="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>${MAC ? '⌘' : 'Ctrl'}</kbd><kbd>K</kbd> toggle</span></div></div>`;
   document.body.appendChild(bg);
@@ -67,11 +67,20 @@
     if (!w.every(x => k.includes(x))) return 0;
     return (norm(it.t).startsWith(q) ? 3 : 1) + (it.live ? .5 : 0);
   }
-  function build() {
-    const q = norm(input.value.trim());
+  // players, teams and leagues in every sport come from the header search (search.js), a moment after the local matches
+  let pseq = 0, glob = [];
+  const GLOB_G = { player: 'Players', fighter: 'Players', team: 'Teams', league: 'Leagues' };
+  function fromSearch(r) {
+    if (!r) return [];
+    return [...r.players.slice(0, 6), ...r.teams.slice(0, 5), ...r.leagues.slice(0, 3)].map(x => ({ g: GLOB_G[x.kind], t: x.title, s: x.sub, i: x.sp, img: x.img, run: () => window.flSearch.go(x) }));
+  }
+  function build(fromNet) {
+    const raw = input.value.trim(), q = norm(raw);
+    if (!fromNet) { glob = []; const s = ++pseq;
+      if (raw.length >= 2 && window.flSearch) window.flSearch.query(raw, r => { if (s === pseq && !bg.hidden) { glob = fromSearch(r); build(true) } }).then(r => { if (s === pseq && !bg.hidden && r) { glob = fromSearch(r); build(true) } }).catch(() => {}) }
     const pool = q ? [...pages(), ...games(), ...teams(), ...fighters()] : [...pages().slice(0, 6), ...games().filter(x => x.live).slice(0, 6), ...pages().slice(6)];
     items = pool.map(it => ({ it, s: score(it, q) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, q ? 40 : 30).map(x => x.it);
-    if (q) items.push(...research(input.value.trim()));
+    if (q) { const have = new Set(items.map(x => norm(x.t))); items.push(...glob.filter(x => !have.has(norm(x.t)))); items.push(...research(raw)) }
     sel = Math.min(sel, Math.max(0, items.length - 1));
     let last = '';
     list.innerHTML = items.length ? items.map((it, i) => { const head = it.g !== last ? `<div class="cmdk-g">${esc(it.g)}</div>` : ''; last = it.g;
