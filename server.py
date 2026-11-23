@@ -56,6 +56,8 @@ import record
 import propbook
 import players as roster
 import health
+import accounts
+import billing
 import corrections
 import gradebook
 
@@ -96,7 +98,7 @@ PUBLIC_FILES = {"index.html", "status.js", "recent.js", "linemove.js", "alerts.j
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
-                "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js"}
+                "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js", "plan.js", "auth.js", "account.js", "pricing.js", "legal.js", "accounts.css"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -175,7 +177,8 @@ def fetch(url, ttl, as_json=False):
 
 # ---------- photo index (saved to disk, so a player's photo is looked up once) ----------
 
-CACHE_DIR = ROOT / ".floodlight-cache"
+# FLOODLIGHT_DATA_DIR points the saved data at a persistent disk (a Render disk, for example) instead of the app folder
+CACHE_DIR = Path(os.environ["FLOODLIGHT_DATA_DIR"]) if os.environ.get("FLOODLIGHT_DATA_DIR") else ROOT / ".floodlight-cache"
 PHOTO_FILE = CACHE_DIR / "photos.json"
 _photos = {}
 _photo_lock = threading.Lock()
@@ -1840,7 +1843,39 @@ def _hash(password, salt):
 def public_user(u):
     return {"username": u["username"], "display": u.get("prefs", {}).get("display") or u["username"],
             "created": u["created"], "prefs": u.get("prefs", {}), "role": role_of(u), "rank": rank_of(u),
-            "status": "paused" if is_paused(u) else "active", "services": {k: has(u, k) for k in SERVICE_KEYS}}
+            "status": "paused" if is_paused(u) else "active", "services": {k: has(u, k) for k in SERVICE_KEYS},
+            "email": u.get("email") or "", "email_verified": bool(u.get("email_verified")), "twofa": bool(u.get("twofa")),
+            "terms": {"ok": accounts.terms_ok(u), "version": accounts.TERMS_VERSION, "accepted": (u.get("terms") or {}).get("version")},
+            "plan": billing.view(u), "plan_status": u.get("plan_status") or "free"}
+
+
+def _set_password(u, password):
+    u["salt"] = secrets.token_hex(16)
+    u["hash"] = _hash(password, u["salt"])
+    u["pw_at"] = int(time.time())
+
+
+def _check_password(u, password):
+    return bool(u) and hmac.compare_digest(_hash(password or "", u["salt"]), u["hash"])
+
+
+def _drop_sessions(key, keep=None):
+    for t in [t for t, v in _sessions.items() if v["user"] == key and t != keep]:
+        _sessions.pop(t, None)
+
+
+def site_url():
+    """The address links in emails and Stripe pages point at."""
+    if os.environ.get("FLOODLIGHT_URL"):
+        return os.environ["FLOODLIGHT_URL"].rstrip("/")
+    if HOSTED:
+        return re.sub(r"/api/.*$", "", gradebook.SERVER)
+    return f"http://localhost:{PORT}"
+
+
+def durable():
+    """Do accounts survive a deploy for certain? (A database, or a persistent disk.)"""
+    return storage.enabled() or bool(os.environ.get("FLOODLIGHT_DATA_DIR"))
 
 
 def clean_prefs(raw, old):
@@ -1866,44 +1901,67 @@ def signup(body):
     if len(password) < 8:
         return 400, {"error": "Use a password of at least 8 characters."}
     key = username.lower()
+    inv = invite_for(str(body.get("invite") or ""))
+    email = accounts.norm_email(body.get("email") or (inv["email"] if inv else ""))
+    if not email:
+        return 400, {"error": "Enter your email address. It's how you get back in if you forget your password.", "field": "email"}
+    if body.get("terms") != accounts.TERMS_VERSION:
+        return 400, {"error": "Tick the box to accept the Terms and Privacy Policy.", "field": "terms"}
+    if not body.get("adult"):
+        return 400, {"error": "Floodlight is for adults. Confirm you're 18 or older (21 where your state requires it).", "field": "adult"}
     with _acct_lock:
         if key in _users:
-            return 409, {"error": "That username is taken. Try another."}
-        inv = invite_for(str(body.get("invite") or ""))
+            return 409, {"error": "That username is taken. Try another.", "field": "username"}
+        if accounts.email_taken(email):
+            return 409, {"error": "An account already uses that email. Log in, or use Forgot password.", "field": "email"}
         _users[key] = _new_user(username, password, "research" if key == ADMIN or inv else SIGNUP_ROLE, body.get("display"), body.get("prefs"),
-                                rank="owner" if key == ADMIN else inv["rank"] if inv else "member", email=inv["email"] if inv else "")
+                                rank="owner" if key == ADMIN else inv["rank"] if inv else "member", email=email)
+        _users[key]["terms"] = {"version": accounts.TERMS_VERSION, "at": int(time.time())}
+        _users[key]["terms_history"] = [_users[key]["terms"]]
+        _users[key]["adult_confirmed"] = int(time.time())
+        if body.get("ref") and isinstance(body.get("ref"), str):
+            _users[key]["referred_by"] = body["ref"][:40]
         if inv:
             _mstate["invites"].remove(inv)
             log_activity(username, f"Joined from the invite sent to {inv['email']}")
             _save_members()
         token = new_session(key)
         _save_accounts()
-    return 200, {"user": public_user(_users[key]), "_token": token}
+    sent = accounts.send_verify(_users[key])[1]
+    return 200, {"user": public_user(_users[key]), "_token": token, "verify": {k: v for k, v in sent.items() if k in ("sent", "to", "devLink")}}
 
 
 def login(body):
-    key = (body.get("username") or "").strip().lower()
+    ident = (body.get("username") or body.get("login") or "").strip()
     password = body.get("password") or ""
-    fails = _failures.get(key, [0, 0])
+    fkey = ident.lower()
+    fails = _failures.get(fkey, [0, 0])
     if fails[0] >= 5 and time.time() - fails[1] < 60:
         return 429, {"error": "Too many attempts. Wait a minute and try again."}
-    u = _users.get(key)
-    if not u or not hmac.compare_digest(_hash(password, u["salt"]), u["hash"]):
-        _failures[key] = [fails[0] + 1, time.time()]
-        return 401, {"error": "That username and password don't match."}
-    _failures.pop(key, None)
+    u = accounts.find_login(ident)
+    if not u or not _check_password(u, password):
+        _failures[fkey] = [fails[0] + 1, time.time()]
+        return 401, {"error": "That username or email and password don't match."}
+    _failures.pop(fkey, None)
+    return finish_login(u, "password")
+
+
+def finish_login(u, via):
+    """Signed in with a password or an email link: ask for the app code when two-step sign-in is on, else open a session."""
+    if u.get("twofa"):
+        return 200, {"need2fa": True, "ticket": accounts.ticket(u, via)}
     with _acct_lock:
-        token = new_session(key)
+        token = new_session(u["username"].lower(), via=via)
         _save_accounts()
     return 200, {"user": public_user(u), "_token": token}
 
 
-def new_session(key):
+def new_session(key, via="password"):
     token = secrets.token_urlsafe(32)
     now = time.time()
     for t in [t for t, v in _sessions.items() if v["exp"] < now]:
         _sessions.pop(t, None)
-    _sessions[token] = {"user": key, "exp": now + SESSION_DAYS * 86400}
+    _sessions[token] = {"user": key, "exp": now + SESSION_DAYS * 86400, "created": int(now), "seen": int(now), "via": via}
     return token
 
 
@@ -1914,7 +1972,222 @@ def session_user(cookie_header):
     sess = _sessions.get(m.group(1))
     if not sess or sess["exp"] < time.time():
         return None, None
+    if time.time() - sess.get("seen", 0) > 900:   # last seen, to the quarter hour, for the signed-in devices list
+        sess["seen"] = int(time.time())
     return m.group(1), _users.get(sess["user"])
+
+
+# ---------- account recovery, security, plans (accounts.py, billing.py) ----------
+
+def auth_post(path, body, addr):
+    """Signed-out account endpoints: sign-in links, two-step codes, password and username recovery, email confirmation."""
+    if path == "/api/auth/2fa":
+        u, err = accounts.ticket_use(body.get("ticket"), body.get("code"))
+        if not u:
+            return 401, {"error": err}
+        with _acct_lock:
+            token = new_session(u["username"].lower(), via="password+2fa")
+            _save_accounts()
+        return 200, {"user": public_user(u), "_token": token}
+    if path == "/api/auth/magic":
+        return accounts.magic_request(body.get("email"), addr)
+    if path == "/api/auth/magic/use":
+        u, err = accounts.magic_use(body.get("token"))
+        if not u:
+            return 400, {"error": err}
+        if GATED and is_paused(u) and rank_of(u) == "member":
+            return 403, {"error": "Your account is paused. Ask your admin."}
+        return finish_login(u, "email link")
+    if path == "/api/auth/forgot":
+        return accounts.forgot(body.get("login") or body.get("username") or body.get("email"), addr)
+    if path == "/api/auth/reset":
+        status, obj = accounts.reset(body.get("token"), body.get("password") or "")
+        if status != 200:
+            return status, obj
+        return finish_login(obj["user"], "password reset")
+    if path == "/api/auth/username":
+        return accounts.remind_username(body.get("email"), addr)
+    if path == "/api/auth/verify":
+        return accounts.verify(body.get("token"))
+    return None
+
+
+def account_post(handler, path, body, user, token):
+    """Signed-in account and billing endpoints. Returns (status, body[, cookie]) or None when the path isn't one of them."""
+    site = site_url()
+    if path == "/api/me/email":
+        return accounts.change_email(user, body.get("email"), body.get("password"))
+    if path == "/api/me/verify":
+        return accounts.send_verify(user)
+    if path == "/api/me/password":
+        if not _check_password(user, body.get("current")):
+            return 401, {"error": "Your current password isn't right."}
+        if len(body.get("password") or "") < 8:
+            return 400, {"error": "Use a password of at least 8 characters."}
+        with _acct_lock:
+            _set_password(user, body["password"])
+            if body.get("others", True):
+                _drop_sessions(user["username"].lower(), keep=token)
+            _save_accounts()
+        if user.get("email"):
+            accounts.send(user["email"], "Your Floodlight password was changed", f"The password for @{user['username']} was just changed. If this wasn't you, reset it now from {site}.")
+        return 200, {"ok": True}
+    if path == "/api/me/2fa/setup":
+        return accounts.twofa_setup(user)
+    if path == "/api/me/2fa/enable":
+        return accounts.twofa_enable(user, body.get("code"))
+    if path == "/api/me/2fa/disable":
+        return accounts.twofa_disable(user, body.get("password"), body.get("code"))
+    if path == "/api/me/sessions/revoke":
+        want = str(body.get("id") or "")
+        with _acct_lock:
+            if body.get("all"):
+                _drop_sessions(user["username"].lower(), keep=token)
+            else:
+                for t in [t for t, v in _sessions.items() if v["user"] == user["username"].lower() and accounts.sid(t) == want]:
+                    if t == token:
+                        return 400, {"error": "To sign out this device, use Log out."}
+                    _sessions.pop(t, None)
+            _save_accounts()
+        return 200, {"ok": True, "sessions": accounts.sessions_of(_sessions, user["username"].lower(), token)}
+    if path == "/api/me/terms":
+        return accounts.accept_terms(user, body.get("version"))
+    if path == "/api/plan/use":   # count one Free use (a Lab search); the same item twice in a day counts once
+        ok, left = billing.use(user, str(body.get("what") or "lab_search")[:20], body.get("item"))
+        return (200 if ok else 402), {"ok": ok, "left": left, **({} if ok else {"error": "You've used today's free Lab searches. Plus has no limit.", "upgrade": "lab_unlimited"})}
+    if path.startswith("/api/billing/"):
+        op = path[len("/api/billing/"):]
+        try:
+            if op == "checkout":
+                return billing.checkout(user, str(body.get("plan") or ""), site)
+            if op == "sync":
+                status, obj = billing.sync_checkout(user, str(body.get("session") or ""))
+                if status == 200 and body.get("gift"):
+                    obj["code"] = billing.gift_of_session(user, str(body.get("session") or ""))
+                return status, obj
+            if op == "cancel":
+                return billing.cancel(user, body.get("reason"), body.get("note"))
+            if op == "reactivate":
+                return billing.reactivate(user)
+            if op == "card":
+                return billing.update_card(user, site)
+            if op == "restore":
+                return billing.restore(user)
+            if op == "gift":
+                return billing.gift_checkout(user, str(body.get("gift") or ""), body.get("to"), site)
+            if op == "redeem":
+                return billing.redeem(user, body.get("code"))
+            if op == "credit":
+                return billing.use_credit(user)
+            if op == "group":
+                return billing.group(user, str(body.get("action") or ""), body.get("who"))
+        except billing.StripeError as e:
+            return 502, {"error": str(e)}
+        return 404, {"error": "unknown endpoint"}
+    if path == "/api/admin/billing":   # owner: plan limits on or off, free Plus for a member
+        if rank_of(user) != "owner":
+            return 403, {"error": "Only an owner can change plans."}
+        if body.get("action") == "enforce":
+            billing.set_enforce(bool(body.get("on")))
+            return 200, billing.summary()
+        if body.get("action") == "comp":
+            target = _users.get(str(body.get("username") or "").strip().lower())
+            if not target:
+                return 404, {"error": "No member with that username."}
+            months = max(0, min(36, int(body.get("months") or 0)))
+            return billing.comp(user, target, months)
+        return 400, {"error": "Unknown action."}
+    return None
+
+
+def delete_account(user, body):
+    """Delete for good: billing stops at once, and the account, its sessions, links, parlays, photo and votes go."""
+    key = user["username"].lower()
+    email = user.get("email") if user.get("email_verified") else ""
+    billing.forget(user)
+    with _acct_lock:
+        _users.pop(key, None)
+        _drop_sessions(key)
+        if _parlays.pop(key, None) is not None:
+            storage.save(PARLAYS_FILE, _parlays)
+        if _avatars.pop(key, None) is not None:
+            storage.save(AVATARS_FILE, _avatars)
+        changed = False
+        for votes in _votes.values():
+            if key in votes:
+                votes.pop(key, None)
+                changed = True
+        if changed:
+            storage.save(VOTES_FILE, _votes)
+        _save_accounts()
+    log_activity(user["username"], "Deleted their account")
+    _save_members()
+    if email:
+        accounts.send(email, "Your Floodlight account was deleted", f"Account @{user['username']} and its saved data were deleted. Any plan was cancelled and won't renew. "
+                      "Receipts already issued stay with our payment processor as the law requires. If this wasn't you, reply to this email.")
+    return 200, {"ok": True}
+
+
+def export_account(user, token):
+    """Everything Floodlight keeps about a member, as one JSON file (Account > Your data > Download)."""
+    key = user["username"].lower()
+    skip = {"salt", "hash", "twofa", "twofa_pending", "customer_id", "subscription_id"}
+    acct = {k: v for k, v in user.items() if k not in skip}
+    return {"exported": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "site": site_url(),
+            "account": acct, "two_step_sign_in": bool(user.get("twofa")), "billing": billing.export(user),
+            "sessions": accounts.sessions_of(_sessions, key, token), "parlays": _parlays.get(key, []),
+            "votes": {g: v[key] for g, v in _votes.items() if key in v}, "photo": key in _avatars,
+            "note": "Card details are held by Stripe, never by Floodlight. Password and two-step secrets are left out on purpose."}
+
+
+# ---------- keeping accounts across a deploy without a database ----------
+# Render starts the new server while the old one still answers the site's address. Before the new one opens its port it
+# asks the old one for the account files (sealed with the key the pick record uses, and asked for with a signed, short-lived
+# request), so members, sessions and plans survive a deploy even before DATABASE_URL is set. A crash or a manual restart
+# still loses them without a database or a disk: that is why durable() is shown to the owner.
+
+def _acct_files():
+    return {"users": (USERS_FILE, _users), "sessions": (SESSIONS_FILE, _sessions), "members": (MEMBERS_FILE, _mstate),
+            "parlays": (PARLAYS_FILE, _parlays), "avatars": (AVATARS_FILE, _avatars), "votes": (VOTES_FILE, _votes),
+            "billing": (CACHE_DIR / "billing.json", billing.state_blob()), "auth": (CACHE_DIR / "auth.json", accounts.state_blob())}
+
+
+def _handoff_sig(ts):
+    k = hashlib.sha256(b"floodlight-accounts:" + (os.environ.get("DISCORD_BOT_TOKEN") or "").encode()).digest()
+    return hmac.new(k, str(ts).encode(), hashlib.sha256).hexdigest()
+
+
+def accounts_bundle(q):
+    try:
+        ts = int(q.get("ts") or 0)
+    except ValueError:
+        return None
+    if not gradebook.can_seal() or abs(time.time() - ts) > 120 or not hmac.compare_digest(_handoff_sig(ts), str(q.get("sig") or "")):
+        return None
+    with _acct_lock:
+        return gradebook.seal({k: v for k, (_, v) in _acct_files().items()})
+
+
+def accounts_handoff():
+    if not HOSTED or durable() or not gradebook.can_seal() or os.environ.get("ACCOUNTS_HANDOFF", "1") == "0":
+        return 0
+    ts = int(time.time())
+    try:
+        got = gradebook.unseal(gradebook._http(f"{site_url()}/api/accounts/handoff?ts={ts}&sig={_handoff_sig(ts)}", timeout=20))
+    except Exception as e:
+        print(f"accounts: no handoff from the previous server ({type(e).__name__})")
+        return 0
+    n = 0
+    for name, (path, live) in _acct_files().items():
+        data = got.get(name)
+        if not isinstance(data, type(live)) or not data:
+            continue
+        live.clear()
+        live.update(data)
+        storage.save(path, live)
+        n += len(data) if name == "users" else 0
+    print(f"accounts: took {n} accounts from the previous server")
+    return n
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -1998,7 +2271,13 @@ class Handler(SimpleHTTPRequestHandler):
         if user and not ok and u.path not in ("/api/lab/img", "/api/lab/fonts.css", "/api/lab/session"):
             svc = "predictions" if board and has(user, "lab") else "lab"
             return self.send_json({"error": f"Your account doesn't include {SERVICE_NAME[svc]}. Ask your admin for access.", "service": svc}, 403)
-        status, obj = lab.handle(u.path[len("/api/lab/"):], q, signed_in=ok)
+        sub = u.path[len("/api/lab/"):]
+        if user and ok and sub in ("player", "team") and billing.enforced() and not billing.allows(user, "lab_unlimited"):
+            what = (q.get("id") or q.get("name") or q.get("player") or q.get("team") or "") + ":" + (q.get("sport") or "")
+            got, left = billing.use(user, "lab_search", sub + ":" + what)
+            if not got:
+                return self.send_json({"error": "You've used today's 5 free Lab searches. Plus has no daily limit.", "upgrade": "lab_unlimited", "left": 0}, 402)
+        status, obj = lab.handle(sub, q, signed_in=ok)
         if isinstance(obj, tuple):
             ct, data = obj
             self.send_response(status)
@@ -2008,6 +2287,16 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             return self.wfile.write(data)
         return self.send_json(obj, status)
+
+    def tag_session(self, res):
+        """Note the device on a session just opened (for Account > Signed-in devices)."""
+        status, obj = res[0], res[1]
+        t = obj.get("_token") if isinstance(obj, dict) else None
+        if t and t in _sessions:
+            _sessions[t]["device"] = accounts.device_label(self.headers.get("User-Agent"))
+            with _acct_lock:
+                _save_accounts()
+        return status, obj
 
     def do_HEAD(self):
         rel = urllib.parse.unquote(urllib.parse.urlparse(self.path).path).lstrip("/") or "index.html"
@@ -2034,6 +2323,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": False}, 409)
             n = grading_absorb(got, "github")
             return self.send_json({"ok": True, "changed": n})
+        if u.path == "/api/billing/webhook":   # Stripe tells the site about payments; signed with STRIPE_WEBHOOK_SECRET
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > 1_000_000:
+                return self.send_json({"error": "too large"}, 413)
+            status, obj = billing.webhook(self.rfile.read(length), self.headers.get("Stripe-Signature") or "")
+            return self.send_json(obj, status)
         if u.path == "/api/discord/interactions":   # Discord slash commands (discord_bot.py); signed by Discord, not a member login
             length = int(self.headers.get("Content-Length") or 0)
             if not discord_bot.enabled() or length > 64_000:
@@ -2050,13 +2345,17 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}")
         except Exception:
             return self.send_auth(400, {"error": "Bad JSON."})
+        addr = (self.headers.get("X-Forwarded-For") or self.client_address[0] or "").split(",")[0].strip()
         if u.path == "/api/auth/signup":
-            addr = (self.headers.get("X-Forwarded-For") or self.client_address[0] or "").split(",")[0].strip()
             if GATED and not signup_allowed(addr):
                 return self.send_auth(429, {"error": "Too many new accounts from here. Try again in an hour."})
-            return self.send_auth(*signup(body))
+            return self.send_auth(*self.tag_session(signup(body)))
         if u.path == "/api/auth/login":
-            return self.send_auth(*login(body))
+            return self.send_auth(*self.tag_session(login(body)))
+        if u.path.startswith("/api/auth/"):   # recovery and sign-in links work signed out
+            r = auth_post(u.path, body, addr)
+            if r:
+                return self.send_auth(*self.tag_session(r))
         token, user = session_user(self.headers.get("Cookie"))
         if u.path.startswith("/api/admin/"):
             if role_of(user) != "admin":
@@ -2076,6 +2375,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.send_auth(200, {"ok": True, "entry": e})
                 except ValueError as ex:
                     return self.send_auth(400, {"error": str(ex)})
+            if u.path == "/api/admin/billing":
+                return self.send_auth(*account_post(self, u.path, body, user, token))
             return self.send_auth(*admin_action(u.path, body, user))
         if u.path == "/api/players/seen":   # a page says which team it showed for a player; a different team flags the record
             if GATED and not user:
@@ -2126,6 +2427,12 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path == "/api/me/prefs":
             if "follows" in body and not has(user, "alerts"):
                 return self.send_auth(403, {"error": "Your account doesn't include Alerts. Ask your admin for access.", "service": "alerts"})
+            old = user.get("prefs", {})
+            for field, lim in (("boards", "boards"), ("favPlayers", "followed_players")):
+                if isinstance(body.get(field), list):
+                    why = billing.check_list_growth(user, lim, old.get(field) or [], body[field])
+                    if why:
+                        return self.send_auth(402, {"error": why, "upgrade": "boards_unlimited" if field == "boards" else "follows_unlimited"})
             with _acct_lock:
                 user["prefs"] = clean_prefs(body, user.get("prefs", {}))
                 _save_accounts()
@@ -2142,16 +2449,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(404, {"error": "That match isn't tracked yet."})
             return self.send_auth(200, {"ok": True})
         if u.path == "/api/me/delete":
-            if not hmac.compare_digest(_hash(body.get("password") or "", user["salt"]), user["hash"]):
+            if not _check_password(user, body.get("password")):
                 return self.send_auth(401, {"error": "That password isn't right."})
-            with _acct_lock:
-                _users.pop(user["username"].lower(), None)
-                if _parlays.pop(user["username"].lower(), None) is not None:
-                    storage.save(PARLAYS_FILE, _parlays)
-                for t in [t for t, v in _sessions.items() if v["user"] == user["username"].lower()]:
-                    _sessions.pop(t, None)
-                _save_accounts()
-            return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
+            if user.get("twofa") and not accounts.totp_ok(user, body.get("code")):
+                return self.send_auth(401, {"error": "Enter the code from your authenticator app (or a recovery code).", "need2fa": True})
+            return self.send_auth(*delete_account(user, body), cookie=self.session_cookie("", clear=True))
+        r = account_post(self, u.path, body, user, token)
+        if r:
+            return self.send_auth(*r[:2], **({"cookie": r[2]} if len(r) > 2 else {}))
         return self.send_auth(404, {"error": "unknown endpoint"})
 
     # The pick record is read from memory in a few milliseconds, so it never waits behind the slow odds and player-line
@@ -2194,6 +2499,48 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(gradebook.status(record, propbook, storage.enabled()), max_age=30)
         if u.path.startswith("/api/lab/") or u.path == "/lab" or (u.path == "/" and "frame_id" in q and "instance_id" in q):
             return self.lab(u, q)   # Floodlight Lab (lab.py): Discord members get in with a pass, not a site login
+        if u.path == "/api/plans":   # the plans and what each includes (public: the pricing and landing pages read it)
+            return self.send_json(billing.plans_public(), max_age=60)
+        if u.path == "/api/accounts/handoff":   # the next server, during a deploy (signed, sealed)
+            data = accounts_bundle(q)
+            if data is None:
+                return self.send_json({"error": "not allowed"}, 403)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
+        if u.path in PRETTY:   # /pricing, /terms, /privacy … open the page inside the app
+            return self.redirect("/#/" + PRETTY[u.path])
+        if u.path in ("/api/me/sessions", "/api/me/export", "/api/me/billing", "/api/admin/billing/summary", "/api/admin/outbox"):
+            token, user = session_user(self.headers.get("Cookie"))
+            if not user:
+                return self.send_auth(401, {"error": "Log in first."})
+            if u.path == "/api/me/sessions":
+                return self.send_auth(200, {"sessions": accounts.sessions_of(_sessions, user["username"].lower(), token)})
+            if u.path == "/api/me/export":
+                body = json.dumps(export_account(user, token), indent=2, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="floodlight-{user["username"].lower()}.json"')
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                return self.wfile.write(body)
+            if u.path == "/api/me/billing":   # the plan, card and receipts, read fresh from Stripe
+                err = ""
+                try:
+                    billing.refresh(user)
+                except billing.StripeError as e:
+                    err = str(e)
+                return self.send_auth(200, {"plan": billing.view(user), "invoices": (user.get("invoices") or [])[:36], "error": err,
+                                            "email": user.get("email") or "", "email_verified": bool(user.get("email_verified"))})
+            if rank_of(user) != "owner":
+                return self.send_auth(403, {"error": "Owners only."})
+            if u.path == "/api/admin/outbox":   # the last emails, only while no email provider is set up
+                return self.send_auth(200, {"ready": accounts.mail_ready(), "outbox": [] if accounts.mail_ready() else accounts.state_blob().get("outbox", [])[:20]})
+            return self.send_auth(200, billing.summary())
         if u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users", "/api/admin/members", "/api/invite"):
             _, user = session_user(self.headers.get("Cookie"))
             if GATED and not user:
@@ -2475,6 +2822,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 _static = {}
 _static_lock = threading.Lock()
+PRETTY = {"/pricing": "pricing", "/upgrade": "pricing", "/terms": "legal/terms", "/privacy": "legal/privacy", "/cookies": "legal/cookies",
+          "/refunds": "legal/refunds", "/subscription-terms": "legal/subscription", "/contact": "legal/contact", "/data-sources": "legal/data-sources",
+          "/disclaimer": "legal/disclaimer", "/acceptable-use": "legal/acceptable-use", "/delete-account": "legal/delete-account", "/legal": "legal",
+          "/account": "account"}
 
 
 # ---------- memory guard ----------
@@ -2539,6 +2890,14 @@ if __name__ == "__main__":
     atexit.register(linehist.flush)
     odds.setup(fetch=fetch, similar=similar, on_board=linehist.record)
     ufcdata.setup(fetch=fetch, cache_dir=CACHE_DIR)
+    accounts.setup(users=_users, save=_save_accounts, lock=_acct_lock, storage=storage, file=CACHE_DIR / "auth.json", site=site_url,
+                   hosted=lambda: HOSTED, check_password=_check_password, set_password=_set_password, drop_sessions=_drop_sessions,
+                   display=lambda u: (u.get("prefs") or {}).get("display") or u["username"])
+    billing.setup(users=_users, save=_save_accounts, lock=_acct_lock, storage=storage, file=CACHE_DIR / "billing.json", rank=rank_of,
+                  site=site_url, mail=accounts.send, mail_ready=accounts.mail_ready, durable=durable, hosted=HOSTED, gated=GATED)
+    accounts_handoff()   # before the port opens, while the public address still reaches the server being replaced
+    if not durable() and HOSTED:
+        print("accounts: WARNING no DATABASE_URL or FLOODLIGHT_DATA_DIR; accounts rely on the deploy handoff and are lost on a crash or restart")
     ensure_admin()
     migrate_members()
     retire_colors()
