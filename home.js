@@ -408,24 +408,25 @@
     return `<section class="card" aria-label="Standout players"><div class="sec-h"><h2>Standout lines</h2><span class="lb">From ${isToday() ? 'today’s' : 'this day’s'} games</span></div><div class="hm-rows hm-two">${rows.slice(0, 6).map(r => `
       <button type="button" class="rw" ${hubAttr(r.g)}>${face(r.shot, r.name)}<span class="rw-t"><b>${esc(r.name)}</b><small>${esc((t => t ? `${t.name} v ${(t === r.g.a ? r.g.b : r.g.a).name}` : `${r.g.a.name} v ${r.g.b.name}`)([r.g.a, r.g.b].find(t => r.team && t.id === r.team)))}</small></span><span class="hm-val"><b class="num">${esc(r.show || r.val)}</b><small class="lb">${esc(r.abbr || r.cat)}</small></span></button>`).join('')}</div></section>`;
   }
-  /* Your games: followed teams and watched games, live first. With nothing chosen yet, an invitation to choose. */
+  /* Your games: followed teams and watched games, live first. With no team followed yet, one thin line inviting a choice;
+     with teams followed but none playing, one thin line saying so. Cards only when there are games to show. */
   function mine(list) {
-    const F = favList(), has = F.length || MY.sports.length || MY.watch.length;
+    const F = favList();
     if (MY.edit) return editor(list);
-    if (!has) return MY.skip ? '' : `<section class="card hm-mine hm-invite" aria-label="Make Home yours"><div class="rw-t"><h2>Make Home yours</h2><p>Tap the sports you follow. Your games then sit at the top of Home and your sports come ahead of the rest.</p>
-        <div class="cx-row hm-quick" role="group" aria-label="Your sports">${SPORTS.filter(x => !['all', 'boxing', 'ufc'].includes(x[0])).map(([k, l]) => `<button type="button" class="cx" aria-pressed="false" data-hubsport="${k}">${esc(l)}</button>`).join('')}</div></div>
-      <div class="hm-inv-acts"><button type="button" class="bt" data-hubmy="edit">Choose teams too</button><button type="button" class="bt ghost" data-hubmy="skip">Not now</button></div></section>`;
+    // nobody followed yet: one thin line, not a card that pushes the featured game off the first screen
+    const banner = (t, d, acts) => `<section class="hm-banner" aria-labelledby="hmBanH"><p><b id="hmBanH">${t}</b><span>${d}</span></p><div class="hm-ban-acts">${acts}</div></section>`;
+    if (!F.length && !MY.watch.length) return MY.skip ? '' : banner('Personalize Floodlight', 'Follow teams to put their games first.',
+      `<button type="button" class="bt sm" data-hubmy="edit">Choose teams</button><button type="button" class="ib" data-hubmy="skip" aria-label="Hide this for now" title="Hide this for now">${ico('x', 16)}</button>`);
     const rank = g => (g.state === 'in' ? 0 : g.state === 'pre' ? 1 : 2), isFav = g => [g.a, g.b].some(t => level(g, t) === 'fav'), games = list.filter(g => isMine(g, F) || watching(g.key)).sort((a, b) => (isFav(b) ? 1 : 0) - (isFav(a) ? 1 : 0) || rank(a) - rank(b) || a.date - b.date);
     const live = games.filter(g => g.state === 'in').length, gone = MY.watch.filter(w => !list.some(g => g.key === w.key)).length;
-    const sub = games.length ? `${games.length} ${isToday() ? 'today' : 'this day'}${live ? ` · ${live} live` : ''}` : F.length || MY.watch.length ? `None of your teams play ${isToday() ? 'today' : 'this day'}` : 'No teams followed yet';
-    // nothing of yours on the board: say what to do next, right here
-    const empty = games.length ? '' : F.length || MY.watch.length ? `<div class="hm-state">${ico('clock', 20)}<p><b>None of your teams play ${isToday() ? 'today' : 'this day'}</b><span>Look at another day, or follow more teams.</span></p><button type="button" class="bt ghost sm" data-hubday="1">Tomorrow</button><button type="button" class="bt ghost sm" data-hubmy="edit">Follow teams</button></div>`
-      : `<div class="hm-state">${ico('star', 20)}<p><b>Follow a team to fill this row</b><span>Your sports are set. Pick teams from today’s games, or from any team’s page.</span></p><button type="button" class="bt sm" data-hubmy="edit">Choose teams</button></div>`;
+    const sub = `${games.length} ${isToday() ? 'today' : 'this day'}${live ? ` · ${live} live` : ''}`;
+    if (!games.length) return banner(`None of your teams play ${isToday() ? 'today' : 'this day'}`, gone ? `${gone} watched ${gone === 1 ? 'game is' : 'games are'} on another day.` : 'Look at another day, or follow more teams.',
+      `<button type="button" class="bt ghost sm" data-hubday="1">Tomorrow</button><button type="button" class="bt ghost sm" data-hubmy="edit">Edit your teams</button>`);
     const tag = g => watching(g.key) && !isMine(g, F) ? '<span class="pl hm-wtag">Watching</span>' : isFav(g) ? `<span class="pl hm-wtag">${ico('star', 12)}Favorite</span>` : '';
     return `<section class="card hm-mine" aria-label="Your games"><div class="sec-h"><h2>Your games</h2><span class="lb">${sub}</span><button type="button" class="lk" data-hubmy="edit">Edit your Home</button></div>
-      ${games.length ? `<div class="g4 hm-cards">${games.slice(0, 8).map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tag(g) })).join('')}</div>` : empty}
+      <div class="g4 hm-cards">${games.slice(0, 8).map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tag(g) })).join('')}</div>
       ${F.length || MY.sports.length ? `<div class="cx-row hm-chips" aria-label="What you follow">${MY.sports.map(k => `<span class="pl solid">${esc((SPORTS.find(x => x[0] === k) || [k, k])[1])}</span>`).join('')}${F.slice(0, 14).map(f => `<span class="pl">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}</span>`).join('')}${F.length > 14 ? `<span class="pl">+${F.length - 14} more</span>` : ''}</div>` : ''}
-      ${gone && !games.length ? `<p class="lb">${gone} watched ${gone === 1 ? 'game is' : 'games are'} on another day.</p>` : ''}</section>`;
+      </section>`;
   }
   /* Continue researching: the last things you looked at, anywhere on the site (recent.js keeps them): two players you
      compared, a trend, a pick's evidence, an unfinished parlay, a game, a player or team in the Lab. Each card reopens
