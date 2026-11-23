@@ -48,6 +48,7 @@ import forecaster
 import dfs
 import odds
 import linehist
+import labshare
 import ufcdata
 import storage
 import discord_bot
@@ -97,7 +98,7 @@ PUBLIC_FILES = {"index.html", "status.js", "recent.js", "linemove.js", "alerts.j
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
                 "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js"}
-PUBLIC_FILES |= {"labcore.js"}   # the Lab: shared numbers (labcore.js)
+PUBLIC_FILES |= {"labcore.js", "propx.js"}   # the Lab: shared numbers (labcore.js)
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -2088,6 +2089,15 @@ class Handler(SimpleHTTPRequestHandler):
             for x in (body.get("photos") if isinstance(body.get("photos"), list) else [])[:40]:
                 health.page_report("photo", re.sub(r"[^a-z0-9:]", "", str(x))[:30])
             return self.send_auth(200, {"ok": True, "agree": out})
+        if u.path in ("/api/boards/share", "/api/boards/unshare"):   # read-only board links (labshare.py)
+            if not user:
+                return self.send_auth(401, {"error": "Log in to share a board."})
+            if u.path.endswith("unshare"):
+                return self.send_auth(*labshare.unshare(user["username"], str(body.get("id") or "")[:20]))
+            return self.send_auth(*labshare.share(user["username"], (user.get("prefs") or {}).get("display") or user["username"], body.get("board")))
+        if u.path == "/api/popular":   # a line researched or followed, for Prop Explorer's "Most researched" and "Most followed"
+            who = user["username"] if user else re.sub(r"[^A-Za-z0-9]", "", str(body.get("guest") or ""))[:24]
+            return self.send_auth(200, {"ok": labshare.count(str(body.get("key") or "")[:100], str(body.get("kind") or ""), who and ("u:" if user else "g:") + who)})
         if u.path == "/api/feedback":   # a note from the Help page, kept for the admins to read
             if GATED and not user:
                 return self.send_auth(401, {"error": "Log in first."})
@@ -2193,6 +2203,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.wfile.write(data)
         if u.path == "/api/grading/status":   # counts and times only, so anyone can check the grader is running
             return self.send_json(gradebook.status(record, propbook, storage.enabled()), max_age=30)
+        if u.path == "/api/boards/shared":   # a read-only board link: open to anyone with the link (labshare.py)
+            st, ob = labshare.shared(str(q.get("id") or "")[:20])
+            return self.send_json(ob, st)
         if u.path.startswith("/api/lab/") or u.path == "/lab" or (u.path == "/" and "frame_id" in q and "instance_id" in q):
             return self.lab(u, q)   # Floodlight Lab (lab.py): Discord members get in with a pass, not a site login
         if u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users", "/api/admin/members", "/api/invite"):
@@ -2206,6 +2219,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": f"Your account doesn't include {SERVICE_NAME[svc]}. Ask your admin for access.", "service": svc}, 403)
             if user:
                 touch(user)
+        if u.path == "/api/popular":   # how many members researched or followed each line today (labshare.py)
+            return self.send_json(labshare.popular(), max_age=60)
         if u.path == "/api/picks/split":
             keys = [k for k in (q.get("keys") or "").split(",") if VOTE_KEY.fullmatch(k)][:60]
             with _acct_lock:
@@ -2538,6 +2553,8 @@ if __name__ == "__main__":
     atexit.register(save_photos)
     linehist.setup(CACHE_DIR, al=odds._al, similar=similar)
     atexit.register(linehist.flush)
+    labshare.setup(CACHE_DIR)
+    atexit.register(labshare.flush)
     odds.setup(fetch=fetch, similar=similar, on_board=linehist.record)
     ufcdata.setup(fetch=fetch, cache_dir=CACHE_DIR)
     ensure_admin()

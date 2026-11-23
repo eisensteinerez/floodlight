@@ -13,7 +13,7 @@
   const LAB_SPORTS = new Set(['nba', 'wnba', 'nfl', 'nhl', 'mlb', 'soccer', 'ufc', 'boxing']);
   const SPORT_NAME = { nba: 'NBA', wnba: 'WNBA', nfl: 'NFL', nhl: 'NHL', mlb: 'MLB', soccer: 'Soccer', ufc: 'UFC', boxing: 'Boxing', tennis: 'Tennis' };
   const TOOLS = [
-    ['props', 'bars', 'Prop explorer', 'Today’s posted lines, ranked by how often they have hit.'],
+    ['props', 'bars', 'Prop explorer', 'Every open, verified line, with filters and a research panel.'],
     ['compare', 'compare', 'Compare', 'Two players on one combined line.'],
     ['matchup', 'versus', 'Matchup', 'A team’s results, totals and the next game’s lines.'],
     ['trends', 'trend', 'Trends', 'The same games as a trend line, with the average.'],
@@ -64,12 +64,15 @@
     if (!window.flEdge || L.loadingPicks) return; L.loadingPicks = true;
     const games = window.flHub?.games?.() || [];
     const today = [...new Set(games.filter(g => ['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer').sort((a, b) => b.weight - a.weight).map(g => g.sport === 'soccer' ? 'soccer' : g.lg))].slice(0, 3);
-    window.flEdge.props(today.length ? today : ['nba', 'nfl']).then(r => { L.picks = r.picks; L.denied = r.denied }).catch(() => { L.picks = [] }).finally(() => { L.loadingPicks = false; drawTry(); drawCast(); drawStart() });
+    // the same verified feed as Prop Explorer and Predictions, so "hottest" can't disagree with them
+    (window.flMarkets?.list ? window.flMarkets.list({}).then(r => ({ picks: r.markets || [], denied: !!r.denied })) : window.flEdge.props(today.length ? today : ['nba', 'nfl'])).then(r => { L.picks = r.picks; L.denied = r.denied }).catch(() => { L.picks = [] }).finally(() => { L.loadingPicks = false; drawTry(); drawCast(); drawStart() });
   }
+  // the hot list: the verified feed decides who is hot (one rule for Home, the Lab and Prop Explorer)
+  const hotList = n => window.flMarkets?.hot ? window.flMarkets.hot(n) : window.flEdge.hot(L.picks, n);
   function drawTry() {
     const box = $('labTry'); if (!box) return;
     const chips = [];
-    for (const p of (L.picks ? window.flEdge.hot(L.picks, 2) : [])) chips.push([`${p.name} ${String(p.label).toLowerCase()}`, window.flEdge.labArgs(p)]);
+    for (const p of (L.picks ? hotList(2) : [])) chips.push([`${p.name} ${String(p.label).toLowerCase()}`, window.flEdge.labArgs(p)]);
     const games = (window.flHub?.games?.() || []).filter(g => g.state !== 'post' && ['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer' && g.state !== 'post').sort((a, b) => (b.state === 'in') - (a.state === 'in') || b.weight - a.weight).slice(0, 2);
     for (const g of games) chips.push([`${g.a.name} v ${g.b.name}`, { sport: g.sport === 'soccer' ? 'soccer' : g.lg, name: g.a.full || g.a.name, team: true }]);
     if (chips.length) chips.push(['Compare two players', { tool: 'compare' }]);
@@ -78,7 +81,7 @@
   /* tonight's three hottest players, as a picture behind the bar. Decoration only: pages.css decides whether it shows (Stadium Gold does) */
   function drawCast() {
     const box = $('labCast'); if (!box) return;
-    const faces = [...new Set((L.picks ? window.flEdge.hot(L.picks, 8) : []).map(p => p.photo).filter(Boolean))].slice(0, 3), key = faces.join('|');
+    const faces = [...new Set((L.picks ? hotList(8) : []).map(p => p.photo).filter(Boolean))].slice(0, 3), key = faces.join('|');
     if (box.dataset.k === key) return; box.dataset.k = key;
     box.innerHTML = faces.map(src => `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`).join('');
   }
@@ -87,11 +90,11 @@
     if (L.engine && L.engine !== 'compare') { box.hidden = true; return } box.hidden = false;
     const cmp = L.engine === 'compare';
     // in Compare, any player with a line today can be dragged in, so the list isn't limited to the hot ones
-    const hot = L.picks ? (cmp ? window.flEdge.players(L.picks).sort((a, b) => Math.abs(b.heat - 50) - Math.abs(a.heat - 50)).slice(0, 9) : window.flEdge.hot(L.picks, 6)) : null;
+    const hot = L.picks ? (cmp ? window.flEdge.players(L.picks).sort((a, b) => Math.abs(b.heat - 50) - Math.abs(a.heat - 50)).slice(0, 9) : hotList(6)) : null;
     box.innerHTML = `<div class="sec-h"><h2>${cmp ? 'Add a player to Compare' : 'Start with tonight’s hottest'}</h2>${hot?.length ? `<span class="lb">${cmp ? 'Drag a card onto a slot, or select it to fill the next empty one' : 'Players with a line posted today'}</span>` : ''}</div>` +
       (hot == null ? `<div class="g3">${'<div class="skl lab-card-skl"></div>'.repeat(6)}</div>`
         : hot.length ? `<div class="g3">${hot.map(p => `<button type="button" class="card hit lab-starter" data-labopen="${esc(JSON.stringify(window.flEdge.labArgs(p)))}" draggable="true" data-cmpdrag="${esc(JSON.stringify({ sport: p.sport, name: p.name, stat: p.k }))}">${face(p.photo, p.name, 'avx av-lg')}<span class="rw-t"><b>${esc(p.name)}</b><small>${[p.fid || p.team ? (window.flPlayers ? window.flPlayers.span(p.fid, p.teamName || p.team) : esc(p.teamName || p.team || '')) : '', esc(SPORT_NAME[p.sport] || '')].filter(Boolean).join(' · ')}</small><small>${esc(p.text)}</small></span>${window.flHeat.badge(p.heat)}</button>`).join('')}</div>`
-        : `<div class="card emp">${ic('lab', 28)}<b>${L.denied ? 'The Lab is switched off for your account' : 'No player is running hot yet today'}</b><p>${L.denied ? 'Ask your admin to switch it on.' : 'The books have not posted player lines that read 60 or more. Type any player or team in the bar above to start.'}</p></div>`);
+        : `<div class="card emp">${ic('lab', 28)}<b>${L.denied ? 'The Lab is switched off for your account' : 'No open line reads hot right now'}</b><p>${L.denied ? 'Ask your admin to switch it on.' : `A line is hot when Floodlight’s chance for it is 60% or more. ${L.picks.length ? `None of the ${L.picks.length} open lines does yet; Prop Explorer lists them all with their recent hit rates.` : 'No player lines are open yet.'}`}</p>${!L.denied && L.picks.length ? '<button type="button" class="bt" data-labtool="props">Open Prop Explorer</button>' : ''}</div>`);
   }
 
   /* ---------- the command bar ---------- */
@@ -162,7 +165,7 @@
   function show() { if (window.flPages.current() !== 'lab') window.flPages.show('lab'); return !!$('labWs') }
   function setEngine(e) {
     L.engine = e; const ws = $('labWs'); if (!ws) return;
-    ws.hidden = !e; $('labFrameBox').hidden = e !== 'lab'; $('labClassic').hidden = e !== 'classic'; $('labTool').hidden = e !== 'compare' && e !== 'trends';
+    ws.hidden = !e; $('labFrameBox').hidden = e !== 'lab'; $('labClassic').hidden = e !== 'classic'; $('labTool').hidden = !['compare', 'trends', 'props'].includes(e);
     if (e !== 'classic') { try { typeof closeResearch === 'function' && S.rs.open && closeResearch() } catch (x) {} }
     drawStart(); drawHead();
   }
@@ -179,14 +182,15 @@
     const b = ev.target.closest?.('.lab-tool[role="tab"]'); if (!b) return;
     const tabs = [...document.querySelectorAll('.lab-tool[role="tab"]')], i = tabs.indexOf(b);
     const j = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? (i + 1) % tabs.length : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? (i - 1 + tabs.length) % tabs.length : ev.key === 'Home' ? 0 : ev.key === 'End' ? tabs.length - 1 : -1;
-    if (j < 0) return; ev.preventDefault(); tabs[j].focus(); runTool(tabs[j].dataset.labtool);
+    if (j < 0) return; ev.preventDefault(); tabs[j].focus(); L.kbTab = true; runTool(tabs[j].dataset.labtool);
+    setTimeout(() => { L.kbTab = false; if (document.activeElement !== tabs[j]) tabs[j].focus({ preventScroll: true }) }, 150);   // the tab keeps focus; the tool opened below it
   });
   /* o: { sport, name | player, team (true for a team), stat, line, side, tab, mode } and, for the older engine, { classic, id, lg, tnId, ... } */
   function open(o = {}) {
     if (denied()) { window.flPages.show('lab'); return }
     if (!show()) return;
     if (o.q != null && !o.name && !o.player) { const a = $('labAsk'); a.value = o.q; a.focus(); if (o.q) search(o.q); return }
-    if (o.tool) return runTool(o.tool);
+    if (o.tool) return runTool(o.tool, o);
     const name = o.name || o.player || '', sport = o.sport || (name ? store.get('lab.sport', 'nba') : '');
     if (!name && !o.tab && !o.id && !o.fmId && !o.tnId && !o.fsId && !o.fsTeam && !o.classic) return;   // just the page
     const useLab = !o.classic && LAB_SPORTS.has(sport) && (name || !(o.id || o.fmId));
@@ -194,6 +198,7 @@
     openClassic({ ...o, sport: sport || o.sport, name });
   }
   function openLab(m, keepBoard) {
+    if (m.tab === 'board') return openTools('props', { sport: m.sport });   // the prop board is Prop Explorer, on the verified feed
     if (!keepBoard) { L.board = null }
     setEngine('lab'); tool(m.tab === 'board' ? 'props' : m.kind === 'team' ? 'matchup' : m.mode === 'trend' ? 'trends' : null);
     const f = frame(); L.cur = null; drawHead(m.name || (m.tab === 'board' ? 'Prop explorer' : ''));
@@ -213,10 +218,10 @@
     drawHead(o.compare ? (o.name ? `${o.name} and another player` : 'Compare two players') : o.name || (o.tab === 'board' ? 'Sportsbook prop board' : o.tab === 'team' ? 'Team props' : o.sport === 'tennis' ? 'Tennis' : 'More tools'));
     focusWs();
   }
-  function focusWs() { const ws = $('labWs'); if (!ws) return; setTimeout(() => { ws.scrollIntoView({ behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' }); $('labWsT')?.focus({ preventScroll: true }) }, 60) }
-  function runTool(k) {
+  function focusWs() { const ws = $('labWs'); if (!ws || L.kbTab) return; setTimeout(() => { ws.scrollIntoView({ behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' }); $('labWsT')?.focus({ preventScroll: true }) }, 60) }
+  function runTool(k, o = {}) {
     const c = L.cur, sport = c?.sport || store.get('lab.sport', 'nba');
-    if (k === 'props') return openLab({ sport, tab: 'board' });
+    if (k === 'props') return openTools('props', { sport: o.sport || (c?.sport && L.engine === 'lab' ? c.sport : '') });
     if (k === 'trends') return c?.view === 'player' && L.engine === 'lab' ? openLab({ sport: c.sport, name: c.name, kind: 'player', stat: c.k, line: c.line, side: c.side, mode: 'trend' }, true) : openTools('trends', {});
     if (k === 'matchup') { const g = (window.flHub?.games?.() || []).filter(g => g.state !== 'post' && (['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer')).sort((a, b) => (b.state === 'in') - (a.state === 'in') || b.weight - a.weight)[0];
       return c?.view === 'team' ? openLab({ sport: c.sport, name: c.name, kind: 'team' }, true) : g ? openLab({ sport: g.sport === 'soccer' ? 'soccer' : g.lg, name: g.a.full || g.a.name, kind: 'team' }) : openLab({ sport, tab: 'team' }) }
@@ -226,10 +231,11 @@
   function openTools(k, o) {
     L.board = null; L.cur = null; L.saving = false; setEngine(k); tool(k);
     const host = $('labTool'), api = { openPlayer: a => openLab({ kind: 'player', ...a, name: a.name || a.player }) };
-    drawHead(k === 'compare' ? (o.name ? `${o.name} and another player` : 'Compare two players') : 'Trends on today’s lines');
-    if (!window.flLabTools) host.innerHTML = `<div class="card emp"><b>That tool did not load</b><p>Reload the page and try again.</p></div>`;
-    else window.flLabTools[k](host, o, api);
-    if (k === 'trends' || o.name) focusWs(); else { const ws = $('labWs'); setTimeout(() => ws?.scrollIntoView({ behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' }), 60) }
+    drawHead(k === 'props' ? 'Prop explorer' : k === 'compare' ? (o.name ? `${o.name} and another player` : 'Compare two players') : 'Trends on today’s lines');
+    const lib = k === 'props' ? window.flPropX && { props: window.flPropX.mount } : window.flLabTools;
+    if (!lib) host.innerHTML = `<div class="card emp"><b>That tool did not load</b><p>Reload the page and try again.</p></div>`;
+    else lib[k](host, o, api);
+    if (k === 'trends' || k === 'props' || o.name) focusWs(); else { const ws = $('labWs'); setTimeout(() => ws?.scrollIntoView({ behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' }), 60) }
   }
   function more(k) {
     if (k === 'tennis') return openClassic({ sport: 'tennis', tab: 'player' });
@@ -252,7 +258,7 @@
     const t = $('labWsT'); if (!t) return;
     const c = L.cur, b = L.board ? L.boards.find(x => x.id === L.board) : null;
     if (title != null) t.textContent = title; else if (L.engine === 'lab' && c) t.textContent = c.view === 'board' ? 'Prop explorer' : c.view === 'home' ? (c.tab === 'team' ? 'Pick a team' : 'Pick a player') : c.name;
-    $('labWsK').textContent = b ? `Board: ${b.name}` : L.engine === 'classic' ? (L.hint || 'More tools') : L.engine === 'compare' ? 'Compare' : L.engine === 'trends' ? 'Trends' : c?.sport ? `Workspace · ${SPORT_NAME[c.sport] || ''}` : 'Workspace';
+    $('labWsK').textContent = b ? `Board: ${b.name}` : L.engine === 'classic' ? (L.hint || 'More tools') : L.engine === 'props' ? 'Open lines' : L.engine === 'compare' ? 'Compare' : L.engine === 'trends' ? 'Trends' : c?.sport ? `Workspace · ${SPORT_NAME[c.sport] || ''}` : 'Workspace';
     $('labWsA').innerHTML = `${canSave() ? `<button type="button" class="bt ghost" data-lab="save" aria-expanded="${L.saving}">${ic('save', 18)}Save to a board</button>` : ''}<button type="button" class="ib" data-lab="closews" aria-label="Close the workspace">${ic('x', 18)}</button>`;
     const vs = $('labViews'); vs.hidden = !b;
     if (b) vs.innerHTML = `<span class="lb">In this board</span><div class="cx-row scroll">${b.items.map((v, i) => `<span class="lab-view"><button type="button" class="cx sm${!!c && viewKey(c) === viewKey(v) ? " on" : ""}"${!!c && viewKey(c) === viewKey(v) ? " aria-current=\"true\"" : ""} data-labview="${i}">${esc(viewLabel(v))}</button><button type="button" class="lab-rm" data-labrm="${i}" aria-label="Remove ${esc(viewLabel(v))} from this board">${ic('x', 14)}</button></span>`).join('')}</div>`;
@@ -331,6 +337,7 @@
   addEventListener('scroll', () => { if (!scrollF) scrollF = requestAnimationFrame(tellScroll) }, { passive: true });
   addEventListener('resize', () => { if (!scrollF) scrollF = requestAnimationFrame(tellScroll) });
   document.addEventListener('fl:theme', () => { const f = frame(); if (L.ready && f?.contentWindow) f.contentWindow.postMessage({ flTheme: root.dataset.theme, flMotion: root.dataset.motion || '' }, location.origin) });
+  document.addEventListener('fl:markets', () => { if (L.loaded && window.flPages.current() === 'lab') { L.picks = null; loadPicks() } });
   document.addEventListener('fl:hub', () => { if (L.loaded && window.flPages.current() === 'lab') { drawTry(); if (L.picks == null) loadPicks() } });
 
   /* ---------- clicks ---------- */

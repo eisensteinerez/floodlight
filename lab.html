@@ -1022,13 +1022,13 @@ async function renderBoard() {
   tellPage({ view: 'board', sport: S.sport });
   const sp = S.sport, b = S.board[sp];
   if (!b) {
-    $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Today's ${esc(sportName())} props by hit rate</b></div>${'<div class="skel" style="height:46px;margin:8px 0;border-radius:var(--r-ctl)"></div>'.repeat(8)}</div>`;
+    $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Open ${esc(sportName())} lines by hit rate</b></div>${'<div class="skel" style="height:46px;margin:8px 0;border-radius:var(--r-ctl)"></div>'.repeat(8)}</div>`;
     try { S.board[sp] = await api('board?sport=' + sp) } catch (e) { S.board[sp] = { rows: [], error: e.message } }
     if (S.tab === 'board' && S.sport === sp) renderBoard();
     return;
   }
   const rows = b.rows || [], heat = x => `<span class="heat num" style="background:${heatBg(x)}">${pc(x)}</span>`;
-  $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Today's ${esc(sportName())} props by hit rate</b>${b.checked ? `<span class="num">${b.checked} lines checked · PrizePicks and Sleeper</span>` : ''}</div>
+  $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Open ${esc(sportName())} lines by hit rate</b>${b.checked ? `<span class="num">${b.checked} lines checked · PrizePicks and Sleeper</span>` : ''}</div>
     ${b.error ? `<div class="err">${esc(b.error)}</div>` : b.note ? `<p class="sub">${esc(b.note)}</p>` : !rows.length ? `<p class="sub">No ${esc(sportName())} lines posted right now.</p>` : ''}
     ${rows.map((r, i) => `<div class="brow${i < 3 ? ' top3' : ''}" data-n="${esc(r.player)}" data-k="${r.k}" data-l="${r.line}"><div class="rk">${i + 1}</div>
       <div><div class="nm">${esc(r.player)}</div><div class="sub">${esc([r.hold ? 'Team information is being verified' : r.teamName || r.team, r.opp && 'vs ' + r.opp].filter(Boolean).join(' · '))}</div>${r.teamNote && (r.hold || r.teamOk === false) ? `<div class="sub tflag" title="${esc(r.teamNote)}">Team check: ${esc(r.teamNote)}</div>` : ''}</div>

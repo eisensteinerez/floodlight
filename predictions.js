@@ -715,4 +715,7 @@
     onShow() { load(); clearInterval(P.timer); P.timer = setInterval(() => { if (window.flPages.current() !== 'predictions') return; if (Date.now() - P.at > 5 * 60000) load(true); else if (!document.activeElement?.closest?.('#pg-predictions select')) draw() }, 60000) },
     onHide() { clearInterval(P.timer); clearTimeout(P.retryT) } });
   window.flPredictions = { combine, state: P, picks: allPicks, sources, load };   // not flPred: that is the match prediction card in predict.js
+  // the Lab's research panel adds to the Prediction Card (the slip) and follows picks with the same lists this page keeps
+  window.flPredictions.slip = { has: inSlip, toggle(p) { if (inSlip(p.id) || allPicks().some(x => x.id === p.id)) return toggle(p.id); if (P.slip.length >= 12) return window.toast?.('A Prediction Card holds up to 12 picks'); P.slip.push(leg(p)); store.set('fl.slip', P.slip); P.saved = 0; draw() } };
+  window.flPredictions.follow = { has: p => !!following(p), toggle: follow };
 })();

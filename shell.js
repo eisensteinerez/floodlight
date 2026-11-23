@@ -48,7 +48,7 @@
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', up: '<path d="M12 19V5M6 11l6-6 6 6"/>', down: '<path d="M12 5v14M6 13l6 6 6-6"/>', minus: '<path d="M5 12h14"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
-    trend: '<path d="M3 17l6-6 4 4 8-8"/>', bars: '<path d="M5 20V10M10 20V4M15 20v-7M20 20v-11"/>', versus: '<path d="M4 6l4 12 4-12M14 8.500c0-1.400 1.200-2.500 3-2.500s3 1 3 2.300c0 3-6 1.700-6 5 0 1.500 1.300 2.700 3.200 2.700 1.800 0 2.800-1 2.800-2.300"/>',
+    trend: '<path d="M3 17l6-6 4 4 8-8"/>', bars: '<path d="M5 20V10M10 20V4M15 20v-7M20 20v-11"/>', filter: '<path d="M4 6h16M7 12h10M10 18h4"/>', share: '<path d="M12 4v11M7.5 8.500L12 4l4.500 4.500M5 13v6h14v-6"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', versus: '<path d="M4 6l4 12 4-12M14 8.500c0-1.400 1.200-2.500 3-2.500s3 1 3 2.300c0 3-6 1.700-6 5 0 1.500 1.300 2.700 3.200 2.700 1.800 0 2.800-1 2.800-2.300"/>',
   };
   const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || ''}</svg>`;
   // sport chips: [key, label, sport the page knows, league to choose first]
