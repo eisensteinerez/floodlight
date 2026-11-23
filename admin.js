@@ -20,12 +20,32 @@
 
   function tool(t) { if (!t?.id || tools.some(x => x.id === t.id)) return; tools.push(t); bar() }
 
-  /* ---------- the bar at the bottom corner ---------- */
+  /* ---------- where the switch lives ----------
+     Wide screens: a small bar in the bottom corner, with room kept under the page so it never sits on a card.
+     Phones and narrow windows: no floating control at all. Admin mode and the tools for the screen are items in the
+     three-dot profile menu, and while it is on the menu button wears an "Admin" tag, so the state is always visible. */
+  const narrow = matchMedia('(max-width:820px)');
+  function tag() {
+    const dots = document.getElementById('flDots'); if (!dots) return;
+    const show = owner() && A.on;
+    dots.classList.toggle('own-tagged', show);
+    dots.setAttribute('aria-label', show ? 'Menu: profile, settings and help. Admin mode is on' : 'Menu: profile, settings and help');
+  }
+  // the menu's items for an owner (shell.js draws them inside the three-dot menu)
+  function menu(mi) {
+    if (!owner()) return '';
+    const list = A.on ? here() : [];
+    return `<div class="flm-g flm-own" role="group" aria-label="Owner">
+      <button class="flm-i flm-own-sw" role="menuitemcheckbox" aria-checked="${A.on}" tabindex="-1" data-own="mode">${pen(18)}<span>Admin mode</span><em>${A.on ? 'On' : 'Off'}</em></button>
+      ${list.map(t => mi('edit', esc(title(t)), `data-own="open:${esc(t.id)}"`)).join('')}${A.on && !list.length ? '<p class="flm-note">No owner tools on this screen</p>' : ''}</div>`;
+  }
+
+  /* ---------- the bar at the bottom corner (wide screens) ---------- */
   function bar() {
-    let el = document.getElementById('flOwn');
-    if (!owner()) { el?.remove(); document.documentElement.classList.remove('own-on'); return }
+    let el = document.getElementById('flOwn'); tag();
+    if (!owner() || narrow.matches) { el?.remove(); A.sig = ''; document.documentElement.classList.remove('own-bar-on'); document.documentElement.classList.toggle('own-on', owner() && A.on); return }
     const list = A.on ? here() : [], sig = `${A.on}|${list.map(t => t.id + ':' + title(t)).join(',')}`;
-    document.documentElement.classList.toggle('own-on', A.on);
+    document.documentElement.classList.toggle('own-on', A.on); document.documentElement.classList.add('own-bar-on');
     if (el && sig === A.sig) return; A.sig = sig;
     if (!el) { el = document.createElement('div'); el.id = 'flOwn'; el.className = 'own-bar'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Owner tools'); document.body.appendChild(el) }
     const keep = document.activeElement?.closest?.('#flOwn [data-own]')?.dataset.own;
@@ -58,7 +78,7 @@
   }
   function close() {
     if (!A.drawer) return; window.flOverlay?.close(A.drawer, { focus: false }); A.drawer.remove(); A.drawer = null;
-    if (A.from?.isConnected) A.from.focus({ preventScroll: true }); else document.querySelector('#flOwn .own-sw')?.focus();
+    if (A.from?.isConnected && A.from.getClientRects().length) A.from.focus({ preventScroll: true }); else (document.querySelector('#flOwn .own-sw') || document.getElementById('flDots'))?.focus();
   }
   function say(text) {
     const live = A.drawer?.querySelector('.own-live');
@@ -70,7 +90,7 @@
     const t = ev.target.closest?.('[data-own],[data-owntool]'); if (!t) return;
     if (t.dataset.owntool) return open(t.dataset.owntool, t);
     const a = t.dataset.own;
-    if (a === 'mode') { A.on = !A.on; put(A.on); bar(); refreshPage(); say(A.on ? 'Admin mode on. Owner tools for this screen are in the bar.' : 'Admin mode off. You see the page as members do.'); return }
+    if (a === 'mode') { A.on = !A.on; put(A.on); bar(); refreshPage(); if (t.closest('#flMenu')) document.getElementById('flDots')?.focus(); say(A.on ? 'Admin mode on. Owner tools for this screen are in the bar.' : 'Admin mode off. You see the page as members do.'); return }
     if (a === 'close') return close();
     if (a.startsWith('open:')) return open(a.slice(5), t);
   });
@@ -91,8 +111,9 @@
   document.addEventListener('fl:admin-refresh', () => { bar(); if (A.drawer) draw() });
   document.addEventListener('fl:me', () => { bar(); if (!owner()) close() });
   addEventListener('hashchange', () => setTimeout(bar, 60));
+  narrow.addEventListener?.('change', bar);
   // the screen changes under the bar (a profile opens, a page changes): check what applies, cheaply
   setInterval(() => { if (owner()) { bar(); if (A.drawer && !here().length) close() } }, 1200);
 
-  window.flAdmin = { tool, owner, on, open, close, say, refresh: () => { bar(); if (A.drawer) draw() } };
+  window.flAdmin = { tool, owner, on, open, close, say, menu, refresh: () => { bar(); if (A.drawer) draw() } };
 })();

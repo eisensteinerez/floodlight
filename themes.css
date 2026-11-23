@@ -961,3 +961,10 @@ html[data-theme="stadium-gold"]:not(.hub-on):not([data-page="predictions"]):not(
 .gs-back{border-color:color-mix(in oklab,var(--accent) 60%,var(--border-2,var(--border)))}
 .gs-back .gs-back-go{font-weight:700}
 .gs-back .gs-back-go svg{color:var(--accent)}
+/* Admin mode, kept out of the way: room under the page for the corner bar on wide screens; on phones it lives in the
+   three-dot menu and the menu button carries an "Admin" tag while it is on */
+html.own-bar-on body{padding-bottom:76px}
+.tb-dots{position:relative}
+.tb-dots.own-tagged::after{content:"Admin";position:absolute;right:-6px;bottom:-6px;padding:2px 5px;border-radius:var(--radius-pill);background:var(--accent-fill,var(--accent));color:var(--on-accent,#111);font:700 9.5px/1.2 var(--font-body);letter-spacing:.02em;pointer-events:none}
+.flm-own-sw[aria-checked="true"] em{color:var(--accent)}
+.flm-note{margin:0;padding:6px 14px 8px;font:500 12.5px/1.4 var(--font-body);color:var(--muted)}
