@@ -1816,3 +1816,17 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .mb-prev .mb-lose{color:var(--text)}
 .card.mb-guide{padding:2px 22px}.mb-guide[open]{padding-bottom:6px}
 .mb-main.solo{grid-template-columns:minmax(0,1fr)}
+
+/* ---------- Parlays: where the books' number comes from, same-game picks, tracking not betting (parlays.js) ---------- */
+.py-src{display:block;max-width:220px;margin-top:4px;margin-left:auto;font:500 12px/1.35 var(--font-body);color:var(--on-accent);opacity:.85}
+.py-same,.py-notbet{display:flex;gap:8px;align-items:flex-start;margin:12px 0 0;font:500 13px/1.45 var(--font-body)}
+.py-same svg,.py-notbet svg{flex:none;margin-top:2px}
+.py-ticket .py-same,.py-ticket .py-notbet,.py-ticket .py-why{color:var(--on-accent)}
+.py-notbet{padding:10px 12px;border-radius:var(--radius-tile);border:1px solid color-mix(in oklab,var(--on-accent) 35%,transparent)}
+.py-why{margin:8px 0 0;font:600 13px/1.4 var(--font-body)}
+.py-g .py-same.sm{margin:0 4px 10px;padding:8px 10px;border-radius:var(--radius-tile);background:var(--surface-2);color:var(--text-2)}
+/* a denser game list */
+:root[data-theme] .py-gh{min-height:52px;padding:6px 4px}
+.py-gh .rw-t small{font-size:12px}
+/* the game line under each pick stays readable on the accent ticket in every theme */
+:root[data-theme] .py-ticket .rw-t small,:root[data-theme] .py-ticket .rw-t small *{color:color-mix(in oklab,var(--on-accent) 80%,transparent)}

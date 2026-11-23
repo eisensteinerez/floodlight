@@ -334,7 +334,7 @@
       const text = p.yes ? `${p.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(p.line)} ${String(p.label).toLowerCase()}`;
       return { id: `prop:${lg}:${p.name}:${p.k}:${p.line}:${s}`, type: 'prop', lg, sport: p.sport, player: p.name, team: p.team || '', opp: p.opp || '', photo: p.photo || '', k: p.k, label: p.label, line: p.line, side: s, ...(p.yes ? { yes: true } : {}),
         start: +p.start, game: p.game || '', gameKey: p.gameKey || `${lg}:${p.name}`, text: `${p.name}: ${text}`, short: `${p.name.split(' ').slice(-1)[0]} ${text.toLowerCase()}`,
-        ours0: flip ? 1 - p.ours : p.ours, ...(p.market != null ? { market0: flip ? 1 - p.market : p.market } : {}), ...(p.mu != null ? { mu: p.mu } : p.avg != null ? { mu: p.avg } : {}), ...(p.sd ? { sd: p.sd } : {}) } }
+        ours0: flip ? 1 - p.ours : p.ours, ...(p.market != null ? { market0: flip ? 1 - p.market : p.market, msrc: [...new Set((p.offers || []).filter(o => o.pOver != null && o.line === p.line).map(o => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' })[o.book] || o.book))].join(' and ') || 'the apps', mAt: p.at || Date.now() } : {}), ...(p.mu != null ? { mu: p.mu } : p.avg != null ? { mu: p.avg } : {}), ...(p.sd ? { sd: p.sd } : {}) } }
     if (p.type === 'match' && p.m) { const m = p.m, lg = m.sport === 'soccer' ? 'soccer' : m.lg === 'nfl' ? 'nfl' : 'cfb', L = LG[lg], draw = m.pick === 'draw';
       const leg = { id: `${draw ? 'draw' : 'win'}:${lg}:${m.key}:${m.pick}`, type: draw ? 'draw' : 'win', lg, sport: lg, home: m.home, away: m.away, side: draw ? 'home' : m.pick, team: draw ? '' : m[m.pick], start: m.ko * 1000,
         game: `${m.home} v ${m.away}`, gameKey: 'match:' + m.key, text: draw ? `${m.home} v ${m.away}: draw` : `${m[m.pick]} to win`, short: draw ? `${m.home} v ${m.away} draw` : `${m[m.pick]} to win`, ours0: p.ours, ...(p.market != null ? { market0: p.market } : {}) };
@@ -347,7 +347,7 @@
   // a leg on a game from the scoreboard. kind: win | draw | total | spread; side: home | away | over | under; line for totals and spreads (the side's own line)
   function fromGame(g, kind, side, line) {
     const L = LG[g.lg], o = g.odds || {}, fair = o.fair || {}, vs = `${g.away.name} at ${g.home.name}`, base = { lg: g.lg, sport: g.lg, eid: g.eid, home: g.home.full || g.home.name, away: g.away.full || g.away.name, homeAbbr: g.home.abbr, awayAbbr: g.away.abbr,
-      start: +g.date, game: L.sport === 'soccer' ? `${g.home.name} v ${g.away.name}` : vs, gameKey: `${g.lg}:${g.eid}`, t0: o.total || L.tot };
+      start: +g.date, game: L.sport === 'soccer' ? `${g.home.name} v ${g.away.name}` : vs, gameKey: `${g.lg}:${g.eid}`, t0: o.total || L.tot, msrc: o.book || 'ESPN scoreboard', mAt: g.readAt || Date.now() };
     const team = side === 'away' ? g.away : g.home, mHome = o.spread != null && !L.pois ? -o.spread : marginFrom(L, fair.home != null ? (L.tie === 'draw' ? fair.home : fair.home / (fair.home + fair.away)) : null, o.total || L.tot);
     if (kind === 'win') return { ...base, id: `win:${g.lg}:${g.eid}:${side}`, type: 'win', side, team: team.name, logo: team.logo, text: `${team.name} to win`, short: `${team.abbr || team.name} to win`, m0: side === 'away' ? -mHome : mHome, ...(fair[side] != null ? { market0: fair[side] } : {}) };
     if (kind === 'draw') return { ...base, id: `draw:${g.lg}:${g.eid}`, type: 'draw', side: 'home', text: `${g.home.name} v ${g.away.name}: draw`, short: `${g.home.abbr} v ${g.away.abbr} draw`, m0: mHome, ...(fair.draw != null ? { market0: fair.draw } : {}) };
