@@ -40,11 +40,24 @@
     window.flShell?.sync?.(); document.dispatchEvent(new CustomEvent('fl:page', { detail: { name: null } }));
     if (window.flAccess && !window.flAccess.has('live') && window.flHub && !window.flHub.on()) window.flHub.show();   // no scores to fall back to
   }
-  function fromHash() {
+  /* Back and Forward return to where you were on that screen: the scroll position is kept per address for this tab,
+     and put back once the screen has drawn enough to reach it (data can take a moment, so it tries for a second and a half). */
+  const SCR = new Map(), spot = () => location.hash || '#';
+  let scrT = 0; addEventListener('scroll', () => { clearTimeout(scrT); scrT = setTimeout(() => SCR.set(spot(), scrollY), 100) }, { passive: true });
+  document.addEventListener('click', () => SCR.set(spot(), scrollY), true);
+  function restore() {
+    const y = SCR.get(spot()); if (!y) return;
+    const t0 = performance.now(), go = () => { if (document.documentElement.scrollHeight - innerHeight >= y - 4 || performance.now() - t0 > 1500) return scrollTo({ top: y }); requestAnimationFrame(go) };
+    requestAnimationFrame(go);
+  }
+  function fromHash(ev) {
     const m = /^#\/([a-z-]+)(?:\/(.+))?$/.exec(location.hash);
     if (m && defs.has(m[1])) show(m[1], m[2] ? decodeURIComponent(m[2]) : undefined, { fromHash: true });
     else if (cur) hide({ fromHash: true });
+    if (ev?.type === 'popstate') popAt = performance.now();
+    if (ev?.type === 'popstate' || (ev?.type === 'hashchange' && performance.now() - popAt < 400)) restore();   // Back fires both
   }
+  let popAt = -1e9;
   addEventListener('popstate', fromHash); addEventListener('hashchange', fromHash);
   // any link or button that names a page opens it
   document.addEventListener('click', ev => {

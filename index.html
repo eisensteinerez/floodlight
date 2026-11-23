@@ -1120,9 +1120,11 @@ img.lg-dark{background:#fff;border-radius:var(--r-ctl);padding:2px;box-sizing:bo
 }
 @media (max-width:360px){ .top-in > .brand{font-size:0} }
 </style>
+<script src="auth.js"></script>
 <script src="analytics.js"></script>
 <script src="landing.js"></script>
 <script src="access.js"></script>
+<script src="plan.js"></script>
 </head>
 <body>
 <a class="skip" href="#groups">Skip to matches</a>
@@ -1170,7 +1172,7 @@ document.addEventListener('error', ev => {
     </div>
   </aside>
 </main>
-<footer class="fl-foot" aria-hidden="true"><span class="fl-foot-mark">Floodlight</span><span class="fl-foot-line">Every match, every line, under the lights.</span></footer>
+<footer class="fl-foot"><span class="fl-foot-mark" aria-hidden="true">Floodlight</span><span class="fl-foot-line">Research, not a sportsbook. Past hit rates are not guarantees. 18+ (21+ where required).</span><nav class="fl-foot-links" aria-label="Plans and policies"><a href="#/pricing" data-page="pricing">Plans</a><a href="#/legal/terms" data-page="legal" data-arg="terms">Terms</a><a href="#/legal/privacy" data-page="legal" data-arg="privacy">Privacy</a><a href="#/legal/refunds" data-page="legal" data-arg="refunds">Refunds</a><a href="#/legal/disclaimer" data-page="legal" data-arg="disclaimer">Disclaimer</a><a href="#/legal/contact" data-page="legal" data-arg="contact">Contact</a><a href="#/legal" data-page="legal">All policies</a></nav></footer>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <div class="drawer-scrim" id="profileScrim" hidden></div>
 <aside class="drawer" id="profile" role="dialog" aria-modal="true" aria-labelledby="profileTitle" tabindex="-1" hidden></aside>
@@ -4012,14 +4014,18 @@ function renderProfile(){
     body = `<div class="pf-guest">${avatarHTML('lg')}<div><strong>You're browsing as a guest</strong><p>Your favourites are saved in this browser. Create a profile to keep them under your name.</p></div></div>
       <div class="seg pf-seg" role="tablist">${[['login','Log in'],['signup','Create account']].map(([k,l]) => `<button role="tab" aria-selected="${P.mode===k}" class="${P.mode===k?'on':''}" data-act="pfmode" data-to="${k}">${l}</button>`).join('')}</div>
       ${P.mode === 'login' ? `<form id="loginForm" class="pf-form" novalidate>
-          <label for="liUser">Username</label><input id="liUser" autocomplete="username" required>
+          <label for="liUser">Username or email</label><input id="liUser" autocomplete="username" autocapitalize="none" spellcheck="false" required>
           <label for="liPass">Password</label><input id="liPass" type="password" autocomplete="current-password" required>
-          <button class="btn" type="submit" ${P.busy ? 'disabled' : ''}>${P.busy ? 'Logging in…' : 'Log in'}</button></form>`
+          <button class="btn" type="submit" ${P.busy ? 'disabled' : ''}>${P.busy ? 'Logging in…' : 'Log in'}</button>
+          <p class="pf-hint pf-links"><a href="#/auth/forgot" data-page="auth" data-arg="forgot" data-act="pfclose">Forgot password?</a> <a href="#/auth/magic" data-page="auth" data-arg="magic" data-act="pfclose">Email me a sign-in link</a></p></form>`
         : `<form id="signupForm" class="pf-form" novalidate>
           <label for="suName">Display name</label><input id="suName" autocomplete="nickname" maxlength="40" placeholder="How your name appears">
           <label for="suUser">Username</label><input id="suUser" autocomplete="username" maxlength="20" placeholder="3–20 letters, numbers, . or _" required>
+          <label for="suEmail">Email</label><input id="suEmail" type="email" autocomplete="email" spellcheck="false" placeholder="you@example.com" required>
           <label for="suPass">Password</label><input id="suPass" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required>
           <label for="suPass2">Confirm password</label><input id="suPass2" type="password" autocomplete="new-password" required>
+          <label class="fla-check"><input type="checkbox" id="suAdult" required> I'm 18 or older (21 where my state requires it)</label>
+          <label class="fla-check"><input type="checkbox" id="suTerms" required> I accept the <a href="#/legal/terms" target="_blank" rel="noopener">Terms</a> and <a href="#/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a></label>
           <button class="btn" type="submit" ${P.busy ? 'disabled' : ''}>${P.busy ? 'Creating…' : 'Create account'}</button>
           ${S.fav.length + S.favPlayers.length ? `<p class="pf-hint">Your ${S.fav.length + S.favPlayers.length} guest favourites will move into the new account.</p>` : ''}</form>`}
       <div class="pf-err" role="alert">${esc(P.err)}</div>
@@ -4029,6 +4035,8 @@ function renderProfile(){
     body = `<div class="pf-card">${avatarHTML('lg')}<div><strong id="pfDisplay">${esc(me.display)}</strong><span>@${esc(me.username)}</span><small>Member since ${esc(since)}</small></div></div>
       ${me.prefs?.bio && !P.edit ? `<p class="pf-bio">${esc(me.prefs.bio)}</p>` : ''}
       <button class="btn ghost pf-editbtn" data-page="profile" data-act="pfclose">My profile page: record, stats and themes</button>
+      <button class="btn ghost pf-editbtn" data-page="account" data-arg="${me.plan?.paid ? 'billing' : 'profile'}" data-act="pfclose">Account, security and plan${me.plan ? ` <span class="pl">${esc(me.plan.name)}</span>` : ''}</button>
+      ${me.email && !me.email_verified ? '<p class="pf-hint">Confirm your email to keep your account safe. <a href="#/account/profile" data-page="account" data-arg="profile" data-act="pfclose">Send the link again</a></p>' : !me.email ? '<p class="pf-hint">Add an email so you can get back in if you forget your password. <a href="#/account/profile" data-page="account" data-arg="profile" data-act="pfclose">Add email</a></p>' : ''}
       <div class="pf-stats"><span><b class="num">${S.fav.length}</b> teams</span><span><b class="num">${S.favPlayers.length}</b> players</span><span><b class="num">${S.favLeagues.length}</b> leagues</span></div>
       ${P.edit ? `<form id="editForm" class="pf-form">
           <label for="edName">Display name</label><input id="edName" maxlength="40" value="${esc(me.display)}">
@@ -4051,8 +4059,7 @@ function renderProfile(){
           <button class="x" data-act="lgUp" data-to="${l.slug}" aria-label="Move ${esc(l.name)} up" ${i ? '' : 'disabled'}>↑</button><button class="x" data-act="lgDown" data-to="${l.slug}" aria-label="Move ${esc(l.name)} down" ${i < a.length - 1 ? '' : 'disabled'}>↓</button><button class="x" data-act="favL" data-to="${l.slug}" aria-label="Unstar ${esc(l.name)}">✕</button></li>`).join('')}</ol>
         <span class="pf-label">Add a league</span><div class="pf-chips" style="margin-top:6px">${LEAGUES.filter(l => !S.favLeagues.includes(l.slug)).map(l => `<button class="qf" data-act="favL" data-to="${l.slug}" aria-label="Star ${esc(l.name)}">${l.logo ? `<img src="${esc(l.logo)}" alt="" style="width:16px;height:16px;object-fit:contain">` : ''}☆ ${esc(l.name)}</button>`).join('')}</div></section>
       ${me ? `<div class="pf-foot"><button class="btn ghost" data-act="logout">Log out</button>
-        ${P.del ? `<form id="delForm" class="pf-form pf-danger"><label for="delPass">Type your password to delete @${esc(me.username)} for good</label><input id="delPass" type="password" autocomplete="current-password"><div class="pf-row"><button class="btn danger" type="submit">Delete account</button><button class="btn ghost" type="button" data-act="pfdel">Cancel</button></div></form>`
-          : `<button class="linkbtn pf-delete" data-act="pfdel">Delete account</button>`}</div>` : ''}
+        <button class="linkbtn pf-delete" data-page="account" data-arg="data" data-act="pfclose">Delete account</button></div>` : ''}
     </div>`;
   if (keep && $(keep)) { $(keep).focus(); if (caret != null && $(keep).setSelectionRange) try { $(keep).setSelectionRange(caret, caret) } catch {} }
 }
@@ -4091,6 +4098,7 @@ async function profileSubmit(form){
     if (form.id === 'loginForm') {
       P.busy = true; renderProfile();
       const d = await api('/api/auth/login', { username: $('liUser').value, password: $('liPass').value });
+      if (d.need2fa) { P.busy = false; closeProfile(); return window.flAuth?.twofa(d.ticket) }
       const guest = { t: S.fav, p: S.favPlayers, l: S.favLeagues };
       adoptUser(d.user);
       if (guest.t.length || guest.p.length || guest.l.length) {   // keep anything added while logged out
@@ -4098,10 +4106,14 @@ async function profileSubmit(form){
       toast(`Welcome back, ${d.user.display}.`);
     } else if (form.id === 'signupForm') {
       if ($('suPass').value !== $('suPass2').value) throw new Error("The two passwords don't match.");
+      if (!$('suAdult').checked) throw new Error("Tick the box to confirm you're 18 or older.");
+      if (!$('suTerms').checked) throw new Error('Tick the box to accept the Terms and Privacy Policy.');
       P.busy = true; renderProfile();
-      const d = await api('/api/auth/signup', { display: $('suName').value || $('suUser').value, username: $('suUser').value, password: $('suPass').value,
+      const tv = (await api('/api/me')).terms;
+      const d = await api('/api/auth/signup', { display: $('suName').value || $('suUser').value, username: $('suUser').value, password: $('suPass').value, email: $('suEmail').value, adult: true, terms: tv,
         prefs: { favTeams: S.fav, favPlayers: S.favPlayers, favLeagues: S.favLeagues, color: COLORS[Math.floor(Math.random() * COLORS.length)] } });
-      adoptUser(d.user); toast(`Profile created. Welcome, ${d.user.display}.`);
+      try { sessionStorage.setItem('fl.newAccount', '1') } catch {}
+      adoptUser(d.user); toast(`Profile created. Check ${d.user.email} for a link to confirm your email.`);
     } else if (form.id === 'editForm') {
       const d = await api('/api/me/prefs', { display: $('edName').value, bio: $('edBio').value, color: S.me.prefs?.color || COLORS[3] });
       S.me = d.user; P.edit = false; renderProfileBtn(); toast('Profile saved.');
@@ -5011,13 +5023,18 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="labcore.js"></script>
 <script src="edge.js"></script>
 <script src="markets.js"></script>
+<script src="marketfeed.js"></script>
 <script src="pages.js"></script>
+<script src="pricing.js"></script>
+<script src="account.js"></script>
+<script src="legal.js"></script>
 <script src="shell.js"></script>
 <script src="recent.js"></script>
 <script src="home.js"></script>
 <script src="live.js"></script>
 <script src="linemove.js"></script>
 <script src="share.js"></script>
+<script src="inbox.js"></script>
 <script src="alerts.js"></script>
 <script src="matchcentre.js"></script>
 <script src="labpage.js"></script>
@@ -5042,6 +5059,9 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="referrals.js"></script>
 <script src="owner.js"></script>
 <script src="status.js"></script>
+<script src="daily.js"></script>
+<script src="compete.js"></script>
+<script src="pwa.js"></script>
 <script type="module">
 // Predicted lineups: Claude researches recent team news with web search, using the viewer's own API key.
 // The SDK is only downloaded the first time someone asks for a predicted lineup.

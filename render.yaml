@@ -31,3 +31,13 @@ services:
         sync: false
       - key: DISCORD_MEMBER_ROLES
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: FLOODLIGHT_URL
+        sync: false
