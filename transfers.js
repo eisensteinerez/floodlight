@@ -28,7 +28,7 @@
     { k: 'cfb', name: 'College football', chip: 'cfb', college: true, status: 'Transfer portal window', words: ['Transfer portal window'], src: '' },
     { k: 'soccer', name: 'Soccer', chip: 'soccer', status: 'Transfer window', words: ['Transfer window'], src: 'Transfermarkt' }];
   const LG = Object.fromEntries(LEAGUES.map(l => [l.k, l]));
-  const TYPES = { trade: 'Trades', sign: 'Signings', ext: 'Extensions', waiver: 'Waivers and releases', ir: 'Injury list', ps: 'Practice squad', other: 'Roster moves', transfer: 'Transfers', loan: 'Loans', free: 'Free transfers' };
+  const TYPES = { trade: 'Trades', sign: 'Signings', ext: 'Extensions', waiver: 'Waivers and releases', ir: 'Injury list', ps: 'Practice squad', other: 'Roster moves', transfer: 'Transfers', loan: 'Loans', free: 'Free transfers', left: 'Released and retired' };
   const T = { lg: LG[store.get('fl.tw.league', 'nba')] ? store.get('fl.tw.league', 'nba') : 'nba', type: 'all', team: null, data: {}, dates: null, open: new Set(), src: new Set(), reported: new Set(store.get('fl.tw.reported', [])), show: 30, msg: '', dateMsg: '',
     follows: store.get('fl.follows', []) };
 
@@ -113,7 +113,8 @@
   // MLB: the league names the player, both clubs and the kind of move. One trade is several rows, one per player.
   const MLB_KIND = { TR: 'trade', SFA: 'sign', SGN: 'sign', REL: 'waiver', CLW: 'waiver', DES: 'waiver', WA: 'waiver', OUT: 'waiver' };
   const MLB_LABEL = { TR: 'Trade', SFA: 'Free agent', SGN: 'Signing', REL: 'Release', CLW: 'Waiver claim', DES: 'Designated for assignment', WA: 'Waiver', OUT: 'Outrighted' };
-  function fromMlb(rows) {
+  function fromMlb(rows, meta = {}) {
+    const src = text => ({ text, sentence: text, status: 'Official', name: 'MLB', link: meta.link || '' });
     const logo = id => typeof bsLogo === 'function' && id ? bsLogo(id) : '', shot = id => typeof bsShot === 'function' && id ? bsShot(id) : '';
     const tm = t => t ? { id: t.id, name: t.name, short: t.name, logo: logo(t.id) } : null;
     const posOf = (text, name) => { const m = name && String(text).match(new RegExp(`\\b(${POSN})\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)); return m ? m[1] : '' };
@@ -121,23 +122,70 @@
     for (const r of rows) { const when = whenOf(r.date); if (isNaN(when)) continue;
       const kind = MLB_KIND[r.code] || (/extension/i.test(r.text) ? 'ext' : 'other'), from = tm(r.from), to = tm(r.to), p = r.player ? { id: r.player.id, name: r.player.name, pos: posOf(r.text, r.player.name), photo: shot(r.player.id) } : null;
       if (kind === 'trade') { const k = dayOf(when) + '|' + norm(r.text); let g = trades.get(k);
-        if (!g) { g = { id: `mlb:trade:${r.id}`, lg: 'mlb', type: 'trade', label: 'Trade', when, player: p, lead: to || from, from, to, details: r.text, parts: [], seen: new Set(), ins: [], outs: [] }; trades.set(k, g); out.push(g) }
+        if (!g) { g = { id: `mlb:trade:${r.id}`, lg: 'mlb', type: 'trade', code: 'TR', label: 'Trade', when, player: p, lead: to || from, from, to, details: r.text, source: src(r.text), parts: [], seen: new Set(), ins: [], outs: [] }; trades.set(k, g); out.push(g) }
         if (p && !g.seen.has(p.id)) { g.seen.add(p.id); g.parts.push({ player: p, from, to }); if (to) g.ins.push([to, 1]); if (from) g.outs.push([from, 1]) }
         continue }
       const gone = kind === 'waiver' && r.code !== 'CLW';
-      out.push({ id: 'mlb:' + r.id, lg: 'mlb', type: kind, label: MLB_LABEL[r.code] || (kind === 'ext' ? 'Extension' : r.kind || 'Roster move'), when, player: p, lead: to || from, from: gone ? (from || to) : from, to: gone ? null : to, details: r.text,
+      out.push({ id: 'mlb:' + r.id, lg: 'mlb', type: kind, code: r.code || '', terms: r.terms || null, label: MLB_LABEL[r.code] || (kind === 'ext' ? 'Extension' : r.kind || 'Roster move'), when, player: p, lead: to || from, from: gone ? (from || to) : from, to: gone ? null : to, details: r.text, source: src(r.text),
         ins: kind === 'sign' || r.code === 'CLW' ? (to ? [[to, 1]] : []) : [], outs: gone && (from || to) ? [[from || to, 1]] : [] }) }
     for (const g of out) if (g.parts) { g.people = g.parts.length; delete g.seen; const tms = new Set(g.parts.flatMap(x => [x.from?.id, x.to?.id]).filter(Boolean)); g.teams = tms.size; if (tms.size > 2) g.details = `${tms.size}-team trade` }
     return out;
   }
   const crest = id => id ? `https://img.a.transfermarkt.technology/wappen/head/${id}.png` : '';
   const NOCLUB = /^(without club|retired|career break|unknown|ban)$/i;
+  // Transfermarkt writes "Without Club", "Retired", "Career break", "Unknown" or "Ban" where a club would go. Those are
+  // not clubs: the move keeps only the real club, and `noclub` says what the other side was, so it can be said plainly.
   function fromSoccer(rows) {
-    const club = c => c && c.name ? { id: c.id, name: c.name, short: c.name, logo: c.crest || crest(c.id), soccer: true } : null;
-    return rows.map(t => { const kind = /loan/i.test(t.fee) ? 'loan' : /free/i.test(t.fee) ? 'free' : 'transfer', from = club(t.from), to = club(t.to);
-      return { id: 'soccer:' + t.id, lg: 'soccer', type: kind, label: kind === 'loan' ? 'Loan' : kind === 'free' ? 'Free transfer' : 'Transfer', when: whenOf(t.date), player: { name: t.name, pos: t.position, age: t.age, photo: t.photo, soccer: true }, lead: to || from, from, to,
-        details: kind === 'transfer' && t.fee && !/^[-?]$/.test(t.fee) ? `Fee ${t.fee}` : t.marketValue && !/^[-?]$/.test(t.marketValue) ? `Market value ${t.marketValue}` : kind === 'transfer' ? 'Fee not given' : '', ins: to && !NOCLUB.test(to.name) ? [[to, 1]] : [], outs: from && !NOCLUB.test(from.name) ? [[from, 1]] : [] } }).filter(x => !isNaN(x.when));
+    const club = c => c && c.name && !NOCLUB.test(c.name.trim()) ? { id: c.id, name: c.name, short: c.name, logo: c.crest || crest(c.id), soccer: true } : null;
+    const none = c => c && c.name && NOCLUB.test(c.name.trim()) ? c.name.trim().toLowerCase() : '';
+    return rows.map(t => { const from = club(t.from), to = club(t.to), gone = none(t.to), back = none(t.from), fee = String(t.fee || '').trim(), ret = /end of loan/i.test(fee);
+      const kind = gone ? 'left' : /loan/i.test(fee) ? 'loan' : back || /free/i.test(fee) ? 'free' : 'transfer';
+      const label = gone ? ({ 'without club': 'Released', retired: 'Retired', 'career break': 'Career break', ban: 'Ban' }[gone] || 'Left the club')
+        : back === 'without club' ? 'Free agent signing' : ret ? 'Loan return' : kind === 'loan' ? 'Loan' : kind === 'free' ? 'Free transfer' : 'Transfer';
+      return { id: 'soccer:' + t.id, lg: 'soccer', type: kind, label, when: whenOf(t.date), player: { name: t.name, pos: t.position, age: t.age, photo: t.photo, soccer: true }, lead: to || from, from, to,
+        noclub: gone ? { side: 'to', what: gone, name: t.to.name.trim() } : back ? { side: 'from', what: back, name: t.from.name.trim() } : null, fee: /^[-?]?$/.test(fee) ? '' : fee,
+        // Transfermarkt gives fields, not a sentence: the source is those fields as listed
+        source: { status: 'Reported', name: 'Transfermarkt', fields: [['Player', t.name], ['From', t.from?.name], ['To', t.to?.name], ['Fee', t.fee], ['Market value', t.marketValue], ['Date', t.date]].filter(x => x[1]) },
+        details: kind === 'transfer' && fee && !/^[-?]$/.test(fee) ? `Fee ${fee}` : t.marketValue && !/^[-?]$/.test(t.marketValue) ? `Market value ${t.marketValue}` : kind === 'transfer' ? 'Fee not given' : '', ins: to ? [[to, 1]] : [], outs: from ? [[from, 1]] : [] } }).filter(x => !isNaN(x.when));
   }
+
+  /* ---------- saying a move in plain words ----------
+     One line for what happened ("Released by Arsenal") and, when it adds something, a second ("Now a free agent").
+     The table row, the player's timeline, the drawer, the report and Home's wire all use these words. */
+  const theTeam = (t, lg) => !t ? '' : lg === 'soccer' ? (t.name || t.short) : `the ${t.name || t.short}`;
+  const SAY = {   // ESPN kinds, said about the team that made the move
+    sign: t => `Signed by ${t}`, re_sign: t => `Re-signed by ${t}`, two_way: t => `Signed to a two-way contract by ${t}`, extension: t => `Contract extended by ${t}`,
+    ps_sign: t => `Signed to the practice squad by ${t}`, promote: t => `Promoted to the active roster by ${t}`, elevate: t => `Elevated from the practice squad by ${t}`,
+    ps_release: t => [`Released from the practice squad by ${t}`, 'Now a free agent'], waive: t => [`Waived by ${t}`, 'Other teams can put in a claim'],
+    release: t => [`Released by ${t}`, 'Now a free agent'], ir: t => `Placed on injured reserve by ${t}`,
+    ps_ir: t => `Placed on the practice squad injured list by ${t}`, return_ir: t => `Designated to return from injured reserve by ${t}`, activate: t => `Activated by ${t}`,
+    suspend: t => `Placed on the suspended list by ${t}`, pup: t => `Placed on the physically unable to perform list by ${t}`, convert: t => `Contract converted by ${t}`,
+    guarantee: t => `Contract guaranteed by ${t}`, exemption: t => `Given a practice exemption by ${t}` };
+  const MLB_SAY = { REL: t => [`Released by ${t}`, 'Now a free agent'], WA: t => [`Waived by ${t}`, 'Other teams can put in a claim'], DES: t => `Designated for assignment by ${t}`,
+    OUT: t => `Outrighted off the 40-man roster by ${t}`, SFA: t => `Signed as a free agent by ${t}`, SGN: t => `Signed by ${t}` };
+  const GONE = { 'without club': f => [`Released by ${f}`, 'Now a free agent'], retired: f => `Retired, last at ${f}`, 'career break': f => `Taking a career break, last at ${f}`,
+    ban: f => `Serving a ban, last at ${f}`, unknown: f => [`Left ${f}`, 'Next club not known'] };
+  const BACK = { 'without club': t => `Signed as a free agent by ${t}`, retired: t => `Back from retirement with ${t}`, 'career break': t => `Back from a career break with ${t}`,
+    ban: t => `Back from a ban with ${t}`, unknown: t => [`Joined ${t}`, 'Previous club not known'] };
+  const QUIET = new Set(Object.values(SAYS));   // the old one-line readings, now said by the line itself
+  function says(it) {
+    const lg = it.lg, from = theTeam(it.from, lg), to = theTeam(it.to, lg), team = theTeam(it.lead, lg), pair = x => Array.isArray(x) ? { line: x[0], sub: x[1] || '' } : { line: x, sub: '' };
+    let out;
+    if (it.noclub) { const n = it.noclub; out = n.side === 'to' && from ? pair((GONE[n.what] || GONE.unknown)(from)) : n.side === 'from' && to ? pair((BACK[n.what] || BACK.unknown)(to)) : pair(it.label) }
+    else if (it.type === 'trade') out = pair(from && to ? `Traded from ${from} to ${to}` : to ? `Traded to ${to}` : from ? `Traded by ${from}` : 'Trade');
+    else if (lg === 'soccer') out = pair(it.label === 'Loan return' && to ? `Back at ${to} after a loan${from ? ` at ${from}` : ''}` : it.type === 'loan' && to ? `On loan at ${to}${from ? ` from ${from}` : ''}` : to ? `Joined ${to}${from ? ` from ${from}` : ''}` : from ? `Left ${from}` : it.label);
+    else if (lg === 'mlb') { const f = MLB_SAY[it.code], t2 = to || from; out = it.code === 'CLW' && to ? pair(`Claimed off waivers by ${to}${from ? ` from ${from}` : ''}`) : f && t2 ? pair(f(t2)) : pair(it.details || it.label) }
+    else if (it.kind === 'option') out = pair(`${/^declined/i.test(it.source?.sentence || '') ? 'Option declined' : 'Option exercised'} by ${team}`);
+    else if (it.kind === 'claim') out = pair(`Claimed off waivers by ${team}${it.from ? ` from ${from}` : ''}`);
+    else if (SAY[it.kind] && team) out = pair(SAY[it.kind](team));
+    else if (it.type === 'waiver' && from && !it.to) out = pair(/claim/i.test(it.label) ? `Claimed off waivers by ${from}` : /waiver/i.test(it.label) ? [`Waived by ${from}`, 'Other teams can put in a claim'] : [`Released by ${from}`, 'Now a free agent']);
+    else out = pair(to && from ? `From ${from} to ${to}` : to ? `Joined ${to}` : from ? `Left ${from}` : it.label + (team ? ` by ${team}` : ''));
+    // the second line adds what the details say beyond the line: a contract, a route in, a fee
+    const det = it.details && !QUIET.has(it.details) && it.details !== out.line && it.details !== it.source?.sentence && it.details !== it.source?.text && !/^Off waivers/.test(it.details) ? it.details : '';
+    const deal = it.terms?.summary && !det.toLowerCase().includes(it.terms.summary.toLowerCase()) ? it.terms.summary : '';
+    return { line: out.line.charAt(0).toUpperCase() + out.line.slice(1), sub: [out.sub, deal, det].filter(Boolean).join('. ') };
+  }
+  const plain = it => says(it).line;
 
   /* ---------- loading ---------- */
   const TTL = 5 * 60000;
@@ -145,7 +193,7 @@
     const cur = T.data[lg];
     if (cur && !force && (cur.promise || Date.now() - cur.at < TTL)) return cur.promise || Promise.resolve(cur);
     const req = lg === 'soccer' ? get('/api/tm/transfers/feed?kind=latest&page=1').then(d => ({ items: fromSoccer(d.transfers || []), source: 'Transfermarkt' }))
-      : get('/api/transfers/moves?league=' + lg).then(d => ({ items: !d.source ? [] : lg === 'mlb' ? fromMlb(d.moves || []) : d.events ? fromEvents(lg, d.events, d) : fromEspn(lg, d.moves || []), source: d.source || '', link: d.link || '', status: d.status || '', note: d.error || '' }));
+      : get('/api/transfers/moves?league=' + lg).then(d => ({ items: !d.source ? [] : lg === 'mlb' ? fromMlb(d.moves || [], d) : d.events ? fromEvents(lg, d.events, d) : fromEspn(lg, d.moves || []), source: d.source || '', link: d.link || '', status: d.status || '', note: d.error || '' }));
     const promise = req.catch(e => ({ items: cur?.items || [], source: LG[lg].src, error: e.status === 401 || e.status === 403 ? 'denied' : (e.message || 'It did not load.') }))
       .then(r => { r.items.sort((a, b) => b.when - a.when); r.at = Date.now(); T.data[lg] = r; return r });
     T.data[lg] = { ...(cur || {}), at: cur?.at || 0, promise };
@@ -185,11 +233,12 @@
   const teamBtn = (t, lg, small) => !t ? `<span class="avx crest av-sm tw-none" title="No club named">–</span>`
     : `<button type="button" class="tw-team${small ? ' sm' : ''}" data-twteam="${esc(JSON.stringify({ lg, id: t.id, name: t.name }))}" aria-label="${esc(t.name)}" title="${esc(t.name)}"><span class="avx crest av-sm">${t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<span aria-hidden="true">${esc(t.abbr || initials(t.short || t.name))}</span></span>${small ? '' : `<span>${esc(t.short || t.name)}</span>`}</button>`;
   const playerBtn = (p, lg) => `<button type="button" class="tw-player" data-twplayer="${esc(JSON.stringify({ lg, id: p.id || '', name: p.name, soccer: !!p.soccer }))}">${face(p)}<span class="rw-t"><b>${esc(p.name)}</b><small>${esc([p.pos, p.age ? `${p.age}` : ''].filter(Boolean).join(' · ')) || '&nbsp;'}</small></span></button>`;
-  const freeAgent = `<span class="avx crest av-sm tw-none" title="Free agent">FA</span>`;
+  const freeAgent = `<span class="avx crest av-sm tw-none" title="Free agent"><span aria-hidden="true">FA</span><span class="sr-only">Free agent</span></span>`;
+  const noClub = n => n.what === 'without club' ? freeAgent : `<span class="avx crest av-sm tw-none" title="${esc(n.name)}"><span aria-hidden="true">${n.what === 'retired' ? 'Ret' : n.what === 'ban' ? 'Ban' : '–'}</span><span class="sr-only">${esc(n.name)}</span></span>`;
   function sourcePanel(it) {
     const s = it.source || { text: it.details, status: it.lg === 'soccer' ? 'Reported' : 'Official', name: LG[it.lg].src }, rep = T.reported.has(it.id);
     return `<div class="tw-src"><p class="tw-said"><span class="pl ${s.status === 'Official' ? 'solid' : ''}">${esc(s.status)}</span> ${esc(s.name || LG[it.lg].src)}${s.link ? ` · <a class="lk" href="${esc(s.link)}" target="_blank" rel="noopener">See the list</a>` : ''}</p>
-      <blockquote class="tw-quote">${esc(s.sentence || s.text || it.details)}</blockquote>
+      ${s.fields ? `<dl class="tw-fields">${s.fields.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : `<blockquote class="tw-quote">${esc(s.sentence || s.text || it.details)}</blockquote>`}
       ${s.text && s.sentence && s.text !== s.sentence ? `<p class="lb">From the full entry: “${esc(s.text)}”</p>` : ''}
       ${(s.also || []).length ? `<p class="lb">Listed again the same day as: ${s.also.map(x => `“${esc(x)}”`).join(', ')}. Shown once.</p>` : ''}
       ${it.conf === 'low' || (it.checks || []).length ? `<p class="lb tw-warn">${ic('info', 14)} ${esc((it.checks || []).join(' ') || 'Floodlight could not read every part of this entry, so it is shown as written.')}</p>` : ''}
@@ -202,22 +251,25 @@
         ? `<li>${playerBtn(p.player, it.lg)}<span class="tw-move">${teamBtn(p.from, it.lg, true)}${ic('arrow', 16)}${teamBtn(p.to, it.lg, true)}</span><span class="lb">${esc([p.from?.name, p.to?.name].filter(Boolean).join(' to '))}</span></li>`
         : `<li>${teamBtn(p.team, it.lg)}<span class="tw-said">${esc(p.text)}</span></li>`).join('')}</ul></td></tr>`;
     const move = it.internal ? `<span class="tw-move tw-stay">${teamBtn(it.lead, it.lg, true)}<span class="lb">Roster move</span></span>`
-      : `<span class="tw-move">${teamBtn(it.from, it.lg, true)}<span class="tw-arrow" aria-label="to">${ic('arrow', 16)}</span>${it.to ? teamBtn(it.to, it.lg, true) : it.type === 'waiver' ? freeAgent : teamBtn(null)}</span>`;
+      : `<span class="tw-move">${it.from ? teamBtn(it.from, it.lg, true) : it.noclub?.side === 'from' ? noClub(it.noclub) : teamBtn(null)}<span class="tw-arrow" aria-hidden="true">${ic('arrow', 16)}</span>${it.to ? teamBtn(it.to, it.lg, true) : it.noclub?.side === 'to' ? noClub(it.noclub) : it.type === 'waiver' ? freeAgent : teamBtn(null)}</span>`;
+    const w = says(it);
     return `<tr class="tw-row"><td data-l="Player">${who}</td>
       <td data-l="Move">${move}</td>
       <td data-l="Type"><span class="pl${it.type === 'trade' || it.type === 'transfer' ? ' solid' : ''}">${esc(it.label)}</span></td>
-      <td data-l="Details" class="tw-det">${esc(it.details)}<span class="tw-links">${many ? `<button type="button" class="lk tw-exp" data-twopen="${esc(it.id)}" aria-expanded="${open}" aria-controls="twm-${esc(it.id)}">${open ? 'Hide the full trade' : 'Show the full trade'}</button>` : ''}<button type="button" class="lk tw-exp" data-twsrc="${esc(it.id)}" aria-expanded="${src}" aria-controls="tws-${esc(it.id)}">${src ? 'Hide the source' : 'Source'}</button></span></td>
+      <td data-l="Details" class="tw-det"><span class="tw-line">${esc(w.line)}</span>${w.sub ? `<span class="tw-sub">${esc(w.sub)}</span>` : ''}<span class="tw-links">${many ? `<button type="button" class="lk tw-exp" data-twopen="${esc(it.id)}" aria-expanded="${open}" aria-controls="twm-${esc(it.id)}">${open ? 'Hide the full trade' : 'Show the full trade'}</button>` : ''}<button type="button" class="lk tw-exp" data-twsrc="${esc(it.id)}" aria-expanded="${src}" aria-controls="tws-${esc(it.id)}">${src ? 'Hide the source' : 'Source'}</button></span></td>
       <td data-l="When" class="num tw-when"><time datetime="${it.when.toISOString()}" title="${esc(it.when.toLocaleString())}">${esc(ago(it.when))}</time></td></tr>${more}
       <tr class="tw-more"${src ? '' : ' hidden'} id="tws-${esc(it.id)}"><td colspan="5">${src ? sourcePanel(it) : ''}</td></tr>`;
   }
+  // The window state and the next key date show only once an admin has entered a real date. Until then they are left
+  // out altogether: no "Dates to come", no empty "Next key date".
   function banner(l, d, st) {
     const week = d?.items ? d.items.filter(x => Date.now() - x.when < 7 * 864e5 && x.when <= Date.now() + 864e5).length : null;
-    const state = !st.hasWindow ? ['Dates to come', week ? `${week} ${week === 1 ? 'move' : 'moves'} listed this week, below` : 'The latest moves are listed below as they are announced'] : st.open ? ['Open', `Until ${longDay(st.open.end)}`] : ['Closed', st.reopens ? `Opens ${longDay(st.reopens.day)}` : 'Opening date to come'];
+    const win = !st.hasWindow ? null : st.open ? ['Open', `Until ${longDay(st.open.end)}`] : ['Closed', st.reopens ? `Opens ${longDay(st.reopens.day)}` : ''];
     const f = { k: 'league', lg: l.k, name: `your ${l.name} teams` }, on = follows(f);
-    return `<section class="card feature tw-banner" aria-label="${esc(l.status)}"><div class="tw-stats">
-        <div class="tw-stat"><span class="lb">${esc(l.status)}</span><b class="fig tw-state ${st.open ? 'open' : ''}"><i aria-hidden="true"></i>${state[0]}</b><small class="lb">${esc(state[1])}</small></div>
-        <div class="tw-stat"><span class="lb">${st.next ? esc(st.next.label) : 'Next key date'}</span><b class="fig num">${st.next ? count(daysTo(st.next.day)) : '–'}</b><small class="lb">${st.next ? esc(longDay(st.next.day)) : 'No date listed yet'}</small></div>
-        <div class="tw-stat"><span class="lb">Moves this week</span><b class="fig num">${!l.src ? '–' : week == null ? '…' : (d.error || d.note) && !d.items.length ? '–' : week}</b><small class="lb">${d?.source ? `from ${esc(d.source)}` : l.src ? `from ${esc(l.src)}` : 'no source yet'}</small></div></div>
+    const stats = [win ? `<div class="tw-stat"><span class="lb">${esc(l.status)}</span><b class="fig tw-state ${st.open ? 'open' : ''}"><i aria-hidden="true"></i>${win[0]}</b>${win[1] ? `<small class="lb">${esc(win[1])}</small>` : ''}</div>` : '',
+      st.next ? `<div class="tw-stat"><span class="lb">${esc(st.next.label)}</span><b class="fig num">${count(daysTo(st.next.day))}</b><small class="lb">${esc(longDay(st.next.day))}</small></div>` : '',
+      l.src ? `<div class="tw-stat"><span class="lb">Moves this week</span><b class="fig num">${week == null ? '…' : (d.error || d.note) && !d.items.length ? '–' : week}</b><small class="lb">from ${esc(d?.source || l.src)}</small></div>` : ''].filter(Boolean).join('');
+    return `<section class="card feature tw-banner${stats ? '' : ' bare'}" aria-label="${esc(st.set ? l.status : `${l.name} moves`)}">${stats ? `<div class="tw-stats">${stats}</div>` : ''}
       <button type="button" class="bt tw-alert" data-twfollow="${esc(JSON.stringify(f))}" aria-pressed="${on}">${ic(on ? 'check' : 'bell', 18)}${on ? 'Following my teams' : 'Alert me on my teams'}</button>
       ${T.msg ? `<p class="tw-msg" role="status">${esc(T.msg)}</p>` : ''}</section>`;
   }
@@ -240,7 +292,7 @@
         return `<tr><th scope="row"><button type="button" class="tw-team" data-twonly="${esc(String(x.t.id || x.t.name))}" aria-pressed="${T.team === String(x.t.id || x.t.name)}" aria-label="Show only ${esc(x.t.name)} moves"><span class="avx crest av-sm">${x.t.logo ? `<img src="${esc(x.t.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<span aria-hidden="true">${esc(x.t.abbr || initials(x.t.short || x.t.name))}</span></span><span>${esc(x.t.short || x.t.name)}</span></button></th><td class="r num">${x.i}</td><td class="r num">${x.o}</td><td class="r num"><b>${net > 0 ? '+' : net < 0 ? '−' : ''}${Math.abs(net)}</b></td>
           <td class="r"><button type="button" class="ib${on ? ' solid' : ''}" data-twfollow="${esc(JSON.stringify(f))}" aria-pressed="${on}" aria-label="${on ? 'Stop following' : 'Follow'} ${esc(x.t.name)}" title="${on ? 'Following' : 'Follow'}">${ic(on ? 'check' : 'bell', 18)}</button></td></tr>` }).join('')}</tbody></table></div></section>`;
   }
-  const keyDateLine = st => st.next ? `Next key date: ${st.next.label}, ${longDay(st.next.day)} (${count(daysTo(st.next.day))}).` : 'No key dates have been entered for this league yet.';
+  const keyDateLine = st => st.next ? `Next key date: ${st.next.label}, ${longDay(st.next.day)} (${count(daysTo(st.next.day))}).` : '';
   function draw() {
     const el = $('pg-transfers'); if (!el) return;
     const l = LG[T.lg], d = T.data[T.lg], st = status(T.lg), items = d?.items || null, loading = !d || (!d.at && d.promise);
@@ -311,7 +363,7 @@
   // a mistake in a move goes to the owners' feedback list (Members page), with the sentence it came from
   function report(it) {
     const s = it.source || {};
-    const text = `Transfer move looks wrong (${LG[it.lg].name}, ${it.when.toLocaleDateString()}): ${it.player?.name || it.lead?.name || ''} · ${it.label}. Source: “${s.sentence || s.text || it.details}”`;
+    const text = `Transfer move looks wrong (${LG[it.lg].name}, ${it.when.toLocaleDateString()}): ${it.player?.name || it.lead?.name || ''} · ${it.label} · ${plain(it)}. Source: “${s.sentence || s.text || (s.fields || []).map(f => f.join(': ')).join(', ') || it.details}”`;
     fetch('/api/feedback', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, page: 'transfers:' + it.id }) })
       .then(r => { if (r.status === 401) throw new Error('signin'); if (!r.ok) throw new Error('fail'); T.reported.add(it.id); store.set('fl.tw.reported', [...T.reported].slice(-200)); T.repMsg = { id: it.id, text: 'Sent. The owners will check this move against the source.' } })
       .catch(e => { T.repMsg = { id: it.id, text: e.message === 'signin' ? 'Sign in to report a move, so the owners know who to ask.' : 'The report did not send. Try again in a moment.' } })
@@ -326,7 +378,9 @@
     const res = await Promise.all((leagues && leagues.length ? leagues : ['nba', 'nfl', 'mlb', 'soccer']).filter(k => LG[k]?.src).map(k => load(k)));
     const denied = res.length > 0 && res.every(r => r.error === 'denied'), failed = res.length > 0 && res.every(r => ((r.error && r.error !== 'denied') || r.note) && !(r.items || []).length);
     // Home shows moves between teams; injured reserve, practice squad and other roster moves stay on this page
-    return { denied, failed, rows: res.flatMap(r => r.items || []).filter(x => x.type !== 'other' && !x.internal).sort((a, b) => b.when - a.when).slice(0, n).map(x => ({ ...x, league: LG[x.lg].name })) };
+    // each row keeps its usual fields (a club that is "Without Club" is no longer a `to`); `says` adds the plain words,
+    // { line: "Released by Arsenal", sub: "Now a free agent" }, for whoever shows the row
+    return { denied, failed, rows: res.flatMap(r => r.items || []).filter(x => x.type !== 'other' && !x.internal).sort((a, b) => b.when - a.when).slice(0, n).map(x => ({ ...x, league: LG[x.lg].name, says: says(x) })) };
   }
   // a player's own moves, from the same lists (matched by name where the list gives no id)
   function movesCard(sport, name, id) {
@@ -334,7 +388,7 @@
     const d = T.data[lg];
     if (!d || (!d.at && !d.promise)) { load(lg).then(r => { if ((r.items || []).some(x => mine(x, name, id)) && typeof renderSheet === 'function' && window.S?.stack?.length) renderSheet() }); return '' }
     const rows = (d.items || []).filter(x => mine(x, name, id)).slice(0, 8); if (!rows.length) return '';
-    return `<section class="card pfa tw-pm" aria-label="Moves"><div class="sec-h"><h2>Moves</h2><span class="lb">from ${esc(d.source || LG[lg].src)}, recent weeks</span></div><ol class="tw-tl">${rows.map(x => `<li><span class="pl${x.type === 'trade' ? ' solid' : ''}">${esc(x.label)}</span><span class="rw-t"><b>${esc(x.parts && !x.parts[0]?.player ? x.parts.map(p => p.text).join(' ') : x.details)}</b><small>${esc(x.when.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }))}</small></span></li>`).join('')}</ol></section>`;
+    return `<section class="card pfa tw-pm" aria-label="Moves"><div class="sec-h"><h2>Moves</h2><span class="lb">from ${esc(d.source || LG[lg].src)}, recent weeks</span></div><ol class="tw-tl">${rows.map(x => `<li><span class="pl${x.type === 'trade' ? ' solid' : ''}">${esc(x.label)}</span><span class="rw-t"><b>${esc(plain(x))}</b><small>${esc(x.when.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }))}</small></span></li>`).join('')}</ol></section>`;
   }
   const mine = (x, name, id) => { const k = norm(name); return (id && x.player?.id && String(x.player.id) === String(id)) || norm(x.player?.name) === k || (x.parts || []).some(p => (p.player && (norm(p.player.name) === k || (id && String(p.player.id) === String(id)))) || (p.text && norm(p.text).includes(k))) };
 
