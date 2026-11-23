@@ -67,7 +67,7 @@
     return comps.slice(0, sport === 'tennis' ? 12 : 1).map(c => {
       const st = c.status?.type || ev.status?.type || {}, cs = c.competitors || [];
       const home = cs.find(x => x.homeAway === 'home') || cs[0] || {}, away = cs.find(x => x.homeAway === 'away') || cs[1] || {};
-      const side = x => { const t = x.team || x.athlete || {}; return { id: String(t.id || x.id || ''), name: t.shortDisplayName || t.displayName || t.name || '', full: t.displayName || '', logo: t.logo || t.logos?.[0]?.href || t.headshot?.href || t.flag?.href || '',
+      const side = x => { const t = x.team || x.athlete || {}; return { id: String(t.id || x.id || ''), name: t.shortDisplayName || t.displayName || t.name || '', full: t.displayName || '', ab: t.abbreviation || '', logo: t.logo || t.logos?.[0]?.href || t.headshot?.href || t.flag?.href || '',
         score: x.score?.displayValue ?? x.score ?? '', rank: x.curatedRank?.current && x.curatedRank.current <= 25 ? x.curatedRank.current : '', color: hex(t.color), record: x.records?.[0]?.summary || '', winner: !!x.winner, ml: null } };
       const us = !['soccer', 'tennis'].includes(sport), a = side(us ? away : home), b = side(us ? home : away);   // US scoreboards read away at home; soccer reads home first
       const odds = c.odds?.[0]; let draw = null;
@@ -117,7 +117,7 @@
   /* ---------- pieces ---------- */
   const facts = g => ({ id: g.key, hc: g.a.color || '', ac: g.b.color || '',   // no colour in the feed: the card falls back to the theme's own pair
     label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
-    a: { name: g.a.name, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
+    a: { name: g.a.name, ab: g.a.ab, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, ab: g.b.ab, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date });
   const noSpoil = f => { if (f.state === 'pre' || !window.flMC?.spoil(f.id)) return f; f.spoil = true; f.label = f.label.replace(/ \S+ to \S+ /, ' v ') + ', score hidden'; for (const t of [f.a, f.b]) { t.lose = false; t.win = false } return f };
   const hubAttr = g => `data-hub="${esc(g.sport)}|${esc(g.lg || '')}|${esc(g.id)}"`;

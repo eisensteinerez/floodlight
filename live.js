@@ -32,7 +32,7 @@
   // the same card Home draws
   const TINT = 'var(--muted)';
   const cardFacts = g => ({ id: 'lv' + g.key, hc: g.a.color || TINT, ac: g.b.color || TINT, label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
-    a: { name: g.a.name, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
+    a: { name: g.a.name, ab: g.a.ab, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, ab: g.b.ab, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date, ...(g.state !== 'pre' && window.flMC?.spoil(g.key) ? { spoil: true } : {}) });
   // the compact view: one line a game, for scanning a long night
   const row = g => { const sp = g.state !== 'pre' && window.flMC?.spoil(g.key), t = (x, o) => `<span class="lv-t${!sp && g.state === 'post' && o.winner ? ' lose' : ''}">${x.logo ? `<img src="${esc(x.logo)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : '<i></i>'}<span>${x.rank ? `<em>${esc(x.rank)}</em> ` : ''}${esc(x.name)}</span>${g.state === 'pre' ? '' : `<b class="num">${sp ? '–' : esc(x.score)}</b>`}</span>`;

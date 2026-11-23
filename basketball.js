@@ -122,7 +122,7 @@ function bbCard(e){
   const odds = e.state !== 'post' && (O || e.line?.details || P) ? `<div class="oddrow" aria-hidden="true">${P && e.state === 'pre' ? `<span class="${P.pH >= .5 ? 'fav' : ''}">${ab(e.home)} ${pct(P.pH)}%</span><span class="${P.pH < .5 ? 'fav' : ''}">${ab(e.away)} ${pct(1 - P.pH)}%</span>` : ''}${O?.h && O?.a ? `<span class="bb-ml" title="Best moneyline">${ab(e.home)} ${decAm(O.h)} · ${ab(e.away)} ${decAm(O.a)}</span>` : ''}${spTxt ? `<span>${spTxt}</span>` : ''}${ouTxt ? `<span>O/U ${esc(ouTxt)}</span>` : ''}</div>` : '';
   // US leagues list the away team first; everywhere else the home team comes first
   const us = e.src === 'espn' && e.lg !== 'nbl', [A, B, la, lb] = us ? [e.away, e.home, al, hl] : [e.home, e.away, hl, al];
-  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: `onerror="this.style.visibility='hidden'"` });
+  const T = (t, lose, win) => ({ name: t.name, ab: t.abbr, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: `onerror="this.style.visibility='hidden'"` });
   return flCard({ id: e.id, attrs: `data-bbgame="${esc(e.id)}"`, hc: us ? e.ac : e.hc, ac: us ? e.hc : e.ac, state: e.state, a: T(A, la, lb), b: T(B, lb, la), clock: e.detail.replace(/ - /, ' '), final: e.detail,
     note: e.state === 'pre' && /postpon|cancel|delay/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: odds,
     label: `${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Tip-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}` });
