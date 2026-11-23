@@ -122,7 +122,7 @@
         : `<div class="flm-auth">${mi('profile', 'Sign in', 'data-menu="signin"')}${mi('plus', 'Create account', 'data-menu="signup"')}</div>`)
       + `<div class="flm-g">${u ? mi('profile', 'My profile', 'data-page="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}${mi('ticket', 'My parlays', 'data-shell="parlays"')}${mi('members', 'Members', 'data-shell="members"', '', ' flm-narrow')}
         ${mi('gear', 'Settings', 'data-page="settings"')}${mi('palette', 'Theme', 'data-page="settings" data-arg="theme"', `<em>${esc(theme)}</em>`)}${favThemes()}
-        ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help center', 'data-page="help"')}${u ? mi('members', 'Invite friends', 'data-page="invite"') : ''}${mi('clock', 'Data status and corrections', 'data-page="status"')}</div>`
+        ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help center', 'data-page="help"')}${u ? mi('members', 'Invite friends', 'data-page="invite"') : ''}${mi('clock', 'Trust and data', 'data-page="status"')}</div>`
       + (window.flAdmin?.menu?.(mi) || '')
       + (u ? `<div class="flm-g flm-end">${mi('out', 'Sign out', 'data-act="logout"', '', ' danger')}</div>` : '');
   }
@@ -196,7 +196,7 @@
     <div class="flsheet-grid">${CHIPS.map(([k, l, sp, lg]) => `<button class="flsheet-i" data-k="${k}" data-sport="${sp}"${lg ? ` data-lg="${lg}"` : ''}>${ic(k)}<span>${l}</span></button>`).join('')}</div>
     <h4>More</h4><div class="flsheet-grid"><button class="flsheet-i" data-shell="parlays">${ic('ticket')}<span>Parlays</span></button><button class="flsheet-i" data-page="profile">${ic('profile')}<span>My profile</span></button><button class="flsheet-i" data-shell="transfers">${ic('transfers')}<span>Transfers</span></button><button class="flsheet-i" data-shell="members">${ic('members')}<span>Members</span></button>
       <button class="flsheet-i" data-shell="fav">${ic('fav')}<span>Favorites</span></button><button class="flsheet-i" data-page="settings">${ic('gear')}<span>Settings</span></button>
-      <button class="flsheet-i" data-page="guide">${ic('book')}<span>How to use</span></button><button class="flsheet-i" data-page="status">${ic('clock')}<span>Data status</span></button></div></div>`;
+      <button class="flsheet-i" data-page="guide">${ic('book')}<span>How to use</span></button><button class="flsheet-i" data-page="status">${ic('clock')}<span>Trust and data</span></button></div></div>`;
   document.body.appendChild(sheet);
   function openSheetUI() { sheet.hidden = false; sheet.querySelector('.flsheet-i')?.focus({ preventScroll: true }); sync() }
   function closeSheetUI() { if (!sheet.hidden) { sheet.hidden = true; sync() } }

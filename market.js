@@ -85,6 +85,7 @@
   function verify(p, o = {}) {
     const now = o.now ?? Date.now(), tz = o.tz || localTz();
     const at = p.at || 0, age = at ? now - at : Infinity, price = age <= FRESH ? 'fresh' : 'stale';
+    if (p.type !== 'match' && p.mid) return fromServer(p, o);   // checked by the verified market service (markets.py)
     if (p.type === 'match') {
       const start = p.start ? +p.start : null;
       if (!start) return incomplete('no_start', 'Kick-off time not confirmed');
@@ -123,6 +124,44 @@
     if (age > MAX_AGE) return incomplete('unverified', `Price not re-checked since ${clock(at, tz)}`, { start, event: ev });
     return { state: 'open', why: '', text: '', start, event: { ...ev, verified }, price };
   }
+  /* ---------- the verified market service's statuses (markets.py) ---------- */
+  const STATUS = ['open', 'suspended', 'closed', 'started', 'expired', 'voided', 'missing_matchup', 'player_out', 'provider_unavailable', 'awaiting_verification'];
+  const STATUS_LABEL = { open: 'Open', suspended: 'Suspended', closed: 'Closed', started: 'Started', expired: 'Expired', voided: 'Voided', missing_matchup: 'Missing matchup',
+    player_out: 'Player ruled out', provider_unavailable: 'Provider unavailable', awaiting_verification: 'Awaiting verification' };
+  // where a status that is not open is filed on the Predictions page: taken off the board, or an incomplete market
+  const STATUS_STATE = { suspended: 'incomplete', missing_matchup: 'incomplete', awaiting_verification: 'incomplete', provider_unavailable: 'incomplete',
+    closed: 'closed', started: 'closed', expired: 'closed', voided: 'closed', player_out: 'closed' };
+  const STATUS_GONE = { closed: 'Market closed', started: 'Awaiting result', expired: 'Awaiting result', voided: 'Voided', player_out: 'Voided' };
+  const ms = v => v == null || v === '' ? null : typeof v === 'number' ? (v > 1e11 ? v : v * 1000) : (Date.parse(v) || null);
+  /* gate(): the checks that depend on the clock, run on every market the server marked open, in every page, every time
+     it draws. p: a market (the server's row fields: status, start, verifiedAt, eventId). o: { now, injury: { lv } }.
+     -> { status, label, reason } ; status 'open' only when every check passes. Pure: the tests drive it. */
+  function gate(p, o = {}) {
+    const now = o.now ?? Date.now(), st = p.status || 'awaiting_verification';
+    const out = (status, reason) => ({ status, label: STATUS_LABEL[status], reason });
+    if (st !== 'open') return out(st, p.removalReason || p.reason || STATUS_LABEL[st]);
+    const start = ms(p.start);
+    if (!start) return out('missing_matchup', 'Game time not confirmed');
+    if (start <= now) return out('started', 'The game has started');
+    if (!p.eventId && p.matchup !== 'provider') return out('missing_matchup', 'No game on the league schedule');
+    if (o.injury?.lv === 'out') return out('player_out', `${p.name || p.player || 'The player'} is listed out`);
+    const at = ms(p.verifiedAt);
+    if (!at) return out('awaiting_verification', 'Not verified by the provider yet');
+    if (now - at > MAX_AGE) return out('awaiting_verification', `Not re-checked by the provider since ${clock(at, o.tz)}`);
+    return out('open', '');
+  }
+  /* the server's verdict, in verify()'s shape, for a market the verified service already checked */
+  function fromServer(p, o) {
+    const now = o.now ?? Date.now(), tz = o.tz || localTz(), g = gate(p, o), start = ms(p.start);
+    const at = ms(p.verifiedAt) || p.at || 0, price = now - at <= FRESH ? 'fresh' : 'stale';
+    const event = { id: p.eventId || '', start, teamId: p.teamId || '', team: p.teamName || p.team || '', teamAbbr: p.team || '', oppId: p.oppId || '', opp: p.oppName || p.opp || '', oppAbbr: p.opp || '',
+      oppNames: [], home: p.home ?? null, verified: p.matchup === 'provider' ? 'provider' : 'schedule' };
+    if (g.status === 'open') return { state: 'open', why: '', text: '', start, event, price, status: 'open' };
+    const state = STATUS_STATE[g.status] || 'incomplete';
+    return state === 'closed' ? { state, why: g.status, label: STATUS_GONE[g.status] || 'Market closed', text: g.reason, start, event, status: g.status }
+      : { state, why: g.status, text: g.reason, start, event, status: g.status };
+  }
+
   /* lines that were on the board and are missing from a fresh reading of the same sport: the provider stopped offering them */
   function withdrawn(before, picks, answered) {
     const have = new Set(picks.map(p => p.sk || p.id)), out = [];
@@ -200,7 +239,8 @@
     if (x.moved && x.moved.from != null && x.moved.to != null && x.moved.kind === 'line' && Math.abs(x.moved.to - x.moved.from) >= 1) add(.9, `Line moved from ${fmt(x.moved.from)} to ${fmt(x.moved.to)}`);
     const factor = cut.reduce((a, [f]) => a * f, 1);
     const edge = raw == null ? null : Math.round(raw * factor);
-    return { raw, edge, factor, reasons: cut.sort((a, b) => a[0] - b[0]).map(c => c[1]), strength: factor >= .75 ? 'strong' : factor >= .45 ? 'moderate' : 'limited' };
+    const cuts = cut.sort((a, b) => a[0] - b[0]);
+    return { raw, edge, factor, reasons: cuts.map(c => c[1]), cuts: cuts.map(c => [c[0], c[1]]), strength: factor >= .75 ? 'strong' : factor >= .45 ? 'moderate' : 'limited' };
   }
 
   /* ---------- the board's order and grouping ---------- */
@@ -244,7 +284,7 @@
     return { avail, report, start, tag, lv: lv || 'ok' };
   }
 
-  const api = { FRESH, MAX_AGE, SCHED_SPORTS, GONE, localTz, dayKey, dayDiff, dayWord, toMidnight, when, clock, findEvent, evStatus, verify, withdrawn, sample, supported, SORTS, arrange, playerKey, gameKey, availability };
+  const api = { STATUS, STATUS_LABEL, STATUS_STATE, gate, fromServer, FRESH, MAX_AGE, SCHED_SPORTS, GONE, localTz, dayKey, dayDiff, dayWord, toMidnight, when, clock, findEvent, evStatus, verify, withdrawn, sample, supported, SORTS, arrange, playerKey, gameKey, availability };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.flMarket = api;
 })(typeof window !== 'undefined' ? window : globalThis);

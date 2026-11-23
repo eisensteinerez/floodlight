@@ -291,7 +291,7 @@ def test_watch_alerts(tmp_path):
 
 
 # ---------- the Lab board takes the team from the record ----------
-def test_lab_board_rows_use_the_record(reg, monkeypatch):
+def test_lab_board_rows_use_the_record(reg, monkeypatch, tmp_path):
     import lab
     import discord_bot as B
     P.read_rosters("nba")
@@ -301,12 +301,18 @@ def test_lab_board_rows_use_the_record(reg, monkeypatch):
              "l5": {"pct": .6}, "l10": {"pct": .6, "n": 10, "hit": 6}, "l20": {"pct": .55}, "avg": 23.0, "offers": [{"book": "sleeper", "line": 22.5}], "recent": []}]
     monkeypatch.setattr(B, "memo", lambda key, ttl, fn: fn())
     monkeypatch.setattr(B, "props_board", lambda *a, **k: {"rows": rows, "lines": 2, "errors": {}})
-    b = lab.board("nba")
-    lbj, jb = b["rows"]
+    lbj, jb = lab.board_rows("nba", {"rows": rows})
     assert (lbj["team"], lbj["teamName"], lbj["teamStatus"], lbj["hold"], lbj["fid"]) == ("PHI", "Philadelphia 76ers", "verified", False, "nba:1966")
     assert jb["team"] == "PHI" and jb["bookTeam"] == "BOS" and jb["hold"] is True
     assert "providers_disagree" in jb["flags"] and "not_in_game" in jb["flags"] and "Sleeper lists BOS" in jb["teamNote"]
     assert jb["opp"] == "NY"   # both sides in ESPN's codes, so one game has one key
+    # through the verified market service: with no league schedule to check against nothing is open, and the held row
+    # waits for the team check (markets.py)
+    import markets
+    monkeypatch.setattr(markets, "D", dict(markets.D, schedule=None, injuries=None, file=tmp_path / "markets.json"))
+    monkeypatch.setattr(markets, "S", dict(markets.S, markets={}, seen={}, providers={}, schedules={}, injuries={}, loaded=True))
+    b = lab.board("nba")
+    assert not b["rows"] and b["verified"] and {x["player"]: x["status"] for x in b["removed"]} == {"LeBron James": "awaiting_verification", "Jaylen Brown": "awaiting_verification"}
 
 
 def test_lab_player_carries_the_record(reg, monkeypatch):

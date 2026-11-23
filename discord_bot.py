@@ -772,7 +772,7 @@ def props_board(sport, stat=None, count=10, deepen=None):
         list(ex.map(analyse, order))
     done = [r for n in order for r in players[n] if r.get("l10") and r["l10"]["pct"] is not None]
     done.sort(key=lambda r: (-(r["l10"]["pct"]), -(r["l20"]["pct"] or 0), -(r["l5"]["pct"] or 0)))
-    return {"rows": done[:count], "errors": d.get("errors") or {}, "lines": len(rows)}
+    return {"rows": done[:count], "errors": d.get("errors") or {}, "lines": len(rows), "fetched": d.get("fetched")}
 
 
 def cmd_props(o):

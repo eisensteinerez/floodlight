@@ -53,10 +53,10 @@
       ['Why does the team or opponent look wrong?', 'Trades and call-ups can take a day to reach every feed. Use Report incorrect data on the card, and the market details are attached for us automatically.'] ] },
     { id: 'predictions', title: 'Predictions and grading', qs: [
       ['How are predictions graded?', 'Each prediction is saved with its line, price and time before the game starts and can’t be changed afterwards. After the final, it’s graded from the official result as a hit, miss, push or void, with the source and time of grading kept beside it.'],
-      ['What happens when a grade is wrong?', 'An owner corrects it, the original grade stays visible next to the correction, and the change is listed in the public correction log on the Data status page.'],
+      ['What happens when a grade is wrong?', 'An owner corrects it, the original grade stays visible next to the correction, and the change is listed in the public correction log on the Trust and data page.'],
       ['Why is there no hit rate yet?', 'A hit rate from a handful of picks says almost nothing. Floodlight shows early results under 25 graded picks, adds a small-sample warning from 25 to 99, and publishes full reporting from 100.'] ] },
     { id: 'data', title: 'Data, sources and corrections', qs: [
-      ['Where do the numbers come from?', 'Scores, schedules and box scores from league and team feeds; lines and prices from sportsbooks and pick’em apps; injuries from official reports. The Data status page shows how fresh each source is right now.'],
+      ['Where do the numbers come from?', 'Scores, schedules and box scores from league and team feeds; lines and prices from sportsbooks and pick’em apps; injuries from official reports. The Trust and data page shows how fresh each source is right now.'],
       ['How do I report a wrong number?', 'Open the pick or line and choose Report incorrect data. The market ID, player, provider and when the line was last verified are attached for you, with your browser and device. Add a sentence on what looks wrong.'] ] },
     { id: 'account', title: 'Account and sign-in', qs: [
       ['I forgot my password', 'Contact support below and choose Getting into my account. Include your username and an email we can reach you at. Account recovery is answered within one business day.'],
