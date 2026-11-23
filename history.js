@@ -67,6 +67,16 @@
   }
   const all = (matches, props, upcoming) => [...(matches || []).map(fromMatch), ...(props || []).map(fromProp), ...(upcoming || []).map(fromUpcoming)].sort((a, b) => b.t - a.t);
   const graded = e => e.result === 'won' || e.result === 'lost';
+  /* "Locked before start": the pick's first reading was saved before the game began, it was locked with those numbers,
+     and the result was put on it by the grader (server or GitHub) from the final score or box score, not typed in. */
+  const AUTO = new Set(['server', 'github']);
+  function verified(e) {
+    const r = e.raw || e, start = e.t || r.ko || r.start, first = r.first?.at || r.made || 0;
+    if (!start || !first || first >= start) return false;
+    if (e.kind === 'match' && !(r.locked && r.locked <= start + 60)) return false;
+    return ['won', 'lost', 'push', 'void'].includes(e.result) && AUTO.has(r.by);
+  }
+  const lockBadge = e => verified(e) ? `<span class="pl fl-lock" title="Saved ${esc(new Date((e.raw?.first?.at || e.raw?.made || e.made) * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}, before the start, and graded automatically from the final result">${ic('check', 12)}Locked before start</span>` : '';
   function stats(rows) {
     const g = rows.filter(graded), won = g.filter(e => e.result === 'won').length, priced = g.filter(e => e.mkt != null);
     const vs = priced.length ? (priced.filter(e => e.result === 'won').length / priced.length - priced.reduce((a, e) => a + e.mkt, 0) / priced.length) * 100 : null;
@@ -180,7 +190,7 @@
       return `<tr><td class="num hs-when">${esc(new Date(e.t * 1000).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }))}</td>
       <th scope="row"><b>${esc(e.title)}</b><small>${esc([e.sub, e.sport, e.kind === 'prop' ? e.providers.join(', ') : ''].filter(Boolean).join(' · '))}</small>${e.why && e.result && e.result !== 'won' ? `<small class="hs-why">${esc(e.why)}</small>` : ''}</th>
       <td class="r num">${e.ours == null ? '–' : pct(e.ours) + '%'}</td><td class="r num">${e.mkt == null ? '<span class="lb">–</span>' : pct(e.mkt) + '%'}</td>
-      <td class="hs-clv">${e.clv ? `<span class="${e.clv.beat ? 'hs-up' : 'hs-dn'}">${e.clv.beat ? 'Beat it' : 'Lost it'}</span><small>${esc(e.clvNote)}</small>` : '<span class="lb">–</span>'}</td><td class="hs-res">${resPill(e)}</td>
+      <td class="hs-clv">${e.clv ? `<span class="${e.clv.beat ? 'hs-up' : 'hs-dn'}">${e.clv.beat ? 'Beat it' : 'Lost it'}</span><small>${esc(e.clvNote)}</small>` : '<span class="lb">–</span>'}</td><td class="hs-res">${resPill(e)}${lockBadge(e)}</td>
       <td><button type="button" class="bt ghost sm" aria-expanded="${open}" aria-controls="${id}" data-hsrc="${esc(e.key)}" data-fk="rc-${esc(e.key)}">${open ? 'Hide receipt' : 'Receipt'}</button></td></tr>
       ${open ? `<tr class="hs-rc-row" id="${id}"><td colspan="7">${receipt(e)}</td></tr>` : ''}` };
     const small = S.n < SMALL, rateOk = S.n >= MIN_RATE;
@@ -221,5 +231,5 @@
     ev.preventDefault(); Hs.by = ks[n]; draw(); document.querySelector(`#pg-history [data-hsby="${ks[n]}"]`)?.focus();
   });
   window.flPages?.add('history', { title: 'Pick history', render, onShow() { load() } });
-  window.flHistory = { stats, state: Hs, all, graded, BY, MIN_RATE };
+  window.flHistory = { stats, state: Hs, all, graded, verified, lockBadge, BY, MIN_RATE };
 })();
