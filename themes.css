@@ -402,6 +402,9 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
    What makes each theme itself, on top of the shared skin. Values are tokens; team colours come from the data (--hc home, --ac away,
    and --hcs / --acs, the same two made safe for white type by cards.js). */
 :root[data-theme] .pg-title,:root[data-theme] .livebar h2{font-size:var(--title-size)!important}
+/* the giant title belongs to the front doors only: Home, the Lab's landing and the sport pages. Pages you work in
+   (Live, pick history, settings, parlays, predictions, members…) get a smaller one so the content starts higher */
+:root[data-theme] .flpage:not(#pg-lab) .pg-title{font-size:var(--title-dense)!important;line-height:1}
 .pg-title em{font-style:normal}
 :root[data-theme] .ftr{position:relative;overflow:hidden}
 :root[data-theme] .ftr .mx-t{min-width:0}
@@ -856,7 +859,7 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 .gs-none{margin:6px 10px 10px;padding:12px 14px;border:1px dashed var(--border-2);border-radius:var(--radius-tile)}
 .gs-none b{display:block;color:var(--text);font-weight:600;margin-bottom:4px}
 .gs-none p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
-.gs-back{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:24px;display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--radius-pill);background:var(--pop,var(--surface));border:1px solid var(--border-2);box-shadow:var(--shadow-pop);max-width:calc(100vw - 32px)}
+.gs-back{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:24px;display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--radius-pill);background:var(--raised);border:1px solid var(--border-2);box-shadow:var(--shadow-pop);max-width:calc(100vw - 32px)}
 .gs-back button{min-height:40px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-radius:var(--radius-pill);font:600 13px/1.2 var(--font-body);color:var(--text);background:transparent;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gs-back .gs-back-x{padding:0;width:40px;justify-content:center;color:var(--muted)}
 .gs-back button:hover,.gs-back button:focus-visible{background:var(--surface-2)}
@@ -864,9 +867,10 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 @media (pointer:coarse){.gs-back button{min-height:44px}.gs-back .gs-back-x{width:44px}}
 
 /* honest states: offline / signed out bar, and the note on a placeholder that is taking too long (2026-11-23) */
-.fl-netbar{position:fixed;z-index:70;left:50%;top:12px;transform:translateX(-50%);display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--radius-tile);background:var(--pop,var(--surface));border:1px solid var(--border-2);border-left:4px solid var(--warn,var(--accent));box-shadow:var(--shadow-pop);font:500 14px/1.4 var(--font-body);color:var(--text-2)}
+.fl-netbar{position:fixed;z-index:70;left:50%;top:12px;transform:translateX(-50%);display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--radius-tile);background:var(--raised);border:1px solid var(--border-2);border-left:4px solid var(--warning);box-shadow:var(--shadow-pop);font:500 14px/1.4 var(--font-body);color:var(--text-2)}
 .fl-netbar b{color:var(--text)}
-.fl-netbar[data-kind="online"]{border-left-color:var(--good)}
+.fl-netbar[data-kind="online"]{border-left-color:var(--success)}
+.fl-netbar[data-kind="auth"]{border-left-color:var(--error)}
 .fl-netbar[hidden]{display:none}
 .fl-slow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin:0 0 12px;padding:10px 14px;border:1px dashed var(--border-2);border-radius:var(--radius-tile);font:500 14px/1.45 var(--font-body);color:var(--text-2)}
 .fl-slow p{margin:0}.fl-slow b{color:var(--text)}

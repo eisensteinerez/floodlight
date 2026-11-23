@@ -162,7 +162,19 @@
   --board-fg:var(--text); --board-bg:transparent;
   --ease:cubic-bezier(.2,.8,.2,1); --spring:var(--ease);
   --team-a:#2B59FF; --team-b:#0E1116;
+  /* the plain names: one word for each job a colour does, so new components never need a raw colour */
+  --raised:var(--pop); --text-secondary:var(--text-2); --success:var(--good); --error:var(--bad);
+  --chart-1:var(--lm-1); --chart-2:var(--lm-2); --chart-3:var(--lm-3); --chart-4:var(--lm-4);
+  --scrim:rgba(0,0,0,.62);
+  --title-dense:clamp(32px,4.2vw,48px);   /* the page title on working pages; --title-size is kept for the front doors */
+  /* referee cards are the same yellow and red in every theme, the way a team's colours are the team's */
+  --card-yellow:#E8C21A; --card-red:#D7332B;
 }
+/* Stadium Gold's condensed poster face needs a little more size to carry a working page's title */
+:root[data-theme="stadium-gold"],[data-theme-preview="stadium-gold"]{--title-dense:clamp(42px,5.4vw,64px)}
+/* warning reads as amber: bright on the dark themes, deep enough on the light ones to pass as text */
+:root[data-scheme="dark"],.tok-scope[data-scheme="dark"]{--warning:#F2B544}
+:root[data-scheme="light"],.tok-scope[data-scheme="light"]{--warning:#8A5A00}
 /* the heat ramp as one gradient, ice to fire, for gauges and legends */
 :root[data-theme]{--heat-ramp:linear-gradient(90deg,var(--heat-ice),var(--heat-mid) 50%,var(--heat-warm) 75%,var(--heat-fire))}
 /* Aurora Glass is frosted glass where the browser can blur what sits behind a card, and a solid panel where it cannot */
