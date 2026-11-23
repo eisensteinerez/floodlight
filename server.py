@@ -53,6 +53,7 @@ import storage
 import discord_bot
 import lab
 import record
+import propbook
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -1266,7 +1267,7 @@ def service_for(path):
         return "profiles"
     if path.startswith(("/api/tm/transfers/", "/api/transfers/")):
         return "transfers"
-    if path in ("/api/forecast/list", "/api/record", "/api/parlays") or path.startswith("/api/picks/"):
+    if path in ("/api/forecast/list", "/api/record", "/api/props/record", "/api/props/seen", "/api/parlays") or path.startswith("/api/picks/"):
         return "predictions"
     if path.startswith(("/api/dfs/", "/api/forecast/")):
         return "lab"
@@ -1934,6 +1935,11 @@ class Handler(SimpleHTTPRequestHandler):
             if GATED and not user:
                 return self.send_auth(401, {"error": "Log in first."})
             return self.send_auth(*add_feedback(body, user))
+        if u.path == "/api/props/seen":   # the props the Predictions page showed, locked in for grading (propbook.py)
+            if GATED and not (user and has(user, "predictions")):
+                return self.send_auth(200, {"ok": True, "added": 0})
+            items = body.get("props") if isinstance(body.get("props"), list) else []
+            return self.send_auth(200, {"ok": True, "added": propbook.seen(items)})
         if u.path == "/api/forecast/track":
             if not can_research(user):
                 return self.send_auth(200, {"ok": True, "added": 0})
@@ -2102,6 +2108,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(200, {"awards": awards_for(q["sport"], q["id"])})
             if u.path == "/api/record":   # Floodlight's own graded predictions (record.py)
                 return self.send_json({"entries": record.entries(), "summary": record.summary(), "now": int(time.time())}, max_age=60)
+            if u.path == "/api/props/record":   # every prop the Predictions page showed, locked before the start and graded (propbook.py)
+                return self.send_json({"entries": propbook.entries(since=time.time() - 120 * 86400), "now": int(time.time())}, max_age=60)
             if u.path == "/api/forecast/get":
                 keys = [k for k in q.get("keys", "").split(",") if re.fullmatch(r"(soccer|football):[A-Za-z0-9_-]{1,24}", k)][:40]
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
@@ -2316,6 +2324,9 @@ if __name__ == "__main__":
     forecaster.setup(odds=odds, fetch=fetch, similar=similar, tm_squad=tm_squad, fm_team=fm_team, fm_league=fm_league,
                      users=lambda: _users, cache_dir=CACHE_DIR)
     record.setup(fetch=fetch, fm_matchstats=fm_matchstats, forecaster=forecaster, cache_dir=CACHE_DIR)
+    import pick_grade   # the Discord pick grader grades the site's props too
+    pick_grade.D["fetch"] = fetch
+    propbook.setup(cache_dir=CACHE_DIR, board=lab.board, grade=pick_grade.grade_prop, mlb=propbook.mlb_grade(discord_bot))
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
                           odds=odds, dfs=dfs, record=record, forecaster=forecaster, fm_team=fm_team, cache_dir=CACHE_DIR)
