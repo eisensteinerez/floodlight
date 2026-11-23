@@ -22,6 +22,27 @@
   /* a match forecast blends our model with the market: the range is the span between the two */
   function matchRange(p, snap) { const k = p.m.pick, mine = snap?.model?.pH != null && k !== 'draw' ? (k === 'home' ? snap.model.pH : 1 - snap.model.pH) : null, xs = [p.ours, p.market, mine].filter(v => v != null); return xs.length > 1 ? { lo: Math.min(...xs), hi: Math.max(...xs), model: mine } : null }
 
+  /* moving the line on the game log: recount over, under and push for the games shown. Counting only, no new estimate. */
+  const tryText = (log, line, posted) => { const o = log.filter(g => g.v > line).length, u = log.filter(g => g.v < line).length, ps = log.length - o - u;
+    return `<b class="num">Line ${fmt(line)}</b>${line === posted ? ' <span class="lb">posted</span>' : ''} · Over <b class="num">${o}</b> · Under <b class="num">${u}</b>${ps ? ` · Push <b class="num">${ps}</b>` : ''} <span class="lb">of the last ${log.length}</span>` };
+  function setLine(box, line) {
+    const top = +box.dataset.evtop, posted = +box.dataset.evposted, over = box.dataset.evside === 'over', wrap = box.parentElement;
+    line = Math.max(.5, Math.min(Math.round(line * 2) / 2, Math.ceil(top / 1.12) + .5));
+    const mark = box.querySelector('.ev-line'); mark.style.bottom = (line / top * 100).toFixed(1) + '%'; mark.querySelector('i').textContent = fmt(line); mark.classList.toggle('moved', line !== posted);
+    const bars = [...box.querySelectorAll('.ev-bar')], log = bars.map(b => ({ v: +b.dataset.v }));
+    bars.forEach(b => { const v = +b.dataset.v; b.classList.remove('hit', 'miss', 'push'); b.classList.add(v === line ? 'push' : (over ? v > line : v < line) ? 'hit' : 'miss') });
+    const out = wrap.querySelector('.ev-tryout'), sl = wrap.querySelector('[data-evline]'), rs = wrap.querySelector('[data-evreset]');
+    if (out) out.innerHTML = tryText(log, line, posted); if (sl && +sl.value !== line) sl.value = line; if (rs) rs.hidden = line === posted;
+  }
+  document.addEventListener('input', ev => { if (ev.target.matches?.('[data-evline]')) { const box = ev.target.closest('.ev-sec')?.querySelector('.ev-log'); if (box) setLine(box, +ev.target.value) } });
+  document.addEventListener('click', ev => { const r = ev.target.closest?.('[data-evreset]'); if (r) { const box = r.closest('.ev-sec')?.querySelector('.ev-log'); if (box) { setLine(box, +box.dataset.evposted); r.closest('.ev-try')?.querySelector('[data-evline]')?.focus() } } });
+  let dragBox = null;
+  const fromY = (box, y) => { const r = box.getBoundingClientRect(), cs = getComputedStyle(box), pt = parseFloat(cs.paddingTop), pb = parseFloat(cs.paddingBottom), h = r.height - pt - pb; return (1 - (y - r.top - pt) / h) * +box.dataset.evtop };
+  document.addEventListener('pointerdown', ev => { const box = ev.target.closest?.('.ev-log.drag'); if (!box) return; dragBox = box; box.classList.add('dragging'); setLine(box, fromY(box, ev.clientY)); ev.preventDefault() });
+  document.addEventListener('pointermove', ev => { if (dragBox) setLine(dragBox, fromY(dragBox, ev.clientY)) });
+  document.addEventListener('pointerup', () => { dragBox?.classList.remove('dragging'); dragBox = null });
+  document.addEventListener('pointercancel', () => { dragBox?.classList.remove('dragging'); dragBox = null });
+
   /* ---------- a player prop ---------- */
   function prop(p) {
     const gs = (p.games || []).filter(g => g.v != null), over = p.side === 'over', hit = g => over ? g.v > p.line : g.v < p.line, push = g => g.v === p.line;
@@ -29,10 +50,14 @@
     const word = p.yes ? (over ? 'Yes' : 'No') : over ? 'Over' : 'Under', R = propRange(p);
     // the log: the last 20, oldest on the left, each against the line
     const log = gs.slice(0, 20).reverse(), top = Math.max(p.line, ...log.map(g => g.v)) * 1.12 || 1, lineY = p.line / top * 100;
-    const bars = `<div class="ev-log" role="img" aria-label="Last ${log.length} games, oldest first: ${esc(log.map(g => fmt(g.v)).join(', '))}. Line ${fmt(p.line)}.">
+    const vmax = Math.ceil(Math.max(p.line, ...log.map(g => g.v))), canTry = !p.yes && vmax > 1;
+    const bars = `<div class="ev-log${canTry ? ' drag' : ''}" data-evtop="${top}" data-evposted="${p.line}" data-evside="${over ? 'over' : 'under'}" role="img" aria-label="Last ${log.length} games, oldest first: ${esc(log.map(g => fmt(g.v)).join(', '))}. Line ${fmt(p.line)}.">
       <span class="ev-line" style="bottom:${lineY.toFixed(1)}%"><i class="num">${fmt(p.line)}</i></span>
-      ${log.map(g => `<span class="ev-bar ${push(g) ? 'push' : hit(g) ? 'hit' : 'miss'}" title="${esc(`${fmt(g.v)}${g.oppAbbr ? ` ${g.home === false ? 'at' : 'v'} ${g.oppAbbr}` : ''}${g.min ? `, ${fmt(g.min)} min` : ''}`)}"><i style="height:${Math.max(2, g.v / top * 100).toFixed(1)}%"><b class="num">${fmt(g.v)}</b></i><small>${esc(g.oppAbbr || '')}</small></span>`).join('')}</div>
-      <div class="pd-leg" aria-hidden="true"><span><i class="hit"></i>${word}</span><span><i class="said"></i>${p.yes ? (over ? 'No' : 'Yes') : over ? 'Under' : 'Over'}</span><span class="lb">Oldest on the left, newest on the right</span></div>`;
+      ${log.map(g => `<span class="ev-bar ${push(g) ? 'push' : hit(g) ? 'hit' : 'miss'}" data-v="${g.v}" title="${esc(`${fmt(g.v)}${g.oppAbbr ? ` ${g.home === false ? 'at' : 'v'} ${g.oppAbbr}` : ''}${g.min ? `, ${fmt(g.min)} min` : ''}`)}"><i style="height:${Math.max(2, g.v / top * 100).toFixed(1)}%"><b class="num">${fmt(g.v)}</b></i><small>${esc(g.oppAbbr || '')}</small></span>`).join('')}</div>
+      <div class="pd-leg" aria-hidden="true"><span><i class="hit"></i>${word}</span><span><i class="said"></i>${p.yes ? (over ? 'No' : 'Yes') : over ? 'Under' : 'Over'}</span><span class="lb">Oldest on the left, newest on the right</span></div>
+      ${canTry ? `<div class="ev-try"><label><span>Try another line</span><input type="range" min="0.5" max="${vmax + 0.5}" step="0.5" value="${p.line}" data-evline aria-describedby="evTryOut"></label>
+        <output class="ev-tryout" id="evTryOut" aria-live="polite">${tryText(log, p.line, p.line)}</output><button type="button" class="lk" data-evreset hidden>Back to the posted line</button></div>
+        <p class="lb">Drag the dashed line on the chart, or use the slider, to see how the last ${log.length} games fall against any line. This only recounts the games shown; our number above stays tied to the posted line.</p>` : ''}`;
     // counts for the side picked
     const count = (xs, label) => { const d = xs.filter(g => !push(g)), h = d.filter(hit).length, ps = xs.length - d.length; return d.length ? { label, h, n: d.length, ps, rate: h / d.length } : null };
     const rows = [count(gs.slice(0, 5), 'Last 5'), count(gs.slice(0, 10), 'Last 10'), count(gs.slice(0, 20), 'Last 20'), gs.length > 20 ? count(gs, `All ${gs.length}`) : null,

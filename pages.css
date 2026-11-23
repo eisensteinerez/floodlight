@@ -1411,3 +1411,12 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
 .py-exf dt{font:500 13px/1.3 var(--font-body);color:var(--text-2)}.py-exf dd{margin:0;font:var(--display-weight) clamp(26px,3vw,38px)/1 var(--font-display)}
 .py-new[hidden]{display:none}
 @media (max-width:560px){.py-exf{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- evidence: move the line on the game log ---------- */
+.ev-log.drag{cursor:ns-resize;touch-action:none;user-select:none}
+.ev-log.drag .ev-line{border-top-width:2px}.ev-log.drag .ev-line::before{content:"";position:absolute;left:0;right:0;top:-12px;height:24px}
+.ev-line.moved{border-top-color:var(--accent)}.ev-line.moved i{border-color:var(--accent)}
+.ev-try{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:12px 14px;border-radius:12px;background:var(--inset);border:1px solid var(--border)}
+.ev-try label{display:flex;align-items:center;gap:12px;font:600 14px/1.2 var(--font-body);flex:1 1 280px;min-height:44px}
+.ev-try input[type="range"]{flex:1;min-width:120px;accent-color:var(--accent)}
+.ev-tryout{font:500 14px/1.4 var(--font-body);color:var(--text-2)}.ev-tryout b{color:var(--text)}
