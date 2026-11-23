@@ -170,7 +170,7 @@
     label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
     a: { name: g.a.name, ab: g.a.ab, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, ab: g.b.ab, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date });
-  const noSpoil = f => { if (f.state === 'pre' || !window.flMC?.spoil(f.id)) return f; f.spoil = true; f.label = f.label.replace(/ \S+ to \S+ /, ' v ') + ', score hidden'; for (const t of [f.a, f.b]) { t.lose = false; t.win = false } return f };
+  const noSpoil = f => { if (f.state === 'pre' || !window.flMC?.spoil(f.id)) return f; f.spoil = true; f.label = f.label.replace(/ \S+ to \S+ /, ' v ') + ', score hidden by spoiler-free mode'; for (const t of [f.a, f.b]) { t.lose = false; t.win = false } return f };
   const hubAttr = g => `data-hub="${esc(g.sport)}|${esc(g.lg || '')}|${esc(g.id)}"`;
   const card = g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g) });
   const ico = (k, s = 16) => (window.flShell?.ic ? window.flShell.ic(k, s) : '');

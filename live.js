@@ -27,14 +27,21 @@
     if (trail.rank && (!lead.rank || lead.rank > trail.rank)) return true;
     return trail.ml != null && trail.ml >= .65;
   }
-  const ONLY = [['all', 'Every game'], ['close', 'Close'], ['ot', 'Overtime'], ['upset', 'Upsets']];
+  /* Show only: each label says what it keeps without needing the row around it, and each has one line saying how a game
+     qualifies (read by screen readers with the button, shown in the empty state). */
+  const ONLY = [['all', 'Every game'], ['close', 'Close games'], ['upset', 'Potential upsets'], ['ot', 'Overtime'], ['tv', 'On TV'], ['mine', 'My teams'], ['pred', 'Predictions available']];
+  const ONLY_WHY = { all: 'No filter: every game for the day and sport you picked.', close: 'Games in play where the margin is within a score or two for the sport.',
+    upset: 'Games where a ranked team or the betting favourite is behind.', ot: 'Games that went to overtime, extra time or a shootout.', tv: 'Games on a national TV network in the US listing.',
+    mine: 'Games of the teams you follow and games on your watchlist.', pred: 'Games Floodlight has published a pre-game prediction for.' };
+  const ONLY_NONE = { close: 'close games', upset: 'potential upsets', ot: 'games in overtime', tv: 'games on national TV', mine: 'games from your teams', pred: 'games with a prediction' };
   /* Where to watch: national TV, local TV (a team's regional network or station), streaming, free, subscription, or not
      known. broadcast.js sorts each game's channels from the feed's own market and type, so a regional network or a
      team's app is never counted as national. */
   const WATCH = window.flTV?.FILTERS || [['any', 'Any']];
   const watchOk = g => !window.flTV || window.flTV.test(L.watch, g.watch);
   const nat = g => !!g.tvNat, onAir = g => !!(g.watch ? g.watch.all.length : g.tv);
-  const ONLY_F = { all: () => true, close: isClose, ot: isOT, upset };
+  const hasPick = g => !!window.flMC?.hasPick?.(g);
+  const ONLY_F = { all: () => true, close: isClose, ot: isOT, upset, tv: g => nat(g), mine: g => mine(g), pred: hasPick };
   // when each game's score last changed, seen from this tab; the "just scored" sort and tag read it
   const scored = new Map(), lastScore = new Map();
   function track() { const now = Date.now(); for (const g of hub()?.games() || []) { if (g.state === 'pre') continue; const k = `${g.a.score}-${g.b.score}`, was = lastScore.get(g.key); if (was != null && was !== k) scored.set(g.key, now); lastScore.set(g.key, k) } }
@@ -119,7 +126,7 @@
     const wName = (WATCH.find(x => x[0] === L.watch) || [])[1] || '';
     const sp = L.sport !== 'all' ? `${sName.toLowerCase()} ` : '';
     const none = L.watch !== 'any' && L.only === 'all' ? [`No ${sp}games ${show === 'live' ? 'live right now' : show === 'next' ? 'to come' : 'among the results'} match “${wName}”`, L.watch === 'unknown' ? 'Every game here lists at least one channel.' : 'The feed lists US channels only; a game with no listing shows under “Unknown availability”.', 'watch:any', `Clear “${wName}”`]
-      : L.only !== 'all' ? [`No ${sp}${{ close: 'close games', ot: 'games in overtime', upset: 'upsets' }[L.only]} ${show === 'live' ? 'right now' : show === 'next' ? 'to come' : 'among the results'}`, L.only === 'close' ? 'A game counts as close when the margin is within a score or two for its sport.' : L.only === 'ot' ? 'Games that go to overtime, extra time or a shootout show here.' : 'A ranked team or the market’s clear favourite behind shows here.', 'only:all', `Clear “${{ close: 'Close', ot: 'Overtime', upset: 'Upsets' }[L.only]}”`]
+      : L.only !== 'all' ? [`No ${sp}${ONLY_NONE[L.only] || 'games'} ${show === 'live' ? 'right now' : show === 'next' ? 'to come' : 'among the results'}`, ONLY_WHY[L.only] || '', 'only:all', `Clear “${(ONLY.find(x => x[0] === L.only) || [])[1] || ''}”`]
       : show === 'live' ? [`No ${sp}games are live right now`, next.filter(inSport)[0] ? `Next up: ${next.filter(inSport)[0].a.name} v ${next.filter(inSport)[0].b.name} at ${next.filter(inSport)[0].date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : 'Nothing else is scheduled today in this sport.', 'show:next', 'See what is up next']
       : show === 'next' ? [today ? 'Nothing more to start today' : `Nothing scheduled ${dayLabel(L.day).toLowerCase()}`, today ? 'Every game on today’s board has started or finished.' : 'Pick another day above.', today ? 'show:live' : 'day:0', today ? 'See what is live' : 'Back to today']
       : [today ? 'Nothing has finished yet' : 'No results for this day', today ? 'Results from today’s games collect here.' : 'Pick another day above.', today ? 'show:live' : 'day:0', today ? 'See what is live' : 'Back to today'];
@@ -129,15 +136,16 @@
     // the 30-second refresh patches the page in place (morph.js), so a card, a switch or the menu the reader is on is not rebuilt
     (window.flMorph ? h => window.flMorph(el, h) : h => { el.innerHTML = h })(`<header class="pg-head"><div><h1 class="pg-title">Live${today ? '' : ` · ${dayLabel(L.day)}`}</h1><p class="pg-sub">${today ? 'Every game in play, in every sport. Scores update on their own.' : L.day < 0 ? 'Yesterday’s results, in every sport.' : 'Tomorrow’s schedule, in every sport.'}</p></div>
         <div class="lv-head-r"><div class="seg" role="radiogroup" aria-label="Day">${[-1, 0, 1].map(o => `<button type="button" role="radio" aria-checked="${L.day === o}" class="${L.day === o ? 'on' : ''}" tabindex="${L.day === o ? 0 : -1}" data-liveday="${o}">${dayLabel(o)}</button>`).join('')}</div>
-        ${today ? `<div class="seg" role="radiogroup" aria-label="Show">${[['live', `Live${live.length + ufcLive.length ? ` · ${live.length + ufcLive.length}` : ''}`], ['next', 'Up next'], ['done', 'Finished']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${L.show === k}" class="${L.show === k ? 'on' : ''}" tabindex="${L.show === k ? 0 : -1}" data-liveshow="${k}">${l}</button>`).join('')}</div>` : ''}</div></header>
+        ${today ? `<div class="seg" role="radiogroup" aria-label="Show">${[['live', `Live now${live.length + ufcLive.length ? ` · ${live.length + ufcLive.length}` : ''}`], ['next', 'Up next'], ['done', 'Finished']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${L.show === k}" class="${L.show === k ? 'on' : ''}" tabindex="${L.show === k ? 0 : -1}" data-liveshow="${k}">${l}</button>`).join('')}</div>` : ''}</div></header>
       <p class="lv-upd lb" aria-live="off">${at ? `<span class="dot-live" aria-hidden="true"></span><span>Updated <span data-lvago="${at}">${ago(at)}</span> · ${today ? (window.flSaver?.() ? 'data saver: refreshes every 2 minutes' : 'refreshes every 30 seconds') : 'scores for this day'}</span>` : 'Loading the scoreboards…'}</p>
       <div class="lv-opts"><div class="seg" role="radiogroup" aria-label="View">${[['cards', 'Cards'], ['compact', 'Compact']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${L.view === k}" class="${L.view === k ? 'on' : ''}" tabindex="${L.view === k ? 0 : -1}" data-liveview="${k}">${l}</button>`).join('')}</div>
         <label class="lv-sp"><input class="sw" type="checkbox" role="switch" id="lvSpoil" ${window.flMC?.spoilAll() ? 'checked' : ''}> Spoiler-free <span class="lb">hide scores until I reveal them</span></label></div>
       <div class="cx-row scroll" role="group" aria-label="Sport">${SPORTS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${L.sport === k}" data-livesport="${k}">${esc(l)}${count(k) ? `<b class="lv-n num" aria-label="${count(k)} live">${count(k)}</b>` : ''}</button>`).join('')}</div>
-      <div class="lv-filt"><div class="cx-row" role="group" aria-label="Show only">${ONLY.map(([k, l]) => `<button type="button" class="cx sm" aria-pressed="${L.only === k}" data-liveonly="${k}">${esc(l)}</button>`).join('')}</div>
+      <div class="lv-filt"><div class="cx-row scroll lv-only" role="group" aria-label="Show only">${ONLY.map(([k, l]) => `<button type="button" class="cx sm" aria-pressed="${L.only === k}" data-liveonly="${k}" aria-describedby="lvWhy-${k}" title="${esc(ONLY_WHY[k])}">${esc(l)}</button>`).join('')}</div>
+        <div hidden>${ONLY.map(([k]) => `<span id="lvWhy-${k}">${esc(ONLY_WHY[k])}</span>`).join('')}</div>
         <div class="lv-sels">${window.flTV ? `<label class="fl-f lv-sort lv-watch"><span class="lb">Watch</span><select class="inp sm" id="lvWatch" aria-label="Where to watch">${WATCH.map(([k, l]) => `<option value="${k}"${L.watch === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}
         <label class="fl-f lv-sort"><span class="lb">Order</span><select class="inp sm" id="lvSort" aria-label="Order">${[...SORT_NAMES.slice(0, 1), ...(show === 'live' ? [['just', 'Just scored first']] : []), ...SORT_NAMES.slice(1)].filter(([k]) => !(show === 'done' && k === 'soon')).map(([k, l]) => `<option value="${k}"${L.sort === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div></div>
-      ${filtered ? `<p class="lv-scope" role="status"><b>${esc([sName && L.sport !== 'all' ? sName : 'All sports', L.only !== 'all' ? { close: 'close games', ot: 'games in overtime', upset: 'upsets' }[L.only] : '', L.watch !== 'any' ? wName : ''].filter(Boolean).join(', '))}</b> · ${list.length + (L.sport === 'ufc' ? ufcLive.length : 0)} shown<button type="button" class="lk" data-livereset>Show everything</button></p>` : ''}
+      ${filtered ? `<p class="lv-scope" role="status"><b>${esc([sName && L.sport !== 'all' ? sName : 'All sports', L.only !== 'all' ? ONLY_NONE[L.only] || '' : '', L.watch !== 'any' ? wName : ''].filter(Boolean).join(', '))}</b> · ${list.length + (L.sport === 'ufc' ? ufcLive.length : 0)} shown<button type="button" class="lk" data-livereset>Show everything</button></p>` : ''}
       ${!ready ? `<div class="g4">${'<div class="skl hm-card-skl"></div>'.repeat(8)}</div>`
         : !list.length && !ufcBlock ? `<div class="card emp">${ic('live', 30)}<b>${none[0]}</b><p>${esc(none[1])}</p><button type="button" class="bt ghost" data-livego2="${none[2]}">${none[3]}</button></div>`
         : `${ufcBlock}${arrange(list, show)}`}
@@ -151,14 +159,14 @@
     a: { name: g.a.name, ab: g.a.ab, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, ab: g.b.ab, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date, ...(g.state !== 'pre' && window.flMC?.spoil(g.key) ? { spoil: true } : {}) });
   // the compact view: one line a game, for scanning a long night
-  const row = g => { const sp = g.state !== 'pre' && window.flMC?.spoil(g.key), t = (x, o) => `<span class="lv-t${!sp && g.state === 'post' && o.winner ? ' lose' : ''}">${x.logo ? `<img src="${esc(x.logo)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : '<i></i>'}<span>${x.rank ? `<em>${esc(x.rank)}</em> ` : ''}${esc(x.name)}</span>${g.state === 'pre' ? '' : `<b class="num">${sp ? '–' : esc(x.score)}</b>`}</span>`;
-    return `<button type="button" class="lv-row${g.state === 'in' ? ' is-live' : ''}" ${hubAttr(g)} aria-label="${esc(`${g.a.full || g.a.name} ${g.state === 'pre' || sp ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}${sp ? ', score hidden' : ''}`)}">
+  const row = g => { const sp = g.state !== 'pre' && window.flMC?.spoil(g.key), t = (x, o) => `<span class="lv-t${!sp && g.state === 'post' && o.winner ? ' lose' : ''}">${x.logo ? `<img src="${esc(x.logo)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : '<i></i>'}<span>${x.rank ? `<em>${esc(x.rank)}</em> ` : ''}${esc(x.name)}</span>${g.state === 'pre' ? '' : `<b class="num">${sp ? '<span aria-hidden="true">–</span><span class="sr-only">Score hidden by spoiler-free mode</span>' : esc(x.score)}</b>`}</span>`;
+    return `<button type="button" class="lv-row${g.state === 'in' ? ' is-live' : ''}" ${hubAttr(g)} aria-label="${esc(`${g.a.full || g.a.name} ${g.state === 'pre' || sp ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}${sp ? ', score hidden by spoiler-free mode' : ''}`)}">
       <span class="lv-when num${g.state === 'in' ? ' on' : ''}">${g.state === 'pre' ? esc(g.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : esc(g.state === 'in' ? g.clock || 'Live' : sp ? 'Final' : g.final || 'Final')}</span>
       <span class="lv-ts">${t(g.a, g.b)}${t(g.b, g.a)}</span>${g.tv ? `<span class="lb lv-tv">${esc(g.tv)}</span>` : ''}</button>` };
   const page = () => document.getElementById('pg-live');
   const redraw = () => { const el = page(); if (!el || el.hidden) return; const a = document.activeElement, key = el.contains(a) ? a.id === 'lvSpoil' || a.id === 'lvSort' || a.id === 'lvWatch' ? '#' + a.id : ['data-live', 'data-livesport', 'data-liveshow', 'data-liveview', 'data-liveonly', 'data-liveday', 'data-livefold'].map(k => a.hasAttribute(k) ? `[${k}="${CSS.escape(a.getAttribute(k))}"]` : '').find(Boolean) : null;
     render(el); if (key) el.querySelector(key)?.focus({ preventScroll: true }) };
-  document.addEventListener('fl:hub', () => { track(); redraw() }); document.addEventListener('fl:hubday', redraw); document.addEventListener('fl:spoil', redraw);
+  document.addEventListener('fl:hub', () => { track(); redraw() }); document.addEventListener('fl:hubday', redraw); document.addEventListener('fl:spoil', redraw); document.addEventListener('fl:fc', () => { if (L.only === 'pred') redraw() });
   document.addEventListener('change', ev => { if (ev.target.id === 'lvSpoil') window.flMC?.setSpoilAll(ev.target.checked); if (ev.target.id === 'lvSort') { L.sort = ev.target.value; keep(); redraw(); document.getElementById('lvSort')?.focus() }
     if (ev.target.id === 'lvWatch') { L.watch = ev.target.value; L.more.clear(); keep(); redraw(); document.getElementById('lvWatch')?.focus() } });
   document.addEventListener('click', ev => {

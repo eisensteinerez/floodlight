@@ -44,7 +44,7 @@
   function middle(o, big) {
     if (o.state === 'pre') { const cd = o.date && !o.note ? untilText(+o.date) : '';
       return `<span class="mx-mid pre">${big ? dial(o) : ''}<b class="mx-time num">${o.time ? esc(o.time) : o.date ? time(o.date) : ''}</b>${cd ? `<small class="mx-cd num" data-cd="${+o.date}">${cd}</small>` : `<small>${esc(o.sub || (o.date ? o.date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) : ''))}</small>`}</span>` }
-    if (o.spoil) return `<span class="mx-mid spoil">${big ? dial({ ...o, clock: '', progress: 0 }) : ''}<span class="mx-sc num"><b>–</b><i>:</i><b>–</b></span><small>${o.state === 'in' && o.clock ? `${esc(o.clock)} · ` : ''}Score hidden</small></span>`;   // spoiler-free: the clock stays, it gives nothing away
+    if (o.spoil) return `<span class="mx-mid spoil">${big ? dial({ ...o, clock: '', progress: 0 }) : ''}<span class="mx-sc num" aria-hidden="true"><b>–</b><i>:</i><b>–</b></span><small>${o.state === 'in' && o.clock ? `${esc(o.clock)} · ` : ''}Score hidden<span class="sr-only"> by spoiler-free mode</span></small></span>`;   // spoiler-free: the clock stays, it gives nothing away
     const [fa, fb] = o.state === 'in' ? bump(o.id, String(o.a.score), String(o.b.score)) : [false, false];
     return `<span class="mx-mid">${big ? dial(o) : ''}<span class="mx-sc num" style="--sc-n:${String(o.a.score ?? '').length + String(o.b.score ?? '').length + 1}"><b class="${o.a.lose ? 'lose' : ''}${fa ? ' bump' : ''}">${esc(o.a.score)}</b><i>:</i><b class="${o.b.lose ? 'lose' : ''}${fb ? ' bump' : ''}">${esc(o.b.score)}</b></span><small class="${o.state === 'in' ? 'on' : ''}">${esc(o.state === 'in' ? o.clock : o.final || 'Final')}</small></span>`;
   }

@@ -136,7 +136,7 @@
   function loadFc() {
     if (FC.busy || (FC.list && Date.now() - FC.at < 600000)) return;
     FC.busy = true;
-    fetch('/api/forecast/list', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(d => { FC.list = d?.matches || []; FC.at = Date.now() }, () => { FC.list = FC.list || [] }).finally(() => { FC.busy = false; if (!host.hidden) paint() });
+    fetch('/api/forecast/list', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(d => { FC.list = d?.matches || []; FC.at = Date.now() }, () => { FC.list = FC.list || [] }).finally(() => { FC.busy = false; if (!host.hidden) paint(); document.dispatchEvent(new CustomEvent('fl:fc')) });
   }
   function fcFor(g, d) {
     if (!FC.list) return null;
@@ -579,5 +579,7 @@
     if (open({ sport, id }, t)) { ev.stopPropagation(); ev.preventDefault() }
   }, true);
 
-  window.flMC = { open, close, spoil, previewScores, setSpoil, setSpoilAll, spoilAll: () => !!SP.all, state: M, can: s => CAN.has(s) };
+  // whether Floodlight published a pick for this game (Live's "Predictions available"); the list loads on first ask
+  const hasPick = g => { if (!FC.list) { loadFc(); return false } return !!fcFor(g, null)?.pick };
+  window.flMC = { hasPick, open, close, spoil, previewScores, setSpoil, setSpoilAll, spoilAll: () => !!SP.all, state: M, can: s => CAN.has(s) };
 })();
