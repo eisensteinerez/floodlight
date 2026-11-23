@@ -35,7 +35,9 @@
     const start = r.start ? new Date(r.start) : null;
     return { id: `prop:${sport}:${r.player}:${r.k}:${r.line}`, type: 'prop', sport, name: r.player, team: r.team || '', opp: r.opp || '', photo: r.photo || '',
       k: r.k, label: r.label, line: r.line, side, yes, text: yes ? `${r.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(r.line)} ${String(r.label).toLowerCase()}`,
-      ours, market, edge: market == null ? null : pct(ours) - pct(market), heat: pct(ours), conf: J.conf, n: J.n, reasons: reasons.slice(0, 3),
+      ours, market, edge: market == null ? null : pct(ours) - pct(market), heat: pct(ours), n: J.n, reasons: reasons.slice(0, 3),
+      // the books' team and the team of the player whose games were read disagree: the reading may be someone else's, so it is low confidence and says why
+      conf: r.teamOk === false ? 'low' : J.conf, teamNote: r.teamOk === false ? (r.teamNote || 'The books’ team for this player does not match the team the stats come from.') : '',
       start: start && !isNaN(start) ? start : null, game: [r.team, r.opp].filter(Boolean).join(' v '), gameKey: `${sport}:${[r.team, r.opp].filter(Boolean).sort().join('|') || r.player}`,
       books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), avg: r.avg, mu: J.mu, sd: J.sd,
       games: games.slice(0, 60), offers: r.offers || [], neff: J.neff };   // the games and prices behind the reading, for the evidence panel   // mu and sd: what the reading expects, used to follow the pick live

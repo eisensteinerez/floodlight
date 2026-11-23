@@ -1690,3 +1690,7 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-ev{padding:4px 26px 22px;border-
 @media (max-width:820px){.lc-slots{grid-template-columns:minmax(0,1fr)}.lc-vs{justify-self:center}.lc-cols{grid-template-columns:minmax(0,1fr)}.lc-dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (prefers-reduced-motion:reduce){.lc-slot{transition:none}}
 .lc-none{margin:0;padding:24px 12px;text-align:center;border-radius:var(--radius-tile);background:var(--surface-2);color:var(--text-2)}
+
+/* ---------- Team check: the books' team and the stats' team disagree ---------- */
+.ev-warn{margin:0 0 12px;padding:10px 12px;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);line-height:1.45}
+.ev-warn b{color:var(--text)}

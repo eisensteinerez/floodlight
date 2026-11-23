@@ -46,7 +46,8 @@
   /* ---------- a player prop ---------- */
   function prop(p) {
     const gs = (p.games || []).filter(g => g.v != null), over = p.side === 'over', hit = g => over ? g.v > p.line : g.v < p.line, push = g => g.v === p.line;
-    if (!gs.length) return `<p class="lb">The games behind this line were not kept with it. Open it in the Lab to see the full log.</p>`;
+    const warn = p.teamNote ? `<p class="ev-warn" role="note"><b>Team check.</b> ${esc(p.teamNote)}</p>` : '';
+    if (!gs.length) return warn + `<p class="lb">The games behind this line were not kept with it. Open it in the Lab to see the full log.</p>`;
     const word = p.yes ? (over ? 'Yes' : 'No') : over ? 'Over' : 'Under', R = propRange(p);
     // the log: the last 20, oldest on the left, each against the line
     const log = gs.slice(0, 20).reverse(), top = Math.max(p.line, ...log.map(g => g.v)) * 1.12 || 1, lineY = p.line / top * 100;
@@ -86,7 +87,7 @@
       m5 && mAll && mins.length >= 10 ? `It assumes about ${fmt(Math.round(m5))} minutes, the last-5 average (${fmt(Math.round(mAll))} over the whole log). A cut in minutes lowers every counting stat.` : '',
       p.market != null ? `The edge is ${p.edge > 0 ? '+' : ''}${p.edge} against a price read ${p.at ? ago(p.at) : 'earlier'}. If the app moves the line or the price, the edge moves with it.` : 'No app posts both sides of this line, so there is no market number to compare with.',
       'Not in this number: injuries, a changed role or starting lineup, rest days and anything announced after the games in the log.'].filter(Boolean);
-    return `<div class="ev-tiles">${tile('Our number', `${pct(p.ours)}%`, `Likely range ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'Margin taken out')}
+    return `${warn}<div class="ev-tiles">${tile('Our number', `${pct(p.ours)}%`, `Likely range ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'Margin taken out')}
         ${p.yes ? '' : tile('We project', fmt(Math.round(p.mu * 10) / 10), `Line ${fmt(p.line)}${p.sd ? ` · usually ${fmt(Math.max(0, Math.round((p.mu - p.sd) * 10) / 10))} to ${fmt(Math.round((p.mu + p.sd) * 10) / 10)}` : ''}`)}${tile('Games read', R.n, p.conf ? `${esc(p.conf)} confidence` : '')}</div>
       ${sec('Game log against the line', bars)}
       ${sec(`How often ${word.toLowerCase()} hit`, table)}

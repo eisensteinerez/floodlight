@@ -28,6 +28,7 @@ import urllib.parse
 import urllib.request
 
 import discord_bot as bot
+import teamcheck
 import labfight   # UFC and boxing fighters in the same shape as a player
 
 PASS_HOURS = 12
@@ -253,14 +254,18 @@ def player(sport, name, stat=""):
                 k = bot.stat_key(sport, x.get("stat"))
                 if k:
                     lines.append({"k": k, "line": x["line"], "book": x.get("book"), "kind": x.get("kind") or "standard", "pOver": x.get("pOver"),
-                                  "opp": x.get("opp") or "", "start": x.get("start") or ""})
+                                  "opp": x.get("opp") or "", "start": x.get("start") or "", "team": x.get("team") or ""})
     except Exception:
         pass
     ex = _extras(sport, p, name.strip())
+    # the books' team for this name against the team of the player whose games these are
+    book_team = next((x["team"] for x in lines if x.get("team")), "")
+    ok = teamcheck.same(sport, book_team, p.get("teamAbbr"))
+    team_note = teamcheck.note(sport, book_team, p.get("teamAbbr"), p.get("team"), "MLB" if sport == "mlb" else "ESPN")
     nxt = next(({"opp": x["opp"], "date": x["start"], "home": None} for x in lines if x.get("opp")), None)
     return {"sport": sport, "sportLabel": bot.SPORTS[sport], "name": p["name"], "team": p.get("team") or "", "photo": img_url(p.get("photo")),
             "crest": img_url(ex.get("crest")), "pos": " · ".join(x for x in (ex.get("num") and "#" + ex["num"], ex.get("pos")) if x), "next": nxt,
-            "want": bot.stat_key(sport, stat) if stat else None,
+            "want": bot.stat_key(sport, stat) if stat else None, "teamOk": ok, "teamNote": team_note, "bookTeam": book_team,
             "seasonStart": bot.season_start(sport).isoformat(), "stats": stats, "games": games, "lines": lines, "at": int(time.time())}
 
 
@@ -277,7 +282,10 @@ def board(sport, count=24):
              "games": [[_r(v), None if h is None else int(bool(h)), _r(m, 1), o, oa] for v, h, m, o, oa in r.get("recent") or []],
              "offers": [{"book": x.get("book"), "line": x.get("line"), "kind": x.get("kind") or "standard", "pOver": x.get("pOver")} for x in r["offers"]],
              "start": next((x.get("start") for x in r["offers"] if x.get("start")), None), "photo": img_url(r.get("photo")),
-             "n": r["l10"].get("n"), "hit": r["l10"].get("hit")} for r in b["rows"]]
+             "n": r["l10"].get("n"), "hit": r["l10"].get("hit"),
+             # the book's team against the team of the player whose games were read (None: can't tell)
+             "teamOk": r.get("team_ok"), "foundTeam": r.get("found_team") or "",
+             "teamNote": teamcheck.note(sport, r.get("team"), r.get("found_abbr"), r.get("found_team"), "MLB" if sport == "mlb" else "ESPN") if r.get("team_ok") is False else ""} for r in b["rows"]]
     return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"], "at": b.get("at"), "ttl": 900}
 
 
@@ -364,21 +372,48 @@ def _espn_team(sport, name):
                            "out": ((a.get("injuries") or [{}])[0] or {}).get("status") or ""})
     except Exception:
         pass
-    stats = []
+    stats, season_label = [], ""
     try:
         sd = bot.get_json(f"{bot.ESPN}/{path}/teams/{tid}/statistics", 6 * 3600)
-        cats = ((sd.get("results") or {}).get("stats") or {}).get("categories") or []
-        for cat in cats:
-            for x in cat.get("stats") or []:
-                if x.get("displayValue") in (None, "", "0", "0.0"):
-                    continue
-                stats.append({"cat": cat.get("displayName") or cat.get("name") or "", "l": x.get("displayName") or x.get("name"), "v": x.get("displayValue"),
-                              "pg": x.get("perGameDisplayValue") or "", "rank": x.get("rankDisplayValue") or ""})
+        stats, season_label = _espn_team_stats(sd)
     except Exception:
         pass
     rec = ((info.get("record") or {}).get("items") or [{}])[0].get("summary") or ""
     return {"id": str(tid), "name": t.get("displayName") or name, "abbr": t.get("abbreviation") or "", "logo": img_url(logo), "record": rec,
-            "standing": info.get("standingSummary") or "", "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": stats[:80]}
+            "standing": info.get("standingSummary") or "", "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": stats[:80],
+            "statsSeason": season_label}
+
+
+def _espn_team_stats(sd):
+    """ESPN's team statistics as rows, and the season they cover. The same stat is listed under several categories
+    (games played under every one): it is kept once. "v" is the season figure; "pg" is per game, only where ESPN gives
+    one that differs from the figure itself, and the page labels it as per game."""
+    res = sd.get("results") or {}
+    cats = (res.get("stats") or {}).get("categories") or []
+    seen, out = set(), []
+    for cat in cats:
+        for x in cat.get("stats") or []:
+            label = x.get("displayName") or x.get("name") or ""
+            v = x.get("displayValue")
+            if not label or v in (None, "", "0", "0.0", "0.00") or label.lower() in seen:
+                continue
+            seen.add(label.lower())
+            pg = x.get("perGameDisplayValue") or ""
+            per_game_label = bool(re.search(r"game|average|avg|%|percent|pct|rating|ratio", label, re.I))   # already per game, a rate, or games played
+            out.append({"cat": cat.get("displayName") or cat.get("name") or "", "l": label, "v": v,
+                        "pg": "" if per_game_label or pg in ("", v) else pg, "rank": x.get("rankDisplayValue") or ""})
+    season = sd.get("season") or res.get("season") or {}
+    label = season.get("displayName") or (str(season.get("year")) if season.get("year") else "") if isinstance(season, dict) else ""
+    return out, label
+
+
+MLB_STATS = {   # what each MLB team stat means, said plainly: in pitching, runs, hits and home runs are the ones allowed
+    "Hitting": [("avg", "Batting average"), ("obp", "On-base %"), ("slg", "Slugging %"), ("ops", "OPS"), ("runs", "Runs scored"), ("homeRuns", "Home runs"),
+                ("hits", "Hits"), ("strikeOuts", "Strikeouts (batting)"), ("baseOnBalls", "Walks drawn"), ("stolenBases", "Stolen bases")],
+    "Pitching": [("era", "ERA"), ("whip", "WHIP"), ("saves", "Saves"), ("strikeOuts", "Strikeouts (pitching)"), ("baseOnBalls", "Walks allowed"),
+                 ("runs", "Runs allowed"), ("hits", "Hits allowed"), ("homeRuns", "Home runs allowed"), ("strikeoutsPer9Inn", "Strikeouts per 9 innings"),
+                 ("walksPer9Inn", "Walks per 9 innings")],
+}
 
 
 def _mlb_team(name):
@@ -419,13 +454,13 @@ def _mlb_team(name):
         for grp in sd.get("stats") or []:
             cat = ((grp.get("group") or {}).get("displayName") or "").title()
             st = ((grp.get("splits") or [{}])[0] or {}).get("stat") or {}
-            for k in ("avg", "obp", "slg", "ops", "runs", "homeRuns", "hits", "strikeOuts", "baseOnBalls", "stolenBases", "era", "whip", "saves", "strikeoutsPer9Inn", "walksPer9Inn"):
+            for k, label in MLB_STATS.get(cat, []):
                 if st.get(k) not in (None, ""):
-                    stats.append({"cat": cat, "l": re_label(k), "v": str(st[k]), "pg": "", "rank": ""})
+                    stats.append({"cat": cat, "l": label, "v": str(st[k]), "pg": "", "rank": ""})
     except Exception:
         pass
     return {"id": str(tid), "name": t.get("name") or name, "abbr": t.get("abbreviation") or "", "logo": img_url(f"https://www.mlbstatic.com/team-logos/{tid}.svg"),
-            "record": "", "standing": "", "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": stats}
+            "record": "", "standing": "", "games": games, "upcoming": upcoming, "roster": roster, "seasonStats": stats, "statsSeason": f"{y} regular season" if stats else ""}
 
 
 def re_label(k):
@@ -520,7 +555,7 @@ def team(sport, name):
     start = bot.season_start(sport)
     return {"kind": "team", "sport": sport, "sportLabel": bot.SPORTS[sport], "name": t["name"], "team": t.get("standing") or "", "photo": t["logo"], "abbr": t["abbr"],
             "record": t["record"], "unit": unit, "seasonStart": start.isoformat(), "stats": stats, "games": games, "lines": lines, "next": nxt,
-            "roster": t["roster"][:60], "seasonStats": t["seasonStats"], "at": int(time.time())}
+            "roster": t["roster"][:60], "seasonStats": t["seasonStats"], "statsSeason": t.get("statsSeason") or "", "at": int(time.time())}
 
 
 def handle(path, q, signed_in=False):

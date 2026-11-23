@@ -74,6 +74,8 @@ body.embed .brand{display:none}
 .ph h1{margin:0;font:900 66px/.84 var(--f-display);letter-spacing:.012em;text-transform:uppercase;text-shadow:none;text-wrap:balance}
 .ph p{margin:10px 0 0;font-size:13.5px;color:rgba(255,255,255,.76);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .ph p img{width:18px;height:18px;object-fit:contain}
+.ph p.tcheck{display:block;max-width:60ch;padding:8px 12px;border-radius:var(--r-ctl);background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18);color:#fff;line-height:1.4}
+.tflag{color:var(--warn,#f0b43c)}
 .ph .next b{color:var(--accent)}
 .form{display:flex;gap:3px;margin-top:10px}
 .form i{width:19px;height:19px;border-radius:var(--r-ctl);display:grid;place-items:center;font:700 12px/1 var(--f-mono);font-style:normal;background:rgba(255,255,255,.08);color:var(--draw)}
@@ -763,6 +765,7 @@ function hero(gs, meter) {
   return `<div class="hero${team ? ' team' : ''}">${glow ? `<span class="hero-bg" aria-hidden="true"><img src="${esc(glow)}" alt="" onerror="this.remove()"></span>` : '<span class="hero-bg"></span>'}<span class="ghost" aria-hidden="true">${esc(last)}</span>
     <div class="ph"><span class="face"><span>${esc(ini)}${p.photo ? `<img src="${esc(p.photo)}" alt="" onerror="this.remove()">` : ''}</span></span><div style="min-width:0"><h1>${esc(p.name)}</h1>
       <p>${p.crest ? `<img src="${esc(p.crest)}" alt="" onerror="this.remove()">` : ''}${esc(sub || p.sportLabel)}</p>
+      ${p.teamNote ? `<p class="tcheck" role="note"><b>Team check.</b> ${esc(p.teamNote)}</p>` : ''}
       ${p.next ? `<p class="next">Next: ${p.next.home === true ? 'vs' : p.next.home === false ? '@' : 'v'} <b>${esc(p.next.opp)}</b>${p.next.date ? ' · ' + esc(when(p.next.date)) : ''}${p.next.details ? ' · ' + esc(p.next.details) : ''}</p>` : ''}
       ${form ? `<div class="form" title="Last ${Math.min(10, p.games.length)} results, oldest first">${form}</div>` : ''}</div></div>${strip}</div>`;
 }
@@ -971,9 +974,9 @@ function gameLog(shown) {
 function teamExtras() {
   const p = S.p, cats = {};
   for (const x of p.seasonStats || []) (cats[x.cat] = cats[x.cat] || []).push(x);
-  const statCard = Object.keys(cats).length ? `<div class="card"><div class="chh"><b>Season stats</b><span>league rank where known</span></div>
+  const statCard = Object.keys(cats).length ? `<div class="card"><div class="chh"><b>Season stats</b><span>${esc([p.statsSeason, 'league rank where known'].filter(Boolean).join(' · '))}</span></div>
     <div class="scroll" style="max-height:420px">${Object.entries(cats).map(([c, xs]) => `<div class="lbl" style="margin:12px 0 7px">${esc(c)}</div>
-    <div class="sgrid">${xs.slice(0, 18).map(x => `<div><div class="l">${esc(x.l)}</div><div class="v num">${esc(x.pg || x.v)}</div>${x.rank ? `<div class="rk">${esc(x.rank)}</div>` : ''}</div>`).join('')}</div>`).join('')}</div></div>` : '';
+    <div class="sgrid">${xs.slice(0, 18).map(x => `<div><div class="l">${esc(x.l)}</div><div class="v num">${esc(x.v)}</div>${x.pg ? `<div class="rk">${esc(x.pg)} per game</div>` : ''}${x.rank ? `<div class="rk">${esc(x.rank)} in the league</div>` : ''}</div>`).join('')}</div>`).join('')}</div></div>` : '';
   const ros = (p.roster || []).length ? `<div class="card"><div class="chh"><b>Roster</b><span>tap a player to open them here</span></div>
     <div class="roster">${p.roster.map(r => `<button class="rp" data-player="${esc(r.name)}"><span class="av">${r.photo ? `<img src="${esc(r.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>
       <span class="rn"><b>${esc(r.name)}</b><small>${esc([r.num && '#' + r.num, r.pos].filter(Boolean).join(' · '))}${r.out ? ` · <em>${esc(r.out)}</em>` : ''}</small></span></button>`).join('')}</div></div>` : '';
@@ -995,7 +998,7 @@ async function renderBoard() {
   $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Today's ${esc(sportName())} props by hit rate</b>${b.checked ? `<span class="num">${b.checked} lines checked · PrizePicks and Sleeper</span>` : ''}</div>
     ${b.error ? `<div class="err">${esc(b.error)}</div>` : b.note ? `<p class="sub">${esc(b.note)}</p>` : !rows.length ? `<p class="sub">No ${esc(sportName())} lines posted right now.</p>` : ''}
     ${rows.map((r, i) => `<div class="brow${i < 3 ? ' top3' : ''}" data-n="${esc(r.player)}" data-k="${r.k}" data-l="${r.line}"><div class="rk">${i + 1}</div>
-      <div><div class="nm">${esc(r.player)}</div><div class="sub">${esc([r.team, r.opp && 'vs ' + r.opp].filter(Boolean).join(' · '))}</div></div>
+      <div><div class="nm">${esc(r.player)}</div><div class="sub">${esc([r.team, r.opp && 'vs ' + r.opp].filter(Boolean).join(' · '))}</div>${r.teamOk === false ? `<div class="sub tflag" title="${esc(r.teamNote || '')}">Team check: ${r.foundTeam ? `the stats here are for the ${esc(r.foundTeam)} player with this name` : 'the books’ team and the stats don’t match'}</div>` : ''}</div>
       <div><span class="sidec ${r.side}">${r.side === 'over' ? 'O' : 'U'} ${fmt(r.line)}</span> <span class="sub">${esc(r.label)}</span></div>
       <div class="hide-s">${heat(r.l5)}<div class="sub">L5</div></div><div>${heat(r.l10)}<div class="sub">L10</div></div><div class="hide-s">${heat(r.l20)}<div class="sub">L20</div></div>
       <div class="num" style="text-align:right"><b>${f1(r.avg)}</b><div class="sub">avg</div></div></div>`).join('')}</div>`;

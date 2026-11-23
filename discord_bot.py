@@ -43,6 +43,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import teamcheck
+
 API = "https://discord.com/api/v10"
 UA = "DiscordBot (https://github.com/eisensteinerez/floodlight, 1.0)"
 ESPN = "https://site.api.espn.com/apis/site/v2/sports"
@@ -303,16 +305,21 @@ def find_player(sport, name):
             return {"name": name}
         if sport == "mlb":
             d = get_json(f"{SAPI}/people/search?names={urllib.parse.quote(name)}&sportIds=1", 86400)
-            people = sorted(d.get("people") or [], key=lambda x: not x.get("active"))
+            # active players first, and among them the exact name (a search for "Will Smith" finds more than one)
+            people = sorted(d.get("people") or [], key=lambda x: (not x.get("active"), norm(x.get("fullName")) != norm(name)))
             return {"id": people[0]["id"], "name": people[0].get("fullName")} if people else None
         espn_sport = ESPN_PATH[sport].split("/")[0]
         d = get_json(f"{ESPN_WEB}/search?query={urllib.parse.quote(name)}&type=player&sport={espn_sport}&limit=6", 86400)
         ok = ["nba", "wnba"] if sport in ("nba", "wnba") else [sport]
         if sport == "wnba":
             ok = ["wnba", "nba"]
-        items = [x for x in d.get("items") or [] if (x.get("league") or x.get("defaultLeagueSlug")) in ok]
-        if sport in ("nba", "wnba"):
-            items.sort(key=lambda x: (x.get("league") or x.get("defaultLeagueSlug")) != sport)
+        lg = lambda x: x.get("league") or x.get("defaultLeagueSlug")
+        items = [x for x in d.get("items") or [] if lg(x) in ok]
+        # an NBA player is used for a WNBA name only when the name is exactly theirs
+        if sport == "wnba":
+            items = [x for x in items if lg(x) == "wnba" or norm(x.get("displayName")) == norm(name)]
+        # this league first, then the exact name: ESPN's search is fuzzy, and its first hit can be someone else
+        items.sort(key=lambda x: (lg(x) != sport, norm(x.get("displayName")) != norm(name)))
         x = items[0] if items else None
         return {"id": x["id"], "lg": x.get("league") or x.get("defaultLeagueSlug"), "name": x.get("displayName")} if x else None
     try:
@@ -458,9 +465,11 @@ def load_player(sport, name):
             y = dt.datetime.now(dt.timezone.utc).year
             games = mlb_season(o["id"], y) + mlb_season(o["id"], y - 1)
             photo = f"https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/{o['id']}/headshot/67/current"
-            team = ""
+            team, abbr = "", ""
             try:
-                team = ((get_json(f"{SAPI}/people/{o['id']}?hydrate=currentTeam", 86400).get("people") or [{}])[0].get("currentTeam") or {}).get("name") or ""
+                ct = (get_json(f"{SAPI}/people/{o['id']}?hydrate=currentTeam", 86400).get("people") or [{}])[0].get("currentTeam") or {}
+                team = ct.get("name") or ""
+                abbr = next((t.get("abbreviation") or "" for t in get_json(f"{SAPI}/teams?sportId=1", 86400).get("teams") or [] if t.get("id") == ct.get("id")), "")
             except Exception:
                 pass
         else:
@@ -469,9 +478,10 @@ def load_player(sport, name):
             y = cur_season(sport)
             games = espn_season(path, o["id"], y) + espn_season(path, o["id"], y - 1)
             photo = f"https://a.espncdn.com/i/headshots/{lg}/players/full/{o['id']}.png"
-            team = ""
+            team, abbr = "", ""
             try:
-                team = ((get_json(f"{ESPN_WEB}/sports/{path}/athletes/{o['id']}", 86400).get("athlete") or {}).get("team") or {}).get("displayName") or ""
+                t = (get_json(f"{ESPN_WEB}/sports/{path}/athletes/{o['id']}", 86400).get("athlete") or {}).get("team") or {}
+                team, abbr = t.get("displayName") or "", t.get("abbreviation") or ""
             except Exception:
                 pass
         seen, uniq = set(), []
@@ -481,7 +491,7 @@ def load_player(sport, name):
                 uniq.append(g)
         if not uniq:
             raise LookupError(f"No recent games found for {o.get('name') or name}.")
-        return {"sport": sport, "id": str(o["id"]), "name": o.get("name") or name, "team": team, "photo": photo, "games": uniq}
+        return {"sport": sport, "id": str(o["id"]), "name": o.get("name") or name, "team": team, "teamAbbr": abbr, "photo": photo, "games": uniq}
     return memo(("player", sport, norm(name)), 3600, go)
 
 
@@ -724,7 +734,9 @@ def props_board(sport, stat=None, count=10, deepen=None):
             side, best = ("over", o10) if (o10["pct"] or 0) >= (u10["pct"] or 0) else ("under", u10)
             r.update(side=side, l10=best, l5=o5 if side == "over" else rate(gs[:5], sd["get"], r["line"], "under"),
                      l20=o20 if side == "over" else rate(gs[:20], sd["get"], r["line"], "under"), avg=o10["avg"], label=sd["l"],
-                     recent=[(sd["get"](g), g.get("home"), g.get("min"), g.get("opp") or "", g.get("oppAbbr") or "") for g in gs[:60]], photo=p.get("photo"))
+                     recent=[(sd["get"](g), g.get("home"), g.get("min"), g.get("opp") or "", g.get("oppAbbr") or "") for g in gs[:60]], photo=p.get("photo"),
+                     # does the book's team match the team of the player whose games these are?
+                     found_team=p.get("team") or "", found_abbr=p.get("teamAbbr") or "", team_ok=teamcheck.same(sport, r.get("team"), p.get("teamAbbr")))
 
     with cf.ThreadPoolExecutor(4) as ex:
         list(ex.map(analyse, order))

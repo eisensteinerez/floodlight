@@ -75,7 +75,13 @@
         (us ? a : b).ml = aw; (us ? b : a).ml = hm; draw = ml(odds.drawOdds?.moneyLine ?? odds.moneyline?.draw?.close?.odds) }
       // soccer scoreboards list each goal: who, when, and for which side
       const goals = (c.details || []).filter(x => x.scoringPlay).map(x => ({ t: String(x.team?.id || ''), who: x.athletesInvolved?.[0]?.shortName || x.athletesInvolved?.[0]?.displayName || '', min: x.clock?.displayValue || '', og: !!x.ownGoal, pen: !!x.penaltyKick })).filter(x => x.who);
-      const leaders = (c.leaders || []).flatMap(cat => (cat.leaders || []).slice(0, 1).map(l => ({ cat: cat.displayName || cat.name, abbr: cat.abbreviation || '', val: +l.value || 0, show: l.displayValue, name: l.athlete?.displayName || l.athlete?.fullName, shot: l.athlete?.headshot?.href || l.athlete?.headshot || '', team: l.team?.id || l.athlete?.team?.id || '' })));
+      // game leaders, each tied to a team: a team's own list (where the feed gives one) names the team for certain; the game-wide list
+      // carries a team id per player. A leader whose team is neither side is dropped rather than shown under the wrong game.
+      const lead1 = (cat, tid) => (cat.leaders || []).slice(0, 1).map(l => ({ cat: cat.displayName || cat.name, abbr: cat.abbreviation || '', val: +l.value || 0, show: l.displayValue, name: l.athlete?.displayName || l.athlete?.fullName, shot: l.athlete?.headshot?.href || l.athlete?.headshot || '', team: String(tid || l.team?.id || l.athlete?.team?.id || '') }));
+      const ids = [a.id, b.id].map(String);
+      let leaders = (c.leaders || []).flatMap(cat => lead1(cat));
+      if (!leaders.length) leaders = cs.flatMap(x => (x.leaders || []).flatMap(cat => lead1(cat, x.team?.id || x.id)));
+      leaders = leaders.filter(l => !l.team || ids.includes(l.team));
       return { key: `${sport}:${c.id || ev.id}`, sport, path, lg, short, league: ev.league?.abbreviation || c.league?.abbreviation || (sport === 'soccer' ? (ev.season?.slug || '') : short),
         lgName: sport === 'soccer' ? (c.competitionType?.text || '') : short, id: String(sport === 'tennis' ? c.id : ev.id), date: new Date(c.date || ev.date), state: st.state || 'pre',
         clock: st.shortDetail || st.detail || '', detail: st.shortDetail || st.detail || '', final: st.shortDetail || 'Final', a, b, weight, leaders,
@@ -286,7 +292,7 @@
     if (!rows.length) { const started = list.some(g => g.state !== 'pre');
       return list.length ? `<section class="card hm-thin" aria-label="Standout lines"><div class="sec-h"><h2>Standout lines</h2></div>${state('', started ? 'No standout lines to show' : 'Standout lines start with the first game', started ? 'The games in play have no player numbers yet, or their scores are hidden.' : `The first game ${isToday() ? 'today' : 'that day'} starts at ${hm([...list].sort((a, b) => a.date - b.date)[0].date)}.`)}</section>` : '' }
     return `<section class="card" aria-label="Standout players"><div class="sec-h"><h2>Standout lines</h2><span class="lb">From ${isToday() ? 'today’s' : 'this day’s'} games</span></div><div class="hm-rows hm-two">${rows.slice(0, 6).map(r => `
-      <button type="button" class="rw" ${hubAttr(r.g)}>${face(r.shot, r.name)}<span class="rw-t"><b>${esc(r.name)}</b><small>${esc(r.g.a.name)} v ${esc(r.g.b.name)}</small></span><span class="hm-val"><b class="num">${esc(r.show || r.val)}</b><small class="lb">${esc(r.abbr || r.cat)}</small></span></button>`).join('')}</div></section>`;
+      <button type="button" class="rw" ${hubAttr(r.g)}>${face(r.shot, r.name)}<span class="rw-t"><b>${esc(r.name)}</b><small>${esc((t => t ? `${t.name} v ${(t === r.g.a ? r.g.b : r.g.a).name}` : `${r.g.a.name} v ${r.g.b.name}`)([r.g.a, r.g.b].find(t => r.team && t.id === r.team)))}</small></span><span class="hm-val"><b class="num">${esc(r.show || r.val)}</b><small class="lb">${esc(r.abbr || r.cat)}</small></span></button>`).join('')}</div></section>`;
   }
   /* Your games: followed teams and watched games, live first. With nothing chosen yet, an invitation to choose. */
   function mine(list) {
