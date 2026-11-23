@@ -959,7 +959,7 @@ html:root[data-theme="stadium-gold"] .hm-day b{font:italic 800 23px/1 var(--font
 html:root[data-theme="stadium-gold"] .hm-day:hover{border-color:var(--chip-edge-2)}
 html:root[data-theme="stadium-gold"] .hm-day.on{background:var(--gold-grad);border-color:transparent;color:var(--on-accent);font-weight:700;box-shadow:var(--gold-glow)}
 html:root[data-theme="stadium-gold"] .hm-ftr .ftr-body{gap:18px}
-html:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n{overflow-wrap:break-word;font-size:19px}
+html:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n{overflow-wrap:anywhere;font-size:clamp(13px,calc(100cqi / (var(--nl,8) * .54)),19px)}
 html:root[data-theme="stadium-gold"] .hm-prob-l{font:italic 500 16px/1.2 var(--font-body);color:var(--text);text-shadow:0 1px 8px rgba(0,0,0,.9)}
 html:root[data-theme="stadium-gold"] .hm-prob-l b{font-size:18px}
 html:root[data-theme="stadium-gold"] .hm-count{font:italic 500 16px/1.3 var(--font-body);color:var(--text);text-shadow:0 1px 8px rgba(0,0,0,.9)}
@@ -1096,7 +1096,8 @@ html:root[data-theme="stadium-gold"] .pd-why li::before{content:"";flex:none;wid
 html:root[data-theme="stadium-gold"] .pd-done{padding:8px 26px}
 /* the slip is the one gold card on the page */
 html:root[data-theme="stadium-gold"] .pd-slip{border:1px solid transparent;background:var(--slip-grad) padding-box,linear-gradient(135deg,#FFF6D6,#B98427) border-box;box-shadow:0 18px 50px rgba(233,184,75,.2),inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden}
-html:root[data-theme="stadium-gold"] .pd-slip::after{content:"";position:absolute;right:-6px;top:-4px;width:150px;height:124px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100'%3E%3Cg transform='rotate(-28 60 50)' fill='none' stroke='%23150F02' stroke-width='4' stroke-linejoin='round'%3E%3Cpath d='M14 26h92v16a9 9 0 0 0 0 18v16H14V60a9 9 0 0 0 0-18z'/%3E%3Cpath d='M40 30v42' stroke-dasharray='5 6'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;opacity:.16;pointer-events:none}
+html:root[data-theme="stadium-gold"] .pd-slip::after{content:"";position:absolute;right:-22px;top:-34px;width:132px;height:110px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100'%3E%3Cg transform='rotate(-28 60 50)' fill='none' stroke='%23150F02' stroke-width='4' stroke-linejoin='round'%3E%3Cpath d='M14 26h92v16a9 9 0 0 0 0 18v16H14V60a9 9 0 0 0 0-18z'/%3E%3Cpath d='M40 30v42' stroke-dasharray='5 6'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;opacity:.14;transform:rotate(-8deg);pointer-events:none;z-index:0}
+html:root[data-theme="stadium-gold"] .pd-slip > *{position:relative;z-index:1}
 html:root[data-theme="stadium-gold"] .pd-slip h2{font-size:30px}
 html:root[data-theme="stadium-gold"] .pd-empty{font:italic 500 17px/1.5 var(--font-body);max-width:26em}
 html:root[data-theme="stadium-gold"] .pd-big,html:root[data-theme="stadium-gold"] .pd-mk b{font-style:italic}
@@ -1114,6 +1115,8 @@ html:root[data-theme="stadium-gold"] .pd-col b{font:italic 600 14px/1.2 var(--fo
 html:root[data-theme="stadium-gold"] .pd-col small{font-size:12px;color:var(--text-2)}
 html:root[data-theme="stadium-gold"] .pd-leg{font-size:14px;color:var(--text)}
 html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)}html:root[data-theme="stadium-gold"] .pd-leg .hit{background:var(--chart-over)}
+html:root[data-theme="stadium-gold"] .pd-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / -1}
 
 /* ---- phones and tablets ---- */
 @media (max-width:1100px){
@@ -1144,7 +1147,7 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
   html:root[data-theme="stadium-gold"] .ftr .mx-main{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:8px}
   html:root[data-theme="stadium-gold"] .ftr .mx-t{min-width:0}
   html:root[data-theme="stadium-gold"] .ftr .mx-logo{width:60px;height:60px}
-  html:root[data-theme="stadium-gold"] .ftr .mx-n{font-size:clamp(17px,4.8vw,22px);overflow-wrap:break-word;hyphens:none}
+  html:root[data-theme="stadium-gold"] .ftr .mx-n{font-size:clamp(14px,min(4.8vw,calc(100cqi / (var(--nl,8) * .56))),22px);overflow-wrap:anywhere;hyphens:none}
   html:root[data-theme="stadium-gold"] .ftr .mx-mid{padding-top:10px}
   html:root[data-theme="stadium-gold"] .ftr .mx-mid small{font-size:18px}
   html:root[data-theme="stadium-gold"] .ftr .form{flex-wrap:wrap;justify-content:center;gap:4px}
@@ -1152,7 +1155,9 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
   html:root[data-theme="stadium-gold"] .ftr-g{font-size:14px;overflow-wrap:break-word}
   html:root[data-theme="stadium-gold"] .lab-tool::after{left:58%;opacity:.6}
   html:root[data-theme="stadium-gold"] .pd-top{min-height:0;padding:16px 16px 14px;gap:10px 12px}
-  html:root[data-theme="stadium-gold"] .pd-rank{min-width:26px;font-size:28px}
+  html:root[data-theme="stadium-gold"] .pd-top{position:relative}
+  html:root[data-theme="stadium-gold"] .pd-top:has(.pd-rank){grid-template-columns:auto minmax(0,1fr) auto}
+  html:root[data-theme="stadium-gold"] .pd-rank{position:absolute;left:12px;top:10px;z-index:2;min-width:0;font-size:26px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8))}
   html:root[data-theme="stadium-gold"] .pd-top .avx.av-lg{align-self:center;width:84px;height:76px;min-height:0;margin:0;border-radius:10px;clip-path:polygon(16% 0,100% 0,84% 100%,0 100%)}
   html:root[data-theme="stadium-gold"] .pd-open span{font-size:16px}
   html:root[data-theme="stadium-gold"] .pd-open small{font-size:14px}

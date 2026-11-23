@@ -53,7 +53,9 @@
   const abOf = t => { const ab = String(t.ab || '').trim(); return ab && ab.toLowerCase() !== String(t.name ?? '').toLowerCase() ? ab : '' };
   const nameHtml = t => { const ab = abOf(t); return ab ? `<span class="nm-f">${esc(t.name)}</span><span class="nm-a">${esc(ab)}</span>` : esc(t.name) };
   const nameCls = t => { if (!abOf(t)) return ''; const L = Math.max(0, ...String(t.name ?? '').split(/\s+/).map(w => w.length)); return ` has-ab nm-${Math.min(14, Math.max(3, L))}` };
-  const side = (t, extra = '') => `<span class="mx-t${t.lose ? ' lose' : ''}${t.win ? ' win' : ''}">${logo(t, 'mx-logo')}<span class="mx-n${nameCls(t)}">${t.rank ? `<em>${esc(t.rank)}</em>` : ''}${nameHtml(t)}</span>${t.record ? `<small>${esc(t.record)}</small>` : ''}${extra}</span>`;
+  /* the longest word in a team name, so a theme can size names to fit their column (Stadium Gold does) */
+  const nl = n => Math.max(4, ...String(n || '').split(/\s+/).map(w => w.length));
+  const side = (t, extra = '') => `<span class="mx-t${t.lose ? ' lose' : ''}${t.win ? ' win' : ''}">${logo(t, 'mx-logo')}<span class="mx-n${nameCls(t)}" style="--nl:${nl(t.name)}">${t.rank ? `<em>${esc(t.rank)}</em>` : ''}${nameHtml(t)}</span>${t.record ? `<small>${esc(t.record)}</small>` : ''}${extra}</span>`;
 
   /* the standard card: crest and name either side, score or start time in the middle */
   window.flCard = function (o) {

@@ -568,8 +568,9 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
    graphic), and italic condensed capitals for titles and names. A leaning shape is always drawn on a ::before layer,
    never by clipping the element, so focus rings and pop-ups are not cut. */
 
-/* the backdrop: the picture sits at the top of the page and scrolls away with it; the fades keep the type readable */
-html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;height:920px;
+/* the backdrop: the picture sits at the top of the page and scrolls away with it; the fades keep the type readable.
+   The photo is warmed and dimmed a little so its cool floodlight green sits under the gold */
+html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;height:920px;filter:sepia(.32) saturate(.82) brightness(.84);
   background:linear-gradient(180deg,rgba(7,8,10,.66) 0,rgba(7,8,10,.12) 20%,rgba(7,8,10,.2) 52%,var(--bg) 100%),
     linear-gradient(90deg,var(--bg) 0,rgba(7,8,10,.84) 24%,rgba(7,8,10,.3) 58%,rgba(7,8,10,.04) 100%),
     var(--stadium-wide) right top/cover no-repeat,var(--bg)}
@@ -703,6 +704,10 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
   background:radial-gradient(ellipse 80% 90% at 100% 100%,color-mix(in srgb,var(--ac) 30%,transparent),transparent 70%) padding-box,
     radial-gradient(ellipse 70% 80% at 0 0,color-mix(in srgb,var(--hc) 22%,transparent),transparent 70%) padding-box,var(--panel) padding-box,var(--gold-edge) border-box}
 :root[data-theme="stadium-gold"] .m.mx .mx-n{font:italic 700 21px/1.02 var(--font-poster)}
+/* long names: each side is a size container, and the name shrinks until its longest word (--nl, from cards.js) fits, so it never runs under the score */
+:root[data-theme="stadium-gold"] :is(.ftr,.m.mx) .mx-t{container-type:inline-size}
+:root[data-theme="stadium-gold"] .ftr .mx-n{font-size:clamp(17px,min(2.8vw,calc(100cqi / (var(--nl,8) * .56))),42px);overflow-wrap:anywhere}
+:root[data-theme="stadium-gold"] .m.mx .mx-n{font-size:clamp(13px,calc(100cqi / (var(--nl,8) * .54)),21px);overflow-wrap:anywhere}
 :root[data-theme="stadium-gold"] .m.mx .mx-sc{font-style:italic;font-weight:900;font-size:42px;gap:.04em}
 :root[data-theme="stadium-gold"] .m.mx .mx-mid small{font:italic 800 17px/1 var(--font-display)}
 :root[data-theme="stadium-gold"] .m.mx .mx-time{font-style:italic}
