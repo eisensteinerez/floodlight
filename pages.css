@@ -1886,3 +1886,45 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 :root[data-theme] .mx-n em.mx-rk{display:inline-block;font:600 11px/1 var(--font-body);font-style:normal;letter-spacing:0;padding:3px 5px;margin-right:6px;border-radius:var(--radius-pill);border:1px solid var(--border-2);color:var(--text-2);vertical-align:.15em;font-variant-numeric:tabular-nums;-webkit-text-fill-color:currentColor;background:none}
 :root[data-theme] .mx-t small.mx-rec{font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .mx-t small.mx-rec::before{content:"("}.mx-t small.mx-rec::after{content:")"}
+
+/* ---------- Parlays: relationship meter, chance block, price refresh and history (parlays.js) ---------- */
+.py-dli{display:grid;gap:6px;padding:8px 0;border-top:1px solid color-mix(in oklab,var(--on-accent) 22%,transparent)}.py-dli:first-child{border-top:0}
+:root[data-theme] .py-dl li.py-dli{display:grid;min-height:0}
+.py-dlr{display:flex;align-items:center;gap:10px;min-height:44px}
+.py-dli.bad .py-dlr > .rw-t b{text-decoration:underline wavy;text-decoration-thickness:1px;text-underline-offset:4px}
+.py-rel{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--on-accent) 9%,transparent);color:var(--on-accent)}
+.py-rel.conflict{background:transparent;border:1.5px dashed var(--on-accent)}
+.py-mtr{flex:none;display:inline-grid;grid-template-columns:repeat(4,9px);gap:3px;margin-top:4px}
+.py-mtr i{height:9px;border-radius:2px;border:1px solid color-mix(in oklab,var(--on-accent) 55%,transparent)}
+.py-mtr i.on{background:var(--on-accent);border-color:var(--on-accent)}
+.py-rt{display:grid;gap:2px;min-width:0;font:500 13px/1.4 var(--font-body)}
+.py-rt b{font-weight:700}.py-rt small{font:500 12px/1.4 var(--font-body);opacity:.9}
+.py-relsum{display:flex;gap:8px;align-items:flex-start;margin:12px 0 0;font:600 13px/1.45 var(--font-body);color:var(--on-accent)}.py-relsum svg{flex:none;margin-top:2px}
+.py-prob{display:grid;gap:12px;margin-top:12px;padding-top:16px;border-top:2px dashed color-mix(in oklab,var(--on-accent) 40%,transparent);color:var(--on-accent)}
+.py-prob > .py-k{margin:0;font-weight:700}
+.py-pq{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;margin:0}
+.py-pq > div{display:grid;gap:3px;align-content:start;min-width:0}
+.py-pq dt{font:500 12px/1.3 var(--font-body)}
+.py-pq dd{margin:0;font:var(--display-weight) 24px/1 var(--font-display)}
+.py-pq .big dd{font-size:clamp(30px,3.2vw,40px)}
+.py-pq small{font:500 12px/1.35 var(--font-body);opacity:.88}
+:root[data-theme] .py-pq .py-src{max-width:none;margin:0;opacity:.88}
+.py-rb{margin:0;display:grid;gap:6px}
+.py-rbt{position:relative;height:14px;border-radius:999px;background:color-mix(in oklab,var(--on-accent) 14%,transparent);border:1px solid color-mix(in oklab,var(--on-accent) 40%,transparent)}
+.py-rbb{position:absolute;top:2px;bottom:2px;min-width:4px;border-radius:999px;background:color-mix(in oklab,var(--on-accent) 45%,transparent)}
+.py-rbp{position:absolute;top:-5px;bottom:-5px;width:3px;margin-left:-1.5px;border-radius:2px;background:var(--on-accent)}
+.py-rbk{position:absolute;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;transform:rotate(45deg);background:var(--accent);border:2px solid var(--on-accent);border-radius:2px}
+.py-rbx{display:flex;justify-content:space-between;font:500 11px/1 var(--font-body);opacity:.85}
+.py-rbl{display:flex;flex-wrap:wrap;gap:4px 14px;font:500 12px/1.3 var(--font-body)}
+.py-rbl span{display:inline-flex;align-items:center;gap:6px}
+.py-rbl i{display:inline-block;flex:none}
+.py-rbl .k-band{width:18px;height:8px;border-radius:999px;background:color-mix(in oklab,var(--on-accent) 45%,transparent)}
+.py-rbl .k-p{width:3px;height:14px;border-radius:2px;background:var(--on-accent)}
+.py-rbl .k-b{width:9px;height:9px;transform:rotate(45deg);border:2px solid var(--on-accent);border-radius:2px}
+.py-howc summary{display:inline-flex;align-items:center;min-height:44px;cursor:pointer;font:600 13px/1.3 var(--font-body);text-decoration:underline;text-underline-offset:3px}
+.py-howc ul{margin:0;padding-left:18px;display:grid;gap:8px;font:500 13px/1.5 var(--font-body)}
+:root[data-theme] .py-ticket ul.py-why{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
+:root[data-theme] .py-reprice{background:var(--on-accent);color:var(--accent);border-color:transparent}.py-reprice svg{flex:none}
+.py-acts{flex-wrap:wrap}
+.py-pnote{font-weight:600}
+@media (max-width:760px){.py-pq dd{font-size:22px}}

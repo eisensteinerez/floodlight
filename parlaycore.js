@@ -288,6 +288,190 @@
     return { p, lo, hi, linked };
   }
 
+  /* ---------- how two picks relate ----------
+     relate(a, b) -> { level, dir, why }
+       level  'independent' | 'slight' | 'strong' | 'conflict' (the two can't both hit)
+       dir    'together' (one hitting makes the other more likely) | 'against' (less likely) | null (linked, either way)
+       why    one plain sentence, shown on the ticket
+     It reads only what a leg knows: its game, type, side, team, player, opponent, stat (k), sport and line. Nothing is
+     looked up and nothing is measured: these are rules of thumb about what kind of picks move together.
+
+     The rules, first match wins:
+       same pick twice                                   conflict
+       different games                                   independent
+       one player, one stat, over and under              conflict when the over's line is at or above the under's,
+                                                         else strong, against (both hit only in the gap between)
+       one player, one stat, one side, two lines         strong, together
+       one player, two stats that overlap (points and    strong; two stats that don't overlap (points and rebounds)
+         points + rebounds + assists, yards and catches) slight. Together when both ask for a big night, else against
+       both teams to win                                 conflict
+       a winner and a draw                               conflict
+       two spreads in one game                           conflict (both sides, or one side at two lines: pick one)
+       total over and under                              conflict when the over's line is at or above the under's
+       a spread and a winner                             same team: strong, together. Other team: conflict when the
+                                                         spread team gives points (covering means winning), else strong, against
+       a draw and a spread                               conflict when the spread team gives points, strong together when it gets them
+       a draw and the total                              slight: together with the under, against the over
+       a winner and the total                            slight, either way
+       a spread and the total                            slight: favourite with the over, or underdog with the under, together
+       a player and the total                            slight: a scoring stat over goes with the game over
+       a player and a winner or spread                   slight: his team's scoring over goes with his team winning (together);
+                                                         with the other team winning it pulls against (a possible conflict)
+       a quarterback's passing and a teammate's catching strong, together when both are overs (or both unders)
+       a goalie's saves and the other team's shots       strong, together
+       a pitcher's strikeouts and the other team's hits  slight, against
+       two players on one team                           slight, either way: one can take the other's chances
+       two players on opposite teams                     slight: scoring overs together (a fast, open game helps both)
+       anything else in one game                         slight, either way */
+  const STALE_MIN = 30;   // a price read longer ago than this asks to be refreshed before a parlay is locked in
+  const FAM = {
+    pass: new Set(['pyd', 'ptd', 'pcmp', 'patt', 'pryd']), catch: new Set(['reyd', 'rec', 'tgt', 'relng', 'rryd']),
+    shots: new Set(['sog', 'sot', 'shots']), saves: new Set(['sv', 'saves']), bat: new Set(['h', 'tb', 'hrr', 'r', 'rbi', 'hr'])
+  };
+  // stats that overlap: one counts part of the other, or both count the same plays
+  const OVERLAP = [['pts', 'pra', 'pr', 'pa', 'fs', '3pm'], ['reb', 'pra', 'pr', 'ra'], ['ast', 'pra', 'pa', 'ra'], ['pyd', 'ptd', 'pcmp', 'patt', 'pryd'], ['reyd', 'rec', 'tgt', 'rryd', 'relng'],
+    ['ryd', 'ratt', 'rryd', 'pryd', 'rlng'], ['h', 'tb', 'hrr', 'hr', 'r', 'rbi'], ['goals', 'pts', 'g1', 'sog', 'ga', 'shots', 'sot'], ['pk', 'pout'], ['assists', 'ga']];
+  // [helps his team win, pushes the total up] for an over. Most stats are both; these are the exceptions.
+  const TILT = { football: { pint: [-1, 0], tkl: [0, 0], sck: [0, 0] }, basketball: { reb: [0, 0], stl: [0, 0], blk: [0, 0], to: [-1, 0], pf: [0, 0], min: [0, 0] },
+    baseball: { pk: [1, -1], pout: [1, -1], pha: [-1, 1], per: [-1, 1], pbb: [-1, 1], pc: [0, 0], bb: [1, 0], so: [-1, 0] },
+    hockey: { sv: [0, 0], ga: [-1, 1], sa: [0, 1], pim: [0, 0], toi: [0, 0], pm: [1, 0] }, soccer: { saves: [0, 0], fouls: [0, 0], cards: [0, 0] } };
+  const sportOf = l => LG[l.lg]?.sport || l.sport || '';
+  const tilt = l => { const t = TILT[sportOf(l)]?.[l.k] || [1, 1], s = l.side === 'under' ? -1 : 1; return [t[0] * s, t[1] * s] };
+  const nameEq = (x, y) => { const a = norm(x), b = norm(y); return !!a && !!b && (a === b || (a.length > 3 && b.length > 3 && (a.endsWith(' ' + b) || b.endsWith(' ' + a)))) };
+  const anyEq = (xs, ys) => xs.some(x => ys.some(y => nameEq(x, y)));
+  // the names a leg's team goes by, and the other team's
+  const sideNames = (l, s) => s === 'home' ? [l.home, l.homeAbbr] : [l.away, l.awayAbbr];
+  const teamsOf = l => l.type === 'prop' ? [[l.team], [l.opp]].filter(x => x[0]) : [sideNames(l, 'home'), sideNames(l, 'away')].filter(x => x.some(Boolean));
+  const ownTeam = l => l.type === 'prop' ? [l.team] : l.type === 'win' || l.type === 'spread' ? [l.team, ...sideNames(l, l.side)] : [];
+  const otherTeam = l => l.type === 'prop' ? [l.opp] : l.type === 'win' || l.type === 'spread' ? sideNames(l, l.side === 'home' ? 'away' : 'home') : [];
+  // one game: the same key, or the same league within a few hours with a team in common (a pick from the board and one from the scoreboard name the game differently)
+  function sameGame(a, b) {
+    if (a.gameKey && a.gameKey === b.gameKey) return true;
+    if (a.lg !== b.lg || Math.abs((+a.start || 0) - (+b.start || 0)) > 6 * 36e5) return false;
+    return teamsOf(a).some(x => teamsOf(b).some(y => anyEq(x.filter(Boolean), y.filter(Boolean))));
+  }
+  // where a player's team stands to a team pick: 'mate' (his team), 'opp' (the other team) or '' (can't tell)
+  const rel = (prop, l) => { const mine = ownTeam(l).filter(Boolean), theirs = otherTeam(l).filter(Boolean);
+    if (prop.team && anyEq([prop.team], mine)) return 'mate'; if (prop.team && anyEq([prop.team], theirs)) return 'opp'; if (prop.opp && anyEq([prop.opp], mine)) return 'opp'; return '' };
+  const who = l => l.type === 'prop' ? String(l.player || '').split(' ').slice(-1)[0] : l.type === 'total' ? 'the total' : l.team || 'that team';
+  const stat = l => String(l.label || l.k || 'stat').toLowerCase();
+  const lineTxt = v => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v));
+  const R = (level, dir, why) => ({ level, dir, why });
+  const lean = (s, yes, no, flat) => s > 0 ? R('slight', 'together', yes) : s < 0 ? R('slight', 'against', no) : R('slight', null, flat);
+  const pairOf = (a, b, t1, t2) => a.type === t1 && b.type === t2 ? [a, b] : b.type === t1 && a.type === t2 ? [b, a] : null;
+  const RULES = [
+    [(a, b) => a.id === b.id, () => R('conflict', null, 'This is the same pick twice. Take one out.')],
+    [(a, b, x) => !x.same, () => R('independent', null, 'Different games, so one result doesn’t change the other.')],
+    [(a, b) => a.type === 'prop' && b.type === 'prop' && norm(a.player) === norm(b.player) && a.k === b.k, (a, b) => {
+      if (a.side === b.side) return R('strong', 'together', `Both are ${who(a)}’s ${stat(a)}: if the harder line hits, the easier one does too.`);
+      const o = a.side === 'under' ? b : a, u = o === a ? b : a;
+      if (a.yes || o.line >= u.line) return R('conflict', null, o.line === u.line || a.yes ? `${a.player} can’t go both over and under ${a.yes ? '' : fmt(o.line) + ' '}${stat(a)} in one game. Keep one side.`
+        : `${a.player} can’t go over ${fmt(o.line)} and under ${fmt(u.line)} ${stat(a)} in one game. Keep one side.`);
+      return R('strong', 'against', `Both hit only if ${who(a)} lands between ${fmt(o.line)} and ${fmt(u.line)} ${stat(a)}.`) }],
+    [(a, b) => a.type === 'prop' && b.type === 'prop' && norm(a.player) === norm(b.player), (a, b) => {
+      const ta = tilt(a)[0] || (a.side === 'under' ? -1 : 1), tb = tilt(b)[0] || (b.side === 'under' ? -1 : 1), strong = OVERLAP.some(g => g.includes(a.k) && g.includes(b.k));
+      return ta * tb > 0 ? R(strong ? 'strong' : 'slight', 'together', `Both are ${who(a)}’s numbers: a big night lifts both${strong ? ', and they count some of the same plays' : ''}.`)
+        : R(strong ? 'strong' : 'slight', 'against', `These pull ${who(a)} in opposite directions: one needs a big night, the other a quiet one.`) }],
+    [(a, b) => a.type === 'win' && b.type === 'win', () => R('conflict', null, 'Only one team can win this game. Keep one.')],
+    [(a, b) => pairOf(a, b, 'win', 'draw'), () => R('conflict', null, 'A draw means neither team wins, so these can’t both hit. Keep one.')],
+    [(a, b) => a.type === 'spread' && b.type === 'spread', (a, b) => R('conflict', null, a.side === b.side ? `${a.team} is in twice at two lines. Keep one spread for this game.` : 'These are both sides of one spread. Keep one.')],
+    [(a, b) => a.type === 'total' && b.type === 'total', (a, b) => {
+      if (a.side === b.side) return R('strong', 'together', 'Two lines on the same total: if the harder one hits, so does the other.');
+      const o = a.side === 'under' ? b : a, u = o === a ? b : a;
+      return o.line >= u.line ? R('conflict', null, `The total can’t be over ${fmt(o.line)} and under ${fmt(u.line)} at once. Keep one.`) : R('strong', 'against', `Both hit only if the total lands between ${fmt(o.line)} and ${fmt(u.line)}.`) }],
+    [(a, b) => pairOf(a, b, 'spread', 'win'), (a, b) => { const [s, w] = pairOf(a, b, 'spread', 'win');
+      if (s.side === w.side) return R('strong', 'together', `${w.team} winning and covering ${lineTxt(s.line)} usually go together.`);
+      return s.line <= 0 ? R('conflict', null, `If ${s.team} covers ${lineTxt(s.line)}, ${s.team} wins, so ${w.team} can’t. Keep one.`)
+        : R('strong', 'against', `Both hit only if ${w.team} wins by less than ${fmt(s.line)}.`) }],
+    [(a, b) => pairOf(a, b, 'spread', 'draw'), (a, b) => { const [s] = pairOf(a, b, 'spread', 'draw');
+      return s.line < 0 ? R('conflict', null, `A draw means ${s.team} doesn’t cover ${lineTxt(s.line)}. Keep one.`) : s.line > 0 ? R('strong', 'together', `A draw also covers ${s.team} ${lineTxt(s.line)}.`)
+        : R('slight', null, `A draw makes ${s.team} ${lineTxt(s.line)} a push.`) }],
+    [(a, b) => pairOf(a, b, 'draw', 'total'), (a, b) => { const [, t] = pairOf(a, b, 'draw', 'total');
+      return lean(t.side === 'under' ? 1 : -1, 'Draws are more common when few goals go in.', 'A draw with plenty of goals is the less likely kind.', '') }],
+    [(a, b) => pairOf(a, b, 'win', 'total'), () => R('slight', null, 'A winner and the total are only loosely linked: a high-scoring game can go either way.')],
+    [(a, b) => pairOf(a, b, 'spread', 'total'), (a, b) => { const [s, t] = pairOf(a, b, 'spread', 'total'), fav = s.line < 0;
+      return lean((fav ? 1 : -1) * (t.side === 'under' ? -1 : 1), fav ? `A favourite that covers has usually scored plenty, which helps the over.` : `Low-scoring games tend to stay close, which helps ${s.team} ${lineTxt(s.line)}.`,
+        fav ? `A favourite that covers has usually scored plenty, which works against the under.` : `A high-scoring game tends to open up, which works against ${s.team} ${lineTxt(s.line)}.`, '') }],
+    [(a, b) => pairOf(a, b, 'prop', 'total'), (a, b) => { const [p, t] = pairOf(a, b, 'prop', 'total'), s = tilt(p)[1] * (t.side === 'under' ? -1 : 1);
+      return lean(s, `${who(p)}’s ${stat(p)} and the total tend to rise and fall together.`, `This needs ${who(p)} and the total to go opposite ways.`, `Same game, so they can move together a little.`) }],
+    [(a, b) => pairOf(a, b, 'prop', 'draw'), (a, b) => R('slight', null, `Same game: ${who(pairOf(a, b, 'prop', 'draw')[0])}’s night and the result can move together.`)],
+    [(a, b) => pairOf(a, b, 'prop', 'win') || pairOf(a, b, 'prop', 'spread'), (a, b) => { const [p, w] = pairOf(a, b, 'prop', 'win') || pairOf(a, b, 'prop', 'spread'), r = rel(p, w), t = tilt(p)[0];
+      if (!r || !t) return R('slight', null, `Same game: ${who(p)}’s night and the result can move together.`);
+      return r === 'mate' ? lean(t, `A big night from ${who(p)} helps ${w.team}.`, `This needs a quiet night from ${who(p)} while ${w.team} does well.`, '')
+        : lean(-t, `A quiet night from ${who(p)} helps ${w.team}.`, `A big night from ${who(p)} helps the other team, so this may work against ${w.team}.`, '') }],
+    [(a, b) => a.type === 'prop' && b.type === 'prop', (a, b) => {
+      const mates = a.team && b.team && nameEq(a.team, b.team), foes = (a.team && b.opp && nameEq(a.team, b.opp)) || (a.opp && b.team && nameEq(a.opp, b.team)), s = (a.side === 'under' ? -1 : 1) * (b.side === 'under' ? -1 : 1);
+      if (mates) { const q = FAM.pass.has(a.k) ? a : FAM.pass.has(b.k) ? b : null, c = q && (q === a ? b : a);
+        if (q && FAM.catch.has(c.k)) return s > 0 ? R('strong', 'together', `When ${who(q)} throws for more, ${who(c)} usually catches more too.`) : R('strong', 'against', `${who(q)} and ${who(c)} share the same passes, and these ask for opposite nights.`);
+        return R('slight', null, `Teammates: a big night for the team helps both, but one can take the other’s chances.`) }
+      if (foes) { const g = FAM.saves.has(a.k) ? a : FAM.saves.has(b.k) ? b : null, sh = g && (g === a ? b : a);
+        if (g && FAM.shots.has(sh.k)) return s > 0 ? R('strong', 'together', `Shots from ${who(sh)} that don’t go in are saves for ${who(g)}.`) : R('strong', 'against', `Shots from ${who(sh)} are saves for ${who(g)}, and these ask for opposite things.`);
+        const pk = a.k === 'pk' ? a : b.k === 'pk' ? b : null, bt = pk && (pk === a ? b : a);
+        if (pk && FAM.bat.has(bt.k)) return lean(-s, `A quiet night for ${who(bt)} suits ${who(pk)}’s strikeouts.`, `Strikeouts for ${who(pk)} mean fewer chances for ${who(bt)}.`, '');
+        return lean(tilt(a)[1] * tilt(b)[1], 'A fast, open game helps both.', 'These ask the game to go opposite ways.', 'Opponents in the same game, so they can move together a little.') }
+      return R('slight', null, 'Same game, so they can move together.') }],
+    [() => true, () => R('slight', null, 'Same game, so they can move together.')],
+  ];
+  function relate(a, b) {
+    if (!a || !b) return R('independent', null, '');
+    const x = { same: a.id === b.id || sameGame(a, b) };
+    for (const [test, out] of RULES) if (test(a, b, x)) { const r = out(a, b, x); if (!r.why) r.why = 'Same game, so they can move together a little.'; return r }
+  }
+  const RANK = { independent: 0, slight: 1, strong: 2, conflict: 3 };
+  // the strongest tie between one leg and the legs before it
+  function strongest(leg, others) { let best = null; for (const o of others) { const r = { ...relate(leg, o), with: o }; if (!best || RANK[r.level] > RANK[best.level]) best = r } return best }
+  // a key per leg that is shared by every leg from one game, so the sums treat them together
+  function linkKeys(legs) {
+    const up = legs.map((_, i) => i), find = i => up[i] === i ? i : (up[i] = find(up[i]));
+    for (let i = 0; i < legs.length; i++) for (let j = i + 1; j < legs.length; j++) if (sameGame(legs[i], legs[j])) up[find(j)] = find(i);
+    return legs.map((l, i) => 'g' + find(i));
+  }
+
+  /* ---------- the chance every leg hits, allowing for linked legs ----------
+     p        the plain product of every leg's chance, as if no leg affected another
+     lo, hi   a rough range once linked legs are allowed for. For each pair from one game, relate() gives a level and a
+              direction, and each level stands for a loose band of how much the two could move together (a correlation):
+                slight  together 0 to .15   against −.15 to 0   either way −.1 to .1
+                strong  together .15 to .5  against −.5 to −.15 either way −.3 to .3
+              A pair's chance both hit is p1·p2·(1 + ρ·√(q1·q2 / p1·p2)), q = 1 − p, and a game's legs multiply that factor
+              over every pair (a second-order estimate). lo uses the low end of every band and hi the high end. The result
+              is held inside the hard limits that hold whatever the link (Fréchet): no higher than the least likely leg from
+              that game, no lower than what the legs' chances alone guarantee. A game with a conflict gives 0.
+     The bands are judgement, not measurement, so the page calls this a rough range. */
+  const BAND = { slight: { together: [0, .15], against: [-.15, 0], null: [-.1, .1] }, strong: { together: [.15, .5], against: [-.5, -.15], null: [-.3, .3] } };
+  function estimate(legs, get) {
+    const ps = legs.map(get); if (!legs.length || ps.some(v => v == null)) return null;
+    const keys = linkKeys(legs), groups = new Map(); legs.forEach((l, i) => groups.set(keys[i], [...(groups.get(keys[i]) || []), i]));
+    let p = 1, lo = 1, hi = 1, flo = 1, fhi = 1, linked = false, conflict = false;
+    for (const idx of groups.values()) {
+      const q = idx.map(i => clamp(ps[i], 1e-4, 1 - 1e-4)), ind = q.reduce((a, b) => a * b, 1); p *= ind;
+      if (idx.length === 1) { lo *= ind; hi *= ind; flo *= ind; fhi *= ind; continue }
+      linked = true; let fl = 1, fh = 1, bad = false;
+      for (let a = 0; a < idx.length; a++) for (let b = a + 1; b < idx.length; b++) {
+        const r = relate(legs[idx[a]], legs[idx[b]]); if (r.level === 'conflict') { bad = true; continue }
+        const band = BAND[r.level]?.[r.dir ?? 'null']; if (!band) continue;
+        const k = Math.sqrt((1 - q[a]) * (1 - q[b]) / (q[a] * q[b])); fl *= Math.max(0, 1 + band[0] * k); fh *= 1 + band[1] * k;
+      }
+      const gLo = Math.max(0, q.reduce((s, v) => s + v, 0) - (q.length - 1)), gHi = Math.min(...q);
+      if (bad) { conflict = true; lo = hi = flo = fhi = 0; continue }
+      lo *= clamp(ind * fl, gLo, gHi); hi *= clamp(ind * fh, gLo, gHi); flo *= gLo; fhi *= gHi;
+    }
+    if (conflict) { lo = hi = flo = fhi = 0 }
+    return { p, lo: Math.min(lo, hi), hi: Math.max(lo, hi), flo, fhi, linked, conflict };
+  }
+
+  /* ---------- what stops a parlay being locked in ----------
+     -> [{ kind: 'conflict' | 'started' | 'stale', ids, why }]. Every rule says what it found and what to do. */
+  const priceAge = l => l.rAt ?? l.mAt ?? null;
+  function blockers(legs, now = Date.now()) {
+    const out = [];
+    for (let i = 0; i < legs.length; i++) for (let j = i + 1; j < legs.length; j++) { const r = relate(legs[i], legs[j]); if (r.level === 'conflict') out.push({ kind: 'conflict', ids: [legs[i].id, legs[j].id], why: r.why, a: legs[i], b: legs[j] }) }
+    for (const l of legs) if (l.start < now) out.push({ kind: 'started', ids: [l.id], why: `${l.game || l.text} has started. Take it out to lock in the rest.` });
+    const old = legs.filter(l => l.start >= now && (priceAge(l) == null || now - priceAge(l) > STALE_MIN * 60000));
+    if (old.length) out.push({ kind: 'stale', ids: old.map(l => l.id), why: `${old.length === legs.length && old.length > 1 ? 'The prices for these picks were' : old.length === 1 ? `The price for ${old[0].short || old[0].text} was` : `The prices for ${old.length} picks were`} read more than ${STALE_MIN} minutes ago. Refresh them before you lock in.` });
+    return out;
+  }
+
   /* ---------- live odds: what the books post right now for one leg ---------- */
   const oddsCache = new Map(), slugs = new Map();   // game -> { at, promise, data }; soccer game -> its league
   function oddsBoard(leg, g, force) {
@@ -334,7 +518,7 @@
       const text = p.yes ? `${p.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(p.line)} ${String(p.label).toLowerCase()}`;
       return { id: `prop:${lg}:${p.name}:${p.k}:${p.line}:${s}`, type: 'prop', lg, sport: p.sport, player: p.name, team: p.team || '', opp: p.opp || '', photo: p.photo || '', k: p.k, label: p.label, line: p.line, side: s, ...(p.yes ? { yes: true } : {}),
         start: +p.start, game: p.game || '', gameKey: p.gameKey || `${lg}:${p.name}`, text: `${p.name}: ${text}`, short: `${p.name.split(' ').slice(-1)[0]} ${text.toLowerCase()}`,
-        ours0: flip ? 1 - p.ours : p.ours, ...(p.market != null ? { market0: flip ? 1 - p.market : p.market, msrc: [...new Set((p.offers || []).filter(o => o.pOver != null && o.line === p.line).map(o => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' })[o.book] || o.book))].join(' and ') || 'the apps', mAt: p.at || Date.now() } : {}), ...(p.mu != null ? { mu: p.mu } : p.avg != null ? { mu: p.avg } : {}), ...(p.sd ? { sd: p.sd } : {}) } }
+        rAt: p.at || Date.now(), ours0: flip ? 1 - p.ours : p.ours, ...(p.market != null ? { market0: flip ? 1 - p.market : p.market, msrc: [...new Set((p.offers || []).filter(o => o.pOver != null && o.line === p.line).map(o => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' })[o.book] || o.book))].join(' and ') || 'the apps', mAt: p.at || Date.now() } : {}), ...(p.mu != null ? { mu: p.mu } : p.avg != null ? { mu: p.avg } : {}), ...(p.sd ? { sd: p.sd } : {}) } }
     if (p.type === 'match' && p.m) { const m = p.m, lg = m.sport === 'soccer' ? 'soccer' : m.lg === 'nfl' ? 'nfl' : 'cfb', L = LG[lg], draw = m.pick === 'draw';
       const leg = { id: `${draw ? 'draw' : 'win'}:${lg}:${m.key}:${m.pick}`, type: draw ? 'draw' : 'win', lg, sport: lg, home: m.home, away: m.away, side: draw ? 'home' : m.pick, team: draw ? '' : m[m.pick], start: m.ko * 1000,
         game: `${m.home} v ${m.away}`, gameKey: 'match:' + m.key, text: draw ? `${m.home} v ${m.away}: draw` : `${m[m.pick]} to win`, short: draw ? `${m.home} v ${m.away} draw` : `${m[m.pick]} to win`, ours0: p.ours, ...(p.market != null ? { market0: p.market } : {}) };
@@ -347,12 +531,14 @@
   // a leg on a game from the scoreboard. kind: win | draw | total | spread; side: home | away | over | under; line for totals and spreads (the side's own line)
   function fromGame(g, kind, side, line) {
     const L = LG[g.lg], o = g.odds || {}, fair = o.fair || {}, vs = `${g.away.name} at ${g.home.name}`, base = { lg: g.lg, sport: g.lg, eid: g.eid, home: g.home.full || g.home.name, away: g.away.full || g.away.name, homeAbbr: g.home.abbr, awayAbbr: g.away.abbr,
-      start: +g.date, game: L.sport === 'soccer' ? `${g.home.name} v ${g.away.name}` : vs, gameKey: `${g.lg}:${g.eid}`, t0: o.total || L.tot, msrc: o.book || 'ESPN scoreboard', mAt: g.readAt || Date.now() };
+      start: +g.date, game: L.sport === 'soccer' ? `${g.home.name} v ${g.away.name}` : vs, gameKey: `${g.lg}:${g.eid}`, t0: o.total || L.tot, msrc: o.book || 'ESPN scoreboard', mAt: g.readAt || Date.now(), rAt: g.readAt || Date.now() };
+    // the line the book posted for this side, and whether the member moved away from it (a line with none posted is the member's own)
+    const posted = kind === 'total' ? o.total ?? null : kind === 'spread' && o.spread != null ? (side === 'home' ? o.spread : -o.spread) : null, own = { ...(posted != null ? { posted } : {}), ...(posted == null || posted !== line ? { edited: true } : {}) };
     const team = side === 'away' ? g.away : g.home, mHome = o.spread != null && !L.pois ? -o.spread : marginFrom(L, fair.home != null ? (L.tie === 'draw' ? fair.home : fair.home / (fair.home + fair.away)) : null, o.total || L.tot);
     if (kind === 'win') return { ...base, id: `win:${g.lg}:${g.eid}:${side}`, type: 'win', side, team: team.name, logo: team.logo, text: `${team.name} to win`, short: `${team.abbr || team.name} to win`, m0: side === 'away' ? -mHome : mHome, ...(fair[side] != null ? { market0: fair[side] } : {}) };
     if (kind === 'draw') return { ...base, id: `draw:${g.lg}:${g.eid}`, type: 'draw', side: 'home', text: `${g.home.name} v ${g.away.name}: draw`, short: `${g.home.abbr} v ${g.away.abbr} draw`, m0: mHome, ...(fair.draw != null ? { market0: fair.draw } : {}) };
-    if (kind === 'total') return { ...base, id: `total:${g.lg}:${g.eid}:${side}:${line}`, type: 'total', side, line, text: `${base.game}: ${side === 'under' ? 'under' : 'over'} ${fmt(line)} ${L.unit}`, short: `${g.away.abbr || g.away.name}/${g.home.abbr || g.home.name} ${side === 'under' ? 'under' : 'over'} ${fmt(line)}` };
-    if (kind === 'spread') return { ...base, id: `spread:${g.lg}:${g.eid}:${side}:${line}`, type: 'spread', side, line, team: team.name, logo: team.logo, text: `${team.name} ${line > 0 ? '+' : line < 0 ? '−' : ''}${fmt(Math.abs(line))}`, short: `${team.abbr || team.name} ${line > 0 ? '+' : line < 0 ? '−' : ''}${fmt(Math.abs(line))}`, m0: side === 'away' ? -mHome : mHome };
+    if (kind === 'total') return { ...base, id: `total:${g.lg}:${g.eid}:${side}:${line}`, type: 'total', side, line, ...own, text: `${base.game}: ${side === 'under' ? 'under' : 'over'} ${fmt(line)} ${L.unit}`, short: `${g.away.abbr || g.away.name}/${g.home.abbr || g.home.name} ${side === 'under' ? 'under' : 'over'} ${fmt(line)}` };
+    if (kind === 'spread') return { ...base, id: `spread:${g.lg}:${g.eid}:${side}:${line}`, type: 'spread', side, line, ...own, team: team.name, logo: team.logo, text: `${team.name} ${line > 0 ? '+' : line < 0 ? '−' : ''}${fmt(Math.abs(line))}`, short: `${team.abbr || team.name} ${line > 0 ? '+' : line < 0 ? '−' : ''}${fmt(Math.abs(line))}`, m0: side === 'away' ? -mHome : mHome };
     return null;
   }
 
@@ -378,6 +564,7 @@
   async function add(draft) {
     const legs = draft.legs || []; if (!legs.length) throw new Error('Add at least one pick first.');
     const late = legs.find(l => l.start < Date.now() - 120000); if (late) throw new Error(`${late.game || late.text} has already started. Take that pick out and save again.`);
+    const clash = blockers(legs).find(b => b.kind === 'conflict'); if (clash) throw new Error(clash.why);
     const body = { op: 'add', name: draft.name || '', legs, odds: draft.odds ?? null, stake: draft.stake ?? null, ours0: combine(legs, start0)?.p ?? null, market0: combine(legs, l => l.market0)?.p ?? null };
     if (me()) { const d = await api('/api/parlays', body); P.list = [...d.parlays, ...P.list.filter(p => p.local)]; changed(); return d.parlay }
     const p = { id: 'l' + Date.now().toString(36), at: Date.now(), name: body.name, legs: legs.map(l => ({ ...l })), status: 'open', local: true, ...(body.odds != null ? { odds: body.odds } : {}), ...(body.stake != null ? { stake: body.stake } : {}),
@@ -432,7 +619,7 @@
       units: priced ? units : null, staked, roi: staked ? units / staked : null, priced, est: series.some(s => s.est && s.u != null), series, last: all.slice(-10) };
   }
 
-  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
+  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, relate, strongest, sameGame, linkKeys, estimate, blockers, STALE_MIN, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
     etDay, fmt, dec, amFromP, amTxt, marginFrom, norm };
   document.addEventListener('fl:me', () => { load() });
 })();
