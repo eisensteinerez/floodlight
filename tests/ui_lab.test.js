@@ -105,7 +105,8 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
       assert.match(await p.textContent('#rpChT'), /^Over 25\.5 in \d+ of \d+/);
       // the breakdown adds up to the supported edge shown
       const eb = await p.$$eval('.rp-eb td', ts => ts.map(t => +t.textContent.replace('−', '-').replace('+', '')));
-      assert.strictEqual(eb.slice(0, -1).reduce((a, b) => a + b, 0), eb[eb.length - 1]);
+      if (await p.evaluate(() => !!window.flMarkets)) assert.strictEqual(eb.slice(0, -1).reduce((a, b) => a + b, 0), eb[eb.length - 1]);
+      else assert.ok(eb.length === 2 && eb[1] <= eb[0], 'without per-reason factors only raw and supported are shown');
       await p.click('[data-rptab="log"]'); assert.ok(await p.isVisible('.rp-log')); assert.strictEqual(await p.getAttribute('[data-rptab="log"]', 'aria-selected'), 'true');
       for (let i = 0; i < 30; i++) { await p.keyboard.press('Tab'); assert.ok(await p.evaluate(() => !!document.querySelector('#flRP')?.contains(document.activeElement)), `Tab ${i + 1} left the panel at ${w}`) }
       await p.keyboard.press('Escape'); await p.waitForTimeout(200);
