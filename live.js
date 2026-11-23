@@ -190,7 +190,10 @@
   function setDay(o) { L.day = o; const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + o); hub()?.setDay?.(d); redraw() }
   setInterval(() => { const el = page(); if (!el || el.hidden) return; el.querySelectorAll('[data-lvago]').forEach(t => { const x = ago(+t.dataset.lvago); if (t.textContent !== x) t.textContent = x }) }, 15000);
   window.flPages?.add('live', { title: 'Live', render, fresh: true,
-    onShow(el, arg) { const w = /^watch:([a-z]+)$/.exec(arg || ''); if (w && WATCH.some(x => x[0] === w[1])) { L.watch = w[1]; keep(); redraw() }
+    /* Home's glance numbers open the list they count: "show:live,watch:national". Any other filter is cleared, so the
+       list matches the number that was pressed. */
+    onShow(el, arg) { const kv = Object.fromEntries(String(arg || '').split(',').map(x => x.split(':')).filter(x => x.length === 2));
+      if (kv.show || kv.watch) { L.day = 0; L.sport = 'all'; L.only = 'all'; L.more.clear(); if (['live', 'next', 'done'].includes(kv.show)) L.show = kv.show; L.watch = WATCH.some(x => x[0] === kv.watch) ? kv.watch : 'any'; keep(); redraw() }
       if (L.day) setDay(L.day); else hub()?.today(); clearInterval(L.timer); L.timer = setInterval(() => { if (!document.hidden && !L.day && !(window.flSaver?.() && Date.now() - (hub()?.at() || 0) < 12e4)) hub()?.load(true) }, 30000) },
     onHide() { clearInterval(L.timer); if (L.day) hub()?.today() } });
 })();

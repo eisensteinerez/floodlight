@@ -126,6 +126,8 @@ html:root[data-theme="stadium-gold"] .hm-cmd-i b{font:italic 800 18px/1 var(--fo
 .hm-ftr-skl{min-height:440px;border-radius:var(--radius-card)}
 .hm-card-skl{min-height:132px}
 .hm-skl{min-height:52px;margin:6px 0}
+.hm-slow{min-height:calc(var(--rows,3) * 64px);display:grid;align-content:center}
+.hm-slow-ftr{min-height:440px;justify-content:center}
 .hm-empty{align-content:center;min-height:320px}
 .hm-heat{display:flex;flex-direction:column}
 .hm-heat .sec-h{margin-bottom:6px}
