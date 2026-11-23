@@ -95,8 +95,10 @@ straight to it with `/#record`.
 codex-soccer, claude-soccer, instinct-soccer, cafe-picks, parlay-predictor; ez-picks is left out because its picks are
 screenshots). It's built to run with nobody checking it:
 
-- **Counting.** In the props channels a card is one play, like a parlay: every pick hits = a win, one miss = a loss,
-  and a push or a player who didn't play doesn't break it (4-0-1 is a win). In the soccer channels every pick is its
+- **Counting.** In the props channels (codex, claude, instinct) a post is one card, played like a parlay, even when its
+  picks are listed as singles: every pick hits = a win, one miss = a loss (10 picks with one miss is 0-1, not 9-1),
+  and a push or a player who didn't play doesn't break it (4-0-1 is a win). In cafe-picks and parlay-predictor each
+  parlay or ladder is one play and a single with its own stake is its own play. In the soccer channels every pick is its
   own play (four picks that all hit = 4-0).
 - **Reading cards** (`pick_parse.py`). Posts split over several messages are joined and the whole post is read.
   TRACK lines win; otherwise the FINAL CARD; otherwise every play under a card heading (NBA PARLAY, PLAY #2, LADDER

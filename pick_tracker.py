@@ -40,7 +40,7 @@ import storage
 DEFAULT_CHANNELS = ["codex-props", "claude-props", "instinct-props", "codex-soccer", "claude-soccer", "instinct-soccer",
                     "cafe-picks", "parlay-predictor"]
 EPOCH_MS = 1420070400000
-VERSION = 5
+VERSION = 6
 LOOK_BACK_H = 48          # posts read each run
 REGRADE_DAYS = 3          # cards re-graded each run (the double check)
 KEEP_DAYS = 3650          # cards kept in the record (all of them: the all-time record is the whole history)
@@ -120,13 +120,20 @@ def is_soccer(ch):
     return "soccer" in (STATE["channels"].get(ch) or "")
 
 
+def own_singles(ch):
+    """cafe-picks and parlay-predictor post singles as plays of their own (a parlay or a ladder is one play); in the
+    props channels every pick in a post is one card."""
+    return bool(re.search(r"cafe|parlay-predictor", STATE["channels"].get(ch) or ""))
+
+
 def add_posts(ch, posts):
     """Cards from a channel's posts into STATE. A card already reported keeps the picks it was graded on."""
     soccer = is_soccer(ch)
+    singles = own_singles(ch)
     for p in posts:
         if not p["bot"]:
             continue
-        for i, c in enumerate(P.cards_in(p, "soccer" if soccer else "props", p["at"].astimezone(ET).date())):
+        for i, c in enumerate(P.cards_in(p, "soccer" if soccer else "props", p["at"].astimezone(ET).date(), singles)):
             cid = f"{p['id']}:{i}"
             with _lock:
                 old = STATE["cards"].get(cid)
@@ -505,9 +512,9 @@ def report(update=False):
         first = min(c["at"] for c in cards)[:10] if cards else day
         parts = chunks(["\n".join(recheck[:2]) + "\n"] + recheck[2:], 3800, "\n")
         for k, desc in enumerate(parts):
-            e = {"color": B.BLUE, "description": desc}
+            e = {"color": B.BLUE, "description": desc, "_kind": "recheck"}
             if k == 0:
-                e["title"] = "🔁 WHOLE HISTORY RE-CHECKED"
+                e["title"] = f"🔁 WHOLE HISTORY RE-CHECKED · {STATE.get('rebuildId') or VERSION}"
             if k == len(parts) - 1:
                 e["footer"] = {"text": f"Every post since {first} was read again and graded from ESPN and FotMob: every play, leg "
                                        "counts, extras kept apart, the right game day. The all-time records below are the result."}
@@ -534,15 +541,49 @@ def send(dest, payload):
             time.sleep(3 * (attempt + 1))
 
 
+def recent_posts(dest, hours=20):
+    """The bot's own posts in the results channel from the last `hours`: [header and embed titles]. Used to never post
+    the same thing twice, even if the saved record was lost (a server restart) and the run starts over."""
+    try:
+        me = (api("GET", "/users/@me") or {}).get("id")
+        msgs = api("GET", f"/channels/{dest}/messages?limit=100") or []
+    except Exception:
+        return []
+    cut = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
+    out = []
+    for m in msgs:
+        if (m.get("author") or {}).get("id") != me or (B.parse_date(m.get("timestamp")) or cut) < cut:
+            continue
+        out.append(m.get("content") or "")
+        out += [e.get("title") or "" for e in m.get("embeds") or []]
+    return out
+
+
 def post(dest, msgs):
-    """Post the results. Returns the ids of the cards whose message went out (only those are marked as reported)."""
+    """Post the results. Returns the ids of the cards whose message went out (only those are marked as reported).
+    A results post whose header is already in the channel (the same night posted twice) is skipped, and so is a
+    history re-check posted in the last day."""
     if not dest:
         STATE["postError"] = "There's no #verified-records channel."
         return []
+    seen = recent_posts(dest)
+    if msgs and msgs[0][0] and msgs[0][0] in seen:
+        print("pick tracker: already posted, skipping")
+        STATE.pop("postError", None)
+        return [i for _, _, ids in msgs for i in ids]
+    rid = next((m[1]["title"] for m in msgs if m[1].get("_kind") == "recheck" and m[1].get("title")), None)
+    if rid and rid in seen:
+        head = msgs[0][0]
+        msgs = [m for m in msgs if m[1].get("_kind") != "recheck"]
+        if not any(ids for _, _, ids in msgs):      # nothing new besides the re-check: don't post the records again
+            STATE.pop("postError", None)
+            return []
+        msgs[0] = (head,) + msgs[0][1:]
     done = []
     try:
         for content, embed, ids in msgs:
-            send(dest, {"content": content, "embeds": [embed], "allowed_mentions": {"parse": []}})
+            send(dest, {"content": content, "embeds": [{k: v for k, v in embed.items() if not k.startswith("_")}],
+                        "allowed_mentions": {"parse": []}})
             done += ids
             time.sleep(1.5)
     except Exception as e:
@@ -781,6 +822,8 @@ def reload():
             STATE["before"] = {f"{c.get('post')}|{c.get('play')}": c.get("result") for c in (STATE.get("cards") or {}).values()
                                if c.get("reported") and not c.get("superseded")}
         STATE["cards"] = {}
+        if not STATE.get("rebuild"):
+            STATE["rebuildId"] = f"{VERSION}.{int(time.time()) // 60}"
         STATE["rebuild"] = True
         STATE["v"] = VERSION
 
