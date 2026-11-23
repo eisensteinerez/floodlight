@@ -40,9 +40,10 @@ import storage
 DEFAULT_CHANNELS = ["codex-props", "claude-props", "instinct-props", "codex-soccer", "claude-soccer", "instinct-soccer",
                     "cafe-picks", "parlay-predictor"]
 EPOCH_MS = 1420070400000
-VERSION = 4
+VERSION = 5
 LOOK_BACK_H = 48          # posts read each run
 REGRADE_DAYS = 3          # cards re-graded each run (the double check)
+KEEP_DAYS = 3650          # cards kept in the record (all of them: the all-time record is the whole history)
 D = {}
 STATE = {"v": VERSION, "cards": {}, "posted": {}, "channels": {}, "icons": {}, "dest": None}
 _lock = threading.RLock()
@@ -94,10 +95,12 @@ def resolve_channels():
     return out, dest
 
 
-def messages(cid, start, end):
-    """Messages in a channel posted between two times, oldest first."""
-    out, after = [], snowflake(start)
-    for _ in range(10):
+def messages(cid, start, end, pages=10):
+    """Messages in a channel posted between two times, oldest first (100 a page)."""
+    out, after = [], snowflake(start) if start else "0"
+    for k in range(pages):
+        if k:
+            time.sleep(0.4)   # a long history: stay well under Discord's read limit
         page = api("GET", f"/channels/{cid}/messages?limit=100&after={after}") or []
         if not page:
             break
@@ -131,6 +134,7 @@ def add_posts(ch, posts):
                     continue
                 STATE["cards"][cid] = {"id": cid, "ch": ch, "post": p["id"], "at": p["at"].isoformat(), "slate": c["slate"].isoformat(),
                                        "sport": c["sport"], "play": c["play"], "single": soccer, "legs": c["legs"],
+                                       "extras": c.get("extras") or [], "title": c.get("title") or "",
                                        "result": None, "superseded": False, "reported": None}
 
 
@@ -155,9 +159,11 @@ def supersede():
 
 
 def collect(hours=LOOK_BACK_H):
+    """Read the pick channels' posts from the last `hours` (None: from each channel's first post)."""
     chans, dest = resolve_channels()
     end = dt.datetime.now(dt.timezone.utc)
-    start = end - dt.timedelta(hours=hours)
+    start = end - dt.timedelta(hours=hours) if hours else None
+    pages = 10 if hours else 1000
     with _lock:
         STATE["dest"] = dest
         STATE["channels"] = {c["id"]: c["name"] for c in chans}
@@ -167,12 +173,12 @@ def collect(hours=LOOK_BACK_H):
         time.sleep(0.8)   # Discord allows a few reads a second
         try:
             try:
-                msgs = messages(c["id"], start, end)
+                msgs = messages(c["id"], start, end, pages)
             except Exception as e:
                 if "429" not in str(e):
                     raise
                 time.sleep(5)
-                msgs = messages(c["id"], start, end)
+                msgs = messages(c["id"], start, end, pages)
         except Exception as e:
             print(f"pick tracker: can't read #{c['name']}: {e}", file=sys.stderr)
             read_errors.append(c["name"])
@@ -194,9 +200,15 @@ def grade_all():
         if c["slate"] < cut and c.get("result") is not None and all(g.get("result") is not None for g in c["legs"]):
             continue
         slate = dt.date.fromisoformat(c["slate"])
-        for g in c["legs"]:
+        for g in c["legs"] + (c.get("extras") or []):
             G.grade_leg(g, slate)
         c["result"] = G.card_result(c["legs"])
+
+
+def card_day(c):
+    """The day a card is recapped on: the day its last game was played (a Saturday post for Sunday's NFL games is
+    Sunday's), else its slate date."""
+    return max([g["game_day"] for g in c["legs"] if g.get("game_day")] + [c["slate"]])
 
 
 def settled(c):
@@ -248,34 +260,89 @@ MARK = {"won": "✅", "lost": "❌", "push": "➖", "void": "⚪", "unknown": "�
 TAG = {"won": "✅ **CASHED**", "lost": "❌ **MISSED**", "void": "⚪ **VOID**", "unknown": "❔ **COULDN'T VERIFY**", None: "⏳ **WAITING**"}
 
 
-def leg_line(g):
+def leg_line(g, extra=False):
     a = g.get("actual") or ""
-    return f"{MARK[g.get('result')]} {g['label']}" + (f" — **{a}**" if a and g.get("result") in ("won", "lost", "push") else f" — {a}" if a else "")
+    r = g.get("result")
+    label = g["label"]
+    if g.get("player_full") and B.norm(g["player_full"]) != B.norm(g.get("player") or ""):
+        label += f" ({g['player_full']})"
+    line = f"{MARK[r]} {label}" + (f" — **{a}**" if a and r in ("won", "lost", "push") else f" — {a}" if a else "")
+    why = g.get("why")
+    if why and r in ("lost", "void", "push", "unknown"):
+        hurt = "injury" in (g.get("flags") or []) and r == "lost" and "🚑" not in why
+        line += f"\n-# ↳ {'🚑 ' if hurt else ''}{why}"
+    return line
 
 
-def card_block(c, correction=None):
+def play_name(c):
+    p = c["play"]
+    if p.startswith("play"):
+        return f"Play #{p[4:]}"
+    if p.startswith("leg:"):
+        return re.sub(r"\b(\w)", lambda m: m[1].upper(), p[4:]).replace("-Leg", "-leg")
+    if p.startswith("single:"):
+        return "Single"
+    return {"main": "", "best": "Best bet", "ladder": "Ladder", "longshot": "Longshot"}.get(p, "")
+
+
+def verdict(c):
+    """One line on why a card lost: the leg(s) that sank it, by how much, and whether that player got hurt or left
+    early. Legs voided for a DNP are named too, since they drop off the card."""
+    lost = [g for g in c["legs"] if g.get("result") == "lost"]
+    dnp = [g for g in c["legs"] if g.get("result") == "void"]
+    bits = []
+    for g in lost:
+        if g.get("t") != "prop":
+            bits.append(f"{g['label']}")
+            continue
+        who = g.get("player_full") or g.get("player") or g["label"]
+        fl = set(g.get("flags") or [])
+        how = " 🚑 got hurt and" if "injury" in fl and "left" in fl else " left early and" if "left" in fl else ""
+        first = (g.get("why") or "").split(" · ")[0]
+        gap = f" ({first})" if first.endswith(("short", "too many")) else ""
+        bits.append(f"{who}{how} missed{gap}")
+    if dnp:
+        bits.append(", ".join(g.get("player_full") or g.get("player") or g["label"] for g in dnp) +
+                    " didn't play, so that leg drops off")
+    if not bits:
+        return ""
+    return "-# " + ("Lost on: " if lost else "") + " · ".join(bits)
+
+
+def card_block(c, correction=None, late=False):
     when = B.parse_date(c["at"]).astimezone(ET)
     posted = f"posted {when:%a} {when.strftime('%I:%M %p').lstrip('0')}"
-    play = {"main": "", "best": "Best bet · ", "ladder": "Ladder · ", "longshot": "Longshot · "}.get(c["play"], "")
-    if c["play"].startswith("play"):
-        play = f"Play #{c['play'][4:]} · "
+    name = play_name(c)
+    play = f"{name} · " if name else ""
     if c["single"]:
         s = stats([c])
         head = f"**{wl(s)}** · {play}{len(c['legs'])} pick{'s' * (len(c['legs']) != 1)} · {posted}"
     else:
         hits = sum(g.get("result") == "won" for g in c["legs"])
         decided = sum(g.get("result") in ("won", "lost") for g in c["legs"])
-        head = f"{TAG[c.get('result')]} · {play}{len(c['legs'])}-leg card · {hits}/{decided} hit · {posted}"
+        size = "single" if len(c["legs"]) == 1 else f"{len(c['legs'])}-leg card"
+        head = f"{TAG[c.get('result')]} · {play if name != 'Single' else ''}{size} · {hits}/{decided} hit · {posted}"
+    if late:
+        head += " · finished late"
     if correction:
         head = f"🔁 **Corrected** (was {correction}) · " + head
-    return head + "\n" + "\n".join(leg_line(g) for g in c["legs"])
+    lines = [head] + [leg_line(g) for g in c["legs"]]
+    v = verdict(c) if not c["single"] else ""
+    if v:
+        lines.append(v)
+    ex = c.get("extras") or []
+    if ex:
+        hit = sum(g.get("result") == "won" for g in ex)
+        lines.append(f"*Also in the post, not part of the card ({hit}/{len(ex)} hit):*")
+        lines += [leg_line(g) for g in ex]
+    return "\n".join(lines)
 
 
 def short_block(c):
     when = B.parse_date(c["at"]).astimezone(ET)
     res = wl(stats([c])) if c["single"] else {"won": "✅", "lost": "❌", "void": "⚪", "unknown": "❔", None: "⏳"}[c.get("result")]
     legs = ", ".join(f"{MARK[g.get('result')]}{g['label']}" for g in c["legs"])
-    return f"**{res}** {c['slate'][5:]} {c['play']} ({when:%a} {when.strftime('%I:%M%p').lstrip('0').lower()}): {legs}"
+    return f"**{res}** {card_day(c)[5:]} {play_name(c) or 'card'} ({when:%a} {when.strftime('%I:%M%p').lstrip('0').lower()}): {legs}"
 
 
 def card_sport(c):
@@ -304,16 +371,26 @@ def recap_day():
     return (now_et() - dt.timedelta(hours=9)).date().isoformat()
 
 
-def channel_report(ch, new, fixed, everything, update=False):
+def chunks(blocks, size=3900, sep="\n\n"):
+    out, cur = [], ""
+    for b in blocks:
+        if len(b) > size:
+            b = b[:size - 2] + "\n…"
+        if cur and len(cur) + len(sep) + len(b) > size:
+            out.append(cur)
+            cur = ""
+        cur = f"{cur}{sep}{b}" if cur else b
+    return out + ([cur] if cur else [])
+
+
+def channel_report(ch, new, fixed, everything, update=False, late=()):
     """One channel's recap of the day: that day's cards, the day's record, then the all-time record (props channels
-    also by sport)."""
+    also by sport). A list of embeds: long nights are split so nothing is cut off."""
     name, icon = STATE["channels"].get(ch, ch), STATE.get("icons", {}).get(ch, "🎯")
     soccer = is_soccer(ch)
-    today, alltime = stats(new + [c for c, _ in fixed]), stats(everything)
-    blocks = [card_block(c) for c in new] + [card_block(c, was) for c, was in fixed]
-    desc = "\n\n".join(blocks)
-    if len(desc) > 3900:
-        desc = desc[:3900] + "\n…"
+    today, alltime = stats(new + list(late) + [c for c, _ in fixed]), stats(everything)
+    blocks = [card_block(c) for c in new] + [card_block(c, late=True) for c in late] + [card_block(c, was) for c, was in fixed]
+    parts = chunks(blocks) or ["–"]
     color = B.GREY if not today["n"] else B.GREEN if today["won"] >= today["lost"] else B.RED
     unit = "picks" if soccer else "cards"
     fields = [{"name": "Today", "value": f"**{wl(today)}** {unit}", "inline": True},
@@ -323,11 +400,19 @@ def channel_report(ch, new, fixed, everything, update=False):
         subs = sport_records(everything)
         if subs:
             fields.append({"name": "All-time by sport", "value": " · ".join(f"{k} **{wl(v)}** ({pct(v['pct'])})" for k, v in subs.items()), "inline": False})
-    return {"author": {"name": f"{icon}  {name.upper().replace('-', ' ')}"},
-            "title": ("Updated results" if update else "Results") + f" · {wl(today)} {unit}",
-            "color": color, "description": desc, "fields": fields,
-            "footer": {"text": "Every pick counts on its own" if soccer else
-                       "A card is one play: all picks hit = win, one miss = loss · pushes and DNPs don't break it"}}
+    out = []
+    for i, desc in enumerate(parts):
+        e = {"color": color, "description": desc}
+        if i == 0:
+            e["author"] = {"name": f"{icon}  {name.upper().replace('-', ' ')}"}
+            e["title"] = ("Updated results" if update else "Results") + f" · {wl(today)} {unit}"
+        if i == len(parts) - 1:
+            e["fields"] = fields
+            e["footer"] = {"text": "Every pick counts on its own" if soccer else
+                           "A card is one play: all picks hit = win, one miss = loss · pushes and DNPs don't break it · "
+                           "extras and add-ons are shown, not counted"}
+        out.append(e)
+    return out
 
 
 def board_block(by_ch):
@@ -355,32 +440,78 @@ def board_block(by_ch):
     return "\n".join(out)
 
 
+def recheck_block(cards):
+    """After a rebuild: the cards whose result changed with the new reader and grader, and how many it read for the
+    first time, so the records' changes are out in the open. A list of lines."""
+    before = STATE.get("before") or {}
+    lines, first = [], 0
+    for c in sorted(cards, key=lambda c: c["at"]):
+        if c["single"] or not settled(c) or c.get("result") in (None, "unknown"):
+            continue
+        key = f"{c['post']}|{c['play']}"
+        if key not in before:
+            first += 1
+            continue
+        was = before[key]
+        if was == c.get("result"):
+            continue
+        name = STATE["channels"].get(c["ch"], "?")
+        tag = {"won": "✅ win", "lost": "❌ loss", "void": "⚪ void"}.get(c["result"], c["result"])
+        prev = {"won": "win", "lost": "loss", "void": "void", "unknown": "couldn't verify"}.get(was, str(was))
+        lines.append(f"**#{name}** {card_day(c)[5:]} {play_name(c) or 'card'}: {tag} (was {prev})")
+    head = [f"{len(lines)} result(s) changed." if lines else "No earlier result changed."]
+    if first:
+        head.append(f"{first} card(s) were read for the first time (posts the old verifier missed or never graded); "
+                    "they're in the records below.")
+    return head + lines
+
+
 def report(update=False):
     """[(content, embed, card ids)]: one post per channel with that day's finished plays (and any change to them),
-    then the all-time chart. Earlier days aren't recapped again; a late change to them still counts in the records."""
+    then the all-time chart. Cards that finish a day or two late (an NFL card posted Saturday, a Monday night leg) are
+    posted when they finish; anything older than that is only counted."""
     cards = live_cards()
     day = recap_day()
+    oldest = (dt.date.fromisoformat(day) - dt.timedelta(days=REGRADE_DAYS)).isoformat()
+    rebuild = STATE.get("rebuild")
     with _lock:   # older days: never posted again, only counted
         for c in cards:
-            if c["slate"] < day and settled(c) and not c.get("reported"):
+            if card_day(c) < (day if rebuild else oldest) and settled(c) and not c.get("reported"):
                 c["reported"] = snapshot(c)
-    mine = [c for c in cards if c["slate"] == day]
+    mine = [c for c in cards if card_day(c) == day]
     new = [c for c in mine if settled(c) and not c.get("reported")]
+    late = [c for c in cards if oldest <= card_day(c) < day and settled(c) and not c.get("reported")]
     fixed = []
     for c in mine:
         r = c.get("reported")
         if r and settled(c) and outcome_of(snapshot(c), c) != outcome_of(r, c):
             was = r["result"] if not c["single"] else "-".join(str(r["legs"].count(x)) for x in ("won", "lost"))
             fixed.append((c, TAG.get(was, was).replace("*", "") if not c["single"] else was))
-    if not new and not fixed:
+    recheck = recheck_block(cards) if rebuild else []
+    if not new and not fixed and not late and not recheck:
         return []
     out = []
     for ch in STATE["channels"]:
         n = [c for c in new if c["ch"] == ch]
+        lt = [c for c in late if c["ch"] == ch]
         f = [x for x in fixed if x[0]["ch"] == ch]
-        if n or f:
-            out.append(("", channel_report(ch, sorted(n, key=lambda c: c["at"]), f, [c for c in cards if c["ch"] == ch], update),
-                        [c["id"] for c in n] + [c["id"] for c, _ in f]))
+        if n or f or lt:
+            embeds = channel_report(ch, sorted(n, key=lambda c: c["at"]), f, [c for c in cards if c["ch"] == ch], update,
+                                    sorted(lt, key=lambda c: c["at"]))
+            ids = [c["id"] for c in n] + [c["id"] for c in lt] + [c["id"] for c, _ in f]
+            for k, e in enumerate(embeds):
+                out.append(("", e, ids if k == len(embeds) - 1 else []))
+    if recheck:
+        first = min(c["at"] for c in cards)[:10] if cards else day
+        parts = chunks(["\n".join(recheck[:2]) + "\n"] + recheck[2:], 3800, "\n")
+        for k, desc in enumerate(parts):
+            e = {"color": B.BLUE, "description": desc}
+            if k == 0:
+                e["title"] = "🔁 WHOLE HISTORY RE-CHECKED"
+            if k == len(parts) - 1:
+                e["footer"] = {"text": f"Every post since {first} was read again and graded from ESPN and FotMob: every play, leg "
+                                       "counts, extras kept apart, the right game day. The all-time records below are the result."}
+            out.append(("", e, []))
     by_all = {}
     for c in cards:
         by_all.setdefault(c["ch"], []).append(c)
@@ -428,7 +559,8 @@ def run(final=False, dry=False, hours=LOOK_BACK_H, fresh=True):
     G.RUN["id"] = str(int(time.time()) // 300)
     if fresh:
         reload()
-    collect(hours)
+    rebuild = STATE.get("rebuild")
+    collect(None if rebuild else hours)   # a rebuild reads every channel from its first post
     grade_all()
     msgs = report(update=final)
     if msgs and not dry:
@@ -437,8 +569,11 @@ def run(final=False, dry=False, hours=LOOK_BACK_H, fresh=True):
             for c in live_cards():
                 if c["id"] in sent:
                     c["reported"] = snapshot(c)
+            if rebuild and msgs and not STATE.get("postError"):
+                STATE.pop("rebuild", None)
+                STATE.pop("before", None)
     with _lock:   # keep four months
-        cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=120)).isoformat()
+        cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=KEEP_DAYS)).isoformat()
         for k in [k for k, c in STATE["cards"].items() if c["at"] < cut]:
             STATE["cards"].pop(k, None)
     if not dry:
@@ -644,21 +779,26 @@ def github_runs(st=None):
 def reload():
     """The saved state, fresh. On GitHub it's the pick-data file; on the server, GitHub's copy when GitHub is running
     the grading, else the server's own."""
+    got = None
     if D.get("data_dir"):
         f = Path(D["data_dir"]) / DATA_FILE
         got = _newest(unseal(f.read_bytes()) if f.exists() else {}, None if D.get("reset") else from_server())
-    elif not D.get("cache_dir"):
-        return
-    else:
+    elif D.get("cache_dir"):
         got = _newest(dict(STATE), storage.load(_path(), {}), mirror())
     if isinstance(got, dict) and got:
         with _lock:
             STATE.clear()
             STATE.update({"v": VERSION, "cards": {}, "posted": {}, "channels": {}, "icons": {}, "dest": None})
             STATE.update(got)
-    if STATE.get("v", 0) < VERSION:
-        # the card reader and grader were rebuilt: start the record over from the posts (nothing older was right)
+    if STATE.get("v", 0) < VERSION or D.pop("history", False):
+        # the card reader and grader were rebuilt (or a history re-check was asked for): read every post since each
+        # channel began and grade it from scratch. What each card was called before is kept, so the first post can say
+        # which results changed.
+        if not STATE.get("rebuild"):
+            STATE["before"] = {f"{c.get('post')}|{c.get('play')}": c.get("result") for c in (STATE.get("cards") or {}).values()
+                               if c.get("reported") and not c.get("superseded")}
         STATE["cards"] = {}
+        STATE["rebuild"] = True
         STATE["v"] = VERSION
 
 
@@ -721,6 +861,7 @@ if __name__ == "__main__":
             sys.exit(0)
         D["data_dir"] = os.environ.get("PICKS_DATA_DIR") or "data"
         D["reset"] = os.environ.get("PICKS_RESET") == "true"
+        D["history"] = os.environ.get("PICKS_HISTORY") == "true"   # re-read every post since each channel began
         Path(D["data_dir"]).mkdir(exist_ok=True)
         if cmd == "now":
             msgs = run(final=False)
@@ -745,7 +886,9 @@ if __name__ == "__main__":
         for c in sorted(live_cards(), key=lambda c: c["at"]):
             print(f"\n#{STATE['channels'].get(c['ch'])} {c['slate']} {c['play']} -> {c['result']}")
             for g in c["legs"]:
-                print("   " + leg_line(g))
+                print("   " + leg_line(g).replace("\n", "\n   "))
+            for g in c.get("extras") or []:
+                print("   [extra] " + leg_line(g).replace("\n", "\n   "))
         print("\n\n========== what the next post would look like (as if nothing was posted yet) ==========")
         for c in live_cards():
             c["reported"] = None

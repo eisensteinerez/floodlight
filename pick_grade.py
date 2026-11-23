@@ -15,6 +15,7 @@ import sys
 
 import discord_bot as B
 import pick_parse as P
+import pick_story as S
 
 try:
     from zoneinfo import ZoneInfo
@@ -55,6 +56,7 @@ ALIASES = {"nir": "northern ireland", "n ireland": "northern ireland", "ni": "no
            "ivory coast": "cote d ivoire", "uae": "united arab emirates", "man utd": "manchester united", "man united": "manchester united",
            "man city": "manchester city", "psg": "paris saint germain", "paris sg": "paris saint germain", "spurs": "tottenham hotspur",
            "wolves": "wolverhampton wanderers", "atleti": "atletico madrid", "inter milan": "inter", "internazionale": "inter",
+           "jac": "jax", "was": "wsh", "lvr": "lv", "nwe": "ne", "kan": "kc", "gnb": "gb", "tam": "tb", "sfo": "sf", "nor": "no",
            "macedonia": "north macedonia", "fyr macedonia": "north macedonia", "holland": "netherlands", "england u21": "england u21"}
 DROP = {"fc", "cf", "afc", "sc", "fk", "sk", "cd", "the", "club"}
 # words that make a different team: "Ireland" isn't "Northern Ireland", "Germany" isn't "Germany U21"
@@ -177,7 +179,15 @@ def espn_event(e, lo, hi):
         except (TypeError, ValueError):
             return None
     detail = (st.get("detail") or st.get("shortDetail") or "").upper()
-    return {"src": "espn", "id": str(e.get("id")), "ko": ko, "state": state, "hn": hn, "an": an, "hab": hab, "aab": aab,
+    def lines(c):
+        out = []
+        for x in (c or {}).get("linescores") or []:
+            try:
+                out.append(int(float(x.get("value", x.get("displayValue")))))
+            except (TypeError, ValueError):
+                return []
+        return out
+    return {"src": "espn", "hl": lines(side.get("home")), "al": lines(side.get("away")), "id": str(e.get("id")), "ko": ko, "state": state, "hn": hn, "an": an, "hab": hab, "aab": aab,
             "home": (hab or (hn or [""])[0]), "away": (aab or (an or [""])[0]), "hs": sc(side.get("home")), "as": sc(side.get("away")),
             "reg": not re.search(r"\bAET\b|PEN|EXTRA|\bET\b|SO\b", detail)}
 
@@ -201,17 +211,33 @@ def outcome(g, m, sides):
     hs, as_ = m["hs"], m["as"]
     if hs is None or as_ is None:
         return None, ""
+    if g.get("period"):
+        # "Bears 1Q -2.5", "Bears 1H -6.5": the score of that quarter or half, from the line score
+        idx = {"1q": [0], "2q": [1], "3q": [2], "4q": [3], "1h": [0, 1], "2h": None}[g["period"]]
+        hl, al = m.get("hl") or [], m.get("al") or []
+        if len(hl) < 4 or len(al) < 4:
+            return "unknown", f"{m['home']} {hs}-{as_} {m['away']} (no quarter scores)"
+        pick = idx if idx is not None else list(range(2, len(hl)))
+        hs, as_ = sum(hl[i] for i in pick), sum(al[i] for i in pick)
+        sides = dict(sides)
+        shown = f"{g['period'].upper()}: {m['home']} {hs}-{as_} {m['away']}"
+        return outcome_from(g, hs, as_, sides, shown)
     if not m.get("reg", True):
         reg = fm_regulation(m["id"]) if m["src"] == "fm" else None
         if not reg:
             return "unknown", f"{m['home']} {hs}-{as_} {m['away']} (after extra time)"
         hs, as_ = reg
+    return outcome_from(g, hs, as_, sides, f"{m['home']} {hs}-{as_} {m['away']}")
+
+
+def outcome_from(g, hs, as_, sides, shown):
     sc = {"home": hs, "away": as_}
     other = lambda s: "away" if s == "home" else "home"
-    shown = f"{m['home']} {hs}-{as_} {m['away']}"
     t = g["t"]
     side = sides.get(g.get("team")) if g.get("team") else None
     if t == "ml":
+        if sc[side] == sc[other(side)] and g.get("sport") != "soccer":
+            return "push", shown        # an NFL tie, or a level quarter: the books refund it
         return ("won" if sc[side] > sc[other(side)] else "lost"), shown
     if t == "spread":
         v = sc[side] - sc[other(side)] + g["line"]
@@ -238,8 +264,8 @@ def grade_team_leg(g, slate):
     if sport == "soccer":
         sources = (fm_matches, espn_soccer)
     else:
-        lo, hi = window(slate)
         def us(sl, sp=sport):
+            lo, hi = window(sl)
             out = []
             for d in (sl, sl + dt.timedelta(days=1)):
                 try:
@@ -256,10 +282,15 @@ def grade_team_leg(g, slate):
             return out
         sources = (us,)
     why = "not found"
-    for src in sources:
-        matches = src(slate)
+    # an NFL card posted on Saturday ("-150 Ladder Day 1") is for Sunday's games: look ahead to Monday night
+    days = [slate + dt.timedelta(days=i) for i in range(5 if sport == "nfl" and not g.get("day_fixed") else 1)]
+    for src, day in [(src, d) for src in sources for d in days]:
+        matches = src(day)
         m, sides = find_match(g, matches)
+        if not m and sides == "not found" and day != days[-1]:
+            continue
         if m:
+            g["game_day"] = m["ko"].astimezone(ET).date().isoformat()
             if m["state"] == "void":
                 return "void", f"{m['home']} v {m['away']} postponed"
             if m["state"] != "post":
@@ -272,41 +303,207 @@ def grade_team_leg(g, slate):
 
 
 # ---------- player props ----------
-def grade_prop(g, slate):
-    sport = g["sport"]
-    if sport == "soccer":
-        return ("unknown", "soccer player props aren't graded yet") if day_over(slate, 1) else (None, "")
-    o = B.find_player(sport, P.fold(g["player"]))
-    if not o:
-        return ("unknown", "player not found") if day_over(slate, 1) else (None, "")
-    if B.norm(P.fold(o.get("name") or "")) and name_score_player(g["player"], o.get("name")) < 0.6:
-        return "unknown", f"ESPN found {o.get('name')}"
+def gamelog(sport, o):
+    """(games, raw responses) for a player, this season (or last season when this one has nothing)."""
     path = f"{B.ESPN_PATH[sport].split('/')[0]}/{o.get('lg') or sport}"
     y = B.cur_season(sport)
-    games, read = [], False
+    games, raws = [], []
     for yy in (y, y - 1):
         try:
             got = get(f"{B.ESPN_WEB}/sports/{path}/athletes/{o['id']}/gamelog?season={yy}&r={RUN['id']}", 300)
-            read = read or bool(got)
         except Exception:
             got = None
-        games += B.espn_season_from(got) if got else []
+        if got:
+            raws.append(got)
+            games += B.espn_season_from(got)
         if games:
             break
-    if not games:   # ESPN didn't answer (or has no games for him): never call that a DNP
-        return ("unknown", "no game log from ESPN") if day_over(slate, 1) and read else (None, "")
+    return games, raws
+
+
+def team_of(sport, o, raws):
+    """The player's team id: from his most recent game in the log, else from his ESPN profile."""
+    best = None
+    for raw in raws:
+        for ev in (raw.get("events") or {}).values():
+            d = B.parse_date(ev.get("gameDate"))
+            tid = ev.get("awayTeamId") if ev.get("atVs") == "@" else ev.get("homeTeamId")
+            if d and tid and (not best or d > best[0]):
+                best = (d, str(tid))
+    if best:
+        return best[1]
+    try:
+        a = get(f"{B.ESPN_WEB}/sports/{B.ESPN_PATH[sport].split('/')[0]}/{o.get('lg') or sport}/athletes/{o['id']}", 86400) or {}
+        t = (a.get("athlete") or {}).get("team") or {}
+        return str(t["id"]) if t.get("id") else None
+    except Exception:
+        return None
+
+
+def team_game(sport, tid, lo, hi):
+    """The team's first game between two times: {"id", "date", "state", "names"} or None (None too if ESPN fails)."""
+    try:
+        sch = get(f"{B.ESPN}/{B.ESPN_PATH[sport]}/teams/{tid}/schedule?r={RUN['id']}", 600) or {}
+    except Exception:
+        return None
+    for e in sorted(sch.get("events") or [], key=lambda e: e.get("date") or ""):
+        d = B.parse_date(e.get("date"))
+        if not d or not lo <= d < hi:
+            continue
+        comp = (e.get("competitions") or [{}])[0]
+        st = (comp.get("status") or {}).get("type") or {}
+        name = (st.get("name") or "").upper()
+        state = "void" if any(w in name for w in ("POSTPONED", "CANCELED", "CANCELLED", "SUSPENDED")) else \
+            "post" if st.get("completed") or st.get("state") == "post" else st.get("state") or "pre"
+        names = []
+        for c in comp.get("competitors") or []:
+            t = c.get("team") or {}
+            names += [x for x in (t.get("displayName"), t.get("shortDisplayName"), t.get("nickname"), t.get("abbreviation")) if x]
+        return {"id": str(e.get("id")), "date": d, "state": state, "names": names}
+    return {}
+
+
+def summary(sport, event_id):
+    try:
+        return get(f"{B.ESPN}/{B.ESPN_PATH[sport]}/summary?event={event_id}&r={RUN['id']}", 1800) or {}
+    except Exception:
+        return {}
+
+
+def candidates(sport, name):
+    """Every ESPN player a bare last name could be ("Warren"): [{"id", "lg", "name"}]."""
+    espn_sport = B.ESPN_PATH[sport].split("/")[0]
+    try:
+        d = get(f"{B.ESPN_WEB}/search?query={B.urllib.parse.quote(name)}&type=player&sport={espn_sport}&limit=10", 86400) or {}
+    except Exception:
+        return []
+    ok = ("nba", "wnba") if sport in ("nba", "wnba") else (sport,)
+    out = []
+    for x in d.get("items") or []:
+        lg = x.get("league") or x.get("defaultLeagueSlug")
+        if lg in ok and B.norm(S.last_name(x.get("displayName") or "")) == B.norm(S.last_name(name)):
+            out.append({"id": x["id"], "lg": lg, "name": x.get("displayName")})
+    return out
+
+
+def prop_window(sport, slate, fixed):
+    """The games a prop can be about: that night (to 6 AM), or for an NFL card with no day of its own, through Monday
+    night (a Saturday post is for Sunday)."""
     lo, hi = window(slate)
-    for x in sorted(games, key=lambda x: x["date"]):
-        if (g.get("event") and x["id"] == g["event"]) or (not g.get("event") and lo <= x["date"] < hi):
-            if not x.get("res"):          # no W/L yet: the game isn't over
+    if sport == "nfl" and not fixed:
+        hi = lo + dt.timedelta(days=4, hours=6)
+    return lo, hi
+
+
+def value_of(sport, stat, x):
+    return B.STAT[B.stat_sport(sport)][stat]["get"](x)
+
+
+def result_of(g, v):
+    return "push" if v == g["line"] else "won" if (v > g["line"]) == (g["side"] == "over") else "lost"
+
+
+def grade_prop(g, slate):
+    """(result, shown). Also sets g["why"]: what happened in his game when the pick missed or he didn't play."""
+    sport = g["sport"]
+    g.pop("why", None)
+    if sport == "soccer":
+        return ("unknown", "soccer player props aren't graded yet") if day_over(slate, 1) else (None, "")
+    fixed = bool(g.get("slate"))
+    lo, hi = prop_window(sport, slate, fixed)
+    late = now() > hi + dt.timedelta(hours=1)
+    # who: the full name ESPN finds, or for a bare last name, the one player of that name who fits
+    if g.get("loose"):
+        found = []
+        for c in candidates(sport, g["player"])[:4]:
+            games, raws = gamelog(sport, c)
+            tid = team_of(sport, c, raws)
+            tg = team_game(sport, tid, lo, hi) if tid else None
+            if g.get("hint") and tg:
+                if not any(name_score(h, n) >= 0.85 for h in g["hint"] for n in tg.get("names") or []):
+                    continue
+            elif not tg:
+                continue
+            found.append((c, games, raws, tid, tg))
+        if len(found) != 1:
+            settled_all = len(found) > 1 and all(f[4].get("state") == "post" for f in found)
+            if not late and not settled_all:
                 return None, ""
-            v = B.STAT[B.stat_sport(sport)][g["stat"]]["get"](x)
-            if v is None:
-                return "void", "DNP"
-            res = "push" if v == g["line"] else "won" if (v > g["line"]) == (g["side"] == "over") else "lost"
-            return res, B.fmt(v)
-    # no game that day: a DNP once the day is over (ESPN's log can trail the final buzzer, so wait a few hours)
-    return ("void", "DNP") if day_over(slate, 1) else (None, "")
+            return "unknown", ("no player named " if not found else f"{len(found)} players named ") + g["player"] + " fit"
+        o, games, raws, tid, tg = found[0]
+        g["player_full"] = o.get("name")
+    else:
+        o = B.find_player(sport, P.fold(g["player"]))
+        if not o:
+            return ("unknown", "player not found") if late else (None, "")
+        if B.norm(P.fold(o.get("name") or "")) and name_score_player(g["player"], o.get("name")) < 0.6:
+            return "unknown", f"ESPN found {o.get('name')}"
+        games, raws = gamelog(sport, o)
+        tid = team_of(sport, o, raws)
+        tg = team_game(sport, tid, lo, hi) if tid else None
+    if not games and not raws:   # ESPN didn't answer: never call that a DNP
+        return ("unknown", "no game log from ESPN") if late else (None, "")
+    games = sorted(games, key=lambda x: x["date"])
+    # which game: the TRACK line's game id, else his team's game in the window, else his first game in it
+    want = g.get("event") or (tg or {}).get("id")
+    x = next((x for x in games if want and x["id"] == want), None)
+    if not x and not want:
+        x = next((x for x in games if lo <= x["date"] < hi), None)
+    if tg is not None and not tg and not x:
+        # his team has no game in the window at all: that's not a DNP, the pick is about a game we can't find
+        return ("unknown", "his team had no game that day") if late else (None, "")
+    if tg and tg.get("state") == "void":
+        return "void", "game postponed"
+    when = (x or {}).get("date") or (tg or {}).get("date")
+    if when:
+        g["game_day"] = when.astimezone(ET).date().isoformat()
+    if x and x.get("res") and value_of(sport, g["stat"], x) is not None:
+        v = value_of(sport, g["stat"], x)
+        res = result_of(g, v)
+        shown = B.fmt(v)
+        if g.get("alt"):
+            v2 = value_of(sport, g["alt"], x)
+            r2 = result_of(g, v2) if v2 is not None else None
+            if r2 != res:
+                return "unknown", f"\"Rec\" could be catches ({B.fmt(v)}) or yards ({B.fmt(v2) if v2 is not None else '?'})"
+        if res in ("lost", "push") or (res == "won" and g.get("explain_wins")):
+            explain(g, sport, x["id"], o, v, games, x, res)
+        return res, shown
+    if x and not x.get("res"):
+        return None, ""                    # his game isn't over
+    if x and x.get("res"):                 # in the log for that game, but with no numbers: he didn't play
+        explain(g, sport, x["id"], o, None, games, x, "void")
+        return "void", "DNP"
+    # no line for him in his team's finished game: a DNP. ESPN's log can trail the final buzzer, so wait a little.
+    if tg and tg.get("state") == "post":
+        if now() < tg["date"] + dt.timedelta(hours=5 if sport == "nfl" else 4):
+            return None, ""
+        explain(g, sport, tg["id"], o, None, games, None, "void")
+        return "void", "DNP"
+    if tg and tg.get("state") in ("pre", "in"):
+        return None, ""
+    # no team schedule to go by (ESPN didn't answer): the old rule, a DNP only once the window is well over
+    if x is None and late and tg is None:
+        return "void", "DNP"
+    return None, ""
+
+
+def explain(g, sport, event_id, o, v, games, x, res):
+    """g["why"]: the story of his game, for a miss, a push or a DNP."""
+    try:
+        sm = summary(sport, event_id)
+        prior = [y for y in games if not x or y["date"] < x["date"]][-10:]
+        mins = [y.get("min") for y in prior if y.get("min")]
+        usual = sum(mins) / len(mins) if len(mins) >= 3 else None
+        notes, flags = S.story(sport, sm, o["id"], o.get("name") or g["player"], g, v, usual)
+        if res == "lost":
+            gap = S.miss_by(g, v)
+            if gap:
+                notes.insert(0, gap)
+        g["why"] = " · ".join(notes)
+        g["flags"] = sorted(flags)
+    except Exception as e:
+        print(f"pick grade: story for {g.get('label')}: {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def name_score_player(a, b):
@@ -323,6 +520,9 @@ def grade_leg(g, slate):
     if g["t"] == "raw":
         g["result"], g["actual"] = "unknown", ""
         return
+    if g.get("slate"):            # "(CIN @ WAS, Mon)": the pick names its own day
+        slate = dt.date.fromisoformat(g["slate"])
+        g["day_fixed"] = True
     try:
         res, shown = grade_prop(g, slate) if g["t"] == "prop" else grade_team_leg(g, slate)
     except Exception as e:

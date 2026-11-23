@@ -466,3 +466,150 @@ PP_TUE_LADDER = """@everyone
  HOW THE LADDER WORKS (from the capper)
  No boost? The capper's alternative single: Karl-Anthony Towns 25+ Points & Rebounds (around -150)
  Bet responsibly • 21+"""
+
+
+# ---------- Nov 20-22, 2026: the posts the old reader got wrong ----------
+# Cafe, Fri: the card is 5 legs; the "Extra legs considered" were graded as legs 6-9 and Jamal Murray's 14 lost it.
+CAFE_FRI = """@everyone
+☕️ PARLAY CAFE - NBA Friday Play & Extra Legs
+,
+**Play #1 (Video/Ladder, 1u): 5-leg -134 (+111 with boost) FanDuel • Bet Protect+ ON**
+Anthony Davis O15.5 Points - hit 8 of last 9 (avg 34.6); Bulls allow 2nd-most points to centers
+Kyshawn George 10+ Points - hit 15/16 this season; 22 & 17 in his last two vs CHI
+Norman Powell O15.5 Points - hit 10 of last 11; Wizards allow the most points to SGs in the league
+Pascal Siakam 15+ Points - hit 13/14, 19+ in 7 straight; Mobley out means an easier path to his spots
+Jarrett Allen 6+ Rebounds - hit 13 straight without Mobley; 12 boards last game vs IND
+**Extra legs considered:**
+Jamal Murray 15+ Points - hit 11 of last 12; 16+ in 10 straight vs HOU
+Alperen Sengun 6+ Rebounds - hit 24 straight; 12 boards last game vs DEN • ⚠️ Questionable
+Jalen Johnson 6+ Rebounds - 7+ in all 12 games this season; 5 straight vs CHA
+Kevin Huerter O7.5 Points - hit 26 of last 27 at 24+ min; Pistons need his scoring with Robinson out
+
+-# Bet responsibly • 21+"""
+
+# Cafe, Sat 11:32 AM: Sunday's NFL games. The old reader dated it Saturday and called all 14 legs DNPs.
+CAFE_SAT_NFL = """@everyone
+☕️ PARLAY CAFE - NFL Sunday Day Games Menu (1/2)
+,
+All plays FanDuel • Bet Protect+ ON
+**Play #1 (Video/Day 2 Ladder, 1u): 6-leg -122 (+102 with boost)**
+Chris Godwin 10+ Rec Yds - hit 8/9 this year; 40+ yds & 4+ rec in all 6 career vs DET (28th vs pass)
+Chris Godwin 2+ Receptions - hit 30 of last 32
+Emeka Egbuka 15+ Rec Yds - hit 22/24 career; 38+ in last three
+Dallas Goedert 10+ Rec Yds - hit 20 of last 21; PIT allows 4th-most receptions
+Dallas Goedert 2+ Receptions - 30+ yds in 5 straight; PIT allows 3rd-most rec yards
+Makai Lemon 10+ Rec Yds - 14+ in 8 straight, 55+ in last three; highest target share on PHI
+**Play #2 (1PM Extra, 1u): 5-leg -127**
+Luther Burden 25+ Rec Yds - hit 18 of last 19 (avg 71.6)
+D'Andre Swift 30+ Rush Yds - hit 28 of last 29; NO 27th vs the run
+Chris Olave 30+ Rec Yds - hit 21 straight (avg 84.9)
+DK Metcalf 15+ Rec Yds - hit 37 of last 40; PHI allows 2nd-most WR yards
+Pat Freiermuth 5+ Rec Yds - 10+ in 14 straight; reliable option for Rodgers
+**Play #3 (4PM Extra, 1u): 3-leg -125**
+Jakobi Meyers 15+ Rec Yds - hit 49 of last 50
+Malachi Fields 15+ Rec Yds - hit in all 9 career games; JAX allows 5th-most WR yards
+Darnell Mooney 1+ Reception - hit 47 of last 50; one of only 3 Giants WRs running routes
+Extra legs considered: Amon-Ra St. Brown 40+ Rec Yds (hit 34 of 36; 75+ in all 4 career vs TB) and Tetairoa McMillan 25+ Rec Yds (hit 25 of 27, avg 73.3)
+SNF menu (post 2 of 2) drops Sunday.
+
+-# Bet responsibly • 21+"""
+
+# Cafe, Sat 4:26 PM: "6-Leg Parlay" wasn't a heading the old reader knew, so this card was never graded.
+CAFE_SAT_NBA = """@everyone
+☕️ PARLAY CAFE - NBA Saturday Extra Play
+,
+**6-Leg Parlay (4 players) — -120 (FanDuel) • 1u**
+
+🔹 Jaden McDaniels 10+ Points — hit in all 16 games this season; averaging 17.1
+🔹 Jaden McDaniels 3+ Rebounds — hit in all 16; averaging 6
+🔹 LaMelo Ball O11.5 Points — hit in 8 of last 9 (15+ in all 8); averaging 19 over last 10
+🔹 Deni Avdija 15+ Points — hit in 36 of last 37; averaging 24.2 • ⚠️ Questionable
+🔹 Deni Avdija 4+ Rebounds — hit in 34 of last 37; 7 straight vs the Knicks • ⚠️ Questionable
+🔹 Karl-Anthony Towns 8+ Rebounds — 10+ boards in all 15 this season; averaging 13.9 • ⚠️ Questionable
+
+-# Bet responsibly • 21+"""
+
+# Daily Locks (instinct-props), Sat: the add-ons were dropped from the report.
+LOCKS_SAT = """@everyone
+🔒 **DAILY LOCKS — Sat, Nov 21**
+,
+💰 1u the parlay • 📚 Best odds: FanDuel
+📊 Yesterday: 🏀 3-2 • Running: -5.2u
+
+🏈 No NFL game tonight — full NBA card below. NFL Sunday picks drop tomorrow.
+
+
+🏀 **NBA PARLAY — -126**
+,
+✅ **Deni Avdija 15+ Points** — -900
+📈 36 of last 37 • 🔥 24+ in 4 straight • Avg 24.2
+• 25 & 27 in his last two trips to MSG
+• Cleared to play tonight after the foot scare
+
+✅ **Deni Avdija 4+ Rebounds** — -750
+📈 34 of last 37 • 🆚 vs NYK: 7 straight (5+ in last 6) • Avg 6.2
+• Knicks without KAT & OG — extra boards available
+
+✅ **Jaden McDaniels 11+ Points** — -1000
+📈 13+ in all 16 games this season • 🔥 Avg 17.1
+• 16, 29 & 20 in last three vs Memphis
+• Edwards, DiVincenzo & Clark OUT again — big role
+
+✅ **LaMelo Ball 13+ Points** — -900
+📈 15+ in all 8 of his last 9 • 🔥 Avg 19 over last 10
+• 29 in the last matchup vs the Grizzlies
+• Same MIN injury bump with three guards out
+
+✅ **Jalen Brunson 22+ Points** — -600
+📈 Avg 35.8 PRA this season
+• KAT (illness) & OG Anunoby OUT — Brunson takes on the full scoring load at the Garden
+━━━━━━━━━━━━━━━━
+
+➕ **ADD-ONS**
+🎯 **LaMelo Ball 12+ Points** — -1450 • 0.5u
+15+ in all 8 of his last 9 games • 29 last time vs MEM
+
+🎯 **Jaden McDaniels 10+ Points** — -1600 • 0.5u
+13+ in all 16 games this season • Avg 17.1
+
+
+-# Bet responsibly • 21+"""
+
+# Parlay Predictor, Sat noon: each leg names its own day.
+PP_SAT_TD = """@everyone
+📊 **PARLAY PREDICTOR - TD Longshot! 3 Players. 3 Scores.**
+**3-Leg Anytime TD Parlay** • 6.40x (+540) on NoVig • 1/8-1/4u sprinkle (his usual longshot stake)
+Chuba Hubbard Anytime TD (BAL @ CAR, Sun)
+D'Andre Swift Anytime TD (NO @ CHI, Sun)
+Tee Higgins Anytime TD (CIN @ WAS, Mon)
+His 3 favorite guys to score this week; legs from his slip ($10 to win $64.04).
+-# Bet responsibly • 21+"""
+
+# Parlay Predictor, Sat 2:53 PM: Sunday's games, with no day in the heading.
+PP_SAT_LADDER = """@everyone
+📊 **PARLAY PREDICTOR - -150 Ladder Day 1**
+**4-Leg Parlay — -124 (FanDuel) • 1u**
+Emeka Egbuka 15+ Rec Yds — hit in 22 of last 24; Lions rank 30th vs the pass
+Amon-Ra St. Brown 40+ Rec Yds — 40+ in 35 of last 36 healthy games; Bucs have NFL's best run D, so Lions should air it out
+Sam LaPorta 10+ Rec Yds — 15+ in 24 straight; 16 of last 17 TEs vs Bucs cleared this line
+Chris Godwin 10+ Rec Yds — 16+ in every game this year except the monsoon game; Lions 30th vs the pass
+Ladder Day 1: $25 to win $45.19 — winnings roll into Day 2.
+-# Bet responsibly • 21+"""
+
+# Parlay Predictor, Sun 12:04 AM: singles, a 2-leg, two parlays, quarter and half spreads and an ML parlay in one post.
+PP_SUN_WEEK11 = """@everyone
+📊 **PARLAY PREDICTOR - NFL Week 11 Bets**
+Trey McBride O5.5 Rec — -120 (Kalshi) • 1u — hit 9/10 this season; QB Johnson historically peppers TEs; Chiefs 27th vs TEs
+Mark Andrews U4.5 Rec — -149 (DraftKings) • 1u — under in 5 straight before last wk (2.6/gm); Panthers 23rd vs run, so Ravens go run-heavy
+2-Leg: Pollard 60+ Rush+Rec & Gordon 40+ Rush+Rec — -142 (theScore) • 1u — Pollard 76+ in 4 straight, DAL is worst run D; Gordon 50+ in 6 straight, BUF 28th vs RBs out of backfield
+Fernando Mendoza O189.5 Pass+Rush — -115 (Bet365) • 0.5u — DEN 23rd vs pass & 25th vs QB rush; Raiders can't run it. Bump to 1u if Brock Bowers plays (⚠️ Questionable) — check ~1hr before kickoff
+**4-Leg Bears/Saints Parlay — -146 (FanDuel) • 1u**
+Luther Burden 25+ Rec Yds — over in 18 of last 19; Saints 22nd vs pass
+Rome Odunze 15+ Rec Yds — 15+ in 34 of last 36
+Chris Olave 30+ Rec Yds — 30+ in 21 straight
+D'Andre Swift 30+ Rush Yds — 30+ in 28 of last 29; Saints 29th vs run
+**5-Leg Steelers/Eagles Parlay — -101 (FanDuel) • 1u** — Freiermuth 5+ Rec / Metcalf 15+ Rec / Goedert 10+ Rec / Warren 50+ Rush+Rec / Lemon 10+ Rec; all cleared their lines in 90-100% of games this season
+Bears 1Q -2.5 — -130 (BetRivers) • 0.5u — Saints have 9 total 1st-quarter points ALL season
+Bears 1H -6.5 — -122 (BetRivers) • 0.5u — same angle, Bears expected to start hot
+4-Leg ML Parlay: PIT + DET + JAC + SF — +488 (NoVig) • 0.5u — four favorites the capper expects to win
+-# Bet responsibly • 21+"""

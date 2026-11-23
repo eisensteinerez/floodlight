@@ -232,6 +232,264 @@ def test_soccer_counts_each_pick():
     assert (s["won"], s["lost"]) == (3, 1)
 
 
+# ---------- Nov 20-22: the posts the old reader got wrong ----------
+FRI, SAT, SUN = dt.date(2026, 11, 20), dt.date(2026, 11, 21), dt.date(2026, 11, 22)
+
+
+def read(name, day):
+    return P.cards_in({"text": P.text_of({"content": getattr(posts, name)})}, "props", day)
+
+
+def test_extra_legs_are_not_part_of_the_card():
+    c, = read("CAFE_FRI", FRI)
+    assert labels(c) == ["Anthony Davis O15.5 Points", "Kyshawn George O9.5 Points", "Norman Powell O15.5 Points",
+                         "Pascal Siakam O14.5 Points", "Jarrett Allen O5.5 Rebounds"]
+    assert [g["label"] for g in c["extras"]] == ["Jamal Murray O14.5 Points", "Alperen Sengun O5.5 Rebounds",
+                                                 "Jalen Johnson O5.5 Rebounds", "Kevin Huerter O7.5 Points"]
+
+
+def test_sunday_menu_posted_saturday_is_for_sunday():
+    cs = read("CAFE_SAT_NFL", SAT)
+    assert [(c["play"], c["sport"], c["slate"], len(c["legs"])) for c in cs] == [
+        ("play1", "nfl", SUN, 6), ("play2", "nfl", SUN, 5), ("play3", "nfl", SUN, 3)]
+    assert [g["label"] for g in cs[0]["extras"]] == ["Amon-Ra St. Brown O39.5 Receiving yards", "Tetairoa McMillan O24.5 Receiving yards"]
+
+
+def test_n_leg_parlay_heading_is_a_card():
+    c, = read("CAFE_SAT_NBA", SAT)
+    assert len(c["legs"]) == 6 and c["legs"][5]["label"] == "Karl-Anthony Towns O7.5 Rebounds"
+
+
+def test_add_ons_are_kept_as_extras():
+    c, = read("LOCKS_SAT", SAT)
+    assert c["slate"] == SAT and len(c["legs"]) == 5
+    assert [g["label"] for g in c["extras"]] == ["LaMelo Ball O11.5 Points", "Jaden McDaniels O9.5 Points"]
+
+
+def test_each_leg_keeps_its_own_day():
+    c, = read("PP_SAT_TD", SAT)
+    assert [g.get("slate") for g in c["legs"]] == ["2026-11-22", "2026-11-22", "2026-11-23"]
+    assert c["extras"] == []
+
+
+def test_every_play_in_a_post_is_read():
+    cs = read("PP_SUN_WEEK11", SUN)
+    got = [(c["play"].split("|")[0], len(c["legs"])) for c in cs]
+    assert got == [("single:prop", 1), ("single:prop", 1), ("leg:2-leg", 2), ("single:prop", 1), ("leg:4-leg bears/saints parlay", 4),
+                   ("leg:5-leg steelers/eagles parlay", 5), ("single:spread", 1), ("single:spread", 1), ("leg:4-leg ml parlay", 4)], got
+    assert all(c["sport"] == "nfl" for c in cs)
+    assert [g["label"] for g in cs[5]["legs"]][:2] == ["Freiermuth O4.5 Receptions", "Metcalf O14.5 Receiving yards"]
+    assert cs[5]["legs"][0]["hint"] == ["Steelers", "Eagles"] and cs[5]["legs"][0]["alt"] == "reyd"
+    assert labels(cs[6]) == ["Bears 1Q -2.5"] and labels(cs[8]) == ["PIT ML", "DET ML", "JAC ML", "SF ML"]
+
+
+# ---------- grading props, and the story of a miss ----------
+import espn_fake as F      # noqa: E402
+
+
+def espn(f):
+    def go():
+        G.D.update(fetch=F.fetch, now=F.now_after_weekend)
+        B.D["fetch"] = F.fetch
+        B._cache.clear()
+        try:
+            f()
+        finally:
+            G.D.pop("fetch", None)
+            G.D.pop("now", None)
+            B.D.pop("fetch", None)
+    go.__name__ = f.__name__
+    return go
+
+
+def prop(text, sport_day=SAT, sport=None, loose=False):
+    g = P.parse_leg(text, "props", sport, loose)
+    G.grade_leg(g, sport_day)
+    return g
+
+
+@espn
+def test_a_miss_says_how_he_played():
+    g = prop("LaMelo Ball 13+ Points")
+    assert (g["result"], g["actual"]) == ("lost", "12")
+    assert g["why"].startswith("1 short · played 32 min (usually 33) · on the floor in all 4 quarters"), g["why"]
+    assert "5 in the 1st half, 7 in the 2nd" in g["why"]
+
+
+@espn
+def test_a_player_who_left_hurt_is_flagged():
+    g = prop("Deni Avdija 15+ Points")
+    assert g["result"] == "lost"
+    assert "not seen after the 2nd quarter (3:12 left)" in g["why"], g["why"]
+    assert "sprained left ankle" in g["why"] and "injury report: Day-To-Day (left ankle sprain)" in g["why"], g["why"]
+    assert "6 in the 1st half, 0 in the 2nd" in g["why"]
+    assert {"injury", "left"} <= set(g["flags"])
+
+
+@espn
+def test_dnp_gives_the_reason():
+    g = prop("Ja Morant 20+ Points")
+    assert (g["result"], g["actual"]) == ("void", "DNP")
+    assert g["why"] == "didn't play: left hamstring" and "injury" in g["flags"]
+
+
+@espn
+def test_no_team_game_is_not_a_dnp():
+    g = prop("Nobody Atall 10+ Points")
+    assert g["result"] == "unknown" and "no game" in g["actual"]
+
+
+@espn
+def test_nfl_card_posted_saturday_grades_sundays_game():
+    g = prop("Chris Godwin 40+ Rec Yds", SAT)
+    assert (g["result"], g["actual"]) == ("lost", "31")
+    assert "hurt in the 2nd quarter, 6:40 and didn't come back" in g["why"], g["why"]
+    assert "31 in the 1st half, 0 in the 2nd" in g["why"] and "knee injury" in g["why"]
+
+
+@espn
+def test_bare_last_name_uses_the_cards_teams():
+    g = P.parse_leg("Warren 50+ Rush+Rec", "props", "nfl", loose=True)
+    g["hint"] = ["Steelers", "Eagles"]
+    G.grade_leg(g, SUN)
+    assert (g["result"], g["actual"], g["player_full"]) == ("won", "63", "Jaylen Warren")
+    g = P.parse_leg("Warren 50+ Rush+Rec", "props", "nfl", loose=True)       # no teams to go by: two Warrens played
+    G.grade_leg(g, SUN)
+    assert g["result"] == "unknown" and "2 players named Warren" in g["actual"]
+
+
+@espn
+def test_catches_or_yards():
+    g = P.parse_leg("Godwin 5+ Rec", "props", "nfl", loose=True)
+    G.grade_leg(g, SUN)
+    assert g["result"] == "unknown" and "catches (3) or yards (31)" in g["actual"]
+
+
+@espn
+def test_first_quarter_spread():
+    g = P.parse_leg("Bears 1Q -2.5 — -130 (BetRivers) • 0.5u", "props", "nfl")
+    G.grade_leg(g, SUN)
+    assert (g["result"], g["actual"]) == ("won", "1Q: CHI 10-3 NO")
+    g = P.parse_leg("Bears 1H -6.5", "props", "nfl")
+    G.grade_leg(g, SAT)                       # posted Saturday night: Sunday's game
+    assert (g["result"], g["actual"]) == ("won", "1H: CHI 17-6 NO")
+
+
+def clocked(f):
+    """Restores the tracker's clock after a test that sets it."""
+    def go():
+        real = T.now_et
+        try:
+            f()
+        finally:
+            T.now_et = real
+    go.__name__ = f.__name__
+    return go
+
+
+def _card(cid, ch, slate, legs, at="2026-11-22T18:00:00+00:00", play="main", extras=()):
+    return {"id": cid, "ch": ch, "post": cid.split(":")[0], "at": at, "slate": slate, "sport": "nba", "play": play,
+            "single": False, "legs": legs, "extras": list(extras), "title": "", "result": None, "superseded": False,
+            "reported": None}
+
+
+def _leg(label, result, actual="", **k):
+    return dict({"t": "prop", "label": label, "player": label.split(" ")[0], "result": result, "actual": actual}, **k)
+
+
+@clocked
+def test_nightly_post_explains_misses_and_shows_extras():
+    T.STATE.update(cards={}, channels={"c": "instinct-props"}, icons={}, before={}, rebuild=False)
+    hurt = _leg("Avdija 20+ Points", "lost", "9", player_full="Deni Avdija", flags=["injury", "left"],
+                why="11 short · 🚑 hurt in the 2nd quarter and didn't come back")
+    c = _card("1:0", "c", "2026-11-22", [_leg("Ball 10+ Points", "won", "12"), hurt],
+              extras=[_leg("Morant 15+ Points", "void", "DNP", why="didn't play: left hamstring")])
+    c["result"] = "lost"
+    T.STATE["cards"]["1:0"] = c
+    T.now_et = lambda: dt.datetime(2026, 11, 23, 0, 30, tzinfo=T.ET)
+    msgs = T.report()
+    text = "\n".join(e.get("description", "") for _, e, _ in msgs)
+    assert "Deni Avdija 🚑 got hurt and missed (11 short)" in text, text
+    assert "↳ 11 short · 🚑 hurt in the 2nd quarter" in text
+    assert "Also in the post, not part of the card (0/1 hit)" in text and "left hamstring" in text
+    assert T.stats([c])["lost"] == 1          # the extra doesn't count
+
+
+@clocked
+def test_saturday_nfl_card_is_posted_with_sunday():
+    T.STATE.update(cards={}, channels={"c": "instinct-props"}, icons={}, before={}, rebuild=False)
+    c = _card("2:0", "c", "2026-11-21", [_leg("Godwin 50+ Rec Yds", "won", "61", game_day="2026-11-22")])
+    c["result"] = "won"
+    T.STATE["cards"]["2:0"] = c
+    T.now_et = lambda: dt.datetime(2026, 11, 22, 0, 30, tzinfo=T.ET)    # Saturday's recap: not yet
+    T.report()
+    assert not c["reported"]
+    T.now_et = lambda: dt.datetime(2026, 11, 23, 0, 30, tzinfo=T.ET)    # Sunday's recap
+    assert any("2:0" in ids for _, _, ids in T.report())
+
+
+@clocked
+def test_a_late_card_is_still_posted():
+    T.STATE.update(cards={}, channels={"c": "instinct-props"}, icons={}, before={}, rebuild=False)
+    c = _card("3:0", "c", "2026-11-20", [_leg("Ball 10+ Points", "won", "12")])
+    c["result"] = "won"
+    T.STATE["cards"]["3:0"] = c
+    T.now_et = lambda: dt.datetime(2026, 11, 23, 0, 30, tzinfo=T.ET)
+    msgs = T.report()
+    assert any("3:0" in ids for _, _, ids in msgs) and "finished late" in msgs[0][1]["description"]
+
+
+@clocked
+def test_long_nights_are_split_under_discords_limits():
+    T.STATE.update(cards={}, channels={"c": "instinct-props"}, icons={}, before={}, rebuild=False)
+    for i in range(40):
+        legs = [_leg(f"Player{i}x{k} 25+ Points", "lost", "3", why="22 short · played 12 min (usually 30) · " + "x" * 60)
+                for k in range(4)]
+        c = _card(f"{i}:0", "c", "2026-11-22", legs, at=f"2026-11-22T{10 + i // 4:02d}:{i % 4 * 10:02d}:00+00:00")
+        c["result"] = "lost"
+        T.STATE["cards"][c["id"]] = c
+    T.now_et = lambda: dt.datetime(2026, 11, 23, 0, 30, tzinfo=T.ET)
+    msgs = T.report()
+    assert len(msgs) > 3
+    for content, e, _ in msgs:
+        size = len(content) + sum(len(str(e.get(k) or "")) for k in ("title", "description", "footer", "author", "fields"))
+        assert len(e.get("description", "")) <= 4096 and size < 6000, size
+    posted = "\n".join(e.get("description", "") for _, e, _ in msgs)
+    assert all(f"Player{i}x0" in posted for i in range(40))        # nothing cut off
+
+
+@clocked
+def test_rebuild_lists_changed_results():
+    T.STATE.update(cards={}, channels={"c": "cafe-picks"}, icons={}, rebuild=True, before={"5|main": "void"})
+    c = _card("5:0", "c", "2026-11-20", [_leg("Ball 10+ Points", "won", "12")])
+    c["result"] = "won"
+    T.STATE["cards"]["5:0"] = c
+    T.now_et = lambda: dt.datetime(2026, 11, 23, 0, 30, tzinfo=T.ET)
+    msgs = T.report()
+    re_ = [e for _, e, _ in msgs if "RE-CHECKED" in e.get("title", "")]
+    assert re_ and "✅ win (was void)" in re_[0]["description"], msgs
+    assert "1 result(s) changed." in re_[0]["description"]
+    assert c["reported"]                     # an older day is counted, not posted again card by card
+
+
+
+def test_history_recheck_reads_from_the_first_post(monkeypatch):
+    seen = []
+    monkeypatch.setattr(T, "resolve_channels", lambda: ([{"id": "c", "name": "cafe-picks", "icon": "☕"}], "d"))
+    monkeypatch.setattr(T, "messages", lambda cid, start, end, pages=10: seen.append((start, pages)) or [])
+    monkeypatch.setattr(T.time, "sleep", lambda s: None)
+    T.STATE.update(cards={"9:0": _card("9:0", "c", "2026-11-01", [_leg("Ball 10+ Points", "won", "12")])}, v=T.VERSION)
+    T.STATE["cards"]["9:0"]["reported"] = {"result": "won", "legs": ["won"]}
+    T.STATE["cards"]["9:0"]["result"] = "won"
+    T.STATE.pop("rebuild", None)
+    T.D["history"] = True
+    T.reload()
+    assert T.STATE["rebuild"] and T.STATE["before"] == {"9|main": "won"} and not T.STATE["cards"]
+    T.collect(None)
+    assert seen == [(None, 1000)]
+    T.STATE.pop("rebuild", None)
+
+
 if __name__ == "__main__":
     fails = 0
     for n, f in sorted(globals().items()):
