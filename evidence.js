@@ -85,7 +85,26 @@
 
   /* ---------- warning tags: what makes this reading shakier than usual ---------- */
   const DAILY = new Set(['nba', 'wnba', 'nhl', 'mlb']);
-  function warnings(p, gs, oppGs) {
+  /* the same tags as a list, for the pick card (predictions.js): [title, why], strongest first */
+  const sameTeam = (a, b) => a && b && String(a).toLowerCase() === String(b).toLowerCase();
+  function flags(p) {
+    if (p.type === 'match') {
+      const out = [], gap = p.market == null ? null : Math.abs(p.ours - p.market);
+      if (gap != null && gap >= .15) out.push(['Model and market disagree', `We say ${pct(p.ours)}%, the price says ${pct(p.market)}%`]);
+      if (p.market == null) out.push(['No market price', 'No book posts a price for this result yet']);
+      return out;
+    }
+    const gs = (p.games || []).filter(g => g.v != null), oppGs = p.opp ? gs.filter(g => [g.opp, g.oppAbbr].some(o => sameTeam(o, p.opp))) : [];
+    const out = list(p, gs, oppGs);
+    if (!p.opp) out.push(['Opponent data unavailable', 'The books did not say who he plays']);
+    const pv = p.prev;
+    if (pv && (pv.teamName || pv.teamAbbr)) out.unshift(['Recently transferred', `Joined ${p.teamName || p.team || 'a new team'} from ${pv.teamName || pv.teamAbbr}${pv.until ? ` on ${new Date(pv.until * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}. Earlier games in the log were with ${pv.teamName || pv.teamAbbr}`]);
+    const lines = [...new Set((p.offers || []).map(o => o.line).filter(v => typeof v === 'number'))], priced = (p.offers || []).filter(o => o.pOver != null && o.line === p.line).map(o => o.pOver);
+    if (lines.length > 1 && Math.max(...lines) - Math.min(...lines) >= 1) out.push(['Providers disagree', `Lines from ${fmt(Math.min(...lines))} to ${fmt(Math.max(...lines))} across the apps`]);
+    else if (priced.length > 1 && Math.max(...priced) - Math.min(...priced) >= .08) out.push(['Providers disagree', `The apps’ prices for this line are ${pct(Math.max(...priced) - Math.min(...priced))} points apart`]);
+    return out;
+  }
+  function list(p, gs, oppGs) {
     const out = [], mins = n => gs.slice(0, n).map(g => g.min).filter(m => m != null), m5 = avg(mins(5)), m20 = avg(mins(20));
     if (gs.length < 15) out.push(['Small sample', `Only ${gs.length} games behind it`]);
     if (m5 && m20 && mins(20).length >= 10 && Math.abs(m5 - m20) / m20 >= .15) out.push(['Role recently changed', `${fmt(Math.round(m5))} minutes over the last 5 against ${fmt(Math.round(m20))} over 20`]);
@@ -99,6 +118,10 @@
     const I = window.flInjuries, st = I?.status(p.sport, p.name);
     if (st) out.push([st.lv === 'out' ? 'Listed out' : 'Lineup not confirmed', `${st.status || I.LEVEL_NAME[st.lv]} on the injury report${st.what ? ` (${st.what})` : ''}`]);
     if (p.teamNote) out.push(['Possible data mismatch', p.teamNote]);
+    return out;
+  }
+  function warnings(p, gs, oppGs) {
+    const out = list(p, gs, oppGs);
     return out.length ? `<ul class="ev-warns" aria-label="Warnings">${out.map(([t, w]) => `<li><b>${esc(t)}</b><small>${esc(w)}</small></li>`).join('')}</ul>` : '';
   }
 
@@ -274,5 +297,5 @@
     const e = LM.load({ sport: m.sport, lg: m.lg, home: m.home, away: m.away, date: new Date(m.ko * 1000).toISOString() });
     return `<section class="ev-sec">${LM.html(e, { title: 'How the price has moved', names: { home: m.home, away: m.away, draw: 'Draw' }, side: m.pick })}</section>`;
   }
-  window.flEvidence = { prop, match, propRange, matchRange, setLine };
+  window.flEvidence = { prop, match, propRange, matchRange, setLine, flags };
 })();
