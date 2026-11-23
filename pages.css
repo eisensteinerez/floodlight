@@ -2675,6 +2675,30 @@ h3.hm-brief-h{margin:0;font:700 17px/1.25 var(--font-body);color:var(--text)}
 .rcp-ach li.got .rcp-ach-i{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}
 .rcp-ach .rw-t{display:grid;gap:2px;min-width:0}.rcp-ach small{color:var(--text-2);white-space:normal;overflow:visible}
 
+/* Private competitions */
+.cmp-list,.cmp-gl{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.cmp-forms{margin-top:16px;align-items:start}
+.cmp-f{display:grid;gap:10px}.cmp-f h2{margin:0;font:700 18px/1.25 var(--font-body);text-transform:none;letter-spacing:0}
+.cmp-f label{font:600 14px/1.3 var(--font-body);color:var(--text)}
+.cmp-f .bt{justify-self:start}
+.cmp-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
+.cmp-row label{flex-basis:100%}.cmp-row .inp{flex:1 1 220px;width:auto}
+.cmp-g{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-height:60px;padding:8px 0;border-top:1px solid var(--border)}
+.cmp-g:first-child{border-top:0}
+.cmp-g .rw-t{flex:1 1 220px;min-width:0;display:grid;gap:2px}.cmp-g .rw-t small{color:var(--text-2)}
+.cmp-g .cx-row{flex:none;flex-wrap:wrap}
+.cmp-g [aria-pressed="true"]{background:var(--accent-fill);color:var(--on-accent);border-color:transparent}
+.cmp-g [aria-pressed="true"]::before{content:"✓ ";font-weight:800}
+.cmp-tabs{margin:16px 0}
+.cmp-t{width:100%;border-collapse:collapse;font:500 14px/1.3 var(--font-body)}
+.cmp-t th,.cmp-t td{padding:10px 8px;border-bottom:1px solid var(--border);text-align:left}
+.cmp-t thead th{font:700 12px/1.2 var(--font-body);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.cmp-t .n{text-align:right;font-variant-numeric:tabular-nums}
+.cmp-t tr.me th,.cmp-t tr.me td{font-weight:800;color:var(--text)}
+.cmp-link{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.cmp-link .inp{flex:1 1 240px;width:auto}
+.cmp-err{padding:14px 18px;border-color:var(--bad)}
+@media (max-width:420px){.cmp-t th:nth-child(6),.cmp-t td:nth-child(6){display:none}}
+
 /* Alerts inbox and the bell */
 .tb-bell{position:relative}
 @media (max-width:820px){.tb-bell{margin-left:auto}.tb-bell ~ .tb-search{margin-left:0}}
