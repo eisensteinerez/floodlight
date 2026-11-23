@@ -1129,7 +1129,7 @@ document.addEventListener('error', ev => {
   const img = ev.target;
   if (!(img instanceof HTMLImageElement) || img.dataset.fallback) return;
   img.dataset.fallback = '1';
-  if (img.closest('.lg')) img.outerHTML = '<span class="dot"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>';
+  if (img.closest('.lg')) img.outerHTML = '<span class="dot"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>';
   else if (img.closest('.chip, .qf, .lg-order')) img.remove();
 }, true);
 </script>
@@ -1140,7 +1140,7 @@ document.addEventListener('error', ev => {
     Floodlight<small>Match centre</small>
   </div>
   <div class="seg sport-sw" role="tablist" aria-label="Sport"><button role="tab" data-sport="soccer" class="sp-soccer">Soccer</button><button role="tab" data-sport="football" class="sp-football">Football</button><button role="tab" data-sport="basketball" class="sp-basketball">Basketball</button></div>
-  <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+  <label class="search"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input id="q" type="search" placeholder="Search any team, player or league" autocomplete="off" aria-label="Search any team, player or league" aria-controls="sres" aria-expanded="false"><div class="sresults" id="sres" hidden role="listbox" aria-label="Search results"></div></label>
   <div class="sync" id="sync"><i></i><span id="syncTxt">Connecting</span></div>
 </div>
@@ -1497,7 +1497,7 @@ function counts(){
 function renderRail(){
   const c = counts(); const totalLive = [...S.events.values()].filter(e=>e.state==='in').length;
   const badge = (n, live) => live ? `<b class="live">${live}</b>` : n ? `<b>${n}</b>` : '';
-  const lgIcon = l => l.logo ? `<img src="${esc(l.logo)}" alt="">` : `<span class="dot"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>`;
+  const lgIcon = l => l.logo ? `<img src="${esc(l.logo)}" alt="">` : `<span class="dot"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>`;
   let html = `<h4>Matchday</h4>
     <button class="lg${S.filter==='all'&&!S.scope&&S.page!=='transfers'?' on':''}" data-f="all" data-global><span class="dot">●</span><span>All matches</span>${badge(S.events.size,0)}</button>
     <button class="lg${S.filter==='live'&&!S.scope&&S.page!=='transfers'?' on':''}" data-f="live" data-global><span class="dot" style="color:var(--live)">◉</span><span>Live now</span>${totalLive?`<b class="live">${totalLive}</b>`:''}</button>`;
@@ -3654,7 +3654,7 @@ function renderMarket(){
     <div class="seg mk-modes" role="tablist" aria-label="Which transfers">${[['latest','Latest'],['day','Every transfer by day'],['records','Record signings']].map(([k,l]) => `<button role="tab" aria-selected="${m.mode===k}" class="${m.mode===k?'on':''}" data-act="mkmode" data-to="${k}">${l}</button>`).join('')}</div>
     ${sourceBar}
     <div class="mk-filters" role="group" aria-label="Sort and filter">
-      <label class="mk-q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="mkQ" type="search" placeholder="Player or club" value="${esc(m.q)}" aria-label="Filter by player or club"></label>
+      <label class="mk-q"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="mkQ" type="search" placeholder="Player or club" value="${esc(m.q)}" aria-label="Filter by player or club"></label>
       <label class="season"><span>Sort</span><select id="mkSort">${opt('date','Newest first',m.sort)}${opt('fee','Highest fee',m.sort)}${opt('value','Highest market value',m.sort)}${opt('age-asc','Youngest first',m.sort)}${opt('age-desc','Oldest first',m.sort)}${opt('name','Name A–Z',m.sort)}</select></label>
       <label class="season"><span>Type</span><select id="mkType">${opt('all','All moves',m.type)}${opt('paid','With a fee',m.type)}${opt('loan','Loans',m.type)}${opt('free','Free transfers',m.type)}${opt('other','Other (end of loan, retired…)',m.type)}</select></label>
       <label class="season"><span>Position</span><select id="mkPos">${opt('all','Any',m.pos)}${opt('G','Goalkeepers',m.pos)}${opt('D','Defenders',m.pos)}${opt('M','Midfielders',m.pos)}${opt('F','Forwards',m.pos)}</select></label>
@@ -4022,9 +4022,9 @@ function renderProfile(){
   el.innerHTML = `<div class="pf-head"><h2 id="profileTitle">${me ? 'Your profile' : 'Profile'}</h2><button class="icon-btn x" data-act="pfclose" aria-label="Close profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="pf-body">${body}${profilePicksHTML()}
       <section class="pf-sec" aria-labelledby="fT"><h5 id="fT">Favourite teams</h5>${S.fav.map(favTeamRow).join('') || '<p class="pf-empty">No teams yet. Add one below, or tap ☆ Follow on any team page.</p>'}
-        <label class="mk-q pf-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="pfAddT" type="search" placeholder="Add a team" value="${esc(P.addT)}" aria-label="Search for a team to follow"></label>${teamResults}</section>
+        <label class="mk-q pf-add"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="pfAddT" type="search" placeholder="Add a team" value="${esc(P.addT)}" aria-label="Search for a team to follow"></label>${teamResults}</section>
       <section class="pf-sec" aria-labelledby="fP"><h5 id="fP">Favourite players</h5>${S.favPlayers.map(favPlayerRow).join('') || '<p class="pf-empty">No players yet. Add one below, or tap ☆ Follow on a player page.</p>'}
-        <label class="mk-q pf-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="pfAddP" type="search" placeholder="Add a player" value="${esc(P.addP)}" aria-label="Search for a player to follow"></label>${playerResults}</section>
+        <label class="mk-q pf-add"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="pfAddP" type="search" placeholder="Add a player" value="${esc(P.addP)}" aria-label="Search for a player to follow"></label>${playerResults}</section>
       <section class="pf-sec" aria-labelledby="fL"><h5 id="fL">Your leagues</h5>
         <p class="pf-empty" style="margin-bottom:8px">${S.favLeagues.length ? 'These come first in the sidebar and the match list. Drag them, or use the arrows, to change the order.' : 'Star a league and it moves to the top of the sidebar and the match list.'}</p>
         <ol class="lg-order" id="lgOrder">${favLeagueList().map((l, i, a) => `<li draggable="true" data-slug="${l.slug}"><span class="grip" aria-hidden="true">⋮⋮</span>${l.logo ? `<img src="${esc(l.logo)}" alt="">` : ''}<span class="nm">${esc(l.name)}</span>
@@ -5014,6 +5014,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="guide.js"></script>
 <script src="search.js"></script>
 <script src="datastatus.js"></script>
+<script src="status.js"></script>
 <script type="module">
 // Predicted lineups: Claude researches recent team news with web search, using the viewer's own API key.
 // The SDK is only downloaded the first time someone asks for a predicted lineup.

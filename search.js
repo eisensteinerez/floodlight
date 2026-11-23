@@ -420,7 +420,7 @@
     if (res.abbr && !res.teams.length && !res.pending) h += `<p class="gs-note">${esc(res.raw.trim().toUpperCase())} can mean ${res.abbr.map(t => `${esc(t.name)} (${t.lg.toUpperCase()})`).join(', ')}. Their pages did not load; try the full name.</p>`;
     for (const k of order) { const list = res[k].slice(0, caps[k]); if (k === 'lab' && nothing && res.pending) continue; h += group(names[k], list, first && list.length); if (list.length) first = false }
     if (nothing && !res.pending && !res.fuzzy) h = `<div class="gs-none"><b>Nothing matches “${esc(res.raw.trim())}”</b><p>Check the spelling, try a last name (“Mahomes”), a team’s city or short name (“LAL”), or a league (“Premier League”). The Lab can also read the whole question.</p></div>` + h;
-    if (res.pending) h += `<p class="gs-note gs-wait" aria-hidden="true">Searching every sport…</p>`;
+    if (res.pending) h += nothing ? `<div class="gs-skl" aria-hidden="true">${'<div class="gs-skr"><i class="skl"></i><span><i class="skl"></i><i class="skl"></i></span></div>'.repeat(3)}</div><p class="gs-note gs-wait" aria-hidden="true">Searching every sport…</p>` : `<p class="gs-note gs-wait" aria-hidden="true">Still searching…</p>`;
     box.innerHTML = h; show();
     if (!res.pending) say(nothing ? `No results for ${res.raw.trim()}` : `${n} result${n === 1 ? '' : 's'}. Use the arrow keys to move through them.`);
   }

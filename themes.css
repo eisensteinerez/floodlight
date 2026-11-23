@@ -862,3 +862,15 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 .gs-back button:hover,.gs-back button:focus-visible{background:var(--surface-2)}
 @media (max-width:820px){.gs-back{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 @media (pointer:coarse){.gs-back button{min-height:44px}.gs-back .gs-back-x{width:44px}}
+
+/* honest states: offline / signed out bar, and the note on a placeholder that is taking too long (2026-11-23) */
+.fl-netbar{position:fixed;z-index:70;left:50%;top:12px;transform:translateX(-50%);display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--radius-tile);background:var(--pop,var(--surface));border:1px solid var(--border-2);border-left:4px solid var(--warn,var(--accent));box-shadow:var(--shadow-pop);font:500 14px/1.4 var(--font-body);color:var(--text-2)}
+.fl-netbar b{color:var(--text)}
+.fl-netbar[data-kind="online"]{border-left-color:var(--good)}
+.fl-netbar[hidden]{display:none}
+.fl-slow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin:0 0 12px;padding:10px 14px;border:1px dashed var(--border-2);border-radius:var(--radius-tile);font:500 14px/1.45 var(--font-body);color:var(--text-2)}
+.fl-slow p{margin:0}.fl-slow b{color:var(--text)}
+.gs-skl{padding:4px 8px}
+.gs-skr{display:flex;align-items:center;gap:12px;min-height:52px}
+.gs-skr > .skl{width:34px;height:34px;border-radius:50%;flex:none}
+.gs-skr span{flex:1;display:grid;gap:6px}.gs-skr span .skl{height:12px;border-radius:6px}.gs-skr span .skl + .skl{width:55%;height:10px}
