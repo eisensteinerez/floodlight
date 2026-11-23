@@ -22,19 +22,36 @@
   /* ---------- what makes Home yours ----------
      Favorite sports put those sports first. Followed teams and a watchlist of single games fill "Your games". Sections you
      do not want can be switched off. All of it is kept in this browser and, when you are logged in, with your account. */
-  const SECTIONS = [['hot', 'Hot and cold players'], ['three', 'Best edge, transfer wire and the Lab'], ['fights', 'UFC and boxing nights'], ['standouts', 'Standout lines']];
-  const MY = { sports: store.get('fl.favSports', []), off: store.get('fl.homeOff', []), watch: store.get('fl.watch', []), recent: store.get('fl.recentGames', []), edit: false, skip: store.get('fl.homeSkip', false) };
+  /* Home's sections, in the order a member wants them. Each can move up or down; most can be switched off. A key in
+     `sw` is a switch: on unless it is listed in MY.off. */
+  const MODS = [
+    { k: 'brief', l: 'Tonight in 60 seconds', sw: [['brief', 'Show it']] },
+    { k: 'mine', l: 'Your games', sw: [] },
+    { k: 'top', l: 'Featured game', sw: [['hot', 'Hot and cold players beside it']] },
+    { k: 'live', l: 'Live now and up next', sw: [['live', 'Show it']] },
+    { k: 'back', l: 'Continue researching', sw: [['back', 'Show it']] },
+    { k: 'three', l: 'Best edge, transfer wire and the Lab', sw: [['three', 'Show them']] },
+    { k: 'low', l: 'Fight nights and standout lines', sw: [['fights', 'UFC and boxing nights'], ['standouts', 'Standout lines']] }];
+  // the saved order, with any section added since slotted in where it sits by default
+  function order() {
+    const o = (MY.order || []).filter((k, i, a) => MODS.some(m => m.k === k) && a.indexOf(k) === i);
+    MODS.forEach((m, i) => { if (o.includes(m.k)) return; const before = MODS.slice(0, i).reverse().find(x => o.includes(x.k)); o.splice(before ? o.indexOf(before.k) + 1 : 0, 0, m.k) });
+    return o;
+  }
+  const customOrder = () => order().join() !== MODS.map(m => m.k).join();
+  const MY = { sports: store.get('fl.favSports', []), off: store.get('fl.homeOff', []), order: store.get('fl.homeOrder', []), watch: store.get('fl.watch', []), recent: store.get('fl.recentGames', []), edit: false, skip: store.get('fl.homeSkip', false) };
   let myT = 0;
   function saveMine() {
     MY.watch = MY.watch.filter(w => Date.now() - (w.at || 0) < 4 * 864e5).slice(-40);   // a watched game drops off a few days after it was added
-    store.set('fl.favSports', MY.sports); store.set('fl.homeOff', MY.off); store.set('fl.watch', MY.watch);
-    try { if (window.S?.me && typeof api === 'function') { clearTimeout(myT); myT = setTimeout(() => api('/api/me/prefs', { favSports: MY.sports, homeOff: MY.off, watch: MY.watch }).then(d => { if (d.user) S.me = d.user }).catch(() => {}), 500) } } catch (e) {}
+    store.set('fl.favSports', MY.sports); store.set('fl.homeOff', MY.off); store.set('fl.homeOrder', MY.order); store.set('fl.watch', MY.watch);
+    try { if (window.S?.me && typeof api === 'function') { clearTimeout(myT); myT = setTimeout(() => api('/api/me/prefs', { favSports: MY.sports, homeOff: MY.off, homeOrder: MY.order, watch: MY.watch }).then(d => { if (d.user) S.me = d.user }).catch(() => {}), 500) } } catch (e) {}
   }
   document.addEventListener('fl:me', () => { const p = window.S?.me?.prefs; if (!p) return; let ch = false;
     if (Array.isArray(p.favSports) && p.favSports.length && !MY.sports.length) { MY.sports = p.favSports; ch = true }
     if (Array.isArray(p.homeOff) && p.homeOff.length && !MY.off.length) { MY.off = p.homeOff; ch = true }
+    if (Array.isArray(p.homeOrder) && p.homeOrder.length && !MY.order.length) { MY.order = p.homeOrder; ch = true }
     if (Array.isArray(p.watch) && p.watch.length) { const have = new Set(MY.watch.map(w => w.key)), add = p.watch.filter(w => w && w.key && !have.has(w.key)); if (add.length) { MY.watch = [...MY.watch, ...add]; ch = true } }
-    if (ch) { store.set('fl.favSports', MY.sports); store.set('fl.homeOff', MY.off); store.set('fl.watch', MY.watch) }
+    if (ch) { store.set('fl.favSports', MY.sports); store.set('fl.homeOff', MY.off); store.set('fl.homeOrder', MY.order); store.set('fl.watch', MY.watch) }
     if (root.classList.contains('hub-on')) paint() });
   const watching = key => MY.watch.some(w => w.key === key);
   function watch(g, on = !watching(g.key)) { MY.watch = MY.watch.filter(w => w.key !== g.key); if (on) MY.watch.push({ key: g.key, sport: g.sport, id: g.id, a: g.a?.name || '', b: g.b?.name || '', at: Date.now() }); saveMine(); if (root.classList.contains('hub-on')) paint(); return on }
@@ -309,12 +326,48 @@
     const empty = games.length ? '' : F.length || MY.watch.length ? `<div class="hm-state">${ico('clock', 20)}<p><b>None of your teams play ${isToday() ? 'today' : 'this day'}</b><span>Look at another day, or follow more teams.</span></p><button type="button" class="bt ghost sm" data-hubday="1">Tomorrow</button><button type="button" class="bt ghost sm" data-hubmy="edit">Follow teams</button></div>`
       : `<div class="hm-state">${ico('star', 20)}<p><b>Follow a team to fill this row</b><span>Your sports are set. Pick teams from today’s games, or from any team’s page.</span></p><button type="button" class="bt sm" data-hubmy="edit">Choose teams</button></div>`;
     const tag = g => watching(g.key) && !isMine(g, F) ? '<span class="pl hm-wtag">Watching</span>' : '';
-    const recents = MY.recent.filter(r => list.some(g => g.key === r.key) && !games.some(g => g.key === r.key)).slice(0, 4), lab = (store.get('fl.labRecent', []) || []).slice(0, 3);
     return `<section class="card hm-mine" aria-label="Your games"><div class="sec-h"><h2>Your games</h2><span class="lb">${sub}</span><button type="button" class="lk" data-hubmy="edit">Edit your Home</button></div>
       ${games.length ? `<div class="g4 hm-cards">${games.slice(0, 8).map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tag(g) })).join('')}</div>` : empty}
       ${F.length || MY.sports.length ? `<div class="cx-row hm-chips" aria-label="What you follow">${MY.sports.map(k => `<span class="pl solid">${esc((SPORTS.find(x => x[0] === k) || [k, k])[1])}</span>`).join('')}${F.slice(0, 14).map(f => `<span class="pl">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}</span>`).join('')}${F.length > 14 ? `<span class="pl">+${F.length - 14} more</span>` : ''}</div>` : ''}
-      ${recents.length || lab.length ? `<div class="hm-back"><span class="lb">Pick up where you left off</span><div class="cx-row">${recents.map(r => { const g = list.find(x => x.key === r.key); return `<button type="button" class="cx sm" ${hubAttr(g)}>${esc(g.a.name)} v ${esc(g.b.name)}</button>` }).join('')}${lab.map(r => `<button type="button" class="cx sm" data-hublab="${esc(JSON.stringify(r.args || { q: r.q }))}">${ico('lab', 14)}${esc(r.label || r.q)}</button>`).join('')}</div></div>` : ''}
       ${gone && !games.length ? `<p class="lb">${gone} watched ${gone === 1 ? 'game is' : 'games are'} on another day.</p>` : ''}</section>`;
+  }
+  /* Continue researching: the games and Lab searches you opened last, so a return visit starts where the last one ended. */
+  function back(list) {
+    if (MY.off.includes('back')) return '';
+    const F = favList(), inMine = g => isMine(g, F) || watching(g.key);
+    const games = MY.recent.map(r => list.find(g => g.key === r.key)).filter(g => g && !inMine(g)).slice(0, 4);
+    const lab = (store.get('fl.labRecent', []) || []).slice(0, 4);
+    if (!games.length && !lab.length) return '';
+    const st = g => g.state === 'in' ? '<span class="pl live"><i></i>Live</span>' : g.state === 'pre' ? `<small class="lb">${esc(hm(g.date))}</small>` : '<small class="lb">Final</small>';
+    return `<section class="card hm-back" aria-labelledby="hmBackH"><div class="sec-h"><h2 id="hmBackH">Continue researching</h2><span class="lb">What you opened last</span></div>
+      <div class="hm-back-g">${games.length ? `<div><h3 class="lb">Games</h3><ul class="hm-bl">${games.map(g => `<li><button type="button" class="hm-bi" ${hubAttr(g)}><span>${esc(g.a.name)} v ${esc(g.b.name)}</span>${st(g)}</button></li>`).join('')}</ul></div>` : ''}
+        ${lab.length ? `<div><h3 class="lb">In the Lab</h3><ul class="hm-bl">${lab.map(r => `<li><button type="button" class="hm-bi" data-hublab="${esc(JSON.stringify(r.args || { q: r.q }))}">${ico('lab', 16)}<span>${esc(r.label || r.q)}</span></button></li>`).join('')}</ul></div>` : ''}</div></section>`;
+  }
+  /* Tonight in 60 seconds: the board in four lines. Each line is read from the games on Home and opens what it names.
+     A game whose score you have hidden is never described by its score. */
+  function brief(list, ftr) {
+    if (MY.off.includes('brief') || !list.length) return '';
+    const F = favList(), hid = g => g.state !== 'pre' && window.flMC?.spoil?.(g.key), out = [];
+    const nm = g => `${g.a.name} v ${g.b.name}`, gap = g => Math.abs((+g.a.score || 0) - (+g.b.score || 0));
+    const live = list.filter(g => g.state === 'in'), pre = list.filter(g => g.state === 'pre'), post = list.filter(g => g.state === 'post');
+    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 4 : 0) + (likes(g) ? 40 : 0);
+    if (live.length) {
+      const close = live.filter(g => !hid(g) && g.a.score !== '' && g.sport !== 'tennis').sort((x, y) => gap(x) - gap(y) || size(y) - size(x))[0];
+      out.push({ i: 'live', g: close || live[0], t: `<b>${live.length} live.</b> ${close ? `Closest: ${esc(nm(close))}, ${gap(close) ? `${gap(close)} in it` : 'level'}${close.clock ? `, ${esc(close.clock)}` : ''}.` : `Biggest: ${esc(nm(live.sort((x, y) => size(y) - size(x))[0]))}.`}` });
+    }
+    const mine = list.filter(g => isMine(g, F) || watching(g.key)).sort((x, y) => (x.state === 'in' ? 0 : x.state === 'pre' ? 1 : 2) - (y.state === 'in' ? 0 : y.state === 'pre' ? 1 : 2) || x.date - y.date);
+    if (mine.length) { const g = mine[0]; out.push({ i: 'star', g, t: `<b>Your teams:</b> ${esc(nm(g))} ${g.state === 'in' ? 'is on now' : g.state === 'pre' ? `at ${esc(hm(g.date))}` : 'has finished'}${mine.length > 1 ? `, and ${mine.length - 1} more` : ''}.` }) }
+    const next = pre.filter(g => g !== mine[0]).sort((x, y) => size(y) - size(x) || x.date - y.date)[0];
+    if (next) out.push({ i: 'clock', g: next, t: `<b>Biggest still to come:</b> ${esc(nm(next))}, ${esc(hm(next.date))}${next.tv ? ` on ${esc(next.tv)}` : ''}.` });
+    const E = window.flEdge, top = HEAT.picks && E ? E.ranked(HEAT.picks.filter(p => !p.start || p.start > Date.now()))[0] : null;
+    if (top && !MY.off.includes('three')) out.push({ i: 'pred', lab: E.labArgs(top), t: `<b>Best edge:</b> ${esc(top.name)}, ${esc(top.text)}, ${top.edge > 0 ? '+' : top.edge < 0 ? '−' : ''}${Math.abs(top.edge)} on the market.` });
+    const upset = post.filter(g => !hid(g)).map(g => { const w = g.a.winner ? g.a : g.b.winner ? g.b : null, l = w === g.a ? g.b : g.a; return w && l.rank && (!w.rank || w.rank > l.rank) ? { g, w, l } : null }).filter(Boolean).sort((x, y) => x.l.rank - y.l.rank)[0];
+    if (upset && out.length < 4) out.push({ i: 'bolt', g: upset.g, t: `<b>Upset:</b> #${upset.l.rank} ${esc(upset.l.name)} lost to ${esc(upset.w.name)}.` });
+    if (!live.length && !pre.length && out.length < 4) out.push({ i: 'clock', g: null, t: `<b>Everything ${isToday() ? 'today' : 'on this day'} is over.</b> ${post.length} final${post.length === 1 ? '' : 's'}.` });
+    if (!out.length) return '';
+    const head = isToday() ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
+    return `<section class="card hm-brief" aria-labelledby="hmBriefH"><h2 id="hmBriefH">${head} in 60 seconds</h2>
+      <ul class="hm-bl">${out.slice(0, 4).map(x => `<li>${x.g || x.lab ? `<button type="button" class="hm-bi" ${x.g ? hubAttr(x.g) : `data-hublab="${esc(JSON.stringify(x.lab))}"`}>` : '<p class="hm-bi">'}${ico(x.i, 18)}<span>${x.t}</span>${x.g || x.lab ? '</button>' : '</p>'}</li>`).join('')}</ul></section>`;
   }
   function editor(list) {
     const F = favList(), pool = [], seenT = new Set();
@@ -327,7 +380,11 @@
         ${F.length ? `<div class="cx-row" role="group" aria-labelledby="hmEdT">${F.map(f => `<button type="button" class="cx sm" aria-pressed="true" data-hubunfav="${esc(f.id)}" aria-label="Stop following ${esc(f.name)}">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}${ico('x', 14)}</button>`).join('')}</div>` : '<p class="lb">None yet.</p>'}
         <p class="lb">${pool.length ? `Playing ${isToday() ? 'today' : 'this day'}${MY.sports.length ? ' in your sports' : ''}. Press a team to follow it. Any team’s own page has a follow star too.` : `No teams from ${MY.sports.length ? 'your sports' : 'the board'} play ${isToday() ? 'today' : 'this day'}. Follow a team from its own page, or pick another day above.`}</p>
         ${pool.length ? `<div class="cx-row hm-pool">${pool.slice(0, 36).map(({ g, t }, i) => `<button type="button" class="cx sm" aria-pressed="${on(g, t)}" data-hubfav="${i}">${t.logo ? `<img class="hm-plimg" src="${esc(t.logo)}" alt="" loading="lazy">` : ''}${esc(t.full || t.name)}</button>`).join('')}</div>` : ''}</div>
-      <div class="hm-ed"><h3>Sections on Home</h3>${SECTIONS.map(([k, l]) => `<label class="hm-sw"><input class="sw" type="checkbox" role="switch" data-hubsec="${k}" ${MY.off.includes(k) ? '' : 'checked'}> ${esc(l)}</label>`).join('')}</div>
+      <div class="hm-ed"><h3 id="hmEdO">What Home shows, top to bottom</h3><p class="lb">Move a section up or down, or switch it off.</p>
+        <ol class="hm-order" aria-labelledby="hmEdO">${order().map((k, i, o) => { const m = MODS.find(x => x.k === k); return `<li class="hm-ord"><span class="hm-ord-n num" aria-hidden="true">${i + 1}</span>
+          <div class="hm-ord-t"><b>${esc(m.l)}</b>${m.sw.map(([s, l]) => `<label class="hm-sw"><input class="sw" type="checkbox" role="switch" data-hubsec="${s}" aria-label="${esc(m.sw.length > 1 ? l : `${m.l}: ${l}`)}" ${MY.off.includes(s) ? '' : 'checked'}> ${esc(l)}</label>`).join('')}${k === 'mine' ? '<small class="lb">Shown once you follow a sport or team</small>' : ''}</div>
+          <div class="hm-mv"><button type="button" class="ib" data-hubmove="${k}|-1" aria-label="Move ${esc(m.l)} up"${i ? '' : ' disabled'}>${ico('up', 18)}</button><button type="button" class="ib" data-hubmove="${k}|1" aria-label="Move ${esc(m.l)} down"${i < o.length - 1 ? '' : ' disabled'}>${ico('down', 18)}</button></div></li>` }).join('')}</ol>
+        ${customOrder() ? '<button type="button" class="lk" data-hubmy="reset">Put the sections back in the usual order</button>' : ''}</div>
       ${MY.watch.length ? `<div class="hm-ed"><h3>Watchlist</h3><div class="cx-row">${MY.watch.map(w => `<button type="button" class="cx sm" aria-pressed="true" data-hubunwatch="${esc(w.key)}" aria-label="Stop watching ${esc(w.a)} v ${esc(w.b)}">${esc(w.a)} v ${esc(w.b)}${ico('x', 14)}</button>`).join('')}</div><p class="lb">Add a game with the Watch button in its match centre.</p></div>` : '<p class="lb">To watch a single game, open it and press Watch. It then sits in Your games with live updates.</p>'}</section>`;
   }
   const isNight = () => new Date().getHours() >= 17;
@@ -351,22 +408,30 @@
     const title = today ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
     // a redraw every 30 seconds must not take the keyboard's place away
     const act = sec.contains(document.activeElement) ? document.activeElement : null, keepAsk = act?.id === 'hmAsk' ? act.value : null;
-    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-hubmy', 'data-hubsport', 'data-hubsec', 'data-hubfav', 'data-hubunfav', 'data-shell'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
-    sec.innerHTML = `
-      <header class="pg-head hm-head"><div><h1 class="pg-title">${title}</h1><p class="pg-sub">${H.day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>${days()}</header>
-      ${mine(list)}
-      <div class="g2 hm-top${MY.off.includes('hot') ? ' solo' : ''}">
+    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-hubmy', 'data-hubsport', 'data-hubsec', 'data-hubmove', 'data-hubfav', 'data-hubunfav', 'data-shell'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
+    // each section is drawn on its own, then laid out in the member's order
+    const part = {
+      brief: () => ready ? brief(list, ftr) : '',
+      mine: () => mine(list),
+      back: () => back(list),
+      top: () => `<div class="g2 hm-top${MY.off.includes('hot') ? ' solo' : ''}">
         ${noLive() ? `<div class="card feature emp hm-empty">${ico('members', 30)}<b>Live scores are switched off for you</b><p>Ask your admin for access to see games, scores and lineups here.</p></div>`
           : !ready ? '<div class="skl hm-ftr-skl"></div>' : ftr ? featureHTML(ftr, list)
           : H.down && !list.length ? `<div class="card feature emp hm-empty">${ico('live', 30)}<b>The scoreboards didn’t load</b><p>This page tries again every 30 seconds.</p><button type="button" class="bt ghost sm" data-hubretry="games">Try now</button></div>`
           : `<div class="card feature emp hm-empty">${ico('live', 30)}<b>No games ${today ? 'today' : 'on this day'}</b><p>Pick another day above, or choose a sport to see its schedule.</p></div>`}
         ${MY.off.includes('hot') ? '' : heatCard()}
-      </div>
-      <section class="hm-live" aria-label="${rowTitle}"${noLive() || (ready && !list.length) ? ' hidden' : ''}><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
+      </div>`,
+      live: () => MY.off.includes('live') ? '' : `<section class="hm-live" aria-label="${rowTitle}"${noLive() || (ready && !list.length) ? ' hidden' : ''}><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
         ${!ready ? `<div class="g4 hm-cards">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>` : four.length ? `<div class="g4 hm-cards">${four.map(card).join('')}</div>`
-          : `<p class="hm-none"><b>Nothing else ${today ? 'today' : 'on this day'}</b><span>The featured game is the only one on the board.</span></p>`}</section>
-      ${MY.off.includes('three') ? '' : `<div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>`}
-      ${((f, st) => f && st ? `<div class="g2 hm-low">${st}<div class="vst">${f}</div></div>` : f ? `<div class="g3 hm-fights">${f}</div>` : st)(today && !MY.off.includes('fights') ? fightTiles() : '', MY.off.includes('standouts') ? '' : standouts(list))}`;
+          : `<p class="hm-none"><b>Nothing else ${today ? 'today' : 'on this day'}</b><span>The featured game is the only one on the board.</span></p>`}</section>`,
+      three: () => `${MY.off.includes('three') ? '' : `<div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>`}`,
+      low: () => `${((f, st) => f && st ? `<div class="g2 hm-low">${st}<div class="vst">${f}</div></div>` : f ? `<div class="g3 hm-fights">${f}</div>` : st)(today && !MY.off.includes('fights') ? fightTiles() : '', MY.off.includes('standouts') ? '' : standouts(list))}`,
+    };
+    // while Home is being edited, the editor sits at the top where it was opened
+    const ord = MY.edit ? ['mine', ...order().filter(k => k !== 'mine')] : order();
+    sec.innerHTML = `
+      <header class="pg-head hm-head"><div><h1 class="pg-title">${title}</h1><p class="pg-sub">${H.day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>${days()}</header>
+      ${ord.map(k => part[k]()).join('\n')}`;
     if (keepAsk != null) { const a = $('hmAsk'); if (a) { a.value = keepAsk; a.focus() } } else if (keep) sec.querySelector(keep)?.focus({ preventScroll: true });
     { const dy = sec.querySelector('.hm-days'), on = dy?.querySelector('.on'); if (dy && on) dy.scrollLeft = on.offsetLeft - dy.offsetLeft - (dy.clientWidth - on.offsetWidth) / 2 }
     if (!sec.dataset.shown) { sec.dataset.shown = 1; sec.classList.add('hub-in'); setTimeout(() => sec.classList.remove('hub-in'), 900) }
@@ -414,6 +479,7 @@
     if (my) { const m = my.dataset;
       if (m.hubmy === 'edit') { MY.edit = true; paint(); return sec.querySelector('#hmEditH')?.focus() }
       if (m.hubmy === 'done') { MY.edit = false; paint(); return sec.querySelector('[data-hubmy="edit"]')?.focus() }
+      if (m.hubmy === 'reset') { MY.order = []; saveMine(); paint(); tell('Sections are back in the usual order.'); return sec.querySelector('#hmEdO')?.closest('.hm-ed')?.querySelector('[data-hubmove]:not([disabled])')?.focus() }
       if (m.hubmy === 'skip') { MY.skip = true; store.set('fl.homeSkip', true); return paint() }
       if (m.hubsport) { MY.sports = MY.sports.includes(m.hubsport) ? MY.sports.filter(k => k !== m.hubsport) : [...MY.sports, m.hubsport]; saveMine(); return paint() }
       if (m.hubfav != null) { const pool = []; const seenT = new Set(); for (const g of [...H.games].sort((a, b) => likes(b) - likes(a) || b.weight - a.weight)) { if (g.sport === 'tennis' || (MY.sports.length && !likes(g))) continue; for (const t of [g.a, g.b]) { const k = g.sport + t.id; if (!t.id || !t.name || seenT.has(k)) continue; seenT.add(k); pool.push({ g, t }) } }
@@ -421,6 +487,13 @@
       if (m.hubunfav) { try { S.fav = S.fav.filter(f => f.id !== m.hubunfav); typeof savePrefs === 'function' && savePrefs() } catch (e) {} return paint() }
       if (m.hubunwatch) { MY.watch = MY.watch.filter(w => w.key !== m.hubunwatch); saveMine(); return paint() }
     }
+    const mv = ev.target.closest('[data-hubmove]');
+    if (mv) { const [k, d] = mv.dataset.hubmove.split('|'), o = order(), i = o.indexOf(k), j = i + +d; if (i < 0 || j < 0 || j >= o.length) return;
+      [o[i], o[j]] = [o[j], o[i]]; MY.order = o; saveMine(); paint();
+      // stay on the same section's button; at the top or bottom that one is switched off, so move to its partner
+      const at = sec.querySelector(`[data-hubmove="${k}|${d}"]`), other = sec.querySelector(`[data-hubmove="${k}|${-d}"]`);
+      (at && !at.disabled ? at : other)?.focus();
+      return tell(`${MODS.find(x => x.k === k).l} moved to ${j + 1} of ${o.length}.`) }
     const lab = ev.target.closest('[data-hublab]');
     if (lab) { let a = {}; try { a = JSON.parse(lab.dataset.hublab) } catch (e) {} return openLab(a) }
     const go = ev.target.closest('[data-hubgo]');
@@ -431,6 +504,8 @@
   });
   sec.addEventListener('change', ev => { const k = ev.target.dataset?.hubsec; if (!k) return; MY.off = ev.target.checked ? MY.off.filter(x => x !== k) : [...new Set([...MY.off, k])]; saveMine(); paint() });
   sec.addEventListener('submit', ev => { if (!ev.target.matches('[data-hubask]')) return; ev.preventDefault(); const q = $('hmAsk').value.trim(); openLab(q ? { q } : {}) });
+  let sayEl = null;
+  function tell(t) { if (!sayEl) { sayEl = document.createElement('p'); sayEl.className = 'sr-only'; sayEl.setAttribute('role', 'status'); sec.after(sayEl) } sayEl.textContent = ''; setTimeout(() => { sayEl.textContent = t }, 60) }
   // the Lab page takes it from here; before that page exists, fall back to the old research screen
   function openLab(args) { if (window.flLab?.open) return window.flLab.open(args); document.querySelector('[data-shell="lab"]')?.click() }
 
