@@ -336,7 +336,10 @@
     window.flShell?.sync?.();
   }
   function hide() { if (!root.classList.contains('hub-on')) return; root.classList.remove('hub-on'); sec.hidden = true; clearInterval(poll) }
-  window.flHome = { watch, watching, seen, mine: () => MY, isMine: g => isMine(g) };
+  // for the first-visit setup (onboard.js): favorite sports, and following a team from a game on the board
+  const following = (g, t) => favList().some(f => f.id === favId(g, t) || (f.tid && String(f.tid) === t.id && f.sport === g.sport) || (!PRE[g.sport] && (f.name || '').toLowerCase() === (t.full || t.name || '').toLowerCase()));
+  function setSports(list) { MY.sports = SPORTS.map(s => s[0]).filter(k => k !== 'all' && list.includes(k)); saveMine(); if (root.classList.contains('hub-on')) paint() }
+  window.flHome = { watch, watching, seen, mine: () => MY, isMine: g => isMine(g), following, follow: (g, t) => { follow(g, t); if (root.classList.contains('hub-on')) paint(); return following(g, t) }, setSports, SPORTS };
   window.flHub = { show, hide, load, on: () => root.classList.contains('hub-on'), games: () => H.games, open: g => openGame(g.sport, g.lg, g.id), card, ufc: () => H.ufc, at: () => H.at,
     today() { if (!sameLocalDay(H.day)) { const d = new Date(); d.setHours(0, 0, 0, 0); H.day = d; H.games = []; return load(true) } return load() } };
 

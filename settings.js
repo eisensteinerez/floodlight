@@ -133,7 +133,7 @@
           <div class="st-row"><div class="st-l"><label for="prefAlerts">Announce goals</label><small>Reads out a goal in a match you have open, for screen readers.</small></div>
             <div class="st-c"><input class="sw" type="checkbox" role="switch" id="prefAlerts" ${ls.get('fl.alerts', 'true') !== 'false' ? 'checked' : ''}></div></div>
         </div>
-      </div>${window.flAlerts?.card() || ''}`;
+      </div>${window.flAlerts?.card() || ''}${window.flOnboard?.settingsCard() || ''}`;
   }
   function sync() { const el = document.getElementById('pg-settings'); if (!el || el.hidden) return; const f = document.activeElement, pick = f?.dataset?.themePick, id = f?.id; render(el);
     if (pick) el.querySelector(`[data-theme-pick="${current()}"]`)?.focus(); else if (id) document.getElementById(id)?.focus() }

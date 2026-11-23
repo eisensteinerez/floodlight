@@ -1500,3 +1500,28 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
 .pd-evfoot{display:flex;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
 :is(.pd-evfoot,.gx-tools) .bt svg{margin-right:6px;flex:none}
 [aria-busy="true"].bt,[aria-busy="true"].lk{opacity:.7;cursor:progress}
+
+/* ---------- First-visit setup (onboard.js) ---------- */
+:root.obd-on{overflow:hidden}
+.obd{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px}
+.obd-scrim{position:absolute;inset:0;background:rgba(0,0,0,.66)}
+.obd-card{position:relative;width:min(760px,100%);max-height:min(88vh,88dvh);display:flex;flex-direction:column;padding:0;overflow:hidden;border:1px solid var(--border-2);background:var(--pop,var(--surface));box-shadow:var(--shadow-pop)}
+.obd-head{padding:24px 28px 8px;display:grid;gap:8px}
+.obd-step{margin:0}
+.obd-dots{display:flex;gap:6px;margin:0;padding:0;list-style:none}
+.obd-dots li{width:28px;height:4px;border-radius:2px;background:var(--border-2)}
+.obd-dots li.on{background:var(--accent-fill)}
+.obd-head h2{margin:0;font:var(--display-weight,800) clamp(26px,3.4vw,38px)/1.05 var(--font-display);letter-spacing:var(--display-track,0);outline:none;text-wrap:balance}
+.obd-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 28px 20px;display:grid;gap:14px;align-content:start}
+.obd-lead{margin:0;max-width:60ch;font:500 15px/1.5 var(--font-body);color:var(--text-2)}
+.obd-chips{flex-wrap:wrap}
+.obd-grp{display:grid;gap:8px}
+.obd-team{display:inline-flex;align-items:center;gap:8px}
+.obd-team img{width:20px;height:20px;object-fit:contain;flex:none}
+.obd-empty{display:grid;gap:4px;padding:14px 16px;border:1px dashed var(--border-2);border-radius:var(--radius-tile)}
+.obd-empty p{margin:0}
+.obd-themes{grid-template-columns:repeat(3,minmax(0,1fr))}
+.obd-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 28px;border-top:1px solid var(--border)}
+.obd-nav{display:flex;gap:8px}
+.obd-skip{min-height:44px}
+@media (max-width:560px){.obd{padding:0;place-items:end stretch}.obd-card{width:100%;max-height:92dvh;border-radius:var(--radius-card) var(--radius-card) 0 0}.obd-head,.obd-body{padding-left:18px;padding-right:18px}.obd-foot{padding:12px 18px calc(12px + env(safe-area-inset-bottom))}.obd-themes{grid-template-columns:repeat(2,minmax(0,1fr))}}
