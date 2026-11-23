@@ -120,7 +120,7 @@
     const u = me(), theme = window.flTheme?.name?.() || '';
     menu.innerHTML = (u ? `<div class="flm-me"><span class="flm-av${u.prefs?.photo ? ' has-pic' : ''}" style="--av:${esc(u.prefs?.color || 'var(--accent-fill)')}">${initials(u.display)}${u.prefs?.photo ? `<img class="av-pic" src="/api/avatar?u=${encodeURIComponent(u.username)}&amp;v=${+u.prefs.photo}" alt="" decoding="async" onerror="this.remove()">` : ''}</span><span><b>${esc(u.display)}</b><small>${accessLine(u)}</small></span></div>`
         : `<div class="flm-auth">${mi('profile', 'Sign in', 'data-menu="signin"')}${mi('plus', 'Create account', 'data-menu="signup"')}</div>`)
-      + `<div class="flm-g">${u ? mi('profile', 'My profile', 'data-page="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}${mi('ticket', 'My parlays', 'data-shell="parlays"')}
+      + `<div class="flm-g">${u ? mi('profile', 'My profile', 'data-page="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}${mi('ticket', 'My parlays', 'data-shell="parlays"')}${mi('members', 'Members', 'data-shell="members"', '', ' flm-narrow')}
         ${mi('gear', 'Settings', 'data-page="settings"')}${mi('palette', 'Theme', 'data-page="settings" data-arg="theme"', `<em>${esc(theme)}</em>`)}${favThemes()}
         ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help and feedback', 'data-page="guide" data-arg="help"')}${mi('clock', 'Data status and corrections', 'data-page="status"')}</div>`
       + (window.flAdmin?.menu?.(mi) || '')

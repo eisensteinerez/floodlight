@@ -2583,3 +2583,16 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .pv-x:hover,.pv-x:focus-visible{border-color:var(--accent);color:var(--accent)}
 .pv-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:640px){:root[data-theme] .pv-card.full{padding-top:68px}:root[data-theme] .pv-card.full .pv-bar{position:static;margin-top:0}}
+/* match centre on phones: the close button stays in the top corner, the tools wrap under the league line, and the
+   "Updated" line is laid out as text so its height is always counted */
+@media (max-width:860px){
+  .gx-head{position:relative}
+  .gx-bar{padding-right:56px}
+  .gx-tools{flex-wrap:wrap;gap:8px}
+  .gx-tools .ib[data-gx="close"]{position:absolute;top:10px;right:12px;width:44px;height:44px}
+  .gx-fresh{display:block;min-height:0}.gx-fresh>*{vertical-align:middle}.gx-fresh>b{margin:0 6px 0 4px}.gx-fresh>.lb{display:block;margin-top:2px}
+  .gx-fresh .bt{margin-top:8px}
+}
+/* the match centre's body is one column; as a flex column every block keeps its full height (a grid row here could
+   collapse to zero in Chrome and let the "Updated" line run under the Follow buttons) */
+.gx-body{display:flex;flex-direction:column}.gx-body>*{flex:none;min-width:0}
