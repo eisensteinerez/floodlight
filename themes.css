@@ -571,12 +571,14 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
    graphic), and italic condensed capitals for titles and names. A leaning shape is always drawn on a ::before layer,
    never by clipping the element, so focus rings and pop-ups are not cut. */
 
-/* the backdrop: the picture sits at the top of the page and scrolls away with it; the fades keep the type readable.
-   The photo is warmed and dimmed a little so its cool floodlight green sits under the gold */
-html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;height:920px;filter:sepia(.32) saturate(.82) brightness(.84);
-  background:linear-gradient(180deg,rgba(7,8,10,.66) 0,rgba(7,8,10,.12) 20%,rgba(7,8,10,.2) 52%,var(--bg) 100%),
+/* the backdrop: the picture sits behind the heading area only, on Home, Predictions and Members, and fades to the
+   solid page colour before the first card, so filters, cards and tables always sit on plain dark. Every other page is
+   plain from the top. The photo is warmed and dimmed a little so its cool floodlight green sits under the gold */
+html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;height:340px;filter:sepia(.32) saturate(.82) brightness(.84);
+  background:linear-gradient(180deg,rgba(7,8,10,.66) 0,rgba(7,8,10,.16) 24%,rgba(7,8,10,.55) 70%,var(--bg) 100%),
     linear-gradient(90deg,var(--bg) 0,rgba(7,8,10,.84) 24%,rgba(7,8,10,.3) 58%,rgba(7,8,10,.04) 100%),
     var(--stadium-wide) right top/cover no-repeat,var(--bg)}
+html[data-theme="stadium-gold"]:not(.hub-on):not([data-page="predictions"]):not([data-page="members"]) body::before{display:none}
 
 /* type: gradient metal for the display figures, with a plain-ink fallback when the system forces its own colours */
 :root[data-theme="stadium-gold"] :is(.pg-title,.livebar h2,.ftr .mx-sc b,.lab-tool b,.pd-edge b,.pd-rank){-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
@@ -731,7 +733,7 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 
 /* phones and tablets: the picture is shorter, and nothing leans */
 @media (max-width:820px){
-  html[data-theme="stadium-gold"] body::before{height:560px;background:linear-gradient(180deg,rgba(7,8,10,.5) 0,rgba(7,8,10,.3) 40%,var(--bg) 100%),linear-gradient(90deg,rgba(7,8,10,.86) 0,rgba(7,8,10,.3) 100%),var(--stadium-wide) 78% top/cover no-repeat,var(--bg)}
+  html[data-theme="stadium-gold"] body::before{height:380px;background:linear-gradient(180deg,rgba(7,8,10,.5) 0,rgba(7,8,10,.3) 40%,var(--bg) 100%),linear-gradient(90deg,rgba(7,8,10,.86) 0,rgba(7,8,10,.3) 100%),var(--stadium-wide) 78% top/cover no-repeat,var(--bg)}
   :root[data-theme="stadium-gold"] .top-in{padding-bottom:10px}
   :root[data-theme="stadium-gold"] .tb-brand::after{display:none}
   :root[data-theme="stadium-gold"] .flbar{border-color:var(--border-2)}
