@@ -125,7 +125,7 @@
         <div class="pp-faq">${FAQ.map(([q, a]) => `<details class="card flat drw"><summary>${esc(q)}</summary><div class="drw-b"><p>${esc(a)}</p></div></details>`).join('')}</div></section>
       <p class="pp-foot">Floodlight is a research tool, not a sportsbook. Hit rates and predictions describe past results and our estimates; they are never a guarantee. 18+ (21+ where required). If gambling stops being fun, call 1-800-GAMBLER.</p>
     </div>`;
-    track('upgrade_view', { signedIn: !!u });
+    if (opts.standalone && !P.viewed) { P.viewed = true; track('upgrade_view', { signedIn: !!u }) }   // inside the app, analytics.js counts it on fl:page
   }
 
   async function post(path, body) {

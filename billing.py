@@ -37,6 +37,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+try:
+    import analytics   # the owner dashboard's journey counts (analytics.py)
+except Exception:   # pragma: no cover
+    analytics = None
+
 API = "https://api.stripe.com/v1"
 DAY = 86400
 TRIAL_DAYS = 7
@@ -403,6 +408,20 @@ def _card(pm):
             "wallet": ((c.get("wallet") or {}).get("type") or "")}
 
 
+def _journey(u, old_status, what=None, **props):
+    """Count trial_start, subscribe, renew and cancel for the owner dashboard, once per change of state."""
+    if not analytics:
+        return
+    st = u.get("plan_status")
+    name = what or ("trial_start" if st == "trial" and old_status != "trial" else
+                    "subscribe" if st == "active" and old_status not in ("active", "past_due") else None)
+    if name:
+        try:
+            analytics.event(name, {"plan": u.get("plan"), **props}, user=u.get("username"))
+        except Exception:
+            pass
+
+
 def apply_subscription(u, sub, quiet=False):
     """Copy a Stripe subscription onto the account."""
     item = ((sub.get("items") or {}).get("data") or [{}])[0]
@@ -435,6 +454,7 @@ def apply_subscription(u, sub, quiet=False):
     pm = sub.get("default_payment_method")
     if isinstance(pm, dict):
         u["payment_method"] = _card(pm)
+    _journey(u, old[1])
     if not quiet and old != (u.get("plan"), u.get("plan_status")):
         log(f"{PLAN.get(u['plan'], {}).get('name', u['plan'])}: {old[1] or 'none'} → {st}", u["username"])
 
@@ -496,13 +516,15 @@ def _demo_renew(u, now):
     while end <= now:
         end += step
         _demo_invoice(u, p["price_cents"], f"{p['name']} renewal (test)")
-    if u.get("plan_status") == "trial" and not u.get("paid_since"):
+    was = u.get("plan_status")
+    if was == "trial" and not u.get("paid_since"):
         u["paid_since"] = int(u.get("trial_ends") or now)
     u.update({"plan_status": "active", "current_period_end": int(end)})
+    _journey(u, was, None if was == "trial" else "renew")
 
 
 def _demo_start(u, plan, trial):
-    p, now = PLAN[plan], int(time.time())
+    p, now, was = PLAN[plan], int(time.time()), u.get("plan_status")
     step = (365 if p["interval"] == "year" else 30) * DAY
     u.update({"provider": "demo", "plan": plan, "price_cents": p["price_cents"], "interval": p["interval"], "cancel_at_period_end": False,
               "payment_method": {"brand": "visa", "last4": "4242", "exp": "12/34", "wallet": "", "test": True}})
@@ -514,6 +536,7 @@ def _demo_start(u, plan, trial):
     else:
         u.update({"plan_status": "active", "paid_since": u.get("paid_since") or now, "current_period_end": now + step})
         _demo_invoice(u, p["price_cents"], f"{p['name']} (test)")
+    _journey(u, was)
 
 
 # ---------- actions the member takes ----------
@@ -651,6 +674,7 @@ def cancel(u, reason="", note=""):
         u.update({"cancel_at_period_end": True, "canceled_at": int(time.time()), "cancel_reason": reason, "cancel_note": note})
         _save_users()
     log(f"Cancelled {PLAN[u['plan']]['name']} ({reason})", u["username"], reason=reason, note=note)
+    _journey(u, u.get("plan_status"), "cancel", reason=reason)
     return 200, {"ok": True, "plan": view(u)}
 
 
@@ -944,6 +968,7 @@ def webhook(payload, header):
                         u["plan_status"] = "active"
                     if obj.get("billing_reason") == "subscription_cycle" and int(obj.get("amount_paid") or 0) > 0:
                         log("Renewed", u["username"], amount_cents=obj.get("amount_paid"))
+                        _journey(u, u.get("plan_status"), "renew")
                         u["renewed_at"] = int(time.time())
                     if not u.get("paid_since") and int(obj.get("amount_paid") or 0) > 0:
                         u["paid_since"] = int(time.time())

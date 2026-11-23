@@ -103,7 +103,7 @@
     try {
       const r = await fetch('/api/plans', { credentials: 'same-origin' }); if (!r.ok) throw 0;
       const d = await r.json(), list = Array.isArray(d) ? d : d.plans;
-      if (!Array.isArray(list) || !list.length) throw 0;
+      if (!Array.isArray(list) || !list.length || d.on_sale === false) throw 0;   // on_sale: billing.py says paid plans can be bought
       drawPlans(list, true);
     } catch { drawPlans(PLANNED, false) }
   }

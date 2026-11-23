@@ -76,7 +76,7 @@
   function set(mode, extra = {}) { Object.assign(A, { mode, err: '', msg: '', busy: false }, extra); redraw(true) }
 
   async function signedIn(d, how) {
-    if (how === 'signup') { try { sessionStorage.setItem('fl.newAccount', '1') } catch {} track('signup', {}) }
+    if (how === 'signup') { try { sessionStorage.setItem('fl.newAccount', '1') } catch {} }   // the server counts the signup (analytics.py)
     let next = ''; try { next = sessionStorage.getItem('fl.after') || ''; sessionStorage.removeItem('fl.after') } catch {}
     if (A.gated || !window.flPages) { location.hash = next; location.reload(); return }
     if (typeof adoptUser === 'function') adoptUser(d.user);

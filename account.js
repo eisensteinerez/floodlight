@@ -192,7 +192,7 @@
       const f = d.querySelector('form'), reason = f.reason.value || 'other', note = f.note.value;
       const go = d.returnValue === 'cancel'; d.remove(); from?.focus?.();
       if (!go) return;
-      try { const r = await call('/api/billing/cancel', { reason, note }); A.bill.plan = r.plan; say('plan', 'Your plan is cancelled. It stays on until the end of the period.'); track('cancel', { plan: p.plan, reason, note }); await refreshMe() } catch (e) { oops('plan', e) }
+      try { const r = await call('/api/billing/cancel', { reason, note }); A.bill.plan = r.plan; say('plan', 'Your plan is cancelled. It stays on until the end of the period.');; await refreshMe() } catch (e) { oops('plan', e) }
       draw();
     });
     d.showModal();
@@ -271,7 +271,7 @@
       if (a === '2fa-cancel') { A.setup = null }
       if (a === 'signout') { A.sess = (await call('/api/me/sessions/revoke', { id: b.dataset.id })).sessions; say('sess', 'Signed out.') }
       if (a === 'signout-all') { A.sess = (await call('/api/me/sessions/revoke', { all: true })).sessions; say('sess', 'Every other device is signed out.') }
-      if (a === 'reactivate') { A.bill.plan = (await call('/api/billing/reactivate', {})).plan; say('plan', "Your plan is back on. It renews as before."); track('renew', { plan: A.bill.plan.plan }); await refreshMe() }
+      if (a === 'reactivate') { A.bill.plan = (await call('/api/billing/reactivate', {})).plan; say('plan', "Your plan is back on. It renews as before.");  await refreshMe() }
       if (a === 'switch') { const d = await call('/api/billing/checkout', { plan: b.dataset.plan }); if (d.url) { location.href = d.url; return } A.bill = await call('/api/me/billing'); say('plan', `Switched to ${esc(PLAN_NAME[b.dataset.plan])}.`); await refreshMe() }
       if (a === 'card') { const d = await call('/api/billing/card', {}); if (d.url) { location.href = d.url; return } say('plan', esc(d.note || 'Card saved.')) }
       if (a === 'restore') { const d = await call('/api/billing/restore', {}); if (d.found) { A.bill = await call('/api/me/billing'); say('more', 'Found it. Your plan is linked to this account.'); await refreshMe() } else say('more', esc(d.message)) }
