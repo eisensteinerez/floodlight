@@ -344,8 +344,9 @@
   }
 
   document.addEventListener('click', ev => {
-    const t = ev.target.closest('[data-twlg],[data-twtype],[data-twopen],[data-twsrc],[data-twreport],[data-twonly],[data-twmore],[data-twfollow],[data-twteam],[data-twplayer],[data-twretry],[data-twmarket],[data-twdrm]'); if (!t) return;
+    const t = ev.target.closest('[data-twlg],[data-twtype],[data-twopen],[data-twsrc],[data-twreport],[data-twonly],[data-twmore],[data-twfollow],[data-twteam],[data-twplayer],[data-twretry],[data-twmarket],[data-twdrm],[data-twmove]'); if (!t) return;
     const d = t.dataset, keep = sel => requestAnimationFrame(() => document.querySelector(sel)?.focus());
+    if (d.twmove) { const lg = d.twmove.split(':')[0]; if (LG[lg]) { T.lg = lg; T.team = null; T.type = 'all' } window.flPages?.show('transfers'); return }
     if (d.twsrc) { T.src.has(d.twsrc) ? T.src.delete(d.twsrc) : T.src.add(d.twsrc); draw(); return keep(`[data-twsrc="${CSS.escape(d.twsrc)}"]`) }
     if (d.twonly != null) { T.team = d.twonly || null; T.show = 30; draw(); return keep(d.twonly ? `[data-twonly="${CSS.escape(d.twonly)}"]` : '.tw-latest h2') }
     if (d.twreport) { const it = (T.data[T.lg]?.items || []).find(x => x.id === d.twreport); if (!it) return; report(it); return }
@@ -382,13 +383,32 @@
     // { line: "Released by Arsenal", sub: "Now a free agent" }, for whoever shows the row
     return { denied, failed, rows: res.flatMap(r => r.items || []).filter(x => x.type !== 'other' && !x.internal).sort((a, b) => b.when - a.when).slice(0, n).map(x => ({ ...x, league: LG[x.lg].name, says: says(x) })) };
   }
-  // a player's own moves, from the same lists (matched by name where the list gives no id)
+  // a player's own moves, from the same lists (matched by name where the list gives no id), as a timeline, newest first.
+  // Each step has one plain type, so a season reads down the card: Signed, Waived, Claimed, Practice squad, Activated…
+  const STEP = { sign: 'Signed', re_sign: 'Signed', two_way: 'Signed', claim: 'Claimed', waive: 'Waived', release: 'Released', ps_release: 'Released',
+    ps_sign: 'Practice squad', promote: 'Practice squad', elevate: 'Practice squad', activate: 'Activated', ir: 'Injured reserve', ps_ir: 'Injured reserve',
+    return_ir: 'Injured reserve', pup: 'Reserve list', suspend: 'Suspended', trade: 'Traded', extension: 'Contract extension', convert: 'Contract', option: 'Contract',
+    guarantee: 'Contract', exemption: 'Roster move', other: 'Roster move' };
+  const MLB_STEP = { TR: 'Traded', SFA: 'Signed', SGN: 'Signed', REL: 'Released', CLW: 'Claimed', WA: 'Waived', DES: 'Designated for assignment', OUT: 'Outrighted' };
+  function stepOf(it) {
+    if (it.lg === 'soccer') return it.type === 'loan' ? 'Loan' : it.type === 'left' ? it.label : it.noclub?.side === 'from' && it.noclub.what === 'without club' ? 'Signed' : 'Transfer';
+    if (it.lg === 'mlb') { const t = it.source?.text || it.details || ''; return MLB_STEP[it.code] || (/injured list/i.test(t) && /\bplaced|transferred\b/i.test(t) ? 'Injured list' : /\bactivated|reinstated\b/i.test(t) ? 'Activated' : /extension/i.test(t) ? 'Contract extension' : it.label || 'Roster move') }
+    if (it.kind) return STEP[it.kind] || 'Roster move';
+    return { trade: 'Traded', sign: 'Signed', ext: 'Contract extension', waiver: /claim/i.test(it.label) ? 'Claimed' : /waiver/i.test(it.label) ? 'Waived' : 'Released' }[it.type] || it.label || 'Roster move';
+  }
+  // a step that moves the player between teams gets a filled dot; one inside a roster (injured reserve, practice squad) a ring
+  const between = it => it.type === 'trade' || (!it.internal && !!(it.from || it.to || it.noclub));
+  const longDate = d => d.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
   function movesCard(sport, name, id) {
     const lg = { nba: 'nba', nfl: 'nfl', mlb: 'mlb' }[sport]; if (!lg || !name) return '';
     const d = T.data[lg];
-    if (!d || (!d.at && !d.promise)) { load(lg).then(r => { if ((r.items || []).some(x => mine(x, name, id)) && typeof renderSheet === 'function' && window.S?.stack?.length) renderSheet() }); return '' }
-    const rows = (d.items || []).filter(x => mine(x, name, id)).slice(0, 8); if (!rows.length) return '';
-    return `<section class="card pfa tw-pm" aria-label="Moves"><div class="sec-h"><h2>Moves</h2><span class="lb">from ${esc(d.source || LG[lg].src)}, recent weeks</span></div><ol class="tw-tl">${rows.map(x => `<li><span class="pl${x.type === 'trade' ? ' solid' : ''}">${esc(x.label)}</span><span class="rw-t"><b>${esc(plain(x))}</b><small>${esc(x.when.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }))}</small></span></li>`).join('')}</ol></section>`;
+    if (!d?.at) { load(lg).then(r => { if ((r.items || []).some(x => mine(x, name, id)) && typeof renderSheet === 'function' && window.S?.stack?.length) renderSheet() }); return '' }
+    const rows = (d.items || []).filter(x => mine(x, name, id)).sort((a, b) => b.when - a.when).slice(0, 12); if (!rows.length) return '';
+    return `<section class="card pfa tw-pm" aria-labelledby="twpm-h"><div class="sec-h"><h2 id="twpm-h">Moves</h2><span class="lb">From ${esc(d.source || LG[lg].src)}, newest first</span></div>
+      <ol class="twt">${rows.map(x => { const w = says(x), step = stepOf(x);
+        return `<li class="twt-i${between(x) ? ' go' : ''}"><button type="button" class="twt-b" data-twmove="${esc(x.id)}" aria-haspopup="dialog" aria-label="${esc(`${step}, ${longDate(x.when)}. ${w.line}. Open the details`)}">
+          <span class="twt-dot" aria-hidden="true"></span><span class="twt-k">${esc(step)}</span><span class="twt-t"><b>${esc(w.line)}</b>${w.sub ? `<small>${esc(w.sub)}</small>` : ''}</span>
+          <time class="twt-d num" datetime="${x.when.toISOString()}">${esc(x.when.toLocaleDateString([], { day: 'numeric', month: 'short' }))}</time></button></li>` }).join('')}</ol></section>`;
   }
   const mine = (x, name, id) => { const k = norm(name); return (id && x.player?.id && String(x.player.id) === String(id)) || norm(x.player?.name) === k || (x.parts || []).some(p => (p.player && (norm(p.player.name) === k || (id && String(p.player.id) === String(id)))) || (p.text && norm(p.text).includes(k))) };
 
