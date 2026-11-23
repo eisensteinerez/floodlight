@@ -1450,7 +1450,7 @@ function oddRow(e){
 }
 function spoken(e){
   const sc = `${e.home.full||e.home.name} ${e.home.score}, ${e.away.full||e.away.name} ${e.away.score}`;
-  if (e.state === 'in') return `Live, ${/half/i.test(e.detail) ? 'half time' : e.clock.replace("'", ' minutes')}: ${sc}. ${e.league.name}`;
+  if (e.state === 'in') return `Live, ${/half/i.test(e.detail) ? 'half time' : String(e.clock || 'in play').replace("'", ' minutes')}: ${sc}. ${e.league.name}`;
   if (e.state === 'post') return `${e.desc || 'Full time'}: ${sc}. ${e.league.name}`;
   const ml = S.odds.get(e.id)?.ml;
   const odds = ml ? ` Kalshi: ${e.home.name} ${pct(ml.home.p)} percent, draw ${ml.draw ? pct(ml.draw.p) : '?'} percent, ${e.away.name} ${pct(ml.away.p)} percent.` : '';

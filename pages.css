@@ -2224,3 +2224,14 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .ij-what{grid-column:1 / -1;font:500 12px/1.4 var(--font-body);color:var(--muted)}
 .ij-note{grid-column:1 / -1;margin:0;font:400 13px/1.45 var(--font-body);color:var(--text-2)}
 @media (max-width:560px){.ij-q{margin-left:0;flex-basis:100%}.ij-q input{min-width:0;width:100%}.ij-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Live: sections, folding competitions, "Show all" (2026-11-23) */
+.lv-g{content-visibility:auto;contain-intrinsic-size:auto 420px}
+.lv-g.folded{contain-intrinsic-size:auto 56px}
+.lv-g.folded .sec-h{margin-bottom:0}
+.lv-allh{margin:12px 0 -4px;font:700 13px/1.2 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.lv-fold{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0;color:inherit;font:inherit;background:transparent;border:0;cursor:pointer;text-align:left}
+.lv-fold svg{flex:none;color:var(--muted)}
+.lv-fold:hover span{text-decoration:underline;text-underline-offset:4px}
+.lv-more{margin-top:12px}
+.lv-sort{display:inline-flex;align-items:center;gap:8px}

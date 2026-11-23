@@ -1,6 +1,8 @@
 /* Floodlight · Live: every game in play right now, in every sport, on one page.
-   It reads the same list Home keeps fresh (home.js, every 30 seconds) and only draws it: by sport, live first,
-   then what starts later today, then what has finished. A game opens on its own sport page, as it does from Home. */
+   It reads the same list Home keeps fresh (home.js, every 30 seconds) and only draws it: Live, Up next and Finished.
+   A long list starts with My teams, Top games, On TV and (Up next) Starting in the next hour, then All competitions,
+   five games each with "Show all", and any competition can be folded (remembered). Seven orders replace the grouping.
+   Off-screen sections skip layout (content-visibility), so a night of 100+ games scrolls smoothly. */
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ic = (n, s) => window.flShell?.ic?.(n, s) || '';
@@ -8,8 +10,8 @@
   /* The reader's choices are kept in this browser, so leaving Live and coming back finds the page as it was. */
   const KEEP = 'fl.liveF';
   const kept = (() => { try { return JSON.parse(localStorage.getItem(KEEP) || '{}') } catch { return {} } })();
-  const L = { sport: kept.sport || 'all', show: kept.show || 'live', only: kept.only || 'all', sort: kept.sort || 'big', day: 0, timer: 0, view: (() => { try { return localStorage.getItem('fl.liveView') === 'compact' ? 'compact' : 'cards' } catch { return 'cards' } })() };
-  const keep = () => { try { localStorage.setItem(KEEP, JSON.stringify({ sport: L.sport, show: L.show, only: L.only, sort: L.sort })) } catch {} };
+  const L = { sport: kept.sport || 'all', show: kept.show || 'live', only: kept.only || 'all', sort: kept.sort || 'big', day: 0, timer: 0, more: new Set(), fold: new Set(kept.fold || []), view: (() => { try { return localStorage.getItem('fl.liveView') === 'compact' ? 'compact' : 'cards' } catch { return 'cards' } })() };
+  const keep = () => { try { localStorage.setItem(KEEP, JSON.stringify({ sport: L.sport, show: L.show, only: L.only, sort: L.sort, fold: [...L.fold].slice(-60) })) } catch {} };
   const hub = () => window.flHub;
   const hubAttr = g => `data-live="${esc(g.sport)}|${esc(g.lg || '')}|${esc(g.id)}"`;
 
@@ -33,6 +35,61 @@
   const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : `${m} min ago` };
   const dayLabel = o => o === 0 ? 'Today' : o === -1 ? 'Yesterday' : o === 1 ? 'Tomorrow' : '';
 
+  /* How the list is arranged when there are many games: first the few worth seeing (your teams, the biggest games,
+     what is on TV, what starts within the hour), then every competition, five games each until you ask for all.
+     A competition can be folded away and stays folded on this browser. */
+  const TOP_SOCCER = /premier league|laliga|la liga|bundesliga|serie a|ligue 1|champions league|europa league|conference league|mls|fa cup|copa|eredivisie|liga mx|world cup|euro\b|nations league/i;
+  const YOUTH = /\bu-?(1[5-9]|2[0-3])\b|youth|under-?\d|reserves|friendl/i;
+  const comp = g => g.sport === 'soccer' ? (g.lgName || g.league || 'Soccer') : g.short || g.sport;
+  const mine = g => { try { return !!(window.flHome?.isMine?.(g) || window.flHome?.watching?.(g.key)) } catch { return false } };
+  function pop(g) {   // how much a game is likely to matter to most people: league weight, ranks, TV, a top soccer league; youth and friendlies sink
+    const c = comp(g); let p = (g.weight || 3) * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 6 : 0) + (mine(g) ? 60 : 0);
+    if (g.sport === 'soccer') p += TOP_SOCCER.test(c) && !YOUTH.test(c) ? 30 : 0;
+    if (YOUTH.test(c) || YOUTH.test(`${g.a.full} ${g.b.full}`)) p -= 35;
+    return p;
+  }
+  const evenness = g => g.a.ml != null && g.b.ml != null ? Math.abs(g.a.ml - g.b.ml) : g.state === 'in' ? gap(g) / 10 + .5 : 9;
+  const SORTS = { soon: (a, b) => a.date - b.date, pop: (a, b) => pop(b) - pop(a), close: (a, b) => (a.state === 'in' && b.state === 'in' ? gap(a) - gap(b) : evenness(a) - evenness(b)) || a.date - b.date,
+    ranked: (a, b) => (!!(b.a.rank || b.b.rank) - !!(a.a.rank || a.b.rank)) || (Math.min(a.a.rank || 99, a.b.rank || 99) - Math.min(b.a.rank || 99, b.b.rank || 99)) || a.date - b.date,
+    tv: (a, b) => (!!b.tv - !!a.tv) || pop(b) - pop(a), mine: (a, b) => (mine(b) - mine(a)) || a.date - b.date, just: (a, b) => (scored.get(b.key) || 0) - (scored.get(a.key) || 0) };
+  const SORT_NAMES = [['big', 'By competition'], ['soon', 'Starting soonest'], ['pop', 'Most popular'], ['close', 'Closest matchup'], ['ranked', 'Ranked teams first'], ['tv', 'On TV first'], ['mine', 'My teams first']];
+  const PER = 5, FLAT = 24;
+  function plural(n, one, many) { return `${n} ${n === 1 ? one : many}` }
+  // a section of cards or rows; an id keeps focus when it redraws
+  function block(id, title, gs, opts = {}) {
+    const folded = opts.fold && L.fold.has(id), all = L.more.has(id), shown = opts.cap && !all ? gs.slice(0, opts.cap) : gs, hid = gs.length - shown.length;
+    const body = folded ? '' : `${L.view === 'compact' ? `<div class="card lv-rows">${shown.map(row).join('')}</div>` : `<div class="g4 hm-cards">${shown.map(g => cardOf(g)).join('')}</div>`}
+      ${hid > 0 ? `<button type="button" class="bt ghost lv-more" data-livemore="${esc(id)}">Show all ${gs.length} ${esc(opts.noun || 'games')}</button>` : all && opts.cap && gs.length > opts.cap ? `<button type="button" class="lk lv-more" data-liveless="${esc(id)}">Show fewer</button>` : ''}`;
+    return `<section class="lv-g${opts.cls ? ' ' + opts.cls : ''}${folded ? ' folded' : ''}" aria-labelledby="lvh-${esc(id)}" data-lvsec="${esc(id)}"><div class="sec-h">${opts.fold
+      ? `<h2 id="lvh-${esc(id)}"><button type="button" class="lv-fold" aria-expanded="${!folded}" data-livefold="${esc(id)}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${folded ? 'M9 6l6 6-6 6' : 'M6 9l6 6 6-6'}"/></svg><span>${esc(title)}</span></button></h2>`
+      : `<h2 id="lvh-${esc(id)}">${esc(title)}</h2>`}<span class="lb">${plural(gs.length, 'game', 'games')}${opts.why ? ` · ${esc(opts.why)}` : ''}</span></div>${body}</section>`;
+  }
+  let cardOf = g => '';
+  function arrange(list, show) {
+    if (L.sort !== 'big') {   // one ordered list, a page at a time
+      const sorted = [...list].sort(SORTS[L.sort] || SORTS.soon), name = (SORT_NAMES.find(x => x[0] === L.sort) || [])[1] || (L.sort === 'just' ? 'Just scored first' : 'Ordered');
+      return block('flat', name, sorted, { cap: FLAT, noun: show === 'live' ? 'live games' : 'games' });
+    }
+    let h = '';
+    const used = new Set(), take = (gs, n) => { const out = gs.filter(g => !used.has(g.key)).slice(0, n); out.forEach(g => used.add(g.key)); return out };
+    if (list.length > 8) {   // a long night: the few worth seeing first
+      const my = take(list.filter(mine).sort(SORTS.soon), 12);
+      if (my.length) h += block('mine', 'My teams', my, { why: 'teams and games you follow' });
+      const top = take([...list].filter(g => pop(g) >= 75).sort(SORTS.pop), 4);
+      if (top.length) h += block('top', 'Top games', top, { why: 'biggest leagues, ranked teams and TV' });
+      const tv = take([...list].filter(g => g.tv).sort(SORTS.pop), 4);
+      if (tv.length) h += block('tv', 'On TV', tv, { why: 'with a national broadcast listed' });
+      if (show === 'next') { const soon = take(list.filter(g => g.date - Date.now() < 3600e3).sort(SORTS.soon), 6); if (soon.length) h += block('hour', 'Starting in the next hour', soon) }
+      h += `<h2 class="lv-allh">All competitions</h2>`;
+    }
+    const groups = new Map();
+    for (const g of [...list].sort(show === 'done' ? (a, b) => b.date - a.date : SORTS.soon)) { const k = comp(g); (groups.get(k) || groups.set(k, []).get(k)).push(g) }
+    const order = [...groups].sort((a, b) => Math.max(...b[1].map(pop)) - Math.max(...a[1].map(pop)));
+    // folding is remembered by competition name, so "NCAAB" stays folded tomorrow too
+    h += order.map(([k, gs]) => block('c:' + k, k, gs, { cap: PER, fold: true, noun: `${k} games` })).join('');
+    return h;
+  }
+
   function render(el) {
     const H = hub(), games = H?.games() || [], ready = !!H?.at(), today = L.day === 0;
     const ufcLive = today ? (H?.ufc() || []).filter(e => e.state === 'in') : [];
@@ -42,12 +99,7 @@
     // another day has nothing live: show what that day holds
     const show = !today && L.show === 'live' ? (L.day < 0 ? 'done' : 'next') : L.show;
     const set = show === 'live' ? live : show === 'next' ? next : done;
-    let list = set.filter(inSport).filter(only);
-    if (show === 'live' && L.sort === 'just') list = [...list].sort((a, b) => (scored.get(b.key) || 0) - (scored.get(a.key) || 0));
-    if (show === 'live' && L.sort === 'close') list = [...list].sort((a, b) => gap(a) - gap(b));
-    const groups = new Map();
-    if (show === 'live' && L.sort !== 'big') groups.set(L.sort === 'just' ? 'Most recent score first' : 'Closest first', list);
-    else for (const g of list) { const k = g.short || g.sport; (groups.get(k) || groups.set(k, []).get(k)).push(g) }
+    const list = set.filter(inSport).filter(only);
     const ufcBlock = show === 'live' && L.only === 'all' && (L.sport === 'all' || L.sport === 'ufc') ? ufcLive.map(e => `<button type="button" class="card hit lv-ufc" data-livego="ufc"><span class="pl live"><i></i>Live</span><span class="rw-t"><b>${esc(e.name)}</b><small>${esc(e.live ? `${e.live.a.name} v ${e.live.b.name} · ${e.live.detail}` : 'Fight night under way')}</small></span>${ic('arrow', 18)}</button>`).join('') : '';
     // just finished: today's games that ended in the last two hours stay in view under the live ones
     const recent = today && show === 'live' && L.only === 'all' ? done.filter(inSport).filter(g => Date.now() - g.date < 5 * 3600e3).slice(0, 4) : [];
@@ -58,7 +110,8 @@
       : show === 'next' ? [today ? 'Nothing more to start today' : `Nothing scheduled ${dayLabel(L.day).toLowerCase()}`, today ? 'Every game on today’s board has started or finished.' : 'Pick another day above.', today ? 'show:live' : 'day:0', today ? 'See what is live' : 'Back to today']
       : [today ? 'Nothing has finished yet' : 'No results for this day', today ? 'Results from today’s games collect here.' : 'Pick another day above.', today ? 'show:live' : 'day:0', today ? 'See what is live' : 'Back to today'];
     const at = H?.at?.() || 0;
-    const card = g => window.flCard({ ...cardFacts(g), attrs: hubAttr(g), extra: just(g) });
+    const card = g => window.flCard({ ...cardFacts(g), attrs: hubAttr(g), extra: just(g) }); cardOf = card;
+    if ((L.sort === 'just' && show !== 'live') || (L.sort === 'soon' && show === 'done') || !(L.sort in SORTS || L.sort === 'big')) L.sort = 'big';
     el.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Live${today ? '' : ` · ${dayLabel(L.day)}`}</h1><p class="pg-sub">${today ? 'Every game in play, in every sport. Scores update on their own.' : L.day < 0 ? 'Yesterday’s results, in every sport.' : 'Tomorrow’s schedule, in every sport.'}</p></div>
         <div class="lv-head-r"><div class="seg" role="radiogroup" aria-label="Day">${[-1, 0, 1].map(o => `<button type="button" role="radio" aria-checked="${L.day === o}" class="${L.day === o ? 'on' : ''}" tabindex="${L.day === o ? 0 : -1}" data-liveday="${o}">${dayLabel(o)}</button>`).join('')}</div>
         ${today ? `<div class="seg" role="radiogroup" aria-label="Show">${[['live', `Live${live.length + ufcLive.length ? ` · ${live.length + ufcLive.length}` : ''}`], ['next', 'Up next'], ['done', 'Finished']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${L.show === k}" class="${L.show === k ? 'on' : ''}" tabindex="${L.show === k ? 0 : -1}" data-liveshow="${k}">${l}</button>`).join('')}</div>` : ''}</div></header>
@@ -67,11 +120,11 @@
         <label class="lv-sp"><input class="sw" type="checkbox" role="switch" id="lvSpoil" ${window.flMC?.spoilAll() ? 'checked' : ''}> Spoiler-free <span class="lb">hide scores until I reveal them</span></label></div>
       <div class="cx-row scroll" role="group" aria-label="Sport">${SPORTS.map(([k, l]) => `<button type="button" class="cx" aria-pressed="${L.sport === k}" data-livesport="${k}">${esc(l)}${count(k) ? `<b class="lv-n num" aria-label="${count(k)} live">${count(k)}</b>` : ''}</button>`).join('')}</div>
       <div class="lv-filt"><div class="cx-row" role="group" aria-label="Show only">${ONLY.map(([k, l]) => `<button type="button" class="cx sm" aria-pressed="${L.only === k}" data-liveonly="${k}">${esc(l)}</button>`).join('')}</div>
-        ${show === 'live' ? `<label class="fl-f lv-sort"><span class="sr-only">Order</span><select class="inp sm" id="lvSort">${[['big', 'By competition'], ['just', 'Just scored first'], ['close', 'Closest first']].map(([k, l]) => `<option value="${k}"${L.sort === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}</div>
+        <label class="fl-f lv-sort"><span class="lb">Order</span><select class="inp sm" id="lvSort">${[...SORT_NAMES.slice(0, 1), ...(show === 'live' ? [['just', 'Just scored first']] : []), ...SORT_NAMES.slice(1)].filter(([k]) => !(show === 'done' && k === 'soon')).map(([k, l]) => `<option value="${k}"${L.sort === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>
       ${filtered ? `<p class="lv-scope" role="status"><b>${esc([sName && L.sport !== 'all' ? sName : 'All sports', L.only !== 'all' ? { close: 'close games', ot: 'games in overtime', upset: 'upsets' }[L.only] : ''].filter(Boolean).join(', '))}</b> · ${list.length + (L.sport === 'ufc' ? ufcLive.length : 0)} shown<button type="button" class="lk" data-livereset>Show everything</button></p>` : ''}
       ${!ready ? `<div class="g4">${'<div class="skl hm-card-skl"></div>'.repeat(8)}</div>`
         : !list.length && !ufcBlock ? `<div class="card emp">${ic('live', 30)}<b>${none[0]}</b><p>${esc(none[1])}</p><button type="button" class="bt ghost" data-livego2="${none[2]}">${none[3]}</button></div>`
-        : `${ufcBlock}${[...groups].map(([k, gs]) => `<section class="lv-g" aria-label="${esc(k)}"><div class="sec-h"><h2>${esc(k)}</h2><span class="lb">${gs.length} game${gs.length === 1 ? '' : 's'}</span></div>${L.view === 'compact' ? `<div class="card lv-rows">${gs.map(row).join('')}</div>` : `<div class="g4 hm-cards">${gs.map(card).join('')}</div>`}</section>`).join('')}`}
+        : `${ufcBlock}${arrange(list, show)}`}
       ${recent.length ? `<section class="lv-g lv-recent" aria-label="Just finished"><div class="sec-h"><h2>Just finished</h2><button type="button" class="lk" data-liveshow="done">All results</button></div>${L.view === 'compact' ? `<div class="card lv-rows">${recent.map(row).join('')}</div>` : `<div class="g4 hm-cards">${recent.map(card).join('')}</div>`}</section>` : ''}`;
   }
   // a tag on a game whose score changed in the last few minutes, unless its score is hidden
@@ -87,18 +140,23 @@
       <span class="lv-when num${g.state === 'in' ? ' on' : ''}">${g.state === 'pre' ? esc(g.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : esc(g.state === 'in' ? g.clock || 'Live' : sp ? 'Final' : g.final || 'Final')}</span>
       <span class="lv-ts">${t(g.a, g.b)}${t(g.b, g.a)}</span>${g.tv ? `<span class="lb lv-tv">${esc(g.tv)}</span>` : ''}</button>` };
   const page = () => document.getElementById('pg-live');
-  const redraw = () => { const el = page(); if (!el || el.hidden) return; const a = document.activeElement, key = el.contains(a) ? a.id === 'lvSpoil' ? '#lvSpoil' : ['data-live', 'data-livesport', 'data-liveshow', 'data-liveview', 'data-liveonly', 'data-liveday'].map(k => a.hasAttribute(k) ? `[${k}="${CSS.escape(a.getAttribute(k))}"]` : '').find(Boolean) : null;
+  const redraw = () => { const el = page(); if (!el || el.hidden) return; const a = document.activeElement, key = el.contains(a) ? a.id === 'lvSpoil' ? '#lvSpoil' : ['data-live', 'data-livesport', 'data-liveshow', 'data-liveview', 'data-liveonly', 'data-liveday', 'data-livefold'].map(k => a.hasAttribute(k) ? `[${k}="${CSS.escape(a.getAttribute(k))}"]` : '').find(Boolean) : null;
     render(el); if (key) el.querySelector(key)?.focus({ preventScroll: true }) };
   document.addEventListener('fl:hub', () => { track(); redraw() }); document.addEventListener('fl:hubday', redraw); document.addEventListener('fl:spoil', redraw);
   document.addEventListener('change', ev => { if (ev.target.id === 'lvSpoil') window.flMC?.setSpoilAll(ev.target.checked); if (ev.target.id === 'lvSort') { L.sort = ev.target.value; keep(); redraw(); document.getElementById('lvSort')?.focus() } });
   document.addEventListener('click', ev => {
     const el = page(); if (!el || el.hidden || !el.contains(ev.target)) return;
-    const s = ev.target.closest('[data-livesport]'); if (s) { L.sport = s.dataset.livesport; keep(); return redraw() }
+    const s = ev.target.closest('[data-livesport]'); if (s) { L.sport = s.dataset.livesport; L.more.clear(); keep(); return redraw() }
+    const mo = ev.target.closest('[data-livemore]'); if (mo) { const id = mo.dataset.livemore, sec = mo.closest('.lv-g'), n = sec?.querySelectorAll('[data-live]').length || 0; L.more.add(id); redraw();
+      // focus the first game that was hidden, so the keyboard carries on where the list was cut
+      const now = page()?.querySelector(`[data-lvsec="${CSS.escape(id)}"]`); return (now?.querySelectorAll('[data-live]')[n] || now?.querySelector('[data-liveless]'))?.focus() }
+    const le = ev.target.closest('[data-liveless]'); if (le) { L.more.delete(le.dataset.liveless); redraw(); return page()?.querySelector(`[data-lvsec="${CSS.escape(le.dataset.liveless)}"] h2 button, [data-lvsec="${CSS.escape(le.dataset.liveless)}"] h2`)?.focus?.() }
+    const fo = ev.target.closest('[data-livefold]'); if (fo) { const id = fo.dataset.livefold; L.fold.has(id) ? L.fold.delete(id) : L.fold.add(id); keep(); redraw(); return page()?.querySelector(`[data-livefold="${CSS.escape(id)}"]`)?.focus() }
     const o = ev.target.closest('[data-liveonly]'); if (o) { L.only = o.dataset.liveonly; keep(); redraw(); return el.querySelector(`[data-liveonly="${L.only}"]`)?.focus() }
     if (ev.target.closest('[data-livereset]')) { L.sport = 'all'; L.only = 'all'; keep(); redraw(); return el.querySelector('[data-livesport="all"]')?.focus() }
-    const dy = ev.target.closest('[data-liveday]'); if (dy) { setDay(+dy.dataset.liveday); return el.querySelector(`[data-liveday="${L.day}"]`)?.focus() }
+    const dy = ev.target.closest('[data-liveday]'); if (dy) { L.more.clear(); setDay(+dy.dataset.liveday); return el.querySelector(`[data-liveday="${L.day}"]`)?.focus() }
     const g2 = ev.target.closest('[data-livego2]'); if (g2) { const [k, v] = g2.dataset.livego2.split(':'); if (k === 'only') L.only = v; else if (k === 'show') L.show = v; else if (k === 'day') return setDay(+v); keep(); return redraw() }
-    const w = ev.target.closest('[data-liveshow]'); if (w) { L.show = w.dataset.liveshow; keep(); redraw(); return el.querySelector(`[data-liveshow="${L.show}"]`)?.focus() }
+    const w = ev.target.closest('[data-liveshow]'); if (w) { L.show = w.dataset.liveshow; L.more.clear(); keep(); redraw(); return el.querySelector(`[data-liveshow="${L.show}"]`)?.focus() }
     const v = ev.target.closest('[data-liveview]'); if (v) { L.view = v.dataset.liveview; try { localStorage.setItem('fl.liveView', L.view) } catch {} redraw(); return el.querySelector(`[data-liveview="${L.view}"]`)?.focus() }
     const u = ev.target.closest('[data-livego]'); if (u) { window.flPages.hide(); return document.querySelector('.tbs[data-sport="ufc"]')?.click() }
     const g = ev.target.closest('[data-live]'); if (!g) return;
