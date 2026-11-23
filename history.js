@@ -15,8 +15,16 @@
   const PROP_SPORT = { nba: 'NBA', wnba: 'WNBA', nfl: 'NFL', nhl: 'NHL', mlb: 'MLB', soccer: 'Soccer' };
   const BOOK = { prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' };
   const fmt = v => Number.isInteger(+v) ? String(+v) : (+v).toFixed(1);
-  const MIN_RATE = 20;      // graded picks before a hit rate is shown at all
-  const SMALL = 50;         // under this, every figure says it is a small sample
+  /* Performance is not advertised before it means something (Erez's rule):
+     under 25 graded picks: "Early results", the record only (no hit rate, units, ROI or calibration);
+     25 to 99: every figure, under a small-sample warning; 100 and more: full reporting. */
+  const EARLY = 25, FULL = 100;
+  const MIN_RATE = EARLY;   // graded picks before a hit rate is shown at all
+  const SMALL = FULL;       // under this, every figure says it is a small sample
+  const tier = n => n < EARLY ? 'early' : n < FULL ? 'small' : 'full';
+  const tierNote = (n, short) => n >= FULL ? '' : n < EARLY
+    ? `<p class="hs-tier early" role="note"><b>Early results.</b> ${n} graded ${n === 1 ? 'pick' : 'picks'} so far${short ? '' : '. Hit rate, units and calibration appear at 25 graded picks, and full reporting at 100'}.</p>`
+    : `<p class="hs-tier small" role="note"><b>Small sample.</b> ${n} graded picks. ${short ? 'Figures can swing a lot until 100.' : 'These figures can swing a lot until 100 picks are graded; read them as a first look, not a track record.'}</p>`;
   const RANGE = [[7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']];
   const KINDS = [['all', 'All picks'], ['match', 'Match forecasts'], ['prop', 'Player props']];
   const CAL = [[0, 50, 'Under 50%'], [50, 60, '50–59%'], [60, 70, '60–69%'], [70, 80, '70–79%'], [80, 90, '80–89%'], [90, 101, '90%+']];
@@ -119,9 +127,10 @@
     lead: ['Time before start', rows => ordered(LEAD, group(rows, e => e.made ? inBand(LEAD, e.t - e.made) : null))],
     edge: ['Edge', rows => { const xs = group(rows, e => e.edge == null ? 'No market price' : inBand(EDGES, e.edge)), at = k => k === 'No market price' ? 99 : EDGES.findIndex(x => x[2] === k); return xs.sort((a, b) => at(a.k) - at(b.k)) }],
     provider: ['Provider', rows => group(rows, e => e.providers).sort((a, b) => b.n - a.n)],
+    sedge: ['Supported edge', rows => { const xs = group(rows, e => e.sedge == null ? 'Not recorded' : inBand(EDGES, e.sedge)), at = k => k === 'Not recorded' ? 99 : EDGES.findIndex(x => x[2] === k); return xs.sort((a, b) => at(a.k) - at(b.k)) }],
   };
   const signed = (v, d = 1) => v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
-  const rateCell = r => r.n >= 10 ? `<b>${pct(r.rate)}%</b>` : r.n ? `<span class="lb" title="${r.n} graded: too few to rate">${r.won} of ${r.n}</span>` : '–';
+  const rateCell = r => r.n >= 10 && !Hs.early ? `<b>${pct(r.rate)}%</b>` : r.n ? `<span class="lb" title="${r.n} graded: too few to rate">${r.won} of ${r.n}</span>` : '–';
   const ago = t => { const s = Math.max(0, Math.round(Date.now() / 1000 - t)); return s < 90 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago` };
   const when = t => new Date(t * 1000).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
@@ -153,10 +162,13 @@
       ${S.push || S.void || S.unknown ? `<p class="lb">${[S.push && `${S.push} push`, S.void && `${S.void} void`, S.unknown && `${S.unknown} not graded`].filter(Boolean).join(', ')}: listed in Pick history, never counted as hits or misses.</p>` : ''}${waiting || rows.length ? link : ''}</section>`;
     const rateOk = S.n >= MIN_RATE, by = WBY.find(x => x[0] === Hs.wBy) ? Hs.wBy : 'sport', groups = BY[by][1](rows).slice(0, 6);
     const cell = (k, v, sub) => `<div class="tile inset"><span class="lb">${k}</span><b class="fig num">${v}</b>${sub ? `<small class="lb">${sub}</small>` : ''}</div>`;
-    return `<section class="card pd-res-card hw" aria-labelledby="hw-h">${head}
+    if (tier(S.n) === 'early') return `<section class="card pd-res-card hw" aria-labelledby="hw-h">${head}${tierNote(S.n, true)}
+      <div class="pd-tiles hw-tiles">${cell('Record', `${S.won}–${S.lost}${S.push ? `–${S.push}` : ''}`, `hits–misses${S.push ? '–pushes' : ''}${S.void ? ` · ${S.void} void` : ''}`)}${cell('Graded', S.n, `of ${EARLY} before figures are shown`)}</div>
+      <p class="lb">${S.waiting ? `${S.waiting} ${S.waiting === 1 ? 'pick is' : 'picks are'} waiting for ${S.waiting === 1 ? 'its game' : 'their games'}. ` : ''}Every pick is listed, hits and misses alike.</p>${link}</section>`;
+    return `<section class="card pd-res-card hw" aria-labelledby="hw-h">${head}${tierNote(S.n, true)}
       <div class="pd-tiles hw-tiles">
         ${cell('Record', `${S.won}–${S.lost}${S.push ? `–${S.push}` : ''}`, `hits–misses${S.push ? '–pushes' : ''}${S.void ? ` · ${S.void} void` : ''}`)}
-        ${cell('Hit rate', rateOk ? pct(S.rate) + '%' : '–', rateOk ? `we said ${pct(S.said)}%${S.n < SMALL ? ' · small sample' : ''}` : `${S.n} of ${MIN_RATE} graded needed`)}
+        ${cell('Hit rate', rateOk ? pct(S.rate) + '%' : '–', rateOk ? `we said ${pct(S.said)}%` : `${S.n} of ${MIN_RATE} graded needed`)}
         ${cell('Units', S.units == null ? '–' : signed(S.units), S.units == null ? 'no prices saved' : `ROI ${signed(S.roi * 100)}% over ${S.staked}`)}
         ${cell('Closing line', S.move == null ? '–' : signed(S.move) + ' pts', S.move == null ? 'once a line moves' : `average move for our side${S.clvN ? `, beat ${pct(S.clv)}% of ${S.clvN}` : ''}`)}</div>
       ${S.cal.length ? `<details class="hw-d"><summary data-fk="hw-cal">Calibration by probability range</summary><div class="tbx-wrap"><table class="tbx hs-tbl"><thead><tr><th scope="col">We said</th><th scope="col" class="r">Picks</th><th scope="col" class="r">Average</th><th scope="col" class="r">It hit</th></tr></thead>
@@ -216,10 +228,21 @@
         <tbody>${rs.map(x => `<tr><th scope="row" class="num">${esc(when(x.at))}</th><td>${esc(side(x.pick))}</td><td class="r num">${p(x.top)}</td><td class="r num">${p(x.market && x.market[x.pick])}</td></tr>`).join('')}</tbody></table></div>` : (r.why_pick || []).length ? `<ul class="hs-why-list">${r.why_pick.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '';
     }
     const res = e.result ? dl([['Result', esc(STATE_NAME[e.result] || e.result)], [e.kind === 'prop' ? 'Player stat' : 'Final score', esc(e.actual || '–')], ['How it was graded', esc(r.calc || r.why || '–')],
-      ['Source', esc(r.source || '–')], ['Graded', r.graded ? esc(when(r.graded)) : '–'], ['Graded by', r.by === 'github' ? 'Floodlight grader on GitHub' : r.by === 'server' ? 'Floodlight server' : '–']])
+      ['Source', esc(r.source || '–')], ['Graded', r.graded ? esc(when(r.graded)) : '–'], ['Graded by', r.by === 'github' ? 'Floodlight grader on GitHub' : r.by === 'server' ? 'Floodlight server' : String(r.by || '').startsWith('admin') ? 'Corrected by an administrator' : '–']])
       : `<p class="lb">${esc(STATES.find(s => s[0] === e.state)?.[2] || 'Waiting for the result.')}</p>`;
     const cor = (r.corrections || []).length ? `<ul class="hs-cor">${r.corrections.map(c => `<li><b>${esc(STATE_NAME[c.from] || c.from)} → ${esc(STATE_NAME[c.to] || c.to)}</b> on ${esc(when(c.at))}${c.fromActual || c.toActual ? ` (${esc(c.fromActual || '–')} → ${esc(c.toActual || '–')})` : ''}${c.why ? `: ${esc(c.why)}` : ''}</li>`).join('')}</ul>` : '<p class="lb">No corrections.</p>';
-    return `<div class="hs-rc"><section><h3>Original prediction</h3>${orig}${reads}</section><section><h3>Result</h3>${res}<h3>Correction history</h3>${cor}</section></div>`;
+    return `<div class="hs-rc"><section><h3>Original prediction</h3>${orig}${reads}</section><section><h3>Result</h3>${res}<h3>Correction history</h3>${cor}${fixForm(e)}</section></div>`;
+  }
+  /* Admin mode only: correct a wrong grade. The receipt is never touched; the change goes into the pick's correction
+     history and the public correction log, and automatic re-grading leaves the pick alone from then on. */
+  function fixForm(e) {
+    if (!window.flAdmin?.on?.() || !e.t || e.t * 1000 > Date.now()) return '';
+    const id = `hsfix-${String(e.key).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    return `<form class="hs-fix" data-hsfix="${esc(e.key)}" data-kind="${e.kind}" aria-labelledby="${id}-h"><h3 id="${id}-h">Correct this grade</h3>
+      <div class="hs-fix-row"><label class="fl-f"><span>Grade</span><select class="inp" name="result" required>${[['won', 'Hit'], ['lost', 'Miss'], ['push', 'Push'], ['void', 'Void']].map(([k, l]) => `<option value="${k}"${e.result === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="fl-f"><span>${e.kind === 'prop' ? 'Player stat' : 'Final score'}</span><input class="inp" name="actual" value="${esc(e.actual || '')}" maxlength="40" autocomplete="off"></label></div>
+      <label class="fl-f"><span>Why (shown in the public correction log)</span><textarea class="inp" name="why" rows="2" minlength="8" maxlength="200" required></textarea></label>
+      <div class="hs-fix-row"><button type="submit" class="bt sm">Save correction</button><span class="lb" role="status" aria-live="polite" data-hsfixmsg></span></div></form>`;
   }
 
   function statusLine() {
@@ -258,19 +281,25 @@
       <td class="hs-clv">${e.clv ? `<span class="${e.clv.beat ? 'hs-up' : 'hs-dn'}">${e.clv.beat ? 'Beat it' : 'Lost it'}</span><small>${esc(e.clvNote)}</small>` : '<span class="lb">–</span>'}</td><td class="hs-res">${resPill(e)}${lockBadge(e)}</td>
       <td><button type="button" class="bt ghost sm" aria-expanded="${open}" aria-controls="${id}" data-hsrc="${esc(e.key)}" data-fk="rc-${esc(e.key)}">${open ? 'Hide receipt' : 'Receipt'}</button></td></tr>
       ${open ? `<tr class="hs-rc-row" id="${id}"><td colspan="7">${receipt(e)}</td></tr>` : ''}` };
-    const small = S.n < SMALL, rateOk = S.n >= MIN_RATE;
+    const small = S.n < SMALL, rateOk = S.n >= MIN_RATE, early = tier(S.n) === 'early'; Hs.early = early;
+    const voided = rows.filter(e => e.result === 'void'), fixed = rows.filter(e => (e.raw?.corrections || []).length);
     el.innerHTML = `${statusLine()}<div class="pd-filters"><div class="cx-row scroll" role="radiogroup" aria-label="Sport">${[['all', 'All sports'], ...sports.map(s => [s, s])].map(([k, l]) => `<button type="button" class="cx" role="radio" aria-checked="${Hs.sport === k}" tabindex="${Hs.sport === k ? 0 : -1}" data-hssport="${esc(k)}" data-fk="sp-${esc(k)}">${esc(l)}</button>`).join('')}</div>
         <div class="pd-ctl">${seg('kind', 'Kind of pick', KINDS, Hs.kind)}${seg('days', 'Period', RANGE, Hs.days)}<span class="lb hs-at">${Hs.loading ? 'Checking…' : `Record read ${new Date(Hs.at || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}${Hs.err ? ' · the last check failed, showing the earlier reading' : ''}${Hs.propErr ? ' · the props record did not load' : ''}</span><button type="button" class="bt ghost sm" data-hs="reload" data-fk="reload"${Hs.loading ? ' disabled' : ''}>Refresh</button></div></div>
+      ${rows.length ? tierNote(S.n) : ''}
       ${!rows.length ? `<div class="card emp">${ic('bars', 28) || ic('trophy', 28)}<b>No picks in this period</b><p>A pick lands here the moment it is published: a match forecast when the model first makes it, a player prop the first time the Predictions page shows it. Widen the period or choose another sport.</p></div>` : `
       <div class="hs-tiles">
         <div class="tile inset"><span class="lb">Record</span><b class="fig num">${S.won}–${S.lost}${S.push ? `–${S.push}` : ''}</b><small class="lb">hits–misses${S.push ? '–pushes' : ''}${S.void ? ` · ${S.void} void` : ''}${S.unknown ? ` · ${S.unknown} not graded` : ''}</small></div>
         <div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${rateOk ? pct(S.rate) + '%' : '–'}</b><small class="lb">${rateOk ? `expected ${pct(S.said)}%${small ? ' · small sample' : ''}` : S.n ? `${S.n} graded; shown from ${MIN_RATE}` : 'nothing graded yet'}</small></div>
-        <div class="tile inset"><span class="lb">Units</span><b class="fig num">${S.units == null ? '–' : signed(S.units)}</b><small class="lb">${S.units == null ? 'no prices saved with these picks' : `1 unit a pick, ROI ${signed(S.roi * 100)}% over ${S.staked}`}</small></div>
+        ${early ? '' : `<div class="tile inset"><span class="lb">Units</span><b class="fig num">${S.units == null ? '–' : signed(S.units)}</b><small class="lb">${S.units == null ? 'no prices saved with these picks' : `1 unit a pick, ROI ${signed(S.roi * 100)}% over ${S.staked}`}</small></div>
         <div class="tile inset"><span class="lb">Beat the closing line</span><b class="fig num">${S.clvN ? pct(S.clv) + '%' : '–'}</b><small class="lb">${S.clvN ? `of ${S.clvN} where the line or price moved` : 'once a line moves before the start'}</small></div>
         <div class="tile inset"><span class="lb">Average edge</span><b class="fig num">${S.edge == null ? '–' : signed(S.edge)}</b><small class="lb">${S.edge == null ? 'no market price saved' : 'points over the market, graded picks'}</small></div>
-        <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${rateOk ? signed(S.vs) : '–'}</b><small class="lb">${S.vs == null ? 'no prices saved with these picks' : rateOk ? `points of hit rate, ${S.priced} priced` : 'shown with the hit rate'}</small></div></div>
-      ${calibration(rows)}
+        <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${rateOk ? signed(S.vs) : '–'}</b><small class="lb">${S.vs == null ? 'no prices saved with these picks' : rateOk ? `points of hit rate, ${S.priced} priced` : 'shown with the hit rate'}</small></div>`}</div>
+      ${early ? '' : calibration(rows)}
       ${breakdown(rows)}
+      ${voided.length || fixed.length ? `<section class="card hs-card" aria-labelledby="hs-vc-h"><div class="sec-h"><h2 id="hs-vc-h">Voided and corrected</h2><span class="lb">${voided.length} void · ${fixed.length} corrected</span></div>
+        ${voided.length ? `<h3 class="hs-h3">Voided selections</h3><p class="lb">Listed, never counted as hits or misses.</p><ul class="hs-vlist">${voided.slice(0, 30).map(e => `<li><b>${esc(e.title)}</b> <span class="lb">${esc([e.sub, e.sport, new Date(e.t * 1000).toLocaleDateString([], { day: 'numeric', month: 'short' })].filter(Boolean).join(' · '))}</span>${e.why ? `<small>${esc(e.why)}</small>` : ''}</li>`).join('')}</ul>` : ''}
+        ${fixed.length ? `<h3 class="hs-h3">Corrections</h3><p class="lb">A grade changed after it was first given. The original stays in the pick’s receipt, and every change is also in the <button type="button" class="lk" data-page="trust" data-fk="hs-trust">public correction log</button>.</p><ul class="hs-vlist">${fixed.slice(0, 30).map(e => { const c = e.raw.corrections[e.raw.corrections.length - 1];
+          return `<li><b>${esc(e.title)}</b> <span class="lb">${esc(STATE_NAME[c.from] || c.from || 'Not graded')} → ${esc(STATE_NAME[c.to] || c.to)}${c.fromActual || c.toActual ? ` (${esc(c.fromActual || '–')} → ${esc(c.toActual || '–')})` : ''} · ${esc(when(c.at))}${c.admin ? ' · by an administrator' : ' · automatic re-check'}</span>${c.why ? `<small>${esc(c.why)}</small>` : ''}</li>` }).join('')}</ul>` : ''}</section>` : ''}
       <section class="card hs-card" aria-labelledby="hs-every-h"><div class="sec-h"><h2 id="hs-every-h">Every pick</h2></div>
         <div class="cx-row scroll" role="radiogroup" aria-label="Show picks that are">${[['all', `All ${rows.length}`], ...STATES.filter(([k]) => byState[k]).map(([k, l]) => [k, `${l} ${byState[k]}`])].map(([k, l]) => `<button type="button" class="cx" role="radio" aria-checked="${Hs.res === k}" tabindex="${Hs.res === k ? 0 : -1}" data-hsres="${k}" data-fk="res-${k}">${esc(l)}</button>`).join('')}</div>
         ${list.length ? `<div class="tbx-wrap"><table class="tbx hs-list"><thead><tr><th scope="col">Start</th><th scope="col">Pick</th><th scope="col" class="r">We said</th><th scope="col" class="r">Market</th><th scope="col">Closing line</th><th scope="col">State</th><th scope="col"><span class="sr-only">Receipt</span></th></tr></thead><tbody>${list.slice(0, Hs.shown).map(row).join('')}</tbody></table></div>
@@ -295,6 +324,15 @@
     const ks = Object.keys(BY), i = ks.indexOf(Hs.by), n = ev.key === 'Home' ? 0 : ev.key === 'End' ? ks.length - 1 : (i + (ev.key === 'ArrowRight' ? 1 : -1) + ks.length) % ks.length;
     ev.preventDefault(); Hs.by = ks[n]; draw(); document.querySelector(`#pg-history [data-hsby="${ks[n]}"]`)?.focus();
   });
+  document.addEventListener('submit', ev => {
+    const f = ev.target.closest?.('[data-hsfix]'); if (!f) return; ev.preventDefault();
+    const msg = f.querySelector('[data-hsfixmsg]'), body = { kind: f.dataset.kind, key: f.dataset.hsfix, result: f.result.value, actual: f.actual.value.trim(), why: f.why.value.trim() };
+    msg.textContent = 'Saving…';
+    fetch('/api/admin/grade', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => { if (!ok) { msg.textContent = d.error || 'It wasn’t saved. Try again.'; return }
+        msg.textContent = d.changed ? 'Saved. The correction is in the history and the public log.' : 'Nothing changed.'; window.flAdmin?.say?.('Grade corrected.'); load(true) })
+      .catch(() => { msg.textContent = 'It wasn’t saved. Check the connection and try again.' });
+  });
   window.flPages?.add('history', { title: 'Pick history', render, onShow() { load() } });
-  window.flHistory = { stats, state: Hs, all, graded, verified, lockBadge, BY, MIN_RATE, load, summary, widget };
+  window.flHistory = { stats, state: Hs, all, graded, verified, lockBadge, BY, MIN_RATE, EARLY, FULL, tier, load, summary, widget };
 })();

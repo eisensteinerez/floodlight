@@ -2077,6 +2077,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.send_auth(200, {"ok": True, "entry": e})
                 except ValueError as ex:
                     return self.send_auth(400, {"error": str(ex)})
+            if u.path == "/api/admin/grade":   # correct a wrong grade: kept in the pick's history and the public correction log
+                return self.send_auth(*grade_correction(body, user))
             return self.send_auth(*admin_action(u.path, body, user))
         if u.path == "/api/players/seen":   # a page says which team it showed for a player; a different team flags the record
             if GATED and not user:
@@ -2512,6 +2514,44 @@ def _rss_mb():
     except Exception:
         pass
     return 0
+
+
+RESULT_WORD = {"won": "Hit", "lost": "Miss", "push": "Push", "void": "Void", None: "Not graded", "unknown": "Not graded"}
+
+
+def grade_correction(body, user):
+    """An administrator changes a grade (gradebook.correct). The pick's receipt is never touched; the change, the stat,
+    who and why go into the pick's correction history and the public correction log, and automatic re-grading leaves
+    the pick alone from then on."""
+    kind, key = body.get("kind"), str(body.get("key") or "")[:200]
+    book, lock, save = (propbook.BOOK, propbook._lock, propbook._save) if kind == "prop" else (record.RECORD, record._lock, record._save) if kind == "match" else (None, None, None)
+    if book is None:
+        return 400, {"error": "Say whether it is a prop or a match."}
+    who = (user or {}).get("name") or (user or {}).get("email") or "admin"
+    with lock:
+        e = book.get(key)
+        if not e:
+            return 404, {"error": "No pick with that key."}
+        if (e.get("start") or e.get("ko") or 0) > time.time():
+            return 400, {"error": "That game hasn't started; there is nothing to grade yet."}
+        try:
+            c = gradebook.correct(e, body.get("result"), actual=str(body.get("actual") or "")[:40], why=body.get("why"), by=who)
+        except ValueError as ex:
+            return 400, {"error": str(ex)}
+        if not c:
+            return 200, {"ok": True, "changed": False}
+        save()
+    what = (f"{e.get('player')}: {e.get('label')} {'over' if e.get('side') == 'over' else 'under'} {e.get('line')}" if kind == "prop"
+            else f"{e.get('home')} v {e.get('away')}: {e.get('pick')}")
+    try:
+        corrections.add(f"{what}: grade corrected", f"Graded {RESULT_WORD.get(c['from'], c['from'])}"
+                        f"{' (' + str(c['fromActual']) + ')' if c.get('fromActual') else ''}, corrected to {RESULT_WORD.get(c['to'], c['to'])}"
+                        f"{' (' + str(c['toActual']) + ')' if c.get('toActual') else ''}. {c['why']}", sport=e.get("sport") or "",
+                        before=RESULT_WORD.get(c["from"], c["from"]), after=RESULT_WORD.get(c["to"], c["to"]), affected="1 graded prediction",
+                        source="grading", by=who)
+    except ValueError:
+        pass
+    return 200, {"ok": True, "changed": True, "correction": c}
 
 
 def _player_upkeep():
