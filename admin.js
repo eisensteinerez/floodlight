@@ -39,7 +39,7 @@
     const list = here(); if (!list.length) return;
     A.from = from || document.activeElement; A.focusId = id || list[0].id;
     if (!A.drawer) { A.drawer = document.createElement('div'); A.drawer.className = 'own-dr-wrap'; document.body.appendChild(A.drawer) }
-    draw(true);
+    draw(true); window.flOverlay?.open(A.drawer, { from: A.from, trap: false });
   }
   function draw(first) {
     const d = A.drawer; if (!d) return;
@@ -57,7 +57,7 @@
     else if (actSel) d.querySelector(actSel)?.focus();
   }
   function close() {
-    if (!A.drawer) return; A.drawer.remove(); A.drawer = null;
+    if (!A.drawer) return; window.flOverlay?.close(A.drawer, { focus: false }); A.drawer.remove(); A.drawer = null;
     if (A.from?.isConnected) A.from.focus({ preventScroll: true }); else document.querySelector('#flOwn .own-sw')?.focus();
   }
   function say(text) {

@@ -1174,6 +1174,7 @@ document.addEventListener('error', ev => {
 <aside class="drawer" id="profile" role="dialog" aria-modal="true" aria-labelledby="profileTitle" tabindex="-1" hidden></aside>
 <nav class="bottomnav" id="bottomnav" aria-label="Sections"></nav>
 
+<script src="overlay.js"></script>
 <script src="players.js"></script>
 <script src="schedule.js"></script>
 <script src="dates.js"></script>
@@ -1595,7 +1596,7 @@ function hero(e){
   return `<div class="hero mh${e.state === 'in' ? ' is-live' : ''}" style="--hc:${e.hc};--ac:${e.ac}">
     <div class="mh-fx" aria-hidden="true"><b>${esc(e.home.abbr || '')}</b><b>${esc(e.away.abbr || '')}</b></div>
     <div class="hero-top"><div class="lgname">${e.league.logo?`<img src="${esc(e.league.logo)}" width="16" height="16" alt="">`:''}<span>${esc(e.league.name)}${e.note?' · '+esc(e.note):''}</span></div>
-      <button class="icon-btn expand" data-act="expand" aria-pressed="${!!S.big}" aria-label="${S.big ? 'Shrink match centre' : 'Expand match centre'}" title="${S.big ? 'Shrink match centre' : 'Expand match centre'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close match centre" title="Close match centre"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <button class="icon-btn expand" data-act="expand" aria-label="${S.big ? 'Shrink match centre' : 'Expand match centre'}" title="${S.big ? 'Shrink match centre' : 'Expand match centre'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close match centre" title="Close match centre"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="board">
       <div class="side">${e.home.logo?`<img src="${esc(e.home.logo)}" alt="">`:''}<strong><button class="linkbtn" data-team="${esc(e.home.id)}" data-lg="${esc(e.summarySlug||e.slug)}">${esc(e.home.full||e.home.name)}</button></strong>${form(e.home.form)}</div>
       <div class="score">${showScore
@@ -2473,7 +2474,7 @@ function tcHero(back){
   return `<div class="hero solo" style="--tc:var(--accent)">${topBar(back)}<div class="thead"><div><h3>Transfer centre</h3>
     <p>The biggest signings of every transfer window since ${FIRST_SEASON}. Open any team's Transfers tab for everything that club bought and sold.</p></div></div></div>`;
 }
-function topBar(back){ return `<div class="hero-top">${back}<button class="icon-btn expand" data-act="expand" aria-pressed="${!!S.big}" aria-label="${S.big ? 'Exit large view' : 'View larger'}" title="${S.big ? 'Exit large view' : 'View larger'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>` }
+function topBar(back){ return `<div class="hero-top">${back}<button class="icon-btn expand" data-act="expand" aria-label="${S.big ? 'Exit large view' : 'View larger'}" title="${S.big ? 'Exit large view' : 'View larger'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>` }
 function teamColor(t){ const c = hex(t?.color); return c && lum(c) > .03 && lum(c) < .85 ? c : (hex(t?.alternateColor) || '#3D6FD9') }
 
 /* ---------- team ---------- */
@@ -3970,10 +3971,12 @@ function openProfile(){
   profReturn = document.activeElement;
   $('profile').hidden = false; $('profileScrim').hidden = false; document.body.classList.add('drawer-open');
   S.prof.err = ''; renderProfile();
+  window.flOverlay?.open($('profile'), { from: profReturn, trap: false });
   requestAnimationFrame(() => { $('profile').classList.add('in'); ($('profile').querySelector('input, button:not(.x)') || $('profile')).focus() });
 }
 function closeProfile(){
   $('profile').classList.remove('in'); document.body.classList.remove('drawer-open');
+  window.flOverlay?.close($('profile'), { focus: false });
   setTimeout(() => { $('profile').hidden = true; $('profileScrim').hidden = true }, 180);
   profReturn?.focus?.();
 }
