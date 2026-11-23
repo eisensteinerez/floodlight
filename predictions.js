@@ -212,6 +212,9 @@
     host.appendChild(t); setTimeout(() => t.classList.add('out'), 9500); setTimeout(() => t.remove(), 10000);
   }
   document.addEventListener('fl:board', () => { gather(); sight(P.props?.picks || []); checkAlerts() });
+  // a prop's team is the player record's (players.js), filled in place; a match names its two teams
+  const who = p => p.type === 'prop' && p.fid ? `<span data-flreg="${esc(p.fid)}" data-flreg-show="team">${esc(p.teamName || p.team)}</span>${p.opp ? ' v ' + esc(p.opp) : ''}`
+    : esc(p.type === 'prop' ? p.game : p.text === 'Draw' ? '' : p.game);
   function card(p, rank, now) {
     const st = stateOf(p, now), on = inSlip(p.id), k = keyOf(p), open = P.open.has(k), mv = moved(p), fol = following(p);
     const when = st === 'live' ? `<span class="pl live"><i></i>Live</span>` : esc(time(p.start));
@@ -224,7 +227,7 @@
     const multi = lines.length > 1 || lines.some(o => o.line !== p.line);
     return `<article class="card pd-pk${p.edge != null && p.edge < 0 ? ' neg' : ''}${open ? ' open' : ''}" data-pk="${esc(p.id)}" data-pdk="${esc(k)}">
       <div class="pd-top">${rank ? `<span class="pd-rank num" aria-hidden="true">${rank}</span>` : ''}${face(p.photo, p.name, 'avx av-lg' + (p.type === 'match' ? ' crest' : ''))}
-        <button type="button" class="pd-open" data-pdev="${esc(k)}" data-fk="open-${esc(k)}" aria-expanded="${open}" aria-controls="ev-${esc(k)}"><b>${esc(p.name)}</b><span>${esc(p.text)}</span><small>${esc([p.type === 'prop' ? p.game : p.text === 'Draw' ? '' : p.game, SPORT_NAME[p.sport]].filter(Boolean).join(' · '))}${st === 'live' ? '' : ' · ' + when}</small>
+        <button type="button" class="pd-open" data-pdev="${esc(k)}" data-fk="open-${esc(k)}" aria-expanded="${open}" aria-controls="ev-${esc(k)}"><b>${esc(p.name)}</b><span>${esc(p.text)}</span><small>${[who(p), esc(SPORT_NAME[p.sport] || '')].filter(Boolean).join(' · ')}${st === 'live' ? '' : ' · ' + when}</small>
           <em class="pd-cue">${open ? 'Hide the evidence' : 'See the evidence'}<svg class="pd-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></em></button>
         <span class="pd-tags">${st === 'live' ? when : ''}${old}${badge}</span>
         <div class="pd-edge"><span class="lb">Edge</span><b class="num">${edgeTxt(p.edge)}</b>${p.edge == null ? '<span class="sr-only">no market price</span>' : ''}</div>
@@ -287,6 +290,11 @@
     if (L.live.length) h += `<section aria-label="Live picks"><div class="sec-h"><h2>Live</h2><span class="lb">The game has started, so the price has moved</span></div><div class="vst pd-list">${L.live.map(p => card(p, 0, now)).join('')}</div></section>`;
     if (shown.length) h += `<section aria-label="The edge board"><div class="sec-h"><h2>${L.live.length ? 'Still to start' : 'The edge board'}</h2><span class="lb">${L.ranked.length} ${L.ranked.length === 1 ? 'pick' : 'picks'} with a market price</span></div><div class="vst pd-list">${shown.map((p, i) => card(p, i + 1, now)).join('')}</div>
       ${L.ranked.length > CAP ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show the top ' + CAP : `Show all ${L.ranked.length}`}</button>` : ''}</section>`;
+    // props held back while the player's team is checked (players.py): listed with the reason, never ranked
+    const held = (window.flEdge?.held?.() || []).filter(p => (P.sport === 'all' || p.sport === P.sport) && p.start && p.start > now);
+    if (held.length) h += `<section aria-label="Held for a team check"><details class="card pd-held"><summary><b>${held.length} ${held.length === 1 ? 'prop is' : 'props are'} held back</b> <span class="lb">while we check the player’s team</span></summary>
+      <p class="lb">These lines are posted, but the team rosters and the sportsbooks don’t agree on who the player plays for, so Floodlight doesn’t rank them yet.</p>
+      <ul class="pd-heldl">${held.slice(0, 30).map(p => `<li><b>${esc(p.name)}</b> ${esc(p.text)} <span class="lb">${esc(SPORT_NAME[p.sport] || '')}</span><small>${esc(p.teamNote || 'Team information is being verified.')}</small></li>`).join('')}</ul></details></section>`;
     if (L.bare.length) h += `<section aria-label="Picks with no market price"><div class="sec-h"><h2>Our number only</h2><span class="lb">No book posts both sides of these lines, so there is no edge to rank</span></div><div class="vst pd-list">${L.bare.slice(0, P.all ? 60 : 6).map(p => card(p, 0, now)).join('')}</div>
       ${L.bare.length > 6 && !L.ranked.length ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show fewer' : `Show all ${L.bare.length}`}</button>` : ''}</section>`;
     if (L.done.length) h += `<section aria-label="Finished in the last day"><div class="sec-h"><h2>Finished</h2><span class="lb">Results stay here for a day</span></div><div class="card pd-done">${L.done.map(e => { const hit = e.result === 'won', pick = e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`;

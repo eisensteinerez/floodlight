@@ -229,7 +229,7 @@
   const tomorrow = `<button type="button" class="bt ghost sm" data-hubday="1">See tomorrow</button>`;
   // today's lines are done once every pick's game has started
   const linesOver = () => isToday() && HEAT.picks?.length > 0 && HEAT.picks.every(p => p.start && p.start < Date.now());
-  const heatRow = p => `<button type="button" class="rw" data-hublab="${esc(JSON.stringify(window.flEdge.labArgs(p)))}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}</b><small>${esc([p.team, p.label].filter(Boolean).join(' · '))}</small></span>${window.flHeat.badge(p.heat)}</button>`;
+  const heatRow = p => `<button type="button" class="rw" data-hublab="${esc(JSON.stringify(window.flEdge.labArgs(p)))}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}</b><small>${[p.fid || p.team ? (window.flPlayers ? window.flPlayers.span(p.fid, p.teamName || p.team) : esc(p.teamName || p.team || '')) : '', esc(p.label || '')].filter(Boolean).join(' · ')}</small></span>${window.flHeat.badge(p.heat)}</button>`;
   function heatCard() {
     const E = window.flEdge, has = HEAT.picks && HEAT.picks.length;
     const hot = has ? E.hot(HEAT.picks, 3) : [], cold = has ? E.cold(HEAT.picks, 2) : [];

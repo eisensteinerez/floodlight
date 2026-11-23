@@ -665,7 +665,7 @@ function bbPlayerHero(v, back){
   const sport = /college/.test(l.path) ? 'cbb' : l.key === 'wnba' ? 'wnba' : 'nba';
   return flProfile.hero({ back, sport, heatSport: sport === 'cbb' ? '' : sport, id: v.id, name: a?.displayName, color: col,
     face: `<img class="face espn-shot" src="${esc(a?.headshot?.href || bbShot(v.id, l.path))}" alt="" onerror="this.onerror=null;this.src=SIL">`,
-    team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
+    teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-bbteam="${esc(t.id)}" data-bbl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
     number: a?.displayJersey, position: a?.position?.displayName,
     chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace, a.college?.name] : [],
     status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span>` : '',

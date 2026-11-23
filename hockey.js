@@ -677,7 +677,7 @@ function hkPlayerHero(v, back){
   const season = seasonOf(hkStatCat(v))?.season?.displayName || '';
   return flProfile.hero({ back, sport: l.key === 'nhl' || /nhl/.test(l.path || '') ? 'nhl' : '', heatSport: 'nhl', id: v.id, name: a?.displayName, color: col,
     face: `<img class="face espn-shot" src="${esc(a?.headshot?.href || hkShot(v.id, l.path))}" alt="" ${hkFaceErr}>`,
-    team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-hkteam="${esc(t.id)}" data-hkl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
+    teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(t.logos?.[0]?.href || '')}" alt="" onerror="this.remove()"><button class="linkbtn" data-hkteam="${esc(t.id)}" data-hkl="${esc(v.lg)}">${esc(t.displayName)}</button></span>` : '',
     number: a?.displayJersey, position: a?.position?.displayName,
     chips: a ? [a.age ? 'Age ' + a.age : '', a.displayHeight, a.displayWeight, a.hand?.displayValue ? (goalie ? 'Catches ' : 'Shoots ') + a.hand.displayValue.toLowerCase() : '', a.displayExperience, a.displayDraft ? 'Drafted ' + a.displayDraft : '', a.displayBirthPlace] : [],
     status: a?.injuries?.length ? `<span class="stat-badge injured">${esc(a.injuries[0].status || 'Injured')}${a.injuries[0].details?.type ? ' · ' + esc(a.injuries[0].details.type) : ''}</span>` : '',

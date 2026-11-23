@@ -821,7 +821,7 @@ function bsPlayerHero(v, back){
   const caption = st ? `${esc(v.season)} · ${esc(BSL[v.lg].name)} · ${st.gamesPlayed || 0} games${ss.peers?.[g] ? ` · ranked among ${ss.peers[g].length} ${g === 'pitching' ? ((st.gamesStarted || 0) >= (st.gamesPlayed || 1) / 2 ? 'starting pitchers' : 'relievers') : 'regular hitters'}` : ''}` : '';
   return flProfile.hero({ back, sport: mlb ? 'mlb' : '', heatSport: 'mlb', id: v.id, name: a?.fullName, color: col,
     face: `<img class="face espn-shot" src="${esc(a ? bsShot(a.id, mlb) : SIL)}" alt="" ${bsImgErr}>`,
-    team: t ? `<span class="pfh-team"><img src="${esc(bsLogo(t.id))}" alt="" ${bsLogoErr}><button class="linkbtn" data-bsteam="${esc(t.id)}" data-bsl="${esc(BS_LEAGUES.find(l => l.src === 'sa' && l.sport === t.sport?.id && (!l.league || l.league === t.league?.id))?.key || v.lg)}">${esc(t.name)}</button></span>` : '',
+    teamId: t?.id, team: t ? `<span class="pfh-team"><img src="${esc(bsLogo(t.id))}" alt="" ${bsLogoErr}><button class="linkbtn" data-bsteam="${esc(t.id)}" data-bsl="${esc(BS_LEAGUES.find(l => l.src === 'sa' && l.sport === t.sport?.id && (!l.league || l.league === t.league?.id))?.key || v.lg)}">${esc(t.name)}</button></span>` : '',
     number: a?.primaryNumber, position: a?.primaryPosition?.name,
     chips: a ? [a.currentAge ? 'Age ' + a.currentAge : '', a.height, a.weight ? a.weight + ' lb' : '', a.batSide?.description ? 'Bats ' + a.batSide.description.toLowerCase() : '', a.pitchHand?.description ? 'Throws ' + a.pitchHand.description.toLowerCase() : '',
       a.mlbDebutDate ? 'Debut ' + String(a.mlbDebutDate).slice(0, 4) : '', a.draftYear ? 'Drafted ' + a.draftYear : '', [a.birthCity, a.birthCountry].filter(Boolean).join(', ')] : [],

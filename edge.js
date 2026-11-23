@@ -38,6 +38,8 @@
       ours, market, edge: market == null ? null : pct(ours) - pct(market), heat: pct(ours), n: J.n, reasons: reasons.slice(0, 3),
       // the books' team and the team of the player whose games were read disagree: the reading may be someone else's, so it is low confidence and says why
       conf: r.teamOk === false ? 'low' : J.conf, teamNote: r.teamOk === false ? (r.teamNote || 'The books’ team for this player does not match the team the stats come from.') : '',
+      // who it is for: the player record's team (players.py), the same one every page shows; hold = being checked
+      fid: r.fid || '', teamName: r.teamName || '', teamStatus: r.teamStatus || 'unknown', bookTeam: r.bookTeam || '', prev: r.prev || null, flags: r.flags || [], hold: !!r.hold,
       start: start && !isNaN(start) ? start : null, game: [r.team, r.opp].filter(Boolean).join(' v '), gameKey: `${sport}:${[r.team, r.opp].filter(Boolean).sort().join('|') || r.player}`,
       books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), h10, avg: r.avg, mu: J.mu, sd: J.sd,
       games: games.slice(0, 60), offers: r.offers || [], neff: J.neff };   // the games and prices behind the reading, for the evidence panel   // mu and sd: what the reading expects, used to follow the pick live
@@ -48,7 +50,11 @@
   const disk = { get(sport) { try { const v = JSON.parse(localStorage.getItem('fl.board.' + sport)); return v && v.d && Date.now() - v.got < KEEP ? v : null } catch { return null } },
     set(sport, d, got) { try { localStorage.setItem('fl.board.' + sport, JSON.stringify({ got, d })) } catch {} } };
   // at: when the server read the books (it re-reads them at most every 15 minutes). got: when this browser asked.
-  const shape = (d, sport, got) => { const at = d.at ? d.at * 1000 : got; return { sport, picks: (d.rows || []).map(r => propPick(r, sport)).filter(Boolean).map(p => ({ ...p, at })), checked: d.checked || 0, note: d.note || '', errors: d.errors || {}, at, got } };
+  /* A prop whose player record is being checked (two rosters, a sportsbook that disagrees, a game the player's team
+     isn't in) is held back from every list, Predictions, Home, the Lab and parlays alike, and listed apart with the
+     reason: nothing questionable is published as a pick. */
+  const shape = (d, sport, got) => { const at = d.at ? d.at * 1000 : got, all = (d.rows || []).map(r => propPick(r, sport)).filter(Boolean).map(p => ({ ...p, at }));
+    return { sport, picks: all.filter(p => !p.hold), held: all.filter(p => p.hold), checked: d.checked || 0, note: d.note || '', errors: d.errors || {}, at, got } };
   function kept(sport) { const v = disk.get(sport); if (!v) return null; try { return { ...shape(v.d, sport, v.got), kept: true } } catch { return null } }
   function board(sport, force) {
     const c = cache.get(sport);
@@ -69,6 +75,7 @@
   // what is in hand for a sport right now: this visit's answer, or the reading kept from the last visit
   const have = sport => { const c = cache.get(sport); if (c?.data) return c.data; const k = kept(sport); if (k) cache.set(sport, { at: 0, data: k, promise: c?.promise }); return k };
   const all = () => [...cache.values()].flatMap(c => c.data?.picks || []);
+  const held = () => [...cache.values()].flatMap(c => c.data?.held || []);
   // one reading per player for the hot and cold lists: their strongest line either way
   function players(picks) {
     const best = new Map();
@@ -81,5 +88,5 @@
   // opening a pick in the Lab: the player, the stat and the line it was read at
   const labArgs = p => ({ sport: p.sport, player: p.name, stat: p.k, line: p.line, side: p.side });
 
-  window.flEdge = { SPORTS, board, props, have, all, hot, cold, ranked, players, labArgs, fmt };
+  window.flEdge = { SPORTS, board, props, have, all, held, hot, cold, ranked, players, labArgs, fmt };
 })();
