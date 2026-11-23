@@ -59,6 +59,11 @@ import players as roster
 import health
 import corrections
 import gradebook
+import analytics
+import support
+import referrals
+import ownerstats
+import markets
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -93,10 +98,10 @@ def signup_allowed(addr):
     return True
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
-PUBLIC_FILES = {"index.html", "status.js", "recent.js", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
+PUBLIC_FILES = {"index.html", "analytics.js", "landing.js", "support.js", "referrals.js", "owner.js", "status.js", "recent.js", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "markets.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
                 "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js"}
 PUBLIC_FILES |= {"labcore.js", "propx.js"}   # the Lab: shared numbers (labcore.js)
 ROOT = Path(__file__).resolve().parent
@@ -1305,6 +1310,7 @@ def touch(u):
         with _acct_lock:
             u["seen"] = now
             _save_accounts()
+        analytics.active(u["username"], now)
 
 
 def _start_off():
@@ -1832,7 +1838,82 @@ def add_feedback(body, user):
                                        "text": text, "page": str(body.get("page") or "")[:120], "theme": str(body.get("theme") or "")[:30]})
         del _mstate["feedback"][300:]
         _save_members()
+    # the same note becomes a support ticket, so it gets a number, an answer and a place in the owners' inbox
+    page = str(body.get("page") or "")[:120]
+    support.create({"kind": "data" if page.startswith("transfers:") else "question", "text": text,
+                    "context": {"page": page, "theme": str(body.get("theme") or "")[:30]}},
+                   user=user["username"] if user else None, display=(user or {}).get("prefs", {}).get("display", ""))
     return 200, {"ok": True}
+
+
+# ---------- growth: usage numbers, support tickets, referrals and the owner dashboard ----------
+# analytics.py, support.py, referrals.py and ownerstats.py hold the logic; these wrap them for the handler.
+
+def client_addr(handler):
+    return (handler.headers.get("X-Forwarded-For") or handler.client_address[0] or "").split(",")[0].strip()
+
+
+def is_owner(u):
+    return rank_of(u) == "owner" or (not GATED and u is None)
+
+
+def growth_setup():
+    analytics.init(CACHE_DIR / "analytics.json")
+    support.init(CACHE_DIR / "support.json")
+    referrals.init(CACHE_DIR / "referrals.json")
+    import atexit
+    atexit.register(lambda: analytics.save(force=True))
+
+    def upkeep():
+        n = 0
+        while True:
+            time.sleep(60)
+            n += 1
+            try:
+                analytics.save()
+                if n % 10 == 0:
+                    with _acct_lock:
+                        if referrals.evaluate(_users, analytics.member):
+                            _save_accounts()
+            except Exception as e:
+                print(f"growth upkeep: {e}")
+    threading.Thread(target=upkeep, daemon=True, name="growth-upkeep").start()
+
+
+def referral_view(user, addr):
+    code = referrals.code_for(user["username"], addr)
+    with _acct_lock:
+        if referrals.evaluate(_users, analytics.member):
+            _save_accounts()
+    out = referrals.summary(user["username"], _users, analytics.member)
+    out["code"] = code
+    return out
+
+
+def referral_claim(user, body, addr):
+    code = str(body.get("code") or "")
+    by = referrals.owner_of(code)
+    ok, msg = referrals.claim(user["username"], code, int(user.get("created") or 0), addr=addr,
+                              friend_vids=analytics.member(user["username"])["vids"] + [analytics.hash_id(body.get("vid"))],
+                              referrer_vids=analytics.member(by)["vids"] if by else [])
+    return (200 if ok else 400), ({"ok": True} if ok else {"error": msg})
+
+
+def recap(user):
+    """The member's own week, for the weekly recap card on the Invite and share page."""
+    m = analytics.member(user["username"])
+    wk = m["week"].get(analytics.week_key(), {})
+    last = m["week"].get(analytics.week_key(time.time() - 7 * 86400), {})
+    return {"week": analytics.week_key(), "thisWeek": wk, "lastWeek": last, "activeDays": sum(1 for d in m["days"] if d > analytics.day_num() - 7)}
+
+
+def owner_dashboard(days):
+    days = days if days in (7, 30, 90) else 30
+    with _acct_lock:
+        users = dict(_users)
+    return {"at": int(time.time()), "days": days, "business": ownerstats.business(users), "product": ownerstats.product(users, _parlays, days),
+            "growth": ownerstats.growth(users, days), "support": {k: v for k, v in support.staff_list().items() if k != "tickets"},
+            "referrals": referrals.stats(), "privacy": {"gpcRespected": True, "cookies": False, "ipStored": False}}
 
 
 def _hash(password, salt):
@@ -1880,6 +1961,7 @@ def signup(body):
             _save_members()
         token = new_session(key)
         _save_accounts()
+    analytics.event("signup", {}, user=key)   # the journey step; the browser links what it did before (analytics.py)
     return 200, {"user": public_user(_users[key]), "_token": token}
 
 
@@ -2063,6 +2145,8 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path.startswith("/api/admin/"):
             if role_of(user) != "admin":
                 return self.send_auth(403, {"error": "Only the admin can manage members."})
+            if u.path == "/api/admin/support":   # answer a ticket or change its status (support.py)
+                return self.send_auth(*support.staff_action(body, (user or {}).get("prefs", {}).get("display") or (user or {}).get("username") or "Floodlight"))
             if u.path == "/api/admin/awards":
                 return self.send_auth(*awards_action(body, user))
             if u.path == "/api/admin/transfers/dates":
@@ -2073,12 +2157,37 @@ class Handler(SimpleHTTPRequestHandler):
                 try:
                     if body.get("action") == "remove":
                         return self.send_auth(200, {"ok": corrections.remove(str(body.get("id") or ""))})
+                    if body.get("action") == "resolve":   # close a "Report incorrect data" report
+                        r = corrections.resolve(str(body.get("id") or ""), body.get("outcome"), by=(user or {}).get("name") or "admin", note=body.get("note"))
+                        return self.send_auth(200 if r else 404, {"ok": bool(r), "report": r})
                     e = corrections.add(body.get("subject"), body.get("text"), sport=body.get("sport"), before=body.get("before"), after=body.get("after"),
                                         affected=body.get("affected"), source="admin", by=(user or {}).get("name") or (user or {}).get("email") or "admin")
                     return self.send_auth(200, {"ok": True, "entry": e})
                 except ValueError as ex:
                     return self.send_auth(400, {"error": str(ex)})
+            if u.path == "/api/admin/grade":   # correct a wrong grade: kept in the pick's history and the public correction log
+                return self.send_auth(*grade_correction(body, user))
             return self.send_auth(*admin_action(u.path, body, user))
+        if u.path == "/api/t":   # usage events from analytics.js: counts only, see analytics.py for what is kept
+            if user and GATED and not can_view(user):
+                return self.send_auth(200, {"ok": True})
+            n = analytics.batch(body.get("events"), user=user["username"] if user else None, vid=str(body.get("vid") or ""))
+            return self.send_auth(200, {"ok": True, "n": n})
+        if u.path == "/api/support/tickets":   # a new ticket from the Help center or a "Report incorrect data" button
+            if not user and not support.signed_out_allowed(referrals.net_hash(client_addr(self))):
+                return self.send_auth(429, {"error": "Too many messages from here. Try again in an hour."})
+            status, out = support.create(body, user=user["username"] if user else None, display=(user or {}).get("prefs", {}).get("display", ""))
+            if status == 200:
+                analytics.event("ticket_create", {"kind": body.get("kind")}, user=user["username"] if user else None, vid=str(body.get("vid") or ""))
+            return self.send_auth(status, out)
+        if u.path == "/api/data-report":   # "Report incorrect data" on a card: private, for the administrators (corrections.py)
+            if GATED and not user:
+                return self.send_auth(401, {"error": "Log in to report a problem."})
+            try:
+                r = corrections.report(body if isinstance(body, dict) else {}, (body or {}).get("text"), by=(user or {}).get("name") or "")
+            except ValueError as ex:
+                return self.send_auth(400, {"error": str(ex)})
+            return self.send_auth(200, {"ok": True, "id": r["id"]})
         if u.path == "/api/players/seen":   # a page says which team it showed for a player; a different team flags the record
             if GATED and not user:
                 return self.send_auth(200, {"ok": True})
@@ -2120,6 +2229,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
         if not user:
             return self.send_auth(401, {"error": "Log in first."})
+        if u.path == "/api/support/reply":   # the member answers on their own ticket
+            return self.send_auth(*support.member_reply(user["username"], body, user.get("prefs", {}).get("display", "")))
+        if u.path == "/api/referrals/claim":   # a new account names the invite link that brought it (referrals.py)
+            return self.send_auth(*referral_claim(user, body, client_addr(self)))
         if u.path == "/api/picks/vote":
             if not can_view(user):
                 return self.send_auth(403, {"error": "Your account is paused or waiting for an admin to switch it on."})
@@ -2272,6 +2385,23 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path == "/api/me":
                 _, user = session_user(self.headers.get("Cookie"))
                 return self.send_auth(200, {"user": public_user(user) if user else None, "gated": GATED})
+            if u.path in ("/api/support/tickets", "/api/referrals", "/api/me/recap", "/api/admin/owner", "/api/admin/support"):
+                _, user = session_user(self.headers.get("Cookie"))
+                if not user and (GATED or u.path != "/api/admin/owner"):
+                    return self.send_json({"error": "Log in first."}, 401)
+                if u.path == "/api/support/tickets":   # the member's own tickets, newest first
+                    return self.send_auth(200, {"tickets": support.mine(user["username"]), "kinds": support.KINDS, "replyDays": support.REPLY_DAYS})
+                if u.path == "/api/referrals":   # the member's invite code, who joined with it and the reward
+                    return self.send_auth(200, referral_view(user, client_addr(self)))
+                if u.path == "/api/me/recap":
+                    return self.send_auth(200, recap(user))
+                if u.path == "/api/admin/support":
+                    if role_of(user) != "admin":
+                        return self.send_json({"error": "Only owners and admins can read support tickets."}, 403)
+                    return self.send_auth(200, support.staff_list(q.get("status") or None))
+                if not is_owner(user):
+                    return self.send_json({"error": "Only the owner can see the business numbers."}, 403)
+                return self.send_auth(200, owner_dashboard(int(q.get("days") or 30)))
             if u.path == "/api/parlays":   # the member's own tracked parlays
                 _, user = session_user(self.headers.get("Cookie"))
                 return self.send_auth(200, {"parlays": parlays_of(user) if user else [], "signedIn": bool(user)})
@@ -2311,6 +2441,29 @@ class Handler(SimpleHTTPRequestHandler):
                 st = health.status()
                 st["rosters"] = roster.health()["sports"]
                 return self.send_json(st, max_age=30)
+            if u.path == "/api/markets":   # the verified market service (markets.py): open markets, what was taken off and why
+                if user and not (has(user, "lab") or has(user, "predictions")):
+                    return self.send_json({"error": "Your account doesn't include The Lab or Predictions.", "service": "lab"}, 403)
+                sp = str(q.get("sport") or "nba")
+                if q.get("id"):
+                    m = markets.get(str(q["id"])[:24])
+                    return self.send_json({"market": m} if m else {"error": "No market with that id."}, 200 if m else 404)
+                try:
+                    b = lab.board(sp)
+                except LookupError as e:
+                    return self.send_json({"error": str(e)}, 404)
+                except Exception as e:
+                    print(f"markets: {sp}: {type(e).__name__}: {e}")
+                    return self.send_json({"error": "A data source didn't answer. Try again in a minute."}, 502)
+                return self.send_json({"sport": sp, "at": b.get("at"), "fetched": b.get("fetched"), "markets": b["rows"], "removed": b.get("removed") or [], "counts": b.get("counts") or {},
+                                       "providers": b.get("providers") or {}, "schedule": b.get("schedule"), "injuries": b.get("injuries"), "statuses": markets.LABEL,
+                                       "maxAge": markets.MAX_AGE, "now": int(time.time())})
+            if u.path == "/api/admin/monitor":   # the owner's data monitoring (markets.py, health.py, gradebook.py, corrections.py)
+                if role_of(user) != "admin":
+                    return self.send_json({"error": "Only admins can see this."}, 403)
+                return self.send_json(monitor_report())
+            if u.path == "/api/trust":   # the Trust and Data Center page: verified markets per sport and incidents, no re-read
+                return self.send_json({"markets": markets.summary(), "incidents": health.incidents(), "now": int(time.time())}, max_age=60)
             if u.path == "/api/corrections":   # the public correction log (corrections.py)
                 return self.send_json({"entries": corrections.entries(), "now": int(time.time())}, max_age=60)
             if u.path in ("/api/admin/alerts", "/api/admin/flags"):   # owner alerts and the players being re-checked
@@ -2512,6 +2665,82 @@ def _rss_mb():
     return 0
 
 
+RESULT_WORD = {"won": "Hit", "lost": "Miss", "push": "Push", "void": "Void", None: "Not graded", "unknown": "Not graded"}
+
+
+def grade_correction(body, user):
+    """An administrator changes a grade (gradebook.correct). The pick's receipt is never touched; the change, the stat,
+    who and why go into the pick's correction history and the public correction log, and automatic re-grading leaves
+    the pick alone from then on."""
+    kind, key = body.get("kind"), str(body.get("key") or "")[:200]
+    book, lock, save = (propbook.BOOK, propbook._lock, propbook._save) if kind == "prop" else (record.RECORD, record._lock, record._save) if kind == "match" else (None, None, None)
+    if book is None:
+        return 400, {"error": "Say whether it is a prop or a match."}
+    who = (user or {}).get("name") or (user or {}).get("email") or "admin"
+    with lock:
+        e = book.get(key)
+        if not e:
+            return 404, {"error": "No pick with that key."}
+        if (e.get("start") or e.get("ko") or 0) > time.time():
+            return 400, {"error": "That game hasn't started; there is nothing to grade yet."}
+        try:
+            c = gradebook.correct(e, body.get("result"), actual=str(body.get("actual") or "")[:40], why=body.get("why"), by=who)
+        except ValueError as ex:
+            return 400, {"error": str(ex)}
+        if not c:
+            return 200, {"ok": True, "changed": False}
+        save()
+    what = (f"{e.get('player')}: {e.get('label')} {'over' if e.get('side') == 'over' else 'under'} {e.get('line')}" if kind == "prop"
+            else f"{e.get('home')} v {e.get('away')}: {e.get('pick')}")
+    try:
+        corrections.add(f"{what}: grade corrected", f"Graded {RESULT_WORD.get(c['from'], c['from'])}"
+                        f"{' (' + str(c['fromActual']) + ')' if c.get('fromActual') else ''}, corrected to {RESULT_WORD.get(c['to'], c['to'])}"
+                        f"{' (' + str(c['toActual']) + ')' if c.get('toActual') else ''}. {c['why']}", sport=e.get("sport") or "",
+                        before=RESULT_WORD.get(c["from"], c["from"]), after=RESULT_WORD.get(c["to"], c["to"]), affected="1 graded prediction",
+                        source="grading", by=who)
+    except ValueError:
+        pass
+    return 200, {"ok": True, "changed": True, "correction": c}
+
+
+def monitor_report():
+    """The owner's data monitoring (GET /api/admin/monitor): the market checks (markets.py), grading, unresolved
+    corrections and the internal alerts raised (health.py)."""
+    rep = markets.monitor()
+    now = time.time()
+    st = gradebook.status(record, propbook, storage.enabled())
+    late = [e for e in list(propbook.BOOK.values()) + list(record.RECORD.values()) if not e.get("test") and not e.get("result")
+            and (e.get("start") or e.get("ko") or now) < now - 30 * 3600]
+    rep["checks"].append({"key": "grading", "label": "Grading failures (no grade 30 hours after the start)", "n": len(late) + len(st.get("errors") or []),
+                          "items": [{"player": e.get("player") or f"{e.get('home')} v {e.get('away')}", "sport": e.get("sport"), "start": e.get("start") or e.get("ko"),
+                                     "reason": "Still no grade"} for e in late[:25]] + [{"reason": f"{x['where']}: {x['error']}", "at": x["at"]} for x in st.get("errors") or []]})
+    unresolved = corrections.reports(open_only=True)
+    rep["checks"].append({"key": "corrections", "label": "Unresolved data reports", "n": len(unresolved),
+                          "items": [{"id": r["id"], "player": r.get("player") or "", "mid": r.get("marketId") or "", "provider": r.get("provider") or "", "reason": r["text"], "at": r["at"],
+                                     "page": r.get("page") or ""} for r in unresolved[:25]]})
+    rep["grading"] = {"failures": len(late), "waiting": st.get("pending"), "lastRun": st.get("lastRun"), "lastGraded": st.get("lastGraded"), "errors": st.get("errors")}
+    rep["corrections"] = {"unresolved": len(unresolved), "published": len(corrections.entries(500)), "reports": corrections.reports(limit=50)}
+    rep["alerts"] = health.alerts(30)
+    return rep
+
+
+def _market_watch():
+    """Every ten minutes: raise an internal alert (health.alert: kept for the owner, sent to Discord when set up) for
+    each data-monitoring check that finds a problem."""
+    time.sleep(120)
+    LIMIT = {"providers": 1, "schedules": 1, "stale": 10, "no_event": 25, "mismatch": 10, "timezone": 5, "duplicates": 3, "grading": 5, "corrections": 5}
+    while True:
+        try:
+            for c in monitor_report()["checks"]:
+                if c["n"] >= LIMIT.get(c["key"], 1):
+                    ex = c["items"][0] if c["items"] else {}
+                    eg = ex.get("player") or ex.get("key") or ex.get("subject") or ""
+                    health.alert(f"monitor:{c['key']}", f"Data monitoring: {c['label']}: {c['n']}" + (f" (for example {eg}{': ' + ex['reason'] if ex.get('reason') else ''})" if eg else "") + ".")
+        except Exception as e:
+            print(f"monitor: {type(e).__name__}: {e}")
+        time.sleep(600)
+
+
 def _player_upkeep():
     """Read the rosters soon after start (one league at a time), keep them fresh, save the records, and look for
     props that went out with the wrong team (corrections.scan)."""
@@ -2572,9 +2801,16 @@ if __name__ == "__main__":
     roster.setup(fetch=fetch, file=CACHE_DIR / "players.json", health=health)
     atexit.register(roster.flush)
     corrections.setup(file=CACHE_DIR / "corrections.json")
+    growth_setup()   # usage numbers, support tickets and referrals
+    # the verified market service: every page's lines are checked against the league schedule and injury report here
+    markets.setup(file=CACHE_DIR / "markets.json",
+                  schedule=markets.espn_schedule(discord_bot.get_json, discord_bot.ESPN, discord_bot.ESPN_PATH),
+                  injuries=markets.espn_injuries(discord_bot.get_json, discord_bot.ESPN, discord_bot.ESPN_PATH, markets.injury_level))
+    atexit.register(lambda: markets.save(True))
     health.setup(fetch=fetch, file=CACHE_DIR / "health.json", players=roster, propbook=lambda: list(propbook.BOOK.values()),
                  send=health.discord_sender(lambda m, p_, pl=None: discord_bot.discord(m, p_, pl, token=os.environ.get("DISCORD_BOT_TOKEN"))))
     threading.Thread(target=_player_upkeep, daemon=True, name="player-upkeep").start()
+    threading.Thread(target=_market_watch, daemon=True, name="market-watch").start()
     grading_handoff()   # before the port opens, so the public address still reaches the server being replaced
     threading.Thread(target=grading_restore, daemon=True, name="grading-restore").start()
     if discord_bot.enabled():

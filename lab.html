@@ -352,6 +352,9 @@ html.dragging,html.dragging *{cursor:ns-resize!important;user-select:none;-webki
 .brow:hover{background:color-mix(in oklab,var(--accent) 7%,transparent)}
 .brow .rk{font:900 24px/1 var(--f-display);color:var(--muted);text-align:center}.brow.top3 .rk{color:var(--accent)}
 .brow .nm{font-weight:700}
+.bday{font:700 12px/1.2 var(--f-body,inherit);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:14px 6px 4px}
+.hotc{display:inline-block;font:700 11px/1 var(--f-body,inherit);padding:3px 6px;border-radius:999px;background:color-mix(in oklab,var(--accent) 22%,transparent);color:var(--ink,inherit);vertical-align:1px}
+.boff{margin-top:12px}
 .sidec{font:700 12px/1 var(--f-mono);padding:4px 7px;border-radius:var(--r-ctl)}
 .sidec.over{background:color-mix(in oklab,var(--win) 18%,transparent);color:var(--win)}.sidec.under{background:color-mix(in oklab,var(--loss) 18%,transparent);color:var(--loss)}
 @media (max-width:700px){.brow{grid-template-columns:30px 1fr 64px 60px}.brow .hide-s{display:none}}
@@ -536,18 +539,43 @@ function home() {
     <ol class="lh-steps"><li><b>Search</b><span>${fight ? 'a fighter' : team ? 'a team' : 'a player'} by name, in the box above</span></li><li><b>Pick a stat and a line</b><span>or take the line the books posted</span></li><li><b>Read the hit rate</b><span>over the last 5, 10, 20 games and the season, then filter by opponent, minutes or venue</span></li></ol>
     <div class="lh-cols">
       ${rec.length ? `<div class="lh-card"><h3>Recent searches</h3><div class="lh-ex">${rec.map(r => `<button class="ex" data-ex="${esc(r.n)}" data-exs="${esc(r.s)}" data-ext="${esc(r.t || 'player')}">${esc(r.n)}</button>`).join('')}</div></div>` : ''}
-      ${fight ? '' : `<div class="lh-card"><h3>Today’s hot props</h3><div id="lhHot"><div class="skel" style="height:34px;margin:6px 0"></div><div class="skel" style="height:34px;margin:6px 0"></div><div class="skel" style="height:34px;margin:6px 0"></div></div></div>`}
+      ${fight ? '' : `<div class="lh-card"><h3>Running hot</h3><div id="lhHot"><div class="skel" style="height:34px;margin:6px 0"></div><div class="skel" style="height:34px;margin:6px 0"></div><div class="skel" style="height:34px;margin:6px 0"></div></div></div>`}
       <div class="lh-card"><h3>Other sports</h3><div class="lh-ex">${SPORTS.filter(x => x[0] !== sp).map(([k, l]) => `<button class="ex" data-exsport="${k}">${l}</button>`).join('')}</div></div>
     </div></section>`;
   if (!fight) hotPreview(sp);
 }
+/* ---------- the verified market feed (markets.py through /api/lab/board) ----------
+   The server sends only markets it checked open. Here the checks that depend on the clock run again on every draw: a
+   game that has started, or a line its provider has not re-read for 90 minutes, leaves at once. A board is read again
+   after five minutes, and when the tab comes back. */
+const MAX_AGE = 90 * 60e3, BOARD_TTL = 5 * 60e3;
+const msOf = v => v == null || v === '' ? null : typeof v === 'number' ? (v > 1e11 ? v : v * 1000) : (Date.parse(v) || null);
+function liveRows(b, now = Date.now()) {
+  if (!b.verified) return (b.rows || []).filter(r => !r.start || msOf(r.start) > now);
+  return (b.rows || []).filter(r => r.status === 'open' && msOf(r.start) > now && (r.eventId || r.matchup === 'provider') && msOf(r.verifiedAt) && now - msOf(r.verifiedAt) <= MAX_AGE);
+}
+async function boardFor(sp, force) {
+  const b = S.board[sp];
+  if (b && !force && Date.now() - (b.got || 0) < BOARD_TTL) return b;
+  try { S.board[sp] = Object.assign(await api('board?sport=' + sp, 30000), { got: Date.now() }) } catch (e) { S.board[sp] = b && b.rows?.length ? Object.assign(b, { error: e.message }) : { rows: [], error: e.message, got: Date.now() } }
+  return S.board[sp];
+}
+const dayLabel = t => { const d = new Date(t), n = new Date(); const k = x => x.toDateString(); const tm = new Date(n); tm.setDate(n.getDate() + 1);
+  return k(d) === k(n) ? 'Today' : k(d) === k(tm) ? 'Tomorrow' : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' }) };
+const timeOf = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.tab === 'board') renderBoard() });
+let boardTick = 0;
+function armBoard(rows) {   // redraw by itself at the next start, so a started game's props leave without a reload
+  clearTimeout(boardTick); const now = Date.now(), next = Math.min(...rows.map(r => msOf(r.start)).filter(t => t > now), now + 6e5);
+  boardTick = setTimeout(() => { if (S.tab === 'board') renderBoard() }, Math.max(1000, next - now + 500));
+}
 async function hotPreview(sp) {
-  let b = S.board[sp];
-  if (!b) { try { b = S.board[sp] = await api('board?sport=' + sp, 20000) } catch (e) { b = { rows: [], error: e.message } } }
+  const b = await boardFor(sp);
   const el = $('#lhHot'); if (!el || S.sport !== sp) return;
-  const rows = (b.rows || []).slice(0, 5);
+  // the same "running hot" rule as Home and Prop Explorer, decided on the server (markets.py is_hot)
+  const rows = liveRows(b).filter(r => b.verified ? r.hot : r.l10 >= .7).slice(0, 5);
   el.innerHTML = rows.length ? `<ul class="lh-hot">${rows.map(r => `<li><button data-ex="${esc(r.player)}" data-exs="${sp}" data-exk="${esc(r.k)}" data-exl="${r.line}"><span><b>${esc(r.player)}</b><small>${r.side === 'over' ? 'Over' : 'Under'} ${fmt(r.line)} ${esc(r.label)}</small></span><em class="num">${pc(r.l10)}</em></button></li>`).join('')}</ul><p class="lh-small">Hit rate over each player’s last 10 games.</p>`
-    : `<p class="lh-small">${b.error ? 'Props couldn’t load right now. Search a player instead.' : `No ${esc(sportName())} lines are posted yet today.`}</p>`;
+    : `<p class="lh-small">${b.error ? 'Props couldn’t load right now. Search a player instead.' : `No ${esc(sportName())} player is running hot on an open line right now.`}</p>`;
 }
 function notFound(name, kind, why) {
   const sp = S.sport, others = SPORTS.filter(x => x[0] !== sp && !(kind === 'team' && FIGHT.has(x[0])));
@@ -1020,21 +1048,28 @@ function teamRoster() {
 async function renderBoard() {
   $('#mini').classList.remove('on');
   tellPage({ view: 'board', sport: S.sport });
-  const sp = S.sport, b = S.board[sp];
-  if (!b) {
-    $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Open ${esc(sportName())} lines by hit rate</b></div>${'<div class="skel" style="height:46px;margin:8px 0;border-radius:var(--r-ctl)"></div>'.repeat(8)}</div>`;
-    try { S.board[sp] = await api('board?sport=' + sp) } catch (e) { S.board[sp] = { rows: [], error: e.message } }
+  const sp = S.sport, have = S.board[sp];
+  if (!have || Date.now() - (have.got || 0) >= BOARD_TTL) {
+    if (!have) $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>${esc(sportName())} props, upcoming games</b></div>${'<div class="skel" style="height:46px;margin:8px 0;border-radius:var(--r-ctl)"></div>'.repeat(8)}</div>`;
+    await boardFor(sp, true);
     if (S.tab === 'board' && S.sport === sp) renderBoard();
     return;
   }
-  const rows = b.rows || [], heat = x => `<span class="heat num" style="background:${heatBg(x)}">${pc(x)}</span>`;
-  $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>Open ${esc(sportName())} lines by hit rate</b>${b.checked ? `<span class="num">${b.checked} lines checked · PrizePicks and Sleeper</span>` : ''}</div>
-    ${b.error ? `<div class="err">${esc(b.error)}</div>` : b.note ? `<p class="sub">${esc(b.note)}</p>` : !rows.length ? `<p class="sub">No ${esc(sportName())} lines posted right now.</p>` : ''}
-    ${rows.map((r, i) => `<div class="brow${i < 3 ? ' top3' : ''}" data-n="${esc(r.player)}" data-k="${r.k}" data-l="${r.line}"><div class="rk">${i + 1}</div>
-      <div><div class="nm">${esc(r.player)}</div><div class="sub">${esc([r.hold ? 'Team information is being verified' : r.teamName || r.team, r.opp && 'vs ' + r.opp].filter(Boolean).join(' · '))}</div>${r.teamNote && (r.hold || r.teamOk === false) ? `<div class="sub tflag" title="${esc(r.teamNote)}">Team check: ${esc(r.teamNote)}</div>` : ''}</div>
-      <div><span class="sidec ${r.side}">${r.side === 'over' ? 'O' : 'U'} ${fmt(r.line)}</span> <span class="sub">${esc(r.label)}</span></div>
+  const b = have, rows = liveRows(b), heat = x => `<span class="heat num" style="background:${heatBg(x)}">${pc(x)}</span>`;
+  const off = (b.removed || []).length + ((b.rows || []).length - rows.length);
+  const ver = b.verified ? Math.max(0, ...rows.map(r => msOf(r.verifiedAt) || 0)) : 0;
+  let day = '', i = 0;
+  const body = rows.map(r => { const t = msOf(r.start), d = t ? dayLabel(t) : 'Time to be confirmed', head = d !== day ? `<div class="bday" role="heading" aria-level="3">${esc(d)}</div>` : ''; day = d; i++;
+    return `${head}<div class="brow${i <= 3 ? ' top3' : ''}" role="button" tabindex="0" data-n="${esc(r.player)}" data-k="${r.k}" data-l="${r.line}" data-mid="${esc(r.mid || '')}"><div class="rk">${i}</div>
+      <div><div class="nm">${esc(r.player)}${r.hot ? ' <span class="hotc">Hot</span>' : ''}</div><div class="sub">${esc([r.teamName || r.team, r.opp && (r.home === false ? '@ ' : 'vs ') + r.opp, t && timeOf(t)].filter(Boolean).join(' · '))}</div>${r.teamNote && r.teamOk === false ? `<div class="sub tflag" title="${esc(r.teamNote)}">Team check: ${esc(r.teamNote)}</div>` : ''}</div>
+      <div><span class="sidec ${r.side}">${r.side === 'over' ? 'O' : 'U'} ${fmt(r.line)}</span> <span class="sub">${esc(r.label)}</span>${r.verifiedAt ? `<div class="sub">${esc((r.books || []).map(x => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper' }[x] || x)).join(', '))} · verified ${esc(timeOf(msOf(r.verifiedAt)))}</div>` : ''}</div>
       <div class="hide-s">${heat(r.l5)}<div class="sub">L5</div></div><div>${heat(r.l10)}<div class="sub">L10</div></div><div class="hide-s">${heat(r.l20)}<div class="sub">L20</div></div>
-      <div class="num" style="text-align:right"><b>${f1(r.avg)}</b><div class="sub">avg</div></div></div>`).join('')}</div>`;
+      <div class="num" style="text-align:right"><b>${f1(r.avg)}</b><div class="sub">avg</div></div></div>` }).join('');
+  $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>${esc(sportName())} props, upcoming games</b>${b.checked ? `<span class="num">${rows.length} open of ${b.checked} lines checked${ver ? ` · last verified ${esc(timeOf(ver))}` : ''}</span>` : ''}</div>
+    ${b.error ? `<div class="err">${esc(b.error)}${rows.length ? ' Showing the last verified lines.' : ''}</div>` : b.note ? `<p class="sub">${esc(b.note)}</p>` : !rows.length ? `<p class="sub">No open ${esc(sportName())} lines right now. A line shows here only while its game is on the schedule, hasn’t started, and the provider has re-checked it in the last 90 minutes.</p>` : ''}
+    ${body}
+    ${off ? `<p class="sub boff">${off} ${off === 1 ? 'line is' : 'lines are'} off the board: game started, no confirmed game or opponent, player ruled out, or not re-checked by the provider. Predictions lists each one under Taken off the board.</p>` : ''}</div>`;
+  armBoard(rows);
 }
 function tabs() { document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === S.tab)) }
 
@@ -1100,6 +1135,7 @@ document.addEventListener('pointermove', e => {
 const endDrag = () => { if (!S.drag) return; cancelAnimationFrame(S.drag.raf); S.drag = null; document.documentElement.classList.remove('dragging'); render() };
 document.addEventListener('pointerup', endDrag); document.addEventListener('pointercancel', endDrag);
 S.mode = store.get('lab.mode', 'bars');
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.brow')) { e.preventDefault(); e.target.click() } });
 document.addEventListener('keydown', e => { if (!e.target.matches || !e.target.matches('.ln[data-drag]')) return; const d = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? -1 : 0; if (!d) return; e.preventDefault(); const y = scrollY; setLine(S.line + .5 * d); scrollTo(0, y); document.querySelector('.ln[data-drag]')?.focus() });
 const setCb = on => { document.documentElement.toggleAttribute('data-cb', on); $('#cb').setAttribute('aria-pressed', on); store.set('lab.cb', on) };
 $('#cb').addEventListener('click', () => setCb(!document.documentElement.hasAttribute('data-cb'))); setCb(store.get('lab.cb', false));
