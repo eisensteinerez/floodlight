@@ -510,7 +510,7 @@
   const SPORT_KEY = { NBA: 'nba', WNBA: 'wnba', NFL: 'nfl', NHL: 'nhl', MLB: 'mlb', Soccer: 'soccer' };
   const sportKey = e => SPORT_KEY[e.sport] || 'cfb';
   function resultsCard() { return window.flHistory ? window.flHistory.widget(e => P.sport === 'all' || sportKey(e) === P.sport) : '' }
-  document.addEventListener('fl:record', () => { if (window.flPages.current() === 'predictions' && $('pdSide')) { const k = document.activeElement?.dataset?.fk; drawSide(); if (k) document.querySelector(`#pdSide [data-fk="${k}"]`)?.focus({ preventScroll: true }) } });
+  document.addEventListener('fl:record', () => { if (window.flPages.current() === 'predictions' && $('pdSide')) draw() });   // draw() keeps the keyboard's place and passes the lists drawSide needs
   function fadeCard(L) {
     const now = new Date(), cold = window.flEdge ? window.flEdge.cold((P.props?.picks || []).filter(p => stateOf(p, now) !== 'gone'), 3) : [];
     return `<section class="card pd-fade" aria-label="Fade list"><div class="sec-h"><h2>Fade list</h2><span class="lb">The coldest players tonight</span></div>
@@ -529,7 +529,7 @@
           <b class="num pd-foled">${p ? edgeTxt(p.edge) : '–'}</b><button type="button" class="ib sm" data-pdfollow="${esc(f.k)}" data-fk="unf-${esc(f.k)}" aria-label="Stop following ${esc(f.name)}, ${esc(f.text)}">${ic('x', 16)}</button></li>` }).join('')}</ul>
       <p class="lb">Alerts show on this page while Floodlight is open, and as browser notifications when Alerts are on in Settings.</p></section>`;
   }
-  function drawSide(L) { const el = $('pdSide'); if (el) el.innerHTML = slipCard() + followCard() + resultsCard() + fadeCard(L) }
+  function drawSide(L) { const el = $('pdSide'); if (el && L) el.innerHTML = slipCard() + followCard() + resultsCard() + fadeCard(L) }
 
   /* ---------- actions ---------- */
   function openPick(id) {
