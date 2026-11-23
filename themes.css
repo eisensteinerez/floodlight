@@ -320,6 +320,10 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 .st-l label,.st-l > span{display:block;font:700 16px/1.3 var(--font-body);color:var(--text)}
 .st-l small{display:block;font:500 13px/1.4 var(--font-body);color:var(--text-2)}
 .st-c{display:flex;align-items:center;gap:12px}
+/* a row with a single switch is one big touch target: its label stretches over the row, the controls sit above it */
+.st-row:has(> .st-c > .sw:only-child){position:relative;cursor:pointer}
+.st-row:has(> .st-c > .sw:only-child) .st-l label::after{content:"";position:absolute;inset:0}
+.st-row .st-c{position:relative;z-index:1}
 .st-size{flex:1 1 320px;max-width:540px}
 .st-a{font:700 13px/1 var(--font-body);color:var(--text-2)}.st-a.big{font-size:22px;color:var(--text)}
 .st-size input[type="range"]{flex:1;min-width:0;height:44px;accent-color:var(--accent-fill);background:none}

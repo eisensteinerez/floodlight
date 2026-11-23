@@ -38,6 +38,11 @@
     grid: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
     left: '<path d="M15 6l-6 6 6 6"/>', right: '<path d="M9 6l6 6-6 6"/>', arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     bolt: '<path d="M13 3 5 13h6l-1 8 8-10h-6z"/>',
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.500 2h-15z"/><path d="M10 20.500a2 2 0 0 0 4 0"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.500 20h7M10 17h4"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.500v2.500M12 19v2.500M2.500 12H5M19 12h2.500M5.300 5.300l1.800 1.800M16.900 16.900l1.800 1.800M5.300 18.700l1.800-1.800M16.900 7.100l1.800-1.800"/>',
+    week: '<rect x="3.500" y="5" width="17" height="15" rx="2"/><path d="M3.500 10h17M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.01"/>',
+    install: '<path d="M12 4v11M7.500 10.500 12 15l4.500-4.500"/><path d="M5 19h14"/>',
     check: '<path d="M5 12.500l4.500 4.500L19 7.500"/>', plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
     tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>',
     bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
@@ -65,7 +70,7 @@
   topIn.querySelector('.brand')?.remove(); topIn.querySelector('.sport-sw')?.remove();
   const nav = (k, label, attrs, extra = '') => `<button class="tbn" data-k="${k}" ${attrs}>${label}${extra}</button>`;
   topIn.insertAdjacentHTML('afterbegin', `<button class="tb-brand" data-shell="home" aria-label="Floodlight, home"><i class="tb-dot" aria-hidden="true"></i><b>Floodlight</b></button>
-    <nav class="tb-nav" id="tbNav" aria-label="Sections">${nav('home', 'Home', 'data-shell="home"')}${nav('live', 'Live', 'data-shell="live"', '<b class="tb-live num" id="tbLive" hidden></b>')}${nav('lab', 'Lab', 'data-shell="lab"')}${nav('pred', 'Predictions', 'data-shell="pred"')}${nav('parlays', 'Parlays', 'data-shell="parlays"')}${nav('transfers', 'Transfers', 'data-shell="transfers"')}</nav>`);
+    <nav class="tb-nav" id="tbNav" aria-label="Sections">${nav('home', 'Home', 'data-shell="home"')}${nav('live', 'Live', 'data-shell="live"', '<b class="tb-live num" id="tbLive" hidden></b>')}${nav('lab', 'Lab', 'data-shell="lab"')}${nav('pred', 'Predictions', 'data-shell="pred"')}${nav('parlays', 'Parlays', 'data-shell="parlays"')}</nav>`);
   topIn.insertAdjacentHTML('beforeend', `<button class="tb-ic tb-search" id="tbSearch" aria-label="Search" aria-expanded="false">${ic('search')}</button>
     <button class="tb-members" id="tbMembers" data-shell="members">Members</button>
     <button class="tb-ic tb-dots" id="flDots" aria-haspopup="menu" aria-expanded="false" aria-controls="flMenu" aria-label="Menu: profile, settings and help">${ic('dots')}</button>
@@ -121,8 +126,9 @@
     menu.innerHTML = (u ? `<div class="flm-me"><span class="flm-av${u.prefs?.photo ? ' has-pic' : ''}" style="--av:${esc(u.prefs?.color || 'var(--accent-fill)')}">${initials(u.display)}${u.prefs?.photo ? `<img class="av-pic" src="/api/avatar?u=${encodeURIComponent(u.username)}&amp;v=${+u.prefs.photo}" alt="" decoding="async" onerror="this.remove()">` : ''}</span><span><b>${esc(u.display)}</b><small>${accessLine(u)}</small></span></div>`
         : `<div class="flm-auth">${mi('profile', 'Sign in', 'data-menu="signin"')}${mi('plus', 'Create account', 'data-menu="signup"')}</div>`)
       + `<div class="flm-g">${u ? mi('profile', 'My profile', 'data-page="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}${mi('ticket', 'My parlays', 'data-shell="parlays"')}${mi('members', 'Members', 'data-shell="members"', '', ' flm-narrow')}
+        ${mi('sun', 'Your day', 'data-page="today"')}${mi('week', 'Your week', 'data-page="recap"')}${mi('bell', 'Alerts', 'data-page="inbox"')}${mi('trophy', 'Private competitions', 'data-page="groups"')}${mi('transfers', 'Transfers', 'data-shell="transfers"')}
         ${mi('gear', 'Settings', 'data-page="settings"')}${mi('palette', 'Theme', 'data-page="settings" data-arg="theme"', `<em>${esc(theme)}</em>`)}${favThemes()}
-        ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help and feedback', 'data-page="guide" data-arg="help"')}${mi('clock', 'Data status and corrections', 'data-page="status"')}</div>`
+        ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help and feedback', 'data-page="guide" data-arg="help"')}${mi('clock', 'Data status and corrections', 'data-page="status"')}${window.flApp?.canInstall?.() ? mi('install', 'Install Floodlight', 'data-install') : ''}</div>`
       + (window.flAdmin?.menu?.(mi) || '')
       + (u ? `<div class="flm-g flm-end">${mi('out', 'Sign out', 'data-act="logout"', '', ' danger')}</div>` : '');
   }
@@ -194,7 +200,7 @@
   const sheet = document.createElement('div'); sheet.id = 'flSheet'; sheet.className = 'flsheet-bg'; sheet.hidden = true;
   sheet.innerHTML = `<div class="flsheet" role="dialog" aria-modal="true" aria-label="More"><h4>Sports</h4>
     <div class="flsheet-grid">${CHIPS.map(([k, l, sp, lg]) => `<button class="flsheet-i" data-k="${k}" data-sport="${sp}"${lg ? ` data-lg="${lg}"` : ''}>${ic(k)}<span>${l}</span></button>`).join('')}</div>
-    <h4>More</h4><div class="flsheet-grid"><button class="flsheet-i" data-shell="parlays">${ic('ticket')}<span>Parlays</span></button><button class="flsheet-i" data-page="profile">${ic('profile')}<span>My profile</span></button><button class="flsheet-i" data-shell="transfers">${ic('transfers')}<span>Transfers</span></button><button class="flsheet-i" data-shell="members">${ic('members')}<span>Members</span></button>
+    <h4>More</h4><div class="flsheet-grid"><button class="flsheet-i" data-page="today">${ic('sun')}<span>Your day</span></button><button class="flsheet-i" data-page="inbox">${ic('bell')}<span>Alerts</span></button><button class="flsheet-i" data-page="groups">${ic('trophy')}<span>Competitions</span></button><button class="flsheet-i" data-page="recap">${ic('week')}<span>Your week</span></button><button class="flsheet-i" data-shell="parlays">${ic('ticket')}<span>Parlays</span></button><button class="flsheet-i" data-page="profile">${ic('profile')}<span>My profile</span></button><button class="flsheet-i" data-shell="transfers">${ic('transfers')}<span>Transfers</span></button><button class="flsheet-i" data-shell="members">${ic('members')}<span>Members</span></button>
       <button class="flsheet-i" data-shell="fav">${ic('fav')}<span>Favorites</span></button><button class="flsheet-i" data-page="settings">${ic('gear')}<span>Settings</span></button>
       <button class="flsheet-i" data-page="guide">${ic('book')}<span>How to use</span></button><button class="flsheet-i" data-page="status">${ic('clock')}<span>Data status</span></button></div></div>`;
   document.body.appendChild(sheet);
