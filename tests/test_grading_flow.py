@@ -194,3 +194,22 @@ def test_the_hourly_github_run_grades_the_servers_picks_and_sends_them_back(monk
         assert list(PB.BOOK.values())[0]["result"] == "won"
     finally:
         os.environ.pop("DISCORD_BOT_TOKEN", None)
+
+
+def test_a_deploy_hands_the_forecasts_and_record_to_the_new_server():
+    """Render starts the new server with an empty disk. It takes the old server's forecasts and record before opening
+    its port: matches it does not follow yet are added, and a forecast's snapshots from both copies are joined, so the
+    forecast made before kick-off is still there to be locked and graded."""
+    import forecaster as F
+    F.D["cache_dir"] = tempfile.mkdtemp()
+    F.TRACKED.clear(); F.FORECASTS.clear()
+    F.TRACKED["soccer:1"] = {"sport": "soccer", "id": "1", "lg": "eng.1", "ko": START}
+    F.FORECASTS["soccer:2"] = {"ko": START, "snaps": [{"stage": "final", "at": START - 1000, "pick": "home"}]}
+    old = {"tracked": {"soccer:1": {"sport": "soccer", "id": "1", "lg": "XX", "ko": START}, "soccer:2": {"sport": "soccer", "id": "2", "lg": "eng.1", "ko": START}},
+           "forecasts": {"soccer:2": {"ko": START, "snaps": [{"stage": "day", "at": START - 80000, "pick": "away"}, {"stage": "final", "at": START - 1800, "pick": "away"}]}}}
+    assert F.absorb(old) == 2
+    assert F.TRACKED["soccer:1"]["lg"] == "eng.1"                       # a match this server already follows keeps its own entry
+    snaps = F.FORECASTS["soccer:2"]["snaps"]
+    assert [s["stage"] for s in snaps] == ["day", "final"] and snaps[1]["at"] == START - 1800   # the earliest final is kept
+    assert F.absorb(old) == 0                                            # taking the same copy twice changes nothing
+    F.TRACKED.clear(); F.FORECASTS.clear()

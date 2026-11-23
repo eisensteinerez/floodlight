@@ -93,6 +93,47 @@ def _persist():
         _save("forecasts.json", FORECASTS)
 
 
+def handoff():
+    """What a new server needs from the one it replaces: the matches being followed and every forecast saved for them."""
+    with _lock:
+        return {"tracked": dict(TRACKED), "forecasts": dict(FORECASTS)}
+
+
+def absorb(got):
+    """Take the outgoing server's matches and forecasts in. A match kept here wins; a forecast's saved snapshots from
+    both copies are joined (one per stage, the earliest kept), so a deploy never loses the forecast made before kick-off.
+    Returns how many matches or forecasts changed."""
+    if not isinstance(got, dict):
+        return 0
+    n = 0
+    with _lock:
+        for k, m in (got.get("tracked") or {}).items():
+            if isinstance(m, dict) and m.get("ko") and k not in TRACKED:
+                TRACKED[k] = m
+                n += 1
+        for k, f in (got.get("forecasts") or {}).items():
+            if not isinstance(f, dict):
+                continue
+            mine = FORECASTS.get(k)
+            if not mine:
+                FORECASTS[k] = f
+                n += 1
+                continue
+            by_stage = {}
+            for s in (f.get("snaps") or []) + (mine.get("snaps") or []):
+                if isinstance(s, dict) and s.get("at"):
+                    st = s.get("stage")
+                    if st not in by_stage or s["at"] < by_stage[st]["at"]:
+                        by_stage[st] = s
+            snaps = sorted(by_stage.values(), key=lambda s: s["at"])
+            if len(snaps) != len(mine.get("snaps") or []):
+                mine["snaps"] = snaps
+                n += 1
+    if n:
+        _persist()
+    return n
+
+
 def _save_config():
     with _lock:
         _save("config.json", CONFIG)
