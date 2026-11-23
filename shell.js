@@ -130,6 +130,7 @@
 
   /* ---------- Cmd/Ctrl+K: the Lab from anywhere, cursor in its command bar ---------- */
   document.addEventListener('keydown', ev => {
+    if (window.flSearch) return;   // search.js owns Cmd/Ctrl+K: it opens the search
     if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ev.stopImmediatePropagation(); closeSheetUI(); openLab(true) }
   }, true);
   function openLab(focus) { if (!pages()?.show('lab')) return document.querySelector('[data-rs="open"]')?.click(); if (focus) setTimeout(() => document.getElementById('labAsk')?.focus(), 60) }
@@ -218,5 +219,10 @@
   if (rail) new MutationObserver(() => { tidyRail(); queueMicrotask(sync) }).observe(rail, { childList: true });
   addEventListener('resize', sync);
   sync();
+  /* Drawn icons are decoration: an <svg> with no role, label or <title> is hidden from screen readers, so a reader never
+     hears "image" or a blank name between a control's words. Charts that mean something carry role="img" and a label. */
+  const quiet = rootEl => { for (const s of (rootEl.querySelectorAll ? rootEl.querySelectorAll('svg:not([aria-hidden]):not([role]):not([aria-label])') : [])) if (!s.querySelector('title')) s.setAttribute('aria-hidden', 'true') };
+  let qT = 0; new MutationObserver(() => { if (qT) return; qT = requestAnimationFrame(() => { qT = 0; quiet(document.body) }) }).observe(document.body, { childList: true, subtree: true });
+  quiet(document.body);
   window.flShell = { sync, ic, SPORTS, CHIPS, current, liveCount, closeMenu };
 })();

@@ -39,7 +39,7 @@
       color: hex(c.team?.color), score: c.score ?? '', record: (c.record || []).find(r => r.type === 'total')?.displayValue || c.record?.[0]?.displayValue || c.record?.[0]?.summary || '', lines: (c.linescores || []).map(l => l.displayValue), winner: !!c.winner, home: c.homeAway === 'home' });
     const us = sport !== 'soccer', a = team(us ? away : home), b = team(us ? home : away);   // the same order the cards use
     // logos are thin in the summary header for some sports: fall back to the scoreboard's
-    for (const [t, s] of [[a, g.a], [b, g.b]]) { if (!t.logo) t.logo = s?.logo || ''; if (!t.name) t.name = s?.name || ''; if (!t.color) t.color = s?.color || '' }
+    for (const [t, s] of [[a, g.a], [b, g.b]]) { if (!t.logo) t.logo = s?.logo || ''; if (!t.name) t.name = s?.name || ''; if (!t.color) t.color = s?.color || ''; if (t.score === '' && s?.score !== '') t.score = s?.score ?? '' }
     const st = comp.status?.type || {}, state = st.state || g.state || 'pre';
     const ab = (hs, as) => a.home ? [hs, as] : [as, hs];
 
@@ -124,6 +124,39 @@
     finally { if (seq === M.seq) { M.loading = false; paint() } }
   }
 
+  /* ---------- Floodlight's own pick for this game ----------
+     From the same forecast list the Predictions page reads (/api/forecast/list), matched by sport and both team names.
+     Before and during the game it is shown as made before the start; once the game is final it says whether it was right. */
+  const FC = { at: 0, list: null, busy: false };
+  const nm = s => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  function loadFc() {
+    if (FC.busy || (FC.list && Date.now() - FC.at < 600000)) return;
+    FC.busy = true;
+    fetch('/api/forecast/list', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(d => { FC.list = d?.matches || []; FC.at = Date.now() }, () => { FC.list = FC.list || [] }).finally(() => { FC.busy = false; if (!host.hidden) paint() });
+  }
+  function fcFor(g, d) {
+    if (!FC.list) return null;
+    const A = d?.a || g.a, B = d?.b || g.b, names = t => [t.full, t.name, t.abbr].filter(Boolean).map(nm);
+    const fits = (x, t) => { const n = nm(x); return !!n && names(t).some(m => m === n || (m.length > 3 && (m.includes(n) || n.includes(m)))) };
+    return FC.list.find(m => (!m.sport || m.sport === g.sport) && ((fits(m.home, A) && fits(m.away, B)) || (fits(m.home, B) && fits(m.away, A)))) || null;
+  }
+  function predBlock(g, d, hide) {
+    const m = fcFor(g, d); if (!m || !m.pick) return '';
+    const state = d?.state || g.state, A = d?.a || g.a, B = d?.b || g.b;
+    const homeIsA = [A.full, A.name, A.abbr].map(nm).some(x => x && (nm(m.home).includes(x) || x.includes(nm(m.home))));
+    const name = side => side === 'draw' ? 'a draw' : side === 'home' ? m.home : m.away, pc = v => v == null ? '' : `${Math.round(v * 100)}%`;
+    const p = m.probs?.[m.pick] ?? m.top, mk = m.market?.[m.pick];
+    let verdict = '';
+    if (state === 'post' && !hide && A.score !== '' && B.score !== '') {
+      const ha = +(homeIsA ? A.score : B.score), aw = +(homeIsA ? B.score : A.score), won = ha > aw ? 'home' : aw > ha ? 'away' : 'draw';
+      const right = won === m.pick;
+      verdict = `<p class="gx-verdict ${right ? 'ok' : 'no'}"><b>${right ? 'Floodlight got this one right' : 'Floodlight got this one wrong'}</b> The pick was ${esc(name(m.pick))}; the result was ${won === 'draw' ? 'a draw' : `a win for ${esc(name(won))}`}.</p>`;
+    } else if (state === 'post' && hide) verdict = `<p class="lb">Whether the pick was right is hidden while spoiler-free is on.</p>`;
+    return `<section class="card gx-card" id="gxs-pred" data-gxk="pred" aria-labelledby="gxPredH"><div class="sec-h"><h3 id="gxPredH">${state === 'post' ? 'How the prediction did' : 'Floodlight’s prediction'}</h3><span class="lb">Made before the start</span></div>
+      <p class="gx-pick"><span class="lb">Pick</span> <b>${esc(name(m.pick))}</b>${p != null ? ` <span class="num">${pc(p)}</span>` : ''}${mk != null ? ` <span class="lb">· market ${pc(mk)}</span>` : ''}</p>${verdict}
+      <p class="lb gx-pnote">${state === 'pre' ? 'From past games and posted prices. A research estimate, not a guarantee.' : 'Not changed after kick-off, so it can be checked against the result.'} <a class="lk" href="#/predictions" data-page="predictions">All predictions</a></p></section>`;
+  }
+
   /* ---------- prices, book by book ----------
      The same odds board the sport pages read (odds.py): each book's own price, the chance inside it, and which book has
      the best price for each side. Shown for comparison only. With one book posting there is nothing to compare, and the
@@ -184,6 +217,8 @@
   /* ---------- pieces ---------- */
   const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 5 ? 'just now' : s < 60 ? `${s} seconds ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago` };
   const hm = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const until = t => { const s = Math.round((t - Date.now()) / 1000); if (s <= 0) return 'starting now'; const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+    return d ? `in ${d} day${d === 1 ? '' : 's'} ${h} h` : h ? `in ${h} h ${String(m).padStart(2, '0')} min` : m ? `in ${m} min ${String(s % 60).padStart(2, '0')} s` : `in ${s % 60} s` };
   const day = d => d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
   const ord = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
   const perName = (d, n) => d.sport === 'soccer' ? (n === 1 ? '1st half' : n === 2 ? '2nd half' : 'extra time') : d.sport === 'baseball' ? `${ord(n)} inning` : d.sport === 'hockey' ? (n > 3 ? 'overtime' : `${ord(n)} period`)
@@ -233,17 +268,18 @@
     if (d.sport === 'basketball' && !M.every && d.state === 'in') { const recent = d.plays.filter(p => p.kind === 'score').slice(-3); list = [...new Set([...list, ...recent])].sort((x, y) => x.i - y.i) }
     return list.reverse();
   }
-  const kindIcon = p => p.kind === 'card' ? `<i class="gx-k card ${p.card || 'pen'}" aria-hidden="true"></i>` : p.kind === 'sub' ? `<i class="gx-k sub" aria-hidden="true">${ic('swap', 14)}</i>` : p.kind === 'period' ? `<i class="gx-k per" aria-hidden="true"></i>` : p.kind === 'turn' ? `<i class="gx-k turn" aria-hidden="true">${ic('swap', 14)}</i>` : `<i class="gx-k sc" aria-hidden="true"></i>`;
+  const kindIcon = p => p.kind === 'card' ? `<i class="gx-k bk ${p.card || 'pen'}" aria-hidden="true"></i>` : p.kind === 'sub' ? `<i class="gx-k sub" aria-hidden="true">${ic('swap', 14)}</i>` : p.kind === 'period' ? `<i class="gx-k per" aria-hidden="true"></i>` : p.kind === 'turn' ? `<i class="gx-k turn" aria-hidden="true">${ic('swap', 14)}</i>` : `<i class="gx-k sc" aria-hidden="true"></i>`;
   function timeline(d, hide) {
     if (hide) return hidden('The timeline lists every score');
     const list = moments(d);
     if (!d.plays.length) return `<p class="gx-none">${d.state === 'pre' ? 'The timeline starts when the game does.' : 'The feed has no play-by-play for this game.'}</p>`;
     const more = d.sport === 'basketball' ? `<button type="button" class="lk gx-more" data-gx="every" aria-pressed="${M.every}">${M.every ? 'Show key moments only' : `Show every scoring play (${d.plays.filter(p => p.kind === 'score').length})`}</button>` : '';
     return `${more}<ol class="gx-tl" reversed>${list.map(p => { const t = sideOf(d, p.team), sc = p.changed || p.kind === 'score';
-      return `<li class="gx-ev k-${p.kind}${M.sel === p.id ? ' on' : ''}"${t ? ` data-side="${t === d.a ? 'a' : 'b'}"` : ''}><button type="button" class="gx-evb" data-gxplay="${esc(p.id)}" ${sc && d.scoreOk ? '' : 'tabindex="-1" disabled'}>
+      const pick = sc && d.scoreOk, tag = pick ? 'button' : 'div';
+      return `<li class="gx-ev k-${p.kind}${M.sel === p.id ? ' on' : ''}"${t ? ` data-side="${t === d.a ? 'a' : 'b'}"` : ''}><${tag} ${pick ? `type="button" data-gxplay="${esc(p.id)}" aria-label="${esc(`${when(d, p)} ${p.text || p.type || ''}${t ? `, ${t.name}` : ''}, ${p.a}–${p.b}. Show on the graph`)}"` : ''} class="gx-evb">
         <span class="gx-evt num">${esc(when(d, p))}</span>${kindIcon(p)}${t ? crest(t, 'gx-crest sm') : '<span class="gx-crest sm"></span>'}
-        <span class="gx-evx"><span>${esc(p.kind === 'period' && !p.text ? p.type : p.text)}</span>${p.tag ? `<em class="pl gx-tag">${esc(p.tag)}</em>` : ''}</span>
-        ${sc && d.scoreOk ? `<b class="gx-evs num">${p.a}–${p.b}</b>` : ''}</button></li>` }).join('')}</ol>`;
+        <span class="gx-evx"><span>${esc(p.text || (p.kind === 'card' ? `${p.card === 'red' ? 'Red' : p.card === 'yellow' ? 'Yellow' : 'Penalty'} card` : p.kind === 'sub' ? 'Substitution' : p.type || ''))}</span>${p.tag ? `<em class="pl gx-tag">${esc(p.tag)}</em>` : ''}</span>
+        ${pick ? `<b class="gx-evs num">${p.a}–${p.b}</b>` : ''}</${tag}></li>` }).join('')}</ol>`;
   }
 
   /* game flow: who led, by how much, play by play. Tap or arrow through it; the play under the cursor is named below. */
@@ -315,7 +351,7 @@
     const bits = [sit?.red ? 'Red zone' : '', sit?.text || ''].filter(Boolean).join(' · ');
     return { poss: sit?.poss || '', line: [bits, last].filter(Boolean).join(' · ') };
   }
-  const SECTIONS = [['recap', 'Summary'], ['flow', 'Flow'], ['xi', 'Lineups'], ['tl', 'Timeline'], ['px', 'Prices'], ['mv', 'Line moves'], ['form', 'Stats']];
+  const SECTIONS = [['start', 'Start'], ['recap', 'Summary'], ['pred', 'Prediction'], ['flow', 'Flow'], ['xi', 'Lineups'], ['tl', 'Timeline'], ['px', 'Prices'], ['mv', 'Line moves'], ['form', 'Form']];
   function head(g, d, hide, secs = []) {
     const a = d?.a || g.a, b = d?.b || g.b, state = d?.state || g.state, live = state === 'in', N = now(g, d, hide);
     const has = t => N.poss && String(t.id) === N.poss ? `<span class="gx-poss" title="Has the ball"><i aria-hidden="true"></i><span class="sr-only">has the ball</span></span>` : '';
@@ -325,48 +361,63 @@
       <tbody>${[a, b].map(t => `<tr><th scope="row">${esc(t.abbr || t.name)}</th>${Array.from({ length: d.periods }, (_, i) => `<td class="num">${esc(t.lines[i] ?? '–')}</td>`).join('')}<td class="num"><b>${esc(t.score)}</b></td></tr>`).join('')}</tbody></table>` : '';
     return `<header class="gx-head" data-gxk="head" style="${window.flTeamColours ? window.flTeamColours({ hc: a.color, ac: b.color }) : ''}">
       <div class="gx-bar"><span class="gx-lg">${live ? '<span class="pl live"><i></i>Live</span>' : state === 'post' ? '<span class="pl">Final</span>' : '<span class="pl">Upcoming</span>'}<span class="lb">${esc(g.lgName || g.short || '')}</span></span>
-        <span class="gx-tools">${window.flShare ? `<button type="button" class="bt ghost sm" data-gx="share">${window.flShare.ICON}Share</button>` : ''}${window.flHome && state !== 'post' ? `<button type="button" class="bt ghost sm" data-gx="watch" aria-pressed="${window.flHome.watching(g.key)}">${window.flHome.watching(g.key) ? 'Watching' : 'Watch'}</button>` : ''}<button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}" aria-pressed="${hide}">${hide ? 'Reveal the score' : 'Hide the score'}</button><button type="button" class="ib" data-gx="close" aria-label="Close the match centre">${ic('x', 18) || '×'}</button></span></div>
-      <h2 class="gx-title" id="gxTitle"><span class="gx-team">${crest(a)}<span><span class="gx-full">${esc(a.full || a.name)}</span><span class="gx-short">${esc(a.name || a.full)}</span></span>${has(a)}${a.record ? `<small class="lb">${esc(a.record)}</small>` : ''}</span>
+        <span class="gx-tools">${window.flShare ? `<button type="button" class="bt ghost sm" data-gx="share">${window.flShare.ICON}Share</button>` : ''}${window.flHome && state !== 'post' ? `<button type="button" class="bt ghost sm" data-gx="watch" aria-pressed="${window.flHome.watching(g.key)}" aria-label="${window.flHome.watching(g.key) ? 'Following this game. Stop following' : `Follow ${esc(a.name)} v ${esc(b.name)}`}">${window.flHome.watching(g.key) ? 'Following' : 'Follow game'}</button>` : ''}${state === 'pre' ? '' : `<button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}">${hide ? 'Reveal score' : 'Hide score'}</button>`}<button type="button" class="ib" data-gx="close" aria-label="Close the match centre">${ic('x', 18) || '×'}</button></span></div>
+      <h2 class="gx-title" id="gxTitle"><span class="sr-only">${esc(state === 'pre' ? `${a.full || a.name} v ${b.full || b.name}, ${status}` : hide ? `${a.full || a.name} v ${b.full || b.name}, score hidden, ${status}` : `${a.full || a.name} ${a.score}, ${b.full || b.name} ${b.score}, ${state === 'post' ? 'final' : clockWords({ sport: g.sport, detail: status }) || status}`)}</span><span class="gx-tv" aria-hidden="true"><span class="gx-team">${crest(a)}<span><span class="gx-full">${esc(a.full || a.name)}</span><span class="gx-short">${esc(a.name || a.full)}</span></span>${has(a)}${a.record ? `<small class="lb">${esc(a.record)}</small>` : ''}</span>
         <span class="gx-mid">${state === 'pre' ? `<b class="gx-vs">v</b>` : `${sc(a)}<i aria-hidden="true">:</i><span class="sr-only"> to </span>${sc(b)}`}<small class="${live ? 'on' : ''}">${esc(status)}</small></span>
-        <span class="gx-team">${crest(b)}<span><span class="gx-full">${esc(b.full || b.name)}</span><span class="gx-short">${esc(b.name || b.full)}</span></span>${has(b)}${b.record ? `<small class="lb">${esc(b.record)}</small>` : ''}</span></h2>
+        <span class="gx-team">${crest(b)}<span><span class="gx-full">${esc(b.full || b.name)}</span><span class="gx-short">${esc(b.name || b.full)}</span></span>${has(b)}${b.record ? `<small class="lb">${esc(b.record)}</small>` : ''}</span></span></h2>
       ${N.line ? `<p class="gx-now"><span class="lb">Latest</span> ${esc(N.line.slice(0, 220))}</p>` : ''}
       ${lines}
-      ${secs.length > 2 ? `<nav class="gx-nav" aria-label="Sections of this game"><ul>${secs.map(([k, l], i) => `<li><a href="#gxs-${k}" data-gxgo="${k}"${i === 0 ? ' aria-current="true"' : ''}>${l}</a></li>`).join('')}</ul></nav>` : ''}
-      <p class="gx-meta lb">${[d?.venue || g.venue, d?.crowd ? `${d.crowd.toLocaleString()} there` : '', (d?.tv?.length ? d.tv : g.tv ? [g.tv] : []).length ? `TV (US listing): ${esc((d?.tv?.length ? d.tv : [g.tv]).join(', '))}` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('')}</p>
+      ${secs.length > 2 ? `<nav class="gx-nav" aria-label="Sections of this game"><ul>${secs.map(([k, l], i) => `<li><a href="#gxs-${k}" data-gxgo="${k}" aria-label="Open ${esc(l.toLowerCase())}"${i === 0 ? ' aria-current="true"' : ''}>${l}</a></li>`).join('')}</ul></nav>` : ''}
+      <p class="gx-meta lb">${state === 'pre' ? '' : [d?.venue || g.venue, d?.crowd ? `${d.crowd.toLocaleString()} there` : '', (d?.tv?.length ? d.tv : g.tv ? [g.tv] : []).length ? `TV (US listing): ${esc((d?.tv?.length ? d.tv : [g.tv]).join(', '))}` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('')}</p>
     </header>`;
+  }
+  function startCard(g, d) {
+    const when = d?.date || g.date, tv = d?.tv?.length ? d.tv : g.tv ? [g.tv] : [], venue = d?.venue || g.venue;
+    return `<section class="card gx-card gx-start" id="gxs-start" data-gxk="start" aria-labelledby="gxStartH"><div class="sec-h"><h3 id="gxStartH">Before the start</h3></div>
+      <dl class="gx-facts"><div><dt>Starts</dt><dd>${esc(day(when))}, ${esc(hm(when))} <span class="gx-cd num" data-gxto="${+when}">${esc(until(+when))}</span></dd></div>
+      ${venue ? `<div><dt>Venue</dt><dd>${esc(venue)}</dd></div>` : ''}${tv.length ? `<div><dt>Watch</dt><dd>${esc(tv.join(', '))} <span class="lb">(US listing)</span></dd></div>` : ''}</dl>
+      <p class="lb">The score, momentum and key moments appear here once it starts.</p></section>`;
   }
   function paint() {
     const g = M.g; if (!g || host.hidden) return;
     const d = M.d, hide = spoil(g.key), live = (d?.state || g.state) === 'in';
-    const act = sheet.contains(document.activeElement) ? document.activeElement : null, keepSel = act ? ['data-gx', 'data-gxplay', 'data-gxmode', 'data-gxflow', 'data-gxgo'].map(k => act.hasAttribute(k) ? `[${k}${act.getAttribute(k) ? `="${CSS.escape(act.getAttribute(k))}"` : ''}]` : '').find(Boolean) : null;
+    const act = sheet.contains(document.activeElement) ? document.activeElement : null, keepSel = act?.id === 'gxTitle' ? '#gxTitle' : act ? ['data-gx', 'data-gxplay', 'data-gxmode', 'data-gxflow', 'data-gxgo'].map(k => act.hasAttribute(k) ? `[${k}${act.getAttribute(k) ? `="${CSS.escape(act.getAttribute(k))}"` : ''}]` : '').find(Boolean) : null;
     const scroll = sheet.querySelector('.gx-body')?.scrollTop || 0;
-    const fresh = `<p class="gx-fresh" data-gxk="fresh">${M.err ? `<span class="pd-dot warn" aria-hidden="true"></span><b>${esc(M.err)}</b>${M.at ? ` <span class="lb">Showing what loaded <time data-gxago="${M.at}">${ago(M.at)}</time>.</span>` : ''} <button type="button" class="bt sm" data-gx="retry">Try again</button>`
+    const fresh = `<p class="gx-fresh" data-gxk="fresh">${M.err && !M.d && g.state === 'pre' ? `<span class="pd-dot" aria-hidden="true"></span><b>From the scoreboard</b><span class="lb">The game’s own feed has not opened yet.</span>` : M.err ? `<span class="pd-dot warn" aria-hidden="true"></span><b>${esc(M.err)}</b>${M.at ? ` <span class="lb">Showing what loaded <time data-gxago="${M.at}">${ago(M.at)}</time>.</span>` : ''}${M.d ? ' <button type="button" class="bt sm" data-gx="retry">Try again</button>' : ''}`
       : M.at ? `<span class="pd-dot" aria-hidden="true"></span><b>Updated <time data-gxago="${M.at}">${ago(M.at)}</time></b><span class="lb">Source: ESPN game feed. ${live ? 'Checked every 20 seconds while the game is live; the feed can run behind the broadcast.' : 'Checked again every 90 seconds.'}</span>`
       : `<span class="pd-spin" aria-hidden="true"></span><b>Loading the game feed…</b>`}</p>`;
     let body;
-    if (!d) body = M.err ? `<div class="emp" data-gxk="err">${ic('help', 28)}<b>The detail for this game did not load</b><p>${esc(M.err)} The score above is from the scoreboard and is still current.</p><button type="button" class="bt" data-gx="retry">Try again</button></div>`
+    // an upcoming game often has no detail feed yet: what the scoreboard knows is still worth showing
+    if (!d && M.err && g.state === 'pre') body = `<div class="gx-grid"><div class="gx-c">${startCard(g, null)}${predBlock(g, null, hide)}</div><div class="gx-c"><div class="card gx-card" data-gxk="err"><p class="gx-none">Lineups, injuries, prices and form appear once the game’s detail feed opens, usually a day or two before the start. <button type="button" class="lk" data-gx="retry">Check again</button></p></div></div></div>`;
+    else if (!d) body = M.err ? `<div class="emp" data-gxk="err">${ic('help', 28)}<b>The detail for this game did not load</b><p>${esc(M.err)} The score above is from the scoreboard and is still current.</p><button type="button" class="bt" data-gx="retry">Try again</button></div>`
       : `<div class="gx-grid" data-gxk="wait" aria-hidden="true"><div class="gx-c"><div class="skl" style="height:150px"></div><div class="skl" style="height:230px"></div></div><div class="gx-c"><div class="skl" style="height:320px"></div></div></div>`;
     else {
-      const rc = hide ? '' : recap(d), L = lineups(d), F = formBlock(d, hide);
-      body = `<div class="gx-grid"><div class="gx-c">
-          <section class="card gx-card" id="gxs-recap" data-gxk="recap" aria-labelledby="gxRecapH"><div class="sec-h"><h3 id="gxRecapH">Catch me up</h3><span class="lb">Counted from the plays, not written by AI</span></div>
-            ${hide ? hidden('The recap says who is winning') : `<ul class="gx-recap">${rc.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`}</section>
-          <section class="card gx-card" id="gxs-flow" data-gxk="flow" aria-labelledby="gxFlowH"><div class="sec-h"><h3 id="gxFlowH">Game flow</h3><span class="lb">${d.scoreOk && d.pts.length > 1 && !hide ? `${d.changes} lead change${d.changes === 1 ? '' : 's'}` : ''}</span></div>${flow(d, hide)}</section>
-          ${L ? `<section class="card gx-card" id="gxs-xi" data-gxk="xi" aria-labelledby="gxXiH"><div class="sec-h"><h3 id="gxXiH">${d.xi.a || d.xi.b ? 'Lineups' : d.five.a || d.five.b ? 'Starters' : 'Leaders'}</h3></div>${L}</section>` : ''}
-        </div><div class="gx-c">
-          <section class="card gx-card" id="gxs-tl" data-gxk="tl" aria-labelledby="gxTlH"><div class="sec-h"><h3 id="gxTlH">Timeline</h3><span class="lb">Newest first</span></div>${timeline(d, hide)}</section>
-          ${prices(d, hide)}
-          ${movement(g, d, hide)}
-          ${F ? `<section class="card gx-card" id="gxs-form" data-gxk="form" aria-label="Form, series and team numbers">${F}</section>` : ''}
-        </div></div>`;
+      /* Each state shows what it has: before the start, when and where, the pick, lineups, prices and form (no empty
+         recap, graph or timeline); in play, the score's story, momentum, events and live prices; at the end, the full
+         recap, key numbers and whether the pick was right. */
+      const st = d.state || g.state, pre = st === 'pre', post = st === 'post';
+      const rc = hide || pre ? [] : recap(d), L = lineups(d), F = formBlock(d, hide), P = predBlock(g, d, hide);
+      const xiName = d.xi.a || d.xi.b ? (pre ? 'Expected lineups' : 'Lineups') : d.five.a || d.five.b ? 'Starters' : pre ? 'Injury report and players to watch' : 'Leaders';
+      const start = pre ? startCard(g, d) : '';
+      const recapCard = pre ? '' : `<section class="card gx-card" id="gxs-recap" data-gxk="recap" aria-labelledby="gxRecapH"><div class="sec-h"><h3 id="gxRecapH">${post ? 'Full recap' : 'Catch me up'}</h3><span class="lb">Counted from the plays, not written by AI</span></div>
+            ${hide ? hidden('The recap says who is winning') : rc.length ? `<ul class="gx-recap">${rc.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '<p class="gx-none">Nothing to count yet.</p>'}</section>`;
+      const flowCard = pre ? '' : `<section class="card gx-card" id="gxs-flow" data-gxk="flow" aria-labelledby="gxFlowH"><div class="sec-h"><h3 id="gxFlowH">${post ? 'How it went' : 'Momentum'}</h3><span class="lb">${d.scoreOk && d.pts.length > 1 && !hide ? `${d.changes} lead change${d.changes === 1 ? '' : 's'}` : ''}</span></div>${flow(d, hide)}</section>`;
+      const tlCard = pre ? '' : `<section class="card gx-card" id="gxs-tl" data-gxk="tl" aria-labelledby="gxTlH"><div class="sec-h"><h3 id="gxTlH">${post ? 'Timeline' : 'Key moments'}</h3><span class="lb">Newest first</span></div>${timeline(d, hide)}</section>`;
+      const xiCard = L ? `<section class="card gx-card" id="gxs-xi" data-gxk="xi" aria-labelledby="gxXiH"><div class="sec-h"><h3 id="gxXiH">${xiName}</h3></div>${L}</section>` : '';
+      const formCard = F ? `<section class="card gx-card" id="gxs-form" data-gxk="form" aria-label="${pre ? 'Form and previous meetings' : 'Team numbers, form and series'}">${F}</section>` : '';
+      body = pre ? `<div class="gx-grid"><div class="gx-c">${start}${P}${xiCard}</div><div class="gx-c">${prices(d, hide)}${movement(g, d, hide)}${formCard}</div></div>`
+        : post ? `<div class="gx-grid"><div class="gx-c">${recapCard}${P}${flowCard}${xiCard}</div><div class="gx-c">${formCard}${tlCard}${prices(d, hide)}${movement(g, d, hide)}</div></div>`
+        : `<div class="gx-grid"><div class="gx-c">${recapCard}${flowCard}${xiCard}</div><div class="gx-c">${tlCard}${formCard}${prices(d, hide)}${P}${movement(g, d, hide)}</div></div>`;
     }
     // the section bar: only the sections this game has, Lineups named as its heading says
-    const secs = d ? SECTIONS.filter(([k]) => body.includes(`data-gxk="${k}"`)).map(([k, l]) => [k, k === 'xi' ? (d.xi.a || d.xi.b ? 'Lineups' : d.five.a || d.five.b ? 'Starters' : 'Leaders') : l]) : [];
-    const html = `${head(g, d, hide, secs)}<div class="gx-body" aria-busy="${M.loading && !d}">${fresh}${body}
+    const secs = d ? SECTIONS.filter(([k]) => body.includes(`data-gxk="${k}"`)).map(([k, l]) => [k, k === 'xi' ? (d.xi.a || d.xi.b ? 'Lineups' : d.five.a || d.five.b ? 'Starters' : (d.state || g.state) === 'pre' ? 'Players' : 'Leaders') : k === 'form' && (d.state || g.state) !== 'pre' ? 'Stats' : l]) : [];
+    const fol = window.flHome?.follow ? `<div class="gx-follow" data-gxk="follow" role="group" aria-label="Follow the teams">${[['a', g.a], ['b', g.b]].map(([k, t]) => { const on = !!window.flHome.following?.(g, t);
+      return `<button type="button" class="cx sm" data-gx="follow" data-side="${k}" aria-pressed="${on}" aria-label="${on ? `Following ${esc(t.full || t.name)}` : `Follow ${esc(t.full || t.name)}`}">${ic('star', 14)}${on ? 'Following' : 'Follow'} ${esc(t.name)}</button>` }).join('')}</div>` : '';
+    const html = `${head(g, d, hide, secs)}<div class="gx-body" aria-busy="${M.loading && !d}">${fresh}${fol}${body}
       <footer class="gx-foot" data-gxk="foot"><button type="button" class="bt" data-gx="full">Open the full ${esc(g.sport)} page for this game${ic('arrow', 16)}</button>
         <label class="gx-all"><input class="sw" type="checkbox" role="switch" data-gx="all" ${SP.all ? 'checked' : ''}> Spoiler-free: hide every score until I reveal it</label></footer></div>`;
     if (!morph(html)) { sheet.innerHTML = html; const bodyEl = sheet.querySelector('.gx-body'); if (bodyEl) bodyEl.scrollTop = scroll }
-    if (keepSel && !sheet.contains(document.activeElement)) sheet.querySelector(keepSel)?.focus({ preventScroll: true });
+    if (keepSel && !sheet.contains(document.activeElement)) { const k = sheet.querySelector(keepSel); if (k && keepSel === '#gxTitle') k.setAttribute('tabindex', '-1'); k?.focus({ preventScroll: true }) }
     spy();
   }
   /* The header stays on screen. Once the body is scrolled it tightens (the period table and venue line fold away), and
@@ -405,13 +456,28 @@
   }
   /* What a screen reader hears while the game is open: a score change or the final whistle, once, and nothing when
      the score is hidden. The "Updated" line no longer speaks on every refresh. */
+  // one sentence: who leads, the score, and when. "Goal. Arsenal leads Manchester City, 2–1, 67th minute."
+  const nth = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+  function standing(d) {
+    const a = d.a, b = d.b, x = +a.score, y = +b.score;
+    return x === y ? `${a.full || a.name} and ${b.full || b.name} level at ${x}–${y}` : x > y ? `${a.full || a.name} lead${/s$/.test(a.full || a.name) ? '' : 's'} ${b.full || b.name}, ${x}–${y}` : `${b.full || b.name} lead${/s$/.test(b.full || b.name) ? '' : 's'} ${a.full || a.name}, ${y}–${x}`;
+  }
+  function clockWords(d) {
+    const c = String(d.detail || M.g?.clock || '').trim(), m = /^(\d+)'(?:\+(\d+)')?$/.exec(c);
+    if (d.sport === 'soccer' && m) return `${nth(+m[1])} minute${m[2] ? ` plus ${m[2]}` : ''}`;
+    if (/^HT$|half/i.test(c)) return 'half time';
+    return c.replace(/\bQ(\d)\b/, (_, n) => `${nth(+n)} quarter`).replace(/\bP(\d)\b/, (_, n) => `${nth(+n)} period`).replace(/\bOT\b/, 'overtime');
+  }
+  function spoken(prev, d) {
+    const scoreWord = { soccer: 'Goal', hockey: 'Goal', football: 'Score', basketball: 'Score', baseball: 'Run scores' }[d.sport] || 'Score';
+    if (d.state === 'post' && prev.state !== 'post') return `Final. ${standing(d).replace(' lead ', ' beat ').replace(' leads ', ' beat ').replace(' level at ', ' drew ')}.`;
+    if (d.state === 'in' && (prev.a.score !== d.a.score || prev.b.score !== d.b.score)) { const w = clockWords(d); return `${scoreWord}. ${standing(d)}${w ? ', ' + w : ''}.` }
+    if (d.state === 'in' && prev.state === 'pre') return `Started. ${d.a.full || d.a.name} against ${d.b.full || d.b.name}.`;
+    return '';
+  }
   function say(prev, d) {
     const g = M.g; if (!g || !d || !prev || spoil(g.key)) return;
-    const sc = x => `${x.a.name} ${x.a.score}, ${x.b.name} ${x.b.score}`;
-    let t = '';
-    if (d.state === 'post' && prev.state !== 'post') t = `Final. ${sc(d)}.`;
-    else if (d.state === 'in' && (prev.a.score !== d.a.score || prev.b.score !== d.b.score)) { const last = [...d.plays].reverse().find(p => p.kind === 'score'); t = `Score. ${sc(d)}. ${last?.text ? String(last.text).slice(0, 140) : ''}` }
-    else if (d.state === 'in' && prev.state === 'pre') t = `Started. ${sc(d)}.`;
+    const t = spoken(prev, d);
     if (t) { const el = host.querySelector('#gxSay'); el.textContent = ''; setTimeout(() => { el.textContent = t }, 60) }
   }
 
@@ -421,10 +487,12 @@
     const g = o.key ? o : find(o);
     if (!g || !CAN.has(g.sport) || !g.path) return false;
     M.seq++; M.g = g; M.d = null; M.at = 0; M.err = ''; M.odds = null; M.oddsAt = 0; M.oddsErr = ''; M.oddsBusy = false; M.loading = false; M.sel = null; M.every = false; M.mode = 'lead'; M.from = from || document.activeElement;
-    window.flHome?.seen(g); sheet.innerHTML = ''; sheet.classList.remove('gx-tight');
-    host.hidden = false; root.classList.add('gx-on'); paint(); sheet.focus({ preventScroll: true }); load();
+    window.flHome?.seen(g); sheet.innerHTML = ''; sheet.classList.remove('gx-tight'); loadFc();
+    host.hidden = false; root.classList.add('gx-on'); paint();
+    const t = sheet.querySelector('#gxTitle'); if (t) { t.setAttribute('tabindex', '-1'); t.focus({ preventScroll: true }) } else sheet.focus({ preventScroll: true });
+    load();
     clearInterval(M.timer); M.timer = setInterval(() => { if (document.hidden || host.hidden) return; const live = (M.d?.state || M.g.state) === 'in'; if (Date.now() - (M.at || 0) >= (live ? LIVE_MS : IDLE_MS) * (window.flSaver?.() ? 4 : 1) - 500) load(true) }, 5000);
-    clearInterval(M.tick); M.tick = setInterval(() => sheet.querySelectorAll('[data-gxago]').forEach(t => { const x = ago(+t.dataset.gxago); if (t.textContent !== x) t.textContent = x }), 1000);
+    clearInterval(M.tick); M.tick = setInterval(() => { sheet.querySelectorAll('[data-gxago]').forEach(t => { const x = ago(+t.dataset.gxago); if (t.textContent !== x) t.textContent = x }); sheet.querySelectorAll('[data-gxto]').forEach(t => { const x = until(+t.dataset.gxto); if (t.textContent !== x) t.textContent = x }) }, 1000);
     return true;
   }
   function close() {
@@ -434,6 +502,8 @@
   // the scoreboard keeps the score in the header current between feed reads
   document.addEventListener('fl:hub', () => { if (host.hidden || !M.g) return; const g = find(M.g); if (g) { M.g = g; if (!M.d) paint() } });
 
+  const t0side = b => b.dataset.side === 'a' ? M.g.a : b.dataset.side === 'b' ? M.g.b : null;
+  function sayNow(t) { const el = host.querySelector('#gxSay'); el.textContent = ''; setTimeout(() => { el.textContent = t }, 60) }
   function select(id, viaList) {
     M.sel = M.sel === id && viaList ? null : id; paint();
     if (!viaList && M.sel) sheet.querySelector(`[data-gxplay="${CSS.escape(M.sel)}"]`)?.closest('li')?.scrollIntoView({ block: 'nearest' });
@@ -455,6 +525,7 @@
     if (k === 'odds') { M.oddsAt = 0; M.oddsErr = ''; loadOdds(); return paint() }
     if (k === 'every') { M.every = !M.every; return paint() }
     if (k === 'watch') { window.flHome?.watch(M.g); return paint() }
+    if (k === 'follow') { const tm = t0side(t); if (tm) { const on = window.flHome.follow(M.g, tm); sayNow(on ? `Following ${tm.full || tm.name}` : `Stopped following ${tm.full || tm.name}`) } return paint() }
     if (k === 'share') { const g = M.g, d = M.d, hide = spoil(g.key), st = d?.state || g.state, a = d?.a || g.a, b = d?.b || g.b;
       const when = (d?.date || g.date)?.toLocaleString?.([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) || '';
       const rc = d && !hide ? recap(d).slice(0, 2) : [];

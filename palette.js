@@ -97,7 +97,8 @@
 
   // capture phase, so the older Cmd/Ctrl+K (research) in shell.js does not also fire
   addEventListener('keydown', ev => {
-    if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ev.stopImmediatePropagation(); bg.hidden ? open() : close(); return }
+    if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { if (window.flSearch) { if (!bg.hidden) close(); return }   // Cmd/Ctrl+K opens the header search (search.js)
+      ev.preventDefault(); ev.stopImmediatePropagation(); bg.hidden ? open() : close(); return }
     if (bg.hidden) return;
     if (ev.key === 'Escape') { ev.preventDefault(); ev.stopImmediatePropagation(); close() }
     else if (ev.key === 'ArrowDown') { ev.preventDefault(); move(1) }

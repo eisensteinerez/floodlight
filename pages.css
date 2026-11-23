@@ -1214,7 +1214,7 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 :root.gx-on{overflow:hidden}
 .gx{position:fixed;inset:0;z-index:900;display:grid;justify-items:center;align-items:end}
 .gx[hidden]{display:none}
-.gx-scrim{position:absolute;inset:0;background:rgba(0,0,0,.62)}
+.gx-scrim{position:absolute;inset:0;background:var(--scrim)}
 .gx-sheet{position:relative;width:min(1180px,100vw);height:min(94vh,94dvh);display:flex;flex-direction:column;border-radius:var(--radius-card) var(--radius-card) 0 0;border:1px solid var(--border-2);border-bottom:0;background:var(--bg);color:var(--text);box-shadow:var(--shadow-pop);overflow:hidden;animation:gxUp var(--t-med,.32s) cubic-bezier(.2,.8,.2,1)}
 @keyframes gxUp{from{transform:translateY(28px);opacity:0}}
 @media (prefers-reduced-motion:reduce){.gx-sheet{animation:none}}
@@ -1285,7 +1285,7 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 .gx-tag{min-height:22px;padding:0 8px;font-size:12px;border-color:var(--accent);color:var(--text)}
 .gx-k{width:12px;height:12px;border-radius:50%;justify-self:center;display:inline-grid;place-items:center;color:var(--text-2)}
 .gx-k.sc{background:var(--accent-fill)}.gx-k.per{width:10px;height:2px;border-radius:0;background:var(--border-2)}
-.gx-k.card{width:9px;height:13px;border-radius:2px;background:var(--text-2)}.gx-k.card.yellow{background:#E8C21A}.gx-k.card.red{background:#D7332B}
+.gx-k.bk{width:9px;height:13px;border-radius:2px;background:var(--text-2)}.gx-k.bk.yellow{background:var(--card-yellow)}.gx-k.bk.red{background:var(--card-red)}
 .gx-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
 .gx-col{min-width:0;display:grid;gap:8px;align-content:start}
 .gx-col h4,.gx-ser h4{margin:0;display:flex;align-items:center;gap:8px;font:700 15px/1.2 var(--font-body);letter-spacing:0;text-transform:none}
@@ -1957,7 +1957,12 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .lv-scope b{color:var(--text)}.lv-scope .lk{margin-left:auto}
 .lv-just{min-height:24px;font-size:12px;border-color:var(--live);color:var(--text)}
 .lv-recent{opacity:.92}
-@media (max-width:640px){.lv-head-r{justify-content:flex-start;width:100%}.lv-scope .lk{margin-left:0}}
+@media (max-width:640px){.lv-head-r{justify-content:flex-start;width:100%}.lv-scope .lk{margin-left:0}
+  /* phone: the controls take one screen less, so the first game shows sooner. The switch keeps its name; its longer
+     explanation and the page's subtitle are the parts that go */
+  #pg-live .pg-sub,.lv-sp .lb{display:none}
+  .lv-opts{gap:10px}.lv-sp{white-space:nowrap}.lv-opts .seg button{padding-inline:14px}
+  .lv-filt .cx-row{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:calc(-1 * var(--pad,16px));padding-inline:var(--pad,16px)}}
 
 /* ---------- Settings: where things are kept, resets, data saver, quiet hours (settings.js, alerts.js) ---------- */
 .st-where{margin:6px 0 0;max-width:70ch}
@@ -2224,3 +2229,38 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .ij-what{grid-column:1 / -1;font:500 12px/1.4 var(--font-body);color:var(--muted)}
 .ij-note{grid-column:1 / -1;margin:0;font:400 13px/1.45 var(--font-body);color:var(--text-2)}
 @media (max-width:560px){.ij-q{margin-left:0;flex-basis:100%}.ij-q input{min-width:0;width:100%}.ij-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Live: sections, folding competitions, "Show all" (2026-11-23) */
+.lv-g{content-visibility:auto;contain-intrinsic-size:auto 420px}
+.lv-g.folded{contain-intrinsic-size:auto 56px}
+.lv-g.folded .sec-h{margin-bottom:0}
+.lv-allh{margin:12px 0 -4px;font:700 13px/1.2 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.lv-fold{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0;color:inherit;font:inherit;background:transparent;border:0;cursor:pointer;text-align:left}
+.lv-fold svg{flex:none;color:var(--muted)}
+.lv-fold:hover span{text-decoration:underline;text-underline-offset:4px}
+.lv-more{margin-top:12px}
+.lv-sort{display:inline-flex;align-items:center;gap:8px}
+
+/* match centre: the title's visible parts sit in .gx-tv (hidden from readers, who hear one sentence); before-the-start facts;
+   the prediction and whether it was right (2026-11-23) */
+.gx-title .gx-tv{display:contents}
+div.gx-evb{cursor:default}
+button.gx-evb{cursor:pointer}
+.gx-facts{display:grid;gap:10px;margin:0}
+.gx-facts > div{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:baseline}
+.gx-facts dt{font:600 12px/1.3 var(--font-body);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.gx-facts dd{margin:0;font:600 15px/1.4 var(--font-body);color:var(--text)}
+.gx-cd{display:inline-block;margin-left:8px;font-weight:600;color:var(--accent)}
+.gx-start > .lb{margin:12px 0 0}
+.gx-pick{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font:600 16px/1.3 var(--font-body)}
+.gx-pick .num{font:700 22px/1 var(--font-body);color:var(--accent)}
+.gx-verdict{margin:12px 0 0;padding:10px 12px;border-radius:var(--radius-tile,12px);border:1px solid var(--border-2);border-left:4px solid var(--good);font-size:14px;line-height:1.45}
+.gx-verdict.no{border-left-color:var(--bad)}
+.gx-verdict b{display:block;color:var(--text)}
+.gx-pnote{margin:10px 0 0}
+/* headings that receive focus when a view opens (match centre, profiles, pages): the reader moves there; no ring on a heading */
+:is(#gxTitle,.pfh-name,.pg-title,.flpage h1,#sheet h1,#sheet h2)[tabindex="-1"]:focus{outline:none}
+.gx-follow{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.gx-follow .cx{display:inline-flex;align-items:center;gap:6px}
+.gx-follow .cx[aria-pressed="true"] svg{fill:currentColor}
+.gx-nav + .gx-meta{margin-top:10px}

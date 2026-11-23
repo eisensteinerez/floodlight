@@ -402,6 +402,9 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
    What makes each theme itself, on top of the shared skin. Values are tokens; team colours come from the data (--hc home, --ac away,
    and --hcs / --acs, the same two made safe for white type by cards.js). */
 :root[data-theme] .pg-title,:root[data-theme] .livebar h2{font-size:var(--title-size)!important}
+/* the giant title belongs to the front doors only: Home, the Lab's landing and the sport pages. Pages you work in
+   (Live, pick history, settings, parlays, predictions, members…) get a smaller one so the content starts higher */
+:root[data-theme] .flpage:not(#pg-lab) .pg-title{font-size:var(--title-dense)!important;line-height:1}
 .pg-title em{font-style:normal}
 :root[data-theme] .ftr{position:relative;overflow:hidden}
 :root[data-theme] .ftr .mx-t{min-width:0}
@@ -821,7 +824,13 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 .gs-link{min-height:32px;padding:0 6px;font:600 12px/1 var(--font-body);letter-spacing:0;text-transform:none;color:var(--accent);background:transparent}
 .gs-chips{display:flex;flex-wrap:wrap;gap:6px;padding:2px 8px 4px}
 .gs-chips .gs-chip{min-height:36px}
-@media (max-width:560px){.gs-dest{display:none}.gs-acts .gs-act{padding:0 10px}}
+@media (max-width:560px){.gs-dest{display:none}.gs-acts .gs-act{padding:0 10px}
+  /* a player's Lab and Compare buttons drop under the name, so the name and team are never cut short */
+  .gs-row:has(.gs-acts){flex-wrap:wrap}.gs-row:has(.gs-acts) .gs-go{flex-basis:100%}.gs-acts{padding:0 6px 8px 56px}
+  .sresults .gs-go :is(strong,small){white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}}
+/* phone: the results fill the screen below the box and scroll on their own, so the page behind never moves */
+@media (max-width:820px){:root[data-theme] .top.search-open .sresults:not([hidden]){position:fixed;top:var(--gs-top,120px);left:0;right:0;bottom:0;width:auto;min-width:0;max-width:none;max-height:none;border-radius:var(--radius-tile) var(--radius-tile) 0 0;border-bottom:0;padding:8px 8px calc(16px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;z-index:75}
+  :root[data-theme]:has(.top.search-open .sresults:not([hidden])) .flbar{display:none!important}}
 @media (pointer:coarse){.gs-act{min-height:44px}}
 @media (min-width:821px){:root[data-theme] .sresults{left:auto;right:0;width:max(100%,540px);max-width:calc(100vw - 32px)}}
 
@@ -850,3 +859,28 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 .ds-add{margin-top:12px}.ds-add summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
 .ds-form{display:grid;gap:10px;max-width:560px}
 @media (max-width:560px){.ds-subs li{flex-wrap:wrap}}
+
+/* search: next game under a result, the empty answer, "Back to results" after a result opens (2026-11-23) */
+.gs-t .gs-next{display:block;margin-top:2px;color:var(--text-2);font-size:12px}
+.gs-none{margin:6px 10px 10px;padding:12px 14px;border:1px dashed var(--border-2);border-radius:var(--radius-tile)}
+.gs-none b{display:block;color:var(--text);font-weight:600;margin-bottom:4px}
+.gs-none p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.gs-back{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:24px;display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--radius-pill);background:var(--raised);border:1px solid var(--border-2);box-shadow:var(--shadow-pop);max-width:calc(100vw - 32px)}
+.gs-back button{min-height:40px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-radius:var(--radius-pill);font:600 13px/1.2 var(--font-body);color:var(--text);background:transparent;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-back .gs-back-x{padding:0;width:40px;justify-content:center;color:var(--muted)}
+.gs-back button:hover,.gs-back button:focus-visible{background:var(--surface-2)}
+@media (max-width:820px){.gs-back{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
+@media (pointer:coarse){.gs-back button{min-height:44px}.gs-back .gs-back-x{width:44px}}
+
+/* honest states: offline / signed out bar, and the note on a placeholder that is taking too long (2026-11-23) */
+.fl-netbar{position:fixed;z-index:70;left:50%;top:12px;transform:translateX(-50%);display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--radius-tile);background:var(--raised);border:1px solid var(--border-2);border-left:4px solid var(--warning);box-shadow:var(--shadow-pop);font:500 14px/1.4 var(--font-body);color:var(--text-2)}
+.fl-netbar b{color:var(--text)}
+.fl-netbar[data-kind="online"]{border-left-color:var(--success)}
+.fl-netbar[data-kind="auth"]{border-left-color:var(--error)}
+.fl-netbar[hidden]{display:none}
+.fl-slow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin:0 0 12px;padding:10px 14px;border:1px dashed var(--border-2);border-radius:var(--radius-tile);font:500 14px/1.45 var(--font-body);color:var(--text-2)}
+.fl-slow p{margin:0}.fl-slow b{color:var(--text)}
+.gs-skl{padding:4px 8px}
+.gs-skr{display:flex;align-items:center;gap:12px;min-height:52px}
+.gs-skr > .skl{width:34px;height:34px;border-radius:50%;flex:none}
+.gs-skr span{flex:1;display:grid;gap:6px}.gs-skr span .skl{height:12px;border-radius:6px}.gs-skr span .skl + .skl{width:55%;height:10px}
