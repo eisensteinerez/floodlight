@@ -54,6 +54,9 @@ import discord_bot
 import lab
 import record
 import propbook
+import players as roster
+import health
+import corrections
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -92,7 +95,7 @@ PUBLIC_FILES = {"index.html", "linemove.js", "alerts.js", "share.js", "onboard.j
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "history.js", "search.js",
-                "stadium-wide.webp", "stadium-pitch.webp"}
+                "players.js", "schedule.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -149,9 +152,18 @@ def fetch(url, ttl, as_json=False):
                     _tm_state["cool_until"] = time.time() + 180
                 raise
     else:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            body = _read(r)
-    data = json.loads(body) if as_json else body
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                body = _read(r)
+        except Exception as e:
+            health.saw(url, False, f"{type(e).__name__}: {e}")   # the Data status panel (health.py)
+            raise
+    try:
+        data = json.loads(body) if as_json else body
+    except ValueError as e:
+        health.saw(url, False, "the answer wasn't readable")
+        raise
+    health.saw(url, True)
     with _lock:
         _cache[url] = (now, data)
         if len(_cache) > 2000:
@@ -1930,7 +1942,26 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(*move_dates_action(body, user))
             if u.path == "/api/admin/members":
                 return self.send_auth(*members_action(body, user))
+            if u.path == "/api/admin/corrections":   # add or remove an entry in the public correction log
+                try:
+                    if body.get("action") == "remove":
+                        return self.send_auth(200, {"ok": corrections.remove(str(body.get("id") or ""))})
+                    e = corrections.add(body.get("subject"), body.get("text"), sport=body.get("sport"), before=body.get("before"), after=body.get("after"),
+                                        affected=body.get("affected"), source="admin", by=(user or {}).get("name") or (user or {}).get("email") or "admin")
+                    return self.send_auth(200, {"ok": True, "entry": e})
+                except ValueError as ex:
+                    return self.send_auth(400, {"error": str(ex)})
             return self.send_auth(*admin_action(u.path, body, user))
+        if u.path == "/api/players/seen":   # a page says which team it showed for a player; a different team flags the record
+            if GATED and not user:
+                return self.send_auth(200, {"ok": True})
+            out = {}
+            for x in (body.get("seen") if isinstance(body.get("seen"), list) else [])[:40]:
+                if isinstance(x, dict) and re.fullmatch(r"(nba|wnba|nfl|nhl|mlb):\d{1,12}", str(x.get("fid") or "")) and re.fullmatch(r"\d{1,6}", str(x.get("teamId") or "")):
+                    out[x["fid"]] = roster.seen(x["fid"], str(x["teamId"]), re.sub(r"[^a-z ]", "", str(x.get("where") or "page"))[:20] or "page")
+            for x in (body.get("photos") if isinstance(body.get("photos"), list) else [])[:40]:
+                health.page_report("photo", re.sub(r"[^a-z0-9:]", "", str(x))[:30])
+            return self.send_auth(200, {"ok": True, "agree": out})
         if u.path == "/api/feedback":   # a note from the Help page, kept for the admins to read
             if GATED and not user:
                 return self.send_auth(401, {"error": "Log in first."})
@@ -2106,6 +2137,25 @@ class Handler(SimpleHTTPRequestHandler):
                 if q.get("sport") not in AWARD_SPORTS or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,40}", q.get("id", "")):
                     return self.send_json({"error": "bad request"}, 400)
                 return self.send_auth(200, {"awards": awards_for(q["sport"], q["id"])})
+            if u.path == "/api/players/get":   # the one player record (players.py): every page takes a player's team from here
+                ids = [x for x in (q.get("ids") or "").split(",") if re.fullmatch(r"(nba|wnba|nfl|nhl|mlb):\d{1,12}", x)][:60]
+                return self.send_json({"players": {i: roster.view(roster.get(i)) for i in ids}, "now": int(time.time())}, max_age=120)
+            if u.path == "/api/players/find":
+                sp, nm = q.get("sport") or "", (q.get("name") or "").strip()[:60]
+                if sp not in roster.SPORTS or not nm:
+                    return self.send_json({"error": "bad request"}, 400)
+                rec = roster.find(sp, nm, (q.get("team") or "")[:8] or None, search=discord_bot.search_player, wait=False)
+                return self.send_json({"player": roster.view(rec), "now": int(time.time())}, max_age=300)
+            if u.path == "/api/health":   # Data status: how fresh each outside source is (health.py)
+                st = health.status()
+                st["rosters"] = roster.health()["sports"]
+                return self.send_json(st, max_age=30)
+            if u.path == "/api/corrections":   # the public correction log (corrections.py)
+                return self.send_json({"entries": corrections.entries(), "now": int(time.time())}, max_age=60)
+            if u.path in ("/api/admin/alerts", "/api/admin/flags"):   # owner alerts and the players being re-checked
+                if role_of(user) != "admin":
+                    return self.send_json({"error": "Only admins can see this."}, 403)
+                return self.send_json({"alerts": health.alerts()} if u.path.endswith("alerts") else {"players": roster.flagged()})
             if u.path == "/api/record":   # Floodlight's own graded predictions (record.py)
                 return self.send_json({"entries": record.entries(), "summary": record.summary(), "now": int(time.time())}, max_age=60)
             if u.path == "/api/props/record":   # every prop the Predictions page showed, locked before the start and graded (propbook.py)
@@ -2293,6 +2343,26 @@ def _rss_mb():
     return 0
 
 
+def _player_upkeep():
+    """Read the rosters soon after start (one league at a time), keep them fresh, save the records, and look for
+    props that went out with the wrong team (corrections.scan)."""
+    time.sleep(20)
+    while True:
+        for sp in roster.SPORTS:
+            try:
+                roster.ensure(sp, wait=not (roster.DB["read"].get(sp)))
+            except Exception as e:
+                print(f"players: {sp} rosters: {e}")
+        try:
+            roster.flush()
+            new = corrections.scan(propbook.entries(since=time.time() - 14 * 86400), roster)
+            if new:
+                print(f"corrections: {len(new)} new")
+        except Exception as e:
+            print(f"corrections: {e}")
+        time.sleep(1800)
+
+
 def _memory_guard():
     import gc
     while True:
@@ -2327,6 +2397,13 @@ if __name__ == "__main__":
     import pick_grade   # the Discord pick grader grades the site's props too
     pick_grade.D["fetch"] = fetch
     propbook.setup(cache_dir=CACHE_DIR, board=lab.board, grade=pick_grade.grade_prop, mlb=propbook.mlb_grade(discord_bot))
+    # the one player record, data health and the correction log (players.py, health.py, corrections.py)
+    roster.setup(fetch=fetch, file=CACHE_DIR / "players.json", health=health)
+    atexit.register(roster.flush)
+    corrections.setup(file=CACHE_DIR / "corrections.json")
+    health.setup(fetch=fetch, file=CACHE_DIR / "health.json", players=roster, propbook=lambda: list(propbook.BOOK.values()),
+                 send=health.discord_sender(lambda m, p_, pl=None: discord_bot.discord(m, p_, pl, token=os.environ.get("DISCORD_BOT_TOKEN"))))
+    threading.Thread(target=_player_upkeep, daemon=True, name="player-upkeep").start()
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
                           odds=odds, dfs=dfs, record=record, forecaster=forecaster, fm_team=fm_team, cache_dir=CACHE_DIR)
