@@ -47,9 +47,12 @@ def state(start, result, grade_after, corrections=None, now=None):
     return "pending"
 
 
-def set_result(e, result, actual="", why="", by="server", source="", calc="", now=None):
-    """Put a result on a pick. A real result already there is changed only by a re-check, and the change is kept."""
+def set_result(e, result, actual="", why="", by="server", source="", calc="", now=None, closing=None):
+    """Put a result on a pick. A real result already there is changed only by a re-check, and the change is kept.
+    closing: the last line and price before the start, saved with the first grade and not changed by a re-check."""
     now = now or time.time()
+    if isinstance(closing, dict) and not e.get("closing"):
+        e["closing"] = {k: closing.get(k) for k in ("line", "side", "market", "price", "at")}
     old = e.get("result")
     if old in DEFINITE and result != old:
         if result not in DEFINITE:
@@ -70,6 +73,51 @@ def set_result(e, result, actual="", why="", by="server", source="", calc="", no
     return True
 
 
+# ---------- the receipt: what was published, frozen ----------
+# A receipt is written once, when a pick is first published, and never changed afterwards: later readings, line moves,
+# injury news and re-grades are kept beside it. Its "sha" is a fingerprint of everything in it, so a receipt that was
+# edited after the fact no longer matches (receipt_ok). Fields the publisher did not know are saved as None.
+
+RECEIPT_FIELDS = ("id", "publishedAt", "event", "start", "league", "player", "playerId", "team", "teamId", "opp", "oppId",
+                  "matchup", "market", "marketId", "line", "side", "pick", "provider", "price", "modelProb", "marketProb",
+                  "rawEdge", "supportedEdge", "confidence", "confRange", "sources", "injury", "lineup", "verifiedAt")
+
+
+def _fingerprint(r):
+    body = {k: r.get(k) for k in RECEIPT_FIELDS}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()[:24]
+
+
+def receipt(**fields):
+    r = {k: fields.get(k) for k in RECEIPT_FIELDS}
+    if fields.get("backfilled"):
+        r["backfilled"] = True   # made later from the original first reading, for a pick published before receipts existed
+    r["sha"] = _fingerprint(r)
+    return r
+
+
+def receipt_ok(r):
+    return isinstance(r, dict) and r.get("sha") == _fingerprint(r)
+
+
+def keep_receipt(e, r):
+    """Put a receipt on a pick only if it has none: an existing receipt is never replaced."""
+    if not isinstance(e.get("receipt"), dict):
+        e["receipt"] = r
+        return True
+    return False
+
+
+def grading(e):
+    """What was saved when the pick was graded: result, the stat or score, the closing line and price, when and from where."""
+    if not e.get("result"):
+        return None
+    c = e.get("closing") or {}
+    return {"result": e.get("result"), "stat": e.get("actual") or None, "closeLine": c.get("line"), "closePrice": c.get("price"),
+            "closeMarket": c.get("market"), "gradedAt": e.get("graded"), "source": e.get("source") or None, "by": e.get("by"),
+            "corrected": bool(e.get("corrections"))}
+
+
 # ---------- merging two copies of a record ----------
 
 def _first_at(e):
@@ -86,6 +134,10 @@ def merge_entry(a, b):
         return dict(a)
     base, other = (a, b) if _first_at(a) <= _first_at(b) else (b, a)
     out = dict(base)
+    if not isinstance(out.get("receipt"), dict) and isinstance(other.get("receipt"), dict):
+        out["receipt"] = other["receipt"]   # the earliest copy's receipt wins; a copy with none takes the other's
+    if not out.get("closing") and other.get("closing"):
+        out["closing"] = other["closing"]
     reads = {}
     for r in (a.get("readings") or []) + (b.get("readings") or []):
         if isinstance(r, dict) and r.get("at"):
