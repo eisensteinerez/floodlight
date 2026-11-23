@@ -542,6 +542,23 @@
         ${customOrder() ? '<button type="button" class="lk" data-hubmy="reset">Put the sections back in the usual order</button>' : ''}</div>
       ${MY.watch.length ? `<div class="hm-ed"><h3>Watchlist</h3><div class="cx-row">${MY.watch.map(w => `<button type="button" class="cx sm" aria-pressed="true" data-hubunwatch="${esc(w.key)}" aria-label="Stop watching ${esc(w.a)} v ${esc(w.b)}">${esc(w.a)} v ${esc(w.b)}${ico('x', 14)}</button>`).join('')}</div><p class="lb">Add a game with the Watch button in its match centre.</p></div>` : '<p class="lb">To watch a single game, open it and press Watch. It then sits in Your games with live updates.</p>'}</section>`;
   }
+  /* Tonight at a glance: the numbers that matter right now, each one a way into the page that lists them. A number that
+     is zero is left out, except the count of games, so the row never shows a row of zeros. */
+  function cmdRow(list) {
+    if (!isToday() || noLive() || !list.length) return '';
+    const open = list.filter(g => g.state !== 'post'), live = list.filter(g => g.state === 'in').length;
+    const watchable = open.filter(g => g.watch ? ['national', 'local', 'streaming'].some(k => (g.watch[k] || []).length) : (g.tvs || []).length).length;
+    const E = window.flEdge, top = HEAT.picks && E ? E.ranked(HEAT.picks.filter(p => !p.start || p.start > Date.now()))[0] : null;
+    const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+    const fol = (store.get('fl.pdFollow', []) || []).filter(f => f && f.start && f.start >= +day0 && f.start < +day0 + 864e5).length;
+    const it = (k, n, l, cls = '') => `<button type="button" class="hm-cmd-i${cls}" data-hubcmd="${k}"><b class="num">${n}</b><span>${l}</span></button>`;
+    return `<nav class="hm-cmd" aria-label="${isNight() ? 'Tonight' : 'Today'} at a glance">${[
+      live ? it('live', live, 'live', ' is-live') : '',
+      it('games', list.length, `game${list.length === 1 ? '' : 's'} today`),
+      watchable ? it('watch', watchable, 'to watch') : '',
+      top && top.edge > 0 ? it('edge', `+${top.edge}`, 'best edge', ' is-edge') : '',
+      fol ? it('follow', fol, `followed pick${fol === 1 ? '' : 's'}`) : ''].join('')}</nav>`;
+  }
   const isNight = () => new Date().getHours() >= 17;
   function days() {
     const t = new Date(); t.setHours(0, 0, 0, 0);
@@ -565,7 +582,7 @@
     const title = today ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
     // a redraw every 30 seconds must not take the keyboard's place away
     const act = sec.contains(document.activeElement) ? document.activeElement : null, keepAsk = act?.id === 'hmAsk' ? act.value : null;
-    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-hubmy', 'data-hubsport', 'data-hubsec', 'data-hubmove', 'data-hubfav', 'data-hubunfav', 'data-hublv', 'data-shell', 'data-hubup', 'data-hubfm', 'data-hubrc', 'data-hubpin'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
+    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-hubmy', 'data-hubsport', 'data-hubsec', 'data-hubmove', 'data-hubfav', 'data-hubunfav', 'data-hublv', 'data-shell', 'data-hubup', 'data-hubfm', 'data-hubrc', 'data-hubpin', 'data-hubcmd'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
     // each section is drawn on its own, then laid out in the member's order
     const part = {
       brief: () => ready ? brief(list, ftr) : '',
@@ -593,7 +610,7 @@
     // while Home is being edited, the editor sits at the top where it was opened
     const ord = MY.edit ? ['mine', ...order().filter(k => k !== 'mine')] : order();
     sec.innerHTML = `
-      <header class="pg-head hm-head"><div class="hm-when"><h1 class="pg-title" tabindex="-1">${title}</h1><p class="pg-sub hm-date">${today ? `${H.day.toLocaleDateString([], { weekday: 'long' })} · ` : ''}${H.day.toLocaleDateString([], { month: 'long', day: 'numeric' })}</p></div>${days()}</header>
+      <header class="pg-head hm-head"><div class="hm-when"><h1 class="pg-title" tabindex="-1">${title}</h1><p class="pg-sub hm-date">${today ? `${H.day.toLocaleDateString([], { weekday: 'long' })} · ` : ''}${H.day.toLocaleDateString([], { month: 'long', day: 'numeric' })}</p></div><div class="hm-hr">${days()}${ready ? cmdRow(list) : ''}</div></header>
       ${ord.map(k => part[k]()).join('\n')}`;
     if (keepAsk != null) { const a = $('hmAsk'); if (a) { a.value = keepAsk; a.focus() } } else if (keep) sec.querySelector(keep)?.focus({ preventScroll: true });
     { const dy = sec.querySelector('.hm-days'), on = dy?.querySelector('.on'); if (dy && on) dy.scrollLeft = on.offsetLeft - dy.offsetLeft - (dy.clientWidth - on.offsetWidth) / 2 }
@@ -676,6 +693,10 @@
       const at = sec.querySelector(`[data-hubmove="${k}|${d}"]`), other = sec.querySelector(`[data-hubmove="${k}|${-d}"]`);
       (at && !at.disabled ? at : other)?.focus();
       return tell(`${MODS.find(x => x.k === k).l} moved to ${j + 1} of ${o.length}.`) }
+    const cmd = ev.target.closest('[data-hubcmd]');
+    if (cmd) { const k = cmd.dataset.hubcmd, P = window.flPages;
+      if (k === 'edge' || k === 'follow') return P?.show('predictions');
+      return P?.show('live', k === 'watch' ? 'watch:any' : undefined) || document.querySelector('[data-shell="live"]')?.click() }
     const lab = ev.target.closest('[data-hublab]');
     if (lab) { let a = {}; try { a = JSON.parse(lab.dataset.hublab) } catch (e) {} return openLab(a) }
     const go = ev.target.closest('[data-hubgo]');
