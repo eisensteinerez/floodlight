@@ -2072,6 +2072,9 @@ class Handler(SimpleHTTPRequestHandler):
                 try:
                     if body.get("action") == "remove":
                         return self.send_auth(200, {"ok": corrections.remove(str(body.get("id") or ""))})
+                    if body.get("action") == "resolve":   # close a "Report incorrect data" report
+                        r = corrections.resolve(str(body.get("id") or ""), body.get("outcome"), by=(user or {}).get("name") or "admin", note=body.get("note"))
+                        return self.send_auth(200 if r else 404, {"ok": bool(r), "report": r})
                     e = corrections.add(body.get("subject"), body.get("text"), sport=body.get("sport"), before=body.get("before"), after=body.get("after"),
                                         affected=body.get("affected"), source="admin", by=(user or {}).get("name") or (user or {}).get("email") or "admin")
                     return self.send_auth(200, {"ok": True, "entry": e})
@@ -2080,6 +2083,14 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path == "/api/admin/grade":   # correct a wrong grade: kept in the pick's history and the public correction log
                 return self.send_auth(*grade_correction(body, user))
             return self.send_auth(*admin_action(u.path, body, user))
+        if u.path == "/api/data-report":   # "Report incorrect data" on a card: private, for the administrators (corrections.py)
+            if GATED and not user:
+                return self.send_auth(401, {"error": "Log in to report a problem."})
+            try:
+                r = corrections.report(body if isinstance(body, dict) else {}, (body or {}).get("text"), by=(user or {}).get("name") or "")
+            except ValueError as ex:
+                return self.send_auth(400, {"error": str(ex)})
+            return self.send_auth(200, {"ok": True, "id": r["id"]})
         if u.path == "/api/players/seen":   # a page says which team it showed for a player; a different team flags the record
             if GATED and not user:
                 return self.send_auth(200, {"ok": True})
@@ -2315,6 +2326,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"sport": sp, "at": b.get("at"), "fetched": b.get("fetched"), "markets": b["rows"], "removed": b.get("removed") or [], "counts": b.get("counts") or {},
                                        "providers": b.get("providers") or {}, "schedule": b.get("schedule"), "injuries": b.get("injuries"), "statuses": markets.LABEL,
                                        "maxAge": markets.MAX_AGE, "now": int(time.time())})
+            if u.path == "/api/admin/monitor":   # the owner's data monitoring (markets.py, health.py, gradebook.py, corrections.py)
+                if role_of(user) != "admin":
+                    return self.send_json({"error": "Only admins can see this."}, 403)
+                return self.send_json(monitor_report())
             if u.path == "/api/corrections":   # the public correction log (corrections.py)
                 return self.send_json({"entries": corrections.entries(), "now": int(time.time())}, max_age=60)
             if u.path in ("/api/admin/alerts", "/api/admin/flags"):   # owner alerts and the players being re-checked
@@ -2554,6 +2569,44 @@ def grade_correction(body, user):
     return 200, {"ok": True, "changed": True, "correction": c}
 
 
+def monitor_report():
+    """The owner's data monitoring (GET /api/admin/monitor): the market checks (markets.py), grading, unresolved
+    corrections and the internal alerts raised (health.py)."""
+    rep = markets.monitor()
+    now = time.time()
+    st = gradebook.status(record, propbook, storage.enabled())
+    late = [e for e in list(propbook.BOOK.values()) + list(record.RECORD.values()) if not e.get("test") and not e.get("result")
+            and (e.get("start") or e.get("ko") or now) < now - 30 * 3600]
+    rep["checks"].append({"key": "grading", "label": "Grading failures (no grade 30 hours after the start)", "n": len(late) + len(st.get("errors") or []),
+                          "items": [{"player": e.get("player") or f"{e.get('home')} v {e.get('away')}", "sport": e.get("sport"), "start": e.get("start") or e.get("ko"),
+                                     "reason": "Still no grade"} for e in late[:25]] + [{"reason": f"{x['where']}: {x['error']}", "at": x["at"]} for x in st.get("errors") or []]})
+    unresolved = corrections.reports(open_only=True)
+    rep["checks"].append({"key": "corrections", "label": "Unresolved data reports", "n": len(unresolved),
+                          "items": [{"id": r["id"], "player": r.get("player") or "", "mid": r.get("marketId") or "", "provider": r.get("provider") or "", "reason": r["text"], "at": r["at"],
+                                     "page": r.get("page") or ""} for r in unresolved[:25]]})
+    rep["grading"] = {"failures": len(late), "waiting": st.get("pending"), "lastRun": st.get("lastRun"), "lastGraded": st.get("lastGraded"), "errors": st.get("errors")}
+    rep["corrections"] = {"unresolved": len(unresolved), "published": len(corrections.entries(500)), "reports": corrections.reports(limit=50)}
+    rep["alerts"] = health.alerts(30)
+    return rep
+
+
+def _market_watch():
+    """Every ten minutes: raise an internal alert (health.alert: kept for the owner, sent to Discord when set up) for
+    each data-monitoring check that finds a problem."""
+    time.sleep(120)
+    LIMIT = {"providers": 1, "schedules": 1, "stale": 10, "no_event": 25, "mismatch": 10, "timezone": 5, "duplicates": 3, "grading": 5, "corrections": 5}
+    while True:
+        try:
+            for c in monitor_report()["checks"]:
+                if c["n"] >= LIMIT.get(c["key"], 1):
+                    ex = c["items"][0] if c["items"] else {}
+                    eg = ex.get("player") or ex.get("key") or ex.get("subject") or ""
+                    health.alert(f"monitor:{c['key']}", f"Data monitoring: {c['label']}: {c['n']}" + (f" (for example {eg}{': ' + ex['reason'] if ex.get('reason') else ''})" if eg else "") + ".")
+        except Exception as e:
+            print(f"monitor: {type(e).__name__}: {e}")
+        time.sleep(600)
+
+
 def _player_upkeep():
     """Read the rosters soon after start (one league at a time), keep them fresh, save the records, and look for
     props that went out with the wrong team (corrections.scan)."""
@@ -2620,6 +2673,7 @@ if __name__ == "__main__":
     health.setup(fetch=fetch, file=CACHE_DIR / "health.json", players=roster, propbook=lambda: list(propbook.BOOK.values()),
                  send=health.discord_sender(lambda m, p_, pl=None: discord_bot.discord(m, p_, pl, token=os.environ.get("DISCORD_BOT_TOKEN"))))
     threading.Thread(target=_player_upkeep, daemon=True, name="player-upkeep").start()
+    threading.Thread(target=_market_watch, daemon=True, name="market-watch").start()
     grading_handoff()   # before the port opens, so the public address still reaches the server being replaced
     threading.Thread(target=grading_restore, daemon=True, name="grading-restore").start()
     if discord_bot.enabled():
