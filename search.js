@@ -443,7 +443,10 @@
   }
   const live = Object.assign(document.createElement('div'), { className: 'sr-only', id: 'gsLive' }); live.setAttribute('aria-live', 'polite'); document.body.appendChild(live);
   function say(t) { live.textContent = ''; setTimeout(() => { live.textContent = t }, 30) }
-  function show() { box.hidden = false; G.open = true; input.setAttribute('aria-expanded', 'true'); label?.classList.add('gs-on') }
+  // on a phone the results take the whole screen under the box, so they start just below wherever the box sits
+  function pin() { if (!matchMedia('(max-width:820px)').matches) return; const r = input.getBoundingClientRect(); if (r.height) document.documentElement.style.setProperty('--gs-top', Math.round(r.bottom + 8) + 'px') }
+  function show() { box.hidden = false; G.open = true; input.setAttribute('aria-expanded', 'true'); label?.classList.add('gs-on'); pin() }
+  addEventListener('resize', () => { if (G.open) pin() }, { passive: true });
   function hide(really) { box.hidden = true; input.setAttribute('aria-expanded', 'false'); label?.classList.remove('gs-on'); if (really !== false) G.open = false }
 
   async function run(raw, now) {

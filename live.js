@@ -40,7 +40,9 @@
      A competition can be folded away and stays folded on this browser. */
   const TOP_SOCCER = /premier league|laliga|la liga|bundesliga|serie a|ligue 1|champions league|europa league|conference league|mls|fa cup|copa|eredivisie|liga mx|world cup|euro\b|nations league/i;
   const YOUTH = /\bu-?(1[5-9]|2[0-3])\b|youth|under-?\d|reserves|friendl/i;
-  const comp = g => g.sport === 'soccer' ? (g.lgName || g.league || 'Soccer') : g.short || g.sport;
+  // a soccer game names its competition; when the feed leaves that out, the league code (eng.1) is turned back into its name
+  const lgNamed = code => { try { const r = (typeof LEAGUES !== 'undefined' ? LEAGUES : []).find(l => l[1] === code); return r ? r[2] : '' } catch (e) { return '' } };
+  const comp = g => g.sport === 'soccer' ? (g.lgName || lgNamed(g.league) || 'Soccer') : g.short || g.sport;
   const mine = g => { try { return !!(window.flHome?.isMine?.(g) || window.flHome?.watching?.(g.key)) } catch { return false } };
   function pop(g) {   // how much a game is likely to matter to most people: league weight, ranks, TV, a top soccer league; youth and friendlies sink
     const c = comp(g); let p = (g.weight || 3) * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 6 : 0) + (mine(g) ? 60 : 0);

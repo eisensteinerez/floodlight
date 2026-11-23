@@ -1957,7 +1957,12 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .lv-scope b{color:var(--text)}.lv-scope .lk{margin-left:auto}
 .lv-just{min-height:24px;font-size:12px;border-color:var(--live);color:var(--text)}
 .lv-recent{opacity:.92}
-@media (max-width:640px){.lv-head-r{justify-content:flex-start;width:100%}.lv-scope .lk{margin-left:0}}
+@media (max-width:640px){.lv-head-r{justify-content:flex-start;width:100%}.lv-scope .lk{margin-left:0}
+  /* phone: the controls take one screen less, so the first game shows sooner. The switch keeps its name; its longer
+     explanation and the page's subtitle are the parts that go */
+  #pg-live .pg-sub,.lv-sp .lb{display:none}
+  .lv-opts{gap:10px}.lv-sp{white-space:nowrap}.lv-opts .seg button{padding-inline:14px}
+  .lv-filt .cx-row{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:calc(-1 * var(--pad,16px));padding-inline:var(--pad,16px)}}
 
 /* ---------- Settings: where things are kept, resets, data saver, quiet hours (settings.js, alerts.js) ---------- */
 .st-where{margin:6px 0 0;max-width:70ch}
