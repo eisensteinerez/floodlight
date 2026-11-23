@@ -97,7 +97,7 @@
   const favThemes = () => { const T = window.flTheme, cur = T?.get?.(); return (T?.favs?.() || []).filter(id => id !== cur).map(id => { const t = T.list.find(x => x[0] === id); return t ? mi('star', `Switch to ${esc(t[1])}`, `data-theme-use="${id}"`, '', ' flm-fav') : '' }).join('') };
   function drawMenu() {
     const u = me(), theme = window.flTheme?.name?.() || '';
-    menu.innerHTML = (u ? `<div class="flm-me"><span class="flm-av" style="--av:${esc(u.prefs?.color || 'var(--accent-fill)')}">${initials(u.display)}</span><span><b>${esc(u.display)}</b><small>${accessLine(u)}</small></span></div>`
+    menu.innerHTML = (u ? `<div class="flm-me"><span class="flm-av${u.prefs?.photo ? ' has-pic' : ''}" style="--av:${esc(u.prefs?.color || 'var(--accent-fill)')}">${initials(u.display)}${u.prefs?.photo ? `<img class="av-pic" src="/api/avatar?u=${encodeURIComponent(u.username)}&amp;v=${+u.prefs.photo}" alt="" decoding="async" onerror="this.remove()">` : ''}</span><span><b>${esc(u.display)}</b><small>${accessLine(u)}</small></span></div>`
         : `<div class="flm-auth">${mi('profile', 'Sign in', 'data-menu="signin"')}${mi('plus', 'Create account', 'data-menu="signup"')}</div>`)
       + `<div class="flm-g">${u ? mi('profile', 'My profile', 'data-page="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}${mi('ticket', 'My parlays', 'data-shell="parlays"')}
         ${mi('gear', 'Settings', 'data-page="settings"')}${mi('palette', 'Theme', 'data-page="settings" data-arg="theme"', `<em>${esc(theme)}</em>`)}${favThemes()}

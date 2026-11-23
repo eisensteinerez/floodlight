@@ -258,7 +258,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 .thp-d{display:flex;gap:3px}.thp-d i{flex:1;height:8px;border-radius:calc(var(--radius-tile)/5);background:var(--surface-2);border:1px solid var(--border)}.thp-d i.on{background:var(--pill-bg);border-color:transparent}
 .thp-m{flex:1;display:flex;align-items:center;justify-content:space-around;border-radius:calc(var(--radius-card)/4);background:var(--panel);border:1px solid var(--border);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .thp-m em{width:14px;height:14px;border-radius:50%;border:1px solid var(--border-2);background:var(--surface-2)}
-.thp-m strong{font:var(--score-weight) 20px/1 var(--font-display);color:var(--text);display:flex;align-items:center;gap:2px}.thp-m small{opacity:.5;font-size:14px}
+.thp-m strong{font:var(--score-weight) 20px/1 var(--font-display);color:var(--text);display:flex;align-items:center;gap:2px}.thp-m small{font-size:14px;color:inherit}   /* the colon in the little score: full strength, so it passes contrast like the digits (it was at half opacity) */
 .thp-r{display:flex;gap:3px}.thp-r i{flex:1;height:10px;border-radius:calc(var(--radius-tile)/5);background:var(--surface);border:1px solid var(--border)}
 [data-theme-preview="team-colors"] .thp-m{background:linear-gradient(105deg,var(--thp-a) 0 50%,var(--thp-b) 50% 100%);border-color:transparent}
 [data-theme-preview="team-colors"] .thp-m strong{background:var(--text);color:var(--surface);border-radius:6px;padding:2px 6px;font-size:16px}
@@ -611,6 +611,7 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 :root[data-theme="stadium-gold"] .seg button{font-weight:500;font-size:15px;color:var(--text)}
 :root[data-theme="stadium-gold"] .search input{background:var(--chip-bg);border-color:var(--chip-edge);font-size:16px}
 :root[data-theme="stadium-gold"] .search input::placeholder{color:var(--text-2)}
+:root[data-theme="stadium-gold"] .search input{text-overflow:ellipsis}   /* the italic 16px placeholder ran past the box at 1440 wide; it now ends in an ellipsis instead of being cut mid-letter */
 :root[data-theme="stadium-gold"] .search svg{color:var(--text)}
 :root[data-theme="stadium-gold"] .sync{font-size:15px;color:var(--text)}
 :root[data-theme="stadium-gold"] .inp{background-color:var(--chip-bg);border-color:var(--chip-edge)}
@@ -737,3 +738,55 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
   :root[data-theme="stadium-gold"] .livebar .count::before{height:44px;margin-right:8px}
 }
 /* ---------- end Stadium Gold ---------- */
+
+/* ---------- Match card names beside a wide score ----------
+   A three-digit basketball score used to take the whole middle of a small card and squeeze each name to one
+   letter per line. The score now shrinks to fit (it never drops under 24px, and stays the biggest thing on the
+   card), names keep whole words, and when a name's column is still too narrow for its longest word the team's
+   short code (DEN, MIA) takes its place. --sc-n is the score's length, set by cards.js; --sc-em and --sc-pad are
+   per theme in tokens.css. */
+:root[data-theme] .m.mx .mx-main{container:mxm/inline-size}
+:root[data-theme] .m.mx .mx-main .mx-sc{font-size:clamp(24px,calc((100cqi - 140px - var(--sc-pad,0px)) / (var(--sc-n,5) * var(--sc-em,.6))),var(--sc-max,44px))}
+:root[data-theme="stadium-gold"] .m.mx{--sc-max:42px}
+:root[data-theme] .m.mx .mx-t{container:mxt/inline-size;min-width:0}
+:root[data-theme] .m.mx .mx-n{overflow-wrap:normal;word-break:normal;hyphens:none}
+:root[data-theme] .m.mx .mx-n:not(.has-ab){overflow-wrap:break-word}
+.mx-n .nm-a{display:none}
+/* nm-N is the length of the name's longest word; the code shows once the column is narrower than that word (about 9.2px a letter; in Stadium Gold's poster face 9.8px on sport pages, where names are 21px, and 8.8px on Home and Live cards, where they are 19px; measured on live names) */
+@container mxt (max-width:28px){.m.mx .mx-n.nm-3 .nm-f{display:none}.m.mx .mx-n.nm-3 .nm-a{display:inline}}
+@container mxt (max-width:37px){.m.mx .mx-n.nm-4 .nm-f{display:none}.m.mx .mx-n.nm-4 .nm-a{display:inline}}
+@container mxt (max-width:46px){.m.mx .mx-n.nm-5 .nm-f{display:none}.m.mx .mx-n.nm-5 .nm-a{display:inline}}
+@container mxt (max-width:55px){.m.mx .mx-n.nm-6 .nm-f{display:none}.m.mx .mx-n.nm-6 .nm-a{display:inline}}
+@container mxt (max-width:64px){.m.mx .mx-n.nm-7 .nm-f{display:none}.m.mx .mx-n.nm-7 .nm-a{display:inline}}
+@container mxt (max-width:74px){.m.mx .mx-n.nm-8 .nm-f{display:none}.m.mx .mx-n.nm-8 .nm-a{display:inline}}
+@container mxt (max-width:83px){.m.mx .mx-n.nm-9 .nm-f{display:none}.m.mx .mx-n.nm-9 .nm-a{display:inline}}
+@container mxt (max-width:92px){.m.mx .mx-n.nm-10 .nm-f{display:none}.m.mx .mx-n.nm-10 .nm-a{display:inline}}
+@container mxt (max-width:101px){.m.mx .mx-n.nm-11 .nm-f{display:none}.m.mx .mx-n.nm-11 .nm-a{display:inline}}
+@container mxt (max-width:110px){.m.mx .mx-n.nm-12 .nm-f{display:none}.m.mx .mx-n.nm-12 .nm-a{display:inline}}
+@container mxt (max-width:120px){.m.mx .mx-n.nm-13 .nm-f{display:none}.m.mx .mx-n.nm-13 .nm-a{display:inline}}
+@container mxt (max-width:129px){.m.mx .mx-n.nm-14 .nm-f{display:none}.m.mx .mx-n.nm-14 .nm-a{display:inline}}
+@container mxt (max-width:29px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-3 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-3 .nm-a{display:inline}}
+@container mxt (max-width:39px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-4 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-4 .nm-a{display:inline}}
+@container mxt (max-width:49px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-5 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-5 .nm-a{display:inline}}
+@container mxt (max-width:59px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-6 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-6 .nm-a{display:inline}}
+@container mxt (max-width:69px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-7 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-7 .nm-a{display:inline}}
+@container mxt (max-width:78px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-8 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-8 .nm-a{display:inline}}
+@container mxt (max-width:88px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-9 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-9 .nm-a{display:inline}}
+@container mxt (max-width:98px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-10 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-10 .nm-a{display:inline}}
+@container mxt (max-width:108px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-11 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-11 .nm-a{display:inline}}
+@container mxt (max-width:118px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-12 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-12 .nm-a{display:inline}}
+@container mxt (max-width:127px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-13 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-13 .nm-a{display:inline}}
+@container mxt (max-width:137px){:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-14 .nm-f{display:none}:root[data-theme="stadium-gold"] .m.mx .mx-n.nm-14 .nm-a{display:inline}}
+/* Stadium Gold on Home and Live: names are 19px there, so the full name stays down to 8.8px a letter (live names measured 7.6 to 9.0) */
+@container mxt (min-width:27px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-3 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-3 .nm-a{display:none}}
+@container mxt (min-width:36px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-4 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-4 .nm-a{display:none}}
+@container mxt (min-width:45px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-5 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-5 .nm-a{display:none}}
+@container mxt (min-width:54px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-6 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-6 .nm-a{display:none}}
+@container mxt (min-width:63px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-7 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-7 .nm-a{display:none}}
+@container mxt (min-width:71px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-8 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-8 .nm-a{display:none}}
+@container mxt (min-width:80px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-9 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-9 .nm-a{display:none}}
+@container mxt (min-width:89px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-10 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-10 .nm-a{display:none}}
+@container mxt (min-width:98px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-11 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-11 .nm-a{display:none}}
+@container mxt (min-width:107px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-12 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-12 .nm-a{display:none}}
+@container mxt (min-width:115px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-13 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-13 .nm-a{display:none}}
+@container mxt (min-width:124px){:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-14 .nm-f{display:inline}:root[data-theme="stadium-gold"] .hm-cards .m.mx .mx-n.nm-14 .nm-a{display:none}}

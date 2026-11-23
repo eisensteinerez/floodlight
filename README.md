@@ -25,8 +25,9 @@ Environment variables (set in the Render dashboard):
 - `FLOODLIGHT_OPEN=1` – optional, turns members-only off.
 - `ANTHROPIC_API_KEY` – optional, turns on AI research forecasts (paid by usage on your Anthropic account).
 
-Free-tier limits: the service sleeps after 15 minutes without visitors and takes about a minute to wake up,
-and its disk is wiped whenever it sleeps or redeploys. Without `DATABASE_URL`, members and forecasts reset then.
+The live site runs on Render's paid Starter plan, which stays awake, so nothing has to ping it. Its disk is still
+wiped on every redeploy: without `DATABASE_URL`, members and forecasts reset then. (On Render's free plan the service
+sleeps after 15 minutes without visitors and takes about a minute to wake up.)
 
 ## Discord bot
 
@@ -74,10 +75,9 @@ URL into `DISCORD_WEBHOOK_URL`. Every day at the hours in `DISCORD_DIGEST_HOURS`
 the bot posts the top props and predictions for the sports in `DISCORD_DIGEST_SPORTS` (default `nba,nfl,nhl,mlb,soccer`;
 sports out of season post nothing).
 
-Keep it awake: Render's free plan sleeps after 15 minutes without visitors, and Discord gives up on a command after
-3 seconds, so the first command after a nap fails. A free monitor such as https://cron-job.org or UptimeRobot that
-opens `https://<your-site>.onrender.com/api/version` every 10 minutes keeps it awake. The free plan's 750 hours a
-month cover one service running all the time.
+Staying awake: Discord gives up on a command after 3 seconds, so the server must not be asleep. The paid Render plan
+never sleeps, so the old keep-awake jobs (the GitHub ping and the server pinging itself) are gone. On the free plan you
+would need an outside monitor that opens `https://<your-site>.onrender.com/api/version` every 10 minutes.
 
 Try a command without Discord: `python3 discord_bot.py try research player="Jayson Tatum" stat=pts`.
 

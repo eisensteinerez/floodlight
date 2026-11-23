@@ -12,7 +12,7 @@
     s.setAttribute('aria-label', defs.get(name)?.title || name); shell()?.prepend(s); els.set(name, s); return s;
   }
   // a page that belongs to a service a member does not have opens the "Ask your admin" page in its place
-  const NEEDS = { lab: 'lab', predictions: 'predictions', transfers: 'transfers', live: 'live', parlays: 'predictions' };
+  const NEEDS = { lab: 'lab', predictions: 'predictions', transfers: 'transfers', live: 'live', parlays: 'predictions', history: 'predictions', boards: 'lab' };
   function show(name, arg, opts = {}) {
     if (NEEDS[name] && window.flAccess && !window.flAccess.has(NEEDS[name]) && defs.has('noaccess')) { arg = NEEDS[name]; name = 'noaccess' }
     const d = defs.get(name); if (!d) return false;
@@ -53,7 +53,8 @@
   }, true);
   // anything that goes to a sport, Home, a match or the Lab leaves the page
   document.addEventListener('click', ev => {
-    if (!cur || ev.target.closest?.('.flpage,[data-page],.flmenu,#flDots')) return;
+    const inside = ev.target.closest?.('.flpage,[data-page],.flmenu,#flDots');
+    if (!cur || (inside && inside !== root)) return;   // <html> carries data-page too while a page shows; it is not a page link
     if (ev.target.closest?.('button[data-sport],[data-shell="home"],[data-rs="open"],.rail button,.ticker [data-ev],.ticker button,.sresults button,[data-leave]')) hide();
   }, true);
   // radio groups drawn as segmented controls: arrow keys move and choose, as a native radio group would

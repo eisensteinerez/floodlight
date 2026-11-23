@@ -511,7 +511,7 @@ async function ufcOpenFighter(id){
   render = function(){
     if (S.sport !== 'ufc') { $('ufc').hidden = true; return _render.apply(this, arguments) }
     document.querySelectorAll('.sport-sw button').forEach(b => { const on = b.dataset.sport === 'ufc'; b.classList.toggle('on', on); b.setAttribute('aria-selected', on) });
-    document.querySelectorAll('main.shell > section').forEach(s => { if (s.id !== 'hub') s.hidden = s.id !== 'ufc' });
+    document.querySelectorAll('main.shell > section').forEach(s => { if (s.id !== 'hub' && !s.classList.contains('flpage')) s.hidden = s.id !== 'ufc' });
     document.querySelector('.shell').classList.remove('mk-page'); const tk = $('ticker'); if (tk) tk.hidden = true;
     const rail = $('rail'); if (rail) rail.innerHTML = `<h4>UFC</h4><button class="lg on" data-ufcyear="${new Date().getFullYear()}"><span class="dot">●</span><span>Events</span></button>`;
     const ch = $('chips'); if (ch) ch.innerHTML = '';

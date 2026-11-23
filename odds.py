@@ -479,6 +479,8 @@ def board(q):
         return hit[1]
     out = _board(q)
     _boards[key] = (time.time(), out)
+    if D.get("on_board"):   # line movement history (linehist.py) keeps each fresh reading with its time
+        D["on_board"](q, out)
     if len(_boards) > 200:
         for k in sorted(_boards, key=lambda k: _boards[k][0])[:100]:
             _boards.pop(k, None)

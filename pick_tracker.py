@@ -652,30 +652,13 @@ def _loop():
     skip), so if a set time hasn't been posted 40 minutes after it's due, the server posts it. Both share one record,
     so nothing is posted twice."""
     time.sleep(60)
-    n = 0
-    while True:
+    while True:   # the site runs on Render's paid plan, which never sleeps, so the server no longer pings itself awake
         try:
             if due_slots(SERVER_DELAY):
                 scheduled(SERVER_DELAY)
         except Exception as e:
             print(f"pick tracker: {type(e).__name__}: {e}", file=sys.stderr)
-        if n % 10 == 0:
-            _stay_awake()
-        n += 1
         time.sleep(60)
-
-
-def _stay_awake():
-    """Render's free plan puts the server to sleep after 15 minutes without visitors, and a sleeping server can't post
-    the results. GitHub's 5-minute keep-awake timer turned out to run only a couple of times a day, so the server
-    visits its own public address every 10 minutes (Render counts that as a visitor). Free, and needs no setup."""
-    url = os.environ.get("RENDER_EXTERNAL_URL")
-    if not url:
-        return
-    try:
-        urllib.request.urlopen(url.rstrip("/") + "/api/version", timeout=30).read()
-    except Exception as e:
-        print(f"pick tracker: stay-awake ping failed: {e}", file=sys.stderr)
 
 
 # ---------- the record, shared with GitHub Actions ----------

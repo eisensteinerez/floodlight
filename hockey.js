@@ -254,7 +254,7 @@ function hkCard(e){
   const books = e.state !== 'post' ? S.hk.odds.get(e.id)?.books || [] : [], best = k => Math.max(0, ...books.map(b => b.ml?.[k] || 0)), to = books.map(bbMainTotal).find(Boolean);
   const odds = e.state !== 'post' && (P || books.length || e.line?.details) ? `<div class="oddrow" aria-hidden="true">${P && e.state === 'pre' ? `<span class="${P.pH >= .5 ? 'fav' : ''}">${ab(e.home)} ${pct(P.pH)}%</span><span class="${P.pH < .5 ? 'fav' : ''}">${ab(e.away)} ${pct(1 - P.pH)}%</span>` : ''}${best('home') && best('away') ? `<span class="bb-ml" title="Best moneyline">${ab(e.home)} ${decAm(best('home'))} · ${ab(e.away)} ${decAm(best('away'))}</span>` : e.line?.details ? `<span>${esc(e.line.details)}</span>` : ''}${to ? `<span>O/U ${esc(to.line)}</span>` : e.line?.ou ? `<span>O/U ${esc(e.line.ou)}</span>` : ''}</div>` : '';
   const us = hkUS(e), [A, B, la, lb] = us ? [e.away, e.home, al, hl] : [e.home, e.away, hl, al];
-  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: hkErr });
+  const T = (t, lose, win) => ({ name: t.name, ab: t.abbr, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win, onerr: hkErr });
   return flCard({ id: e.id, attrs: `data-hkgame="${esc(e.id)}"`, hc: us ? e.ac : e.hc, ac: us ? e.hc : e.ac, state: e.state, a: T(A, la, lb), b: T(B, lb, la), clock: e.detail.replace(/ - /, ' '), final: e.detail,
     note: e.state === 'pre' && /postpon|cancel|delay/i.test(e.detail) ? e.detail : '', date: e.date, tv: (e.tv || '').split(',')[0], extra: odds,
     label: `${A.full} ${us ? 'at' : 'versus'} ${B.full}. ${e.state === 'pre' ? 'Puck drop ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${A.score} to ${B.score}, ${e.detail}`}` });
@@ -778,10 +778,12 @@ function openHkFsPlayer(id, slug, lgKey){
 }
 const HK_FS_KEYS = [['matches_played', 'GP'], ['goals', 'G'], ['assists', 'A'], ['points', 'PTS'], ['plus_minus', '+/-'], ['penalty_minutes', 'PIM'], ['yellow_cards', 'PIM'], ['saves', 'SV'], ['goals_against', 'GA'], ['save_percentage', 'SV%'], ['minutes_played', 'MIN']];
 function hkFsPlayerHero(v, back){
+  // the shared profile header (profile.js), as the NHL player pages use
   const p = v.p, col = '#' + fmColor(p?.teamName || v.slug); v.color = col;
-  return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(p?.photo || SIL)}" alt="" ${hkFaceErr}><div><h3>${esc(p?.name || 'Loading…')}</h3>
-    ${p ? `<p>${p.position ? `<span>${esc(p.position)}</span>` : ''}${p.teamId ? `<span><button class="linkbtn" data-hkteam="${esc(p.teamId)}" data-hkslug="${esc(p.teamSlug)}" data-hkl="${esc(v.lg)}">${esc(p.teamName || p.teamSlug)}</button></span>` : ''}</p>
-      <p class="bb-bio">${[p.age ? p.age + ' yrs' : '', p.born ? 'Born ' + p.born : '', p.height, p.weight, p.flag ? p.flag.toUpperCase() : ''].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div></div></div>`;
+  return flProfile.hero({ back, sport: '', heatSport: 'none', id: v.id, name: p?.name, color: col,
+    face: `<img class="face espn-shot" src="${esc(p?.photo || SIL)}" alt="" ${hkFaceErr}>`,
+    team: p?.teamId ? `<span class="pfh-team"><button class="linkbtn" data-hkteam="${esc(p.teamId)}" data-hkslug="${esc(p.teamSlug)}" data-hkl="${esc(v.lg)}">${esc(p.teamName || p.teamSlug)}</button></span>` : '',
+    position: p?.position, chips: p ? [p.age ? 'Age ' + p.age : '', p.born ? 'Born ' + p.born : '', p.height, p.weight, p.flag ? p.flag.toUpperCase() : ''] : [] });
 }
 function hkFsPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;
@@ -789,7 +791,7 @@ function hkFsPlayerPane(v){
   if (v.tab === 'stats') {
     const rows = p.career || []; if (!rows.length) return `<div class="note">No stats published for this player yet.</div>`;
     const keys = HK_FS_KEYS.filter(([k]) => rows.some(r => r.stats?.[k] != null && r.stats[k] !== ''));
-    const extra = [...new Set(rows.flatMap(r => Object.keys(r.stats || {})))].filter(k => !HK_FS_KEYS.some(([x]) => x === k) && rows.some(r => r.stats[k] !== '' && r.stats[k] != null && !isNaN(+r.stats[k]))).slice(0, 6).map(k => [k, k.replace(/_/g, ' ')]);
+    const extra = [...new Set(rows.flatMap(r => Object.keys(r.stats || {})))].filter(k => !HK_FS_KEYS.some(([x]) => x === k) && !/(^|_)(id|even|hide|arrow|flag)(_|$)/.test(k) && rows.some(r => r.stats[k] !== '' && r.stats[k] != null && typeof r.stats[k] !== 'boolean' && !isNaN(+r.stats[k]))).slice(0, 6).map(k => [k, k.replace(/_/g, ' ')]);
     const cols = [...keys, ...extra], groups = {}; for (const r of rows) (groups[r.type] ||= []).push(r);
     const title = { league: 'League seasons', 'international-cups': 'International cups', 'national-team': 'National team' };
     return Object.entries(groups).map(([k, list]) => `<div class="sub-h"><h5>${esc(title[k] || k)}</h5></div><div class="tbl-wrap"><table class="ctable bb-car"><thead><tr><th style="text-align:left">Season</th><th style="text-align:left">Team · competition</th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}</tr></thead><tbody>
@@ -881,7 +883,7 @@ async function hkSearch(q){
   render = function(){
     if (S.sport !== 'hockey') { $('hk').hidden = true; return _render.apply(this, arguments) }
     document.querySelectorAll('.sport-sw button').forEach(b => { const on = b.dataset.sport === 'hockey'; b.classList.toggle('on', on); b.setAttribute('aria-selected', on) });
-    document.querySelectorAll('main.shell > section').forEach(s => { s.hidden = s.id !== 'hk' });
+    document.querySelectorAll('main.shell > section').forEach(s => { if (s.id !== 'hub' && !s.classList.contains('flpage')) s.hidden = s.id !== 'hk' });   // Home and the full pages show and hide themselves
     document.querySelector('.shell').classList.remove('mk-page');
     renderHockey(); hkTicker();
   };

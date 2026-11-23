@@ -38,7 +38,7 @@
   const onCount = m => total() - (m.off || []).length;
   function rows() {
     const d = M.d, me = d.me;
-    const people = d.members.map(m => ({ key: 'u:' + m.username, kind: 'member', name: m.display, sub: m.email || '@' + m.username, rank: m.rank, status: m.status, seen: m.seen, created: m.created,
+    const people = d.members.map(m => ({ key: 'u:' + m.username, kind: 'member', user: m.username, photo: m.photo || 0, name: m.display, sub: m.email || '@' + m.username, rank: m.rank, status: m.status, seen: m.seen, created: m.created,
       on: onCount(m), custom: (m.off || []).length > 0, m, self: m.username.toLowerCase() === me.username.toLowerCase(),
       locked: m.fixed || (m.rank === 'owner' && me.rank !== 'owner') }));
     const invites = d.invites.map(i => ({ key: 'i:' + i.id, kind: 'invite', name: i.email, sub: `Invited by ${i.by}`, rank: i.rank, status: i.expired ? 'expired' : 'invited', seen: 0, created: i.at, on: total(), custom: false, i }));
@@ -65,7 +65,7 @@
   const day = ts => ts ? new Date(ts * 1000).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const stamp = ts => new Date(ts * 1000).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   const initials = n => (n.replace(/@.*/, '').match(/[A-Za-z0-9]+/g) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-  const avatar = (r, size = '') => `<span class="avx ${size} mb-av" aria-hidden="true">${r.kind === 'invite' ? ic('plus', 18) : esc(initials(r.name))}</span>`;
+  const avatar = (r, size = '') => `<span class="avx ${size} mb-av" aria-hidden="true">${r.kind === 'invite' ? ic('plus', 18) : esc(initials(r.name))}${r.photo && r.user ? `<img src="/api/avatar?u=${encodeURIComponent(r.user)}&amp;v=${+r.photo}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ''}</span>`;
   const access = r => r.kind === 'invite' ? 'All services on joining' : r.rank !== 'member' || !r.custom ? 'All services' : `Custom · ${r.on} of ${total()}`;
   const statusPill = r => `<span class="pl mb-st mb-st-${r.status}">${ic(r.status === 'active' ? 'check' : r.status === 'paused' ? 'x' : 'bell', 14)}${STATUS[r.status]}</span>`;
   const inviteLink = i => `${location.origin}${location.pathname}#/join/${i.token}`;

@@ -119,7 +119,7 @@ function fbCard(e){
     : e.espnOdds?.details && e.state === 'pre' ? `<div class="oddrow" aria-hidden="true"><span>${esc(e.espnOdds.details)}</span>${e.espnOdds.ou ? `<span>O/U ${esc(e.espnOdds.ou)}</span>` : ''}</div>` : '';
   const sit = e.state === 'in' && e.situation?.text ? `<div class="fb-sit">${e.situation.red ? '<b>RED ZONE</b> ' : ''}${esc(e.situation.text)}</div>` : '';
   // ESPN lists the away team first in American football; keep that convention
-  const T = (t, lose, win) => ({ name: t.name, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win });
+  const T = (t, lose, win) => ({ name: t.name, ab: t.abbr, logo: t.logo, rank: t.rank, record: t.record, score: t.score, lose, win });
   return flCard({ id: e.id, attrs: `data-fbgame="${esc(e.id)}" data-fbl="${esc(e.lg)}"`, hc: e.ac, ac: e.hc, state: e.state, a: T(e.away, al, hl), b: T(e.home, hl, al), clock: e.detail.replace(/ - /, ' '), final: e.detail,
     date: e.date, tv: (e.tv || '').split(',')[0], extra: sit + odds,
     label: `${e.away.full} at ${e.home.full}. ${e.state === 'pre' ? 'Kick-off ' + e.date.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : `${e.away.score} to ${e.home.score}, ${e.detail}`}${ml?.home ? `. Kalshi: ${e.home.name} ${pct(ml.home.p)} percent` : ''}${e.tv ? '. On ' + e.tv : ''}` });

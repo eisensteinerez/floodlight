@@ -202,18 +202,40 @@
         : `<details class="py-fold"${V.unfold.has(p.id) ? ' open' : ''} data-pyfold="${p.id}"><summary data-fk="fold-${p.id}">${plural(n, 'pick')}: ${esc(p.legs.map(l => l.short || l.text).join(' · '))}</summary><ol class="py-legs" aria-label="Picks">${p.legs.map(l => legRow(p, l)).join('')}</ol>${tools}</details>`}</article>`;
   }
 
+  /* An example for the empty page, so it is clear what a parlay looks like here. It is made from real picks on tonight's
+     board (three from different games, strongest first), it is labelled as an example, and it is never saved. With no
+     lines posted it is left out: there is nothing real to show. */
+  const EX = { picks: null, asked: false };
+  function example() {
+    if (!window.flEdge) return '';
+    if (!EX.asked) { EX.asked = true; window.flEdge.props(['nba', 'nfl', 'nhl']).then(r => { const now = Date.now(), seen = new Set(), out = [];
+        const fresh = r.picks.filter(p => p.start && +p.start > now); EX.late = fresh.length < 3;   // late at night every game may have started: the board's picks are still real ones
+        for (const p of [...(EX.late ? r.picks : fresh)].sort((a, b) => b.ours - a.ours)) { if (seen.has(p.gameKey)) continue; seen.add(p.gameKey); out.push(p); if (out.length === 3) break }
+        EX.picks = out; if (window.flPages.current() === 'parlays') drawMain() }).catch(() => { EX.picks = [] }) }
+    if (!EX.picks) return `<div class="card py-ex" aria-hidden="true"><div class="skl" style="height:150px"></div></div>`;
+    if (EX.picks.length < 2) return '';
+    const all = EX.picks.reduce((a, p) => a * p.ours, 1), mk = EX.picks.every(p => p.market != null) ? EX.picks.reduce((a, p) => a * p.market, 1) : null;
+    return `<section class="card py-ex" aria-label="An example parlay"><div class="sec-h"><h2>What one looks like</h2><span class="pl">Example, not saved</span></div>
+      <p class="lb">${EX.picks.length === 3 ? 'Three' : 'Two'} real picks from ${EX.late ? 'the latest board (these games have started, so they could not be added now)' : 'tonight’s board'}, each from a different game. Nothing here is locked in.</p>
+      <ul class="py-exl">${EX.picks.map(p => `<li><span class="rw-t"><b>${esc(p.name)}</b><small>${esc(p.text)}${p.game ? ' · ' + esc(p.game) : ''}</small></span><b class="num">${pct(p.ours)}%</b></li>`).join('')}</ul>
+      <dl class="py-exf"><div><dt>Our number: chance all ${EX.picks.length} hit</dt><dd class="num">${pct(all)}%</dd></div><div><dt>The same from the apps’ prices</dt><dd class="num">${mk == null ? '–' : pct(mk) + '%'}</dd></div></dl>
+      <p class="lb">The picks are from different games, so their chances are multiplied. Once the games start, a saved parlay shows each pick’s progress and a live read here. This is research, not betting advice.</p></section>`;
+  }
+
   function drawMain() {
     const el = $('pyMain'), list = C.list(), st = C.state;
     if (!st.loaded && !list.length) { el.innerHTML = `<p class="sr-only">Loading your parlays.</p><div class="card"><div class="skl" style="height:140px"></div></div>`; return }
     const open = list.filter(p => p.status === 'open'), reads = new Map(open.map(p => [p.id, parlayRead(p)]));
     const live = open.filter(p => reads.get(p.id).anyLive), wait = open.filter(p => !reads.get(p.id).anyLive).sort((a, b) => (reads.get(a.id).next || 0) - (reads.get(b.id).next || 0));
     const done = list.filter(p => p.status !== 'open').sort((a, b) => (b.settled || b.at) - (a.settled || a.at)), CAP = 6;
+    // one clear way in: while an empty state is showing its own Build button, the one in the header steps aside
+    { const top = document.querySelector('#pg-parlays .py-new'); if (top) top.hidden = (!list.length || !open.length) && !V.open && st.loaded }
     let h = '';
     if (st.error) h += `<p class="card py-err" role="alert">Your saved parlays did not load: ${esc(st.error)} <button type="button" class="bt sm ghost" data-py="reload" data-fk="reload">Try again</button></p>`;
     if (live.length) h += `<section aria-label="Live parlays"><div class="sec-h"><h2>Live now</h2><span class="lb">${V.at ? `Updated ${clock(V.at)}` : 'Checking the games'}</span></div><div class="vst py-list">${live.map(card).join('')}</div></section>`;
     if (wait.length) h += `<section aria-label="Parlays still to start"><div class="sec-h"><h2>${live.length ? 'Still to start' : 'Locked in'}</h2><span class="lb">${plural(wait.length, 'parlay')}</span></div><div class="vst py-list">${wait.map(card).join('')}</div></section>`;
     if (!list.length && !V.open) h += `<div class="card emp py-none">${ic('ticket', 30)}<b>No parlays yet</b><p>Build one from tonight's games or from the player lines on the board. Once the games start, this page shows how each pick is doing, our live read on the whole parlay and what the books are pricing it at.</p>
-      <button type="button" class="bt" data-py="new" data-fk="new2">${ic('plus', 18)}Build your first parlay</button></div>`;
+      <button type="button" class="bt" data-py="new" data-fk="new2">${ic('plus', 18)}Build your first parlay</button></div>${example()}`;
     else if (!open.length && !V.open) h += `<div class="card emp py-none">${ic('ticket', 30)}<b>Nothing in play right now</b><p>Every parlay you saved has finished. Build another when you like.</p><button type="button" class="bt" data-py="new" data-fk="new2">${ic('plus', 18)}New parlay</button></div>`;
     if (done.length) h += `<section aria-label="Finished parlays"><div class="sec-h"><h2>Finished</h2><span class="lb">${plural(done.length, 'parlay')}</span></div><div class="vst py-list">${(V.all ? done : done.slice(0, CAP)).map(card).join('')}</div>
       ${done.length > CAP ? `<button type="button" class="bt ghost wide" data-py="all" data-fk="all">${V.all ? `Show the last ${CAP}` : `Show all ${done.length}`}</button>` : ''}</section>`;

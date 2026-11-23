@@ -16,6 +16,7 @@
 /* The saved theme, applied before anything is drawn so the page never flashes the wrong one. Unknown or missing: Night Match. */
 (function(){var T={'night-match':['dark','#0A0D12','Syne:wght@600..800&family=Manrope:wght@400..800','Night Match'],'team-colors':['light','#EEF0F4','Outfit:wght@400..900','Team Colors'],'members-club':['dark','#0B1411','Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400..800',"Members\u2019 Club"],'aurora-glass':['dark','#070A14','Sora:wght@200..800','Aurora Glass'],'chrono':['light','#F5F5F3','Jost:wght@200..700','Chrono'],'stadium-gold':['dark','#07080A','Barlow+Condensed:ital,wght@1,600;1,700;1,800;1,900&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600;1,700&family=Montserrat:ital,wght@0,700;0,800;1,700;1,800;1,900&family=Syne:wght@800','Stadium Gold']};
 var r=document.documentElement,t=null,p={};try{t=localStorage.getItem('floodlight-theme');p=JSON.parse(localStorage.getItem('fl.look')||'{}')||{}}catch(e){}
+var pv=/[?&]flpreview=([a-z-]+)/.exec(location.search);if(pv&&window.parent!==window){t=pv[1];window.FL_PREVIEW=true;r.classList.add('fl-preview')}   /* the theme preview in Settings: this theme, nothing saved */
 if(!Object.prototype.hasOwnProperty.call(T,t))t='night-match';
 window.FL_THEMES=T;window.flApplyTheme=function(id){if(!Object.prototype.hasOwnProperty.call(T,id))id='night-match';r.dataset.theme=id;r.dataset.scheme=T[id][0];
 var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=T[id][1];
@@ -3084,14 +3085,12 @@ async function openCardFromProfile(v, mid){
 
 /* the player match card */
 function pmHero(v, back){
+  // the shared profile header (profile.js): who, and the match with its score; the rating and minutes are the pane's first tiles
   const { d, p } = v, [h, a] = d.teams || [];
-  return `<div class="hero solo" style="--tc:${esc(v.color)}">${topBar(back)}
-    <div class="thead">${face(p.name, p.team, FMP(p.id), 'face')}
-      <div><h3>${esc(p.name)}</h3>
-      <p>${p.number ? `<span class="num">#${esc(p.number)}</span>` : ''}<span>${esc(POS_NAME[p.position] || '')}</span><span>${esc(p.team || '')}</span></p>
-      ${h && a ? `<p>${esc(h.name)} <b class="num" style="color:var(--fg)">${esc(h.score ?? '')}–${esc(a.score ?? '')}</b> ${esc(a.name)}</p>` : ''}
-      <div class="pm-badges">${rtChip(p.rating, true)}<span class="pm-min"><b class="num">${esc(p.minutes)}'</b> played</span></div>
-      <button class="favbtn" data-act="pmprofile">Full profile →</button></div></div></div>`;
+  return flProfile.hero({ back, sport: '', heatSport: 'none', id: p.id, name: p.name, color: v.color, cls: 'pfh-pm',
+    face: face(p.name, p.team, FMP(p.id), 'face'), team: p.team ? `<span class="pfh-team">${esc(p.team)}</span>` : '', number: p.number, position: POS_NAME[p.position] || '',
+    extra: `${h && a ? `<p class="pfh-sub pm-score">This match: ${esc(h.name)} <b class="num">${esc(h.score ?? '')}–${esc(a.score ?? '')}</b> ${esc(a.name)}</p>` : ''}<div class="pfh-acts"><button type="button" class="bt sm ghost" data-act="pmprofile">Full profile</button></div>`,
+    caption: 'Rating and stats below are from FotMob, for this match only.' });
 }
 const PM_OUT = [
   ['Shooting', [['Goals','goals'],['Total shots','total_shots'],['Shots on target','ShotsOnTarget'],['Shots off target','ShotsOffTarget'],['Blocked shots','blocked_shots'],['Expected goals (xG)','expected_goals','d'],['xG on target (xGOT)','expected_goals_on_target_variant','d'],['Big chances missed','big_chance_missed_title']]],
@@ -3885,7 +3884,9 @@ const COLORS = ['#E5383B', '#F4A62A', '#2BB673', '#2F6FED', '#A0522D', '#E2559B'
 const initials = s => (s || '?').split(/[\s._]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
 function avatarHTML(size = 'sm'){
   const me = S.me, col = me?.prefs?.color || COLORS[3];
-  return me ? `<span class="av ${size}" style="--av:${esc(col)}">${esc(initials(me.display))}</span>`
+  // a member's photo sits over their initials, which show if there is none or it fails to load
+  const pic = me?.prefs?.photo ? `<img class="av-pic" src="/api/avatar?u=${encodeURIComponent(me.username)}&amp;v=${+me.prefs.photo}" alt="" decoding="async" onerror="this.remove()">` : '';
+  return me ? `<span class="av ${size}${pic ? ' has-pic' : ''}" style="--av:${esc(col)}">${esc(initials(me.display))}${pic}</span>`
     : `<span class="av ${size} guest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span>`;
 }
 function renderProfileBtn(){ const b = $('profileBtn'); if (!b) return; b.innerHTML = avatarHTML('sm'); b.setAttribute('aria-label', S.me ? `Your profile, ${S.me.display}` : 'Log in or create a profile') }
@@ -4984,14 +4985,21 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 <script src="shell.js"></script>
 <script src="home.js"></script>
 <script src="live.js"></script>
+<script src="linemove.js"></script>
+<script src="share.js"></script>
+<script src="alerts.js"></script>
+<script src="matchcentre.js"></script>
 <script src="labpage.js"></script>
+<script src="evidence.js"></script>
 <script src="predictions.js"></script>
+<script src="history.js"></script>
 <script src="parlaycore.js"></script>
 <script src="parlays.js"></script>
 <script src="transfers.js"></script>
 <script src="members.js"></script>
 <script src="palette.js"></script>
 <script src="settings.js"></script>
+<script src="onboard.js"></script>
 <script src="me.js"></script>
 <script src="guide.js"></script>
 <script type="module">

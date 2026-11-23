@@ -167,11 +167,11 @@
   }
   function banner(l, d, st) {
     const week = d?.items ? d.items.filter(x => Date.now() - x.when < 7 * 864e5 && x.when <= Date.now() + 864e5).length : null;
-    const state = !st.hasWindow ? ['Not set', 'An admin has not entered this window’s dates yet.'] : st.open ? ['Open', `Until ${longDay(st.open.end)}`] : ['Closed', st.reopens ? `Opens ${longDay(st.reopens.day)}` : 'No opening date entered yet'];
+    const state = !st.hasWindow ? ['Dates to come', admin() ? 'No dates entered yet. Add them under Key dates below.' : (week ? `${week} ${week === 1 ? 'move' : 'moves'} listed this week, below` : 'The latest moves are listed below as they are announced')] : st.open ? ['Open', `Until ${longDay(st.open.end)}`] : ['Closed', st.reopens ? `Opens ${longDay(st.reopens.day)}` : (admin() ? 'No opening date entered yet' : 'Opening date to come')];
     const f = { k: 'league', lg: l.k, name: `your ${l.name} teams` }, on = follows(f);
     return `<section class="card feature tw-banner" aria-label="${esc(l.status)}"><div class="tw-stats">
         <div class="tw-stat"><span class="lb">${esc(l.status)}</span><b class="fig tw-state ${st.open ? 'open' : ''}"><i aria-hidden="true"></i>${state[0]}</b><small class="lb">${esc(state[1])}</small></div>
-        <div class="tw-stat"><span class="lb">${st.next ? esc(st.next.label) : 'Next key date'}</span><b class="fig num">${st.next ? count(daysTo(st.next.day)) : '–'}</b><small class="lb">${st.next ? esc(longDay(st.next.day)) : 'None entered yet'}</small></div>
+        <div class="tw-stat"><span class="lb">${st.next ? esc(st.next.label) : 'Next key date'}</span><b class="fig num">${st.next ? count(daysTo(st.next.day)) : '–'}</b><small class="lb">${st.next ? esc(longDay(st.next.day)) : (admin() ? 'None entered yet' : 'No date listed yet')}</small></div>
         <div class="tw-stat"><span class="lb">Moves this week</span><b class="fig num">${!l.src ? '–' : week == null ? '…' : (d.error || d.note) && !d.items.length ? '–' : week}</b><small class="lb">${d?.source ? `from ${esc(d.source)}` : l.src ? `from ${esc(l.src)}` : 'no source yet'}</small></div></div>
       <button type="button" class="bt tw-alert" data-twfollow="${esc(JSON.stringify(f))}" aria-pressed="${on}">${ic(on ? 'check' : 'bell', 18)}${on ? 'Following my teams' : 'Alert me on my teams'}</button>
       ${T.msg ? `<p class="tw-msg" role="status">${esc(T.msg)}</p>` : ''}</section>`;

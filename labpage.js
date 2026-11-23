@@ -240,7 +240,7 @@
   function saveBoards(note) {
     store.set('fl.labBoards', L.boards);
     try { if (S.me && typeof api === 'function') api('/api/me/prefs', { boards: L.boards.slice(0, 30) }).then(d => { if (d.user) S.me = d.user }).catch(() => {}) } catch (e) {}
-    drawBoards(); if (note) say(note);
+    drawBoards(); drawBoardsPage(); if (note) say(note);
   }
   function say(t) { const a = $('announce'); if (a) { a.textContent = ''; setTimeout(() => { a.textContent = t }, 30) } }
   function saveView(name) {
@@ -258,7 +258,7 @@
   function drawBoards() {
     const box = $('labBoards'); if (!box) return;
     const all = L.boards, list = L.allBoards ? all : all.slice(0, 3);
-    box.innerHTML = `<div class="sec-h"><h2>Saved boards</h2>${all.length > 3 ? `<button type="button" class="lk" data-lab="allboards" aria-expanded="${!!L.allBoards}">${L.allBoards ? 'Show the latest three' : `See all ${all.length}`}</button>` : ''}</div>` +
+    box.innerHTML = `<div class="sec-h"><h2>Saved boards</h2>${all.length ? `<button type="button" class="lk" data-page="boards">${all.length > 3 ? `All ${all.length} boards` : 'Rename or delete boards'}</button>` : ''}</div>` +
       (!all.length ? `<div class="card emp">${ic('save', 28)}<b>No boards yet</b><p>Open a player, a team or the prop explorer, then choose “Save to a board” to keep that view. Boards are saved ${hasAccount() ? 'to your account' : 'in this browser'}.</p></div>`
         : `<div class="g3">${list.map(b => L.confirm === b.id
           ? `<div class="card lab-board" role="group" aria-label="Delete ${esc(b.name)}"><span class="lb">Delete this board?</span><b>${esc(b.name)}</b><span class="lb">Its ${b.items.length} saved view${b.items.length === 1 ? '' : 's'} will be gone. This cannot be undone.</span><div class="lab-board-a"><button type="button" class="bt danger sm" data-labdel="${b.id}">Delete board</button><button type="button" class="bt ghost sm" data-lab="keep">Keep it</button></div></div>`
@@ -267,8 +267,11 @@
   }
   const hasAccount = () => { try { return !!S.me } catch (e) { return false } };
   // boards follow the account: on sign-in, merge what the account has with what this browser has (newest copy of each wins)
-  document.addEventListener('fl:me', () => { try { const mine = S.me?.prefs?.boards; if (Array.isArray(mine) && mine.length) { const by = new Map(); for (const b of [...mine, ...L.boards]) { const o = by.get(b.id); if (!o || (b.at || 0) > (o.at || 0)) by.set(b.id, b) }
-    L.boards = [...by.values()].filter(b => b && b.id && Array.isArray(b.items)).sort((a, b) => b.at - a.at); store.set('fl.labBoards', L.boards) } } catch (e) {} drawBoards(); if (L.loaded && window.flPages.current() === 'lab') window.flPages.redraw('lab') });
+  // a board deleted on this browser stays deleted when the account's older copy comes back (ids kept for 60 days)
+  const gone = () => store.get('fl.labBoardsGone', []).filter(g => Date.now() - g.at < 60 * 864e5);
+  document.addEventListener('fl:me', () => { try { const mine = S.me?.prefs?.boards; if (Array.isArray(mine) && mine.length) { const by = new Map(), dead = new Set(gone().map(g => g.id)); for (const b of [...mine, ...L.boards]) { const o = by.get(b.id); if (!o || (b.at || 0) > (o.at || 0)) by.set(b.id, b) }
+    const merged = [...by.values()].filter(b => b && b.id && Array.isArray(b.items) && !dead.has(b.id)).sort((a, b) => b.at - a.at), differs = JSON.stringify(merged) !== JSON.stringify(mine);
+    L.boards = merged; store.set('fl.labBoards', L.boards); if (differs) saveBoards() } else if (S.me && L.boards.length) saveBoards() } catch (e) {} drawBoards(); drawBoardsPage(); if (L.loaded && window.flPages.current() === 'lab') window.flPages.redraw('lab') });
 
   /* ---------- what the workspace says back ---------- */
   addEventListener('message', ev => {
@@ -297,7 +300,7 @@
     const vw = t.closest('[data-labview]'); if (vw) { const b = L.boards.find(x => x.id === L.board); return b && openView(b, +vw.dataset.labview) }
     const rm = t.closest('[data-labrm]'); if (rm) { const b = L.boards.find(x => x.id === L.board); if (!b) return; const gone = b.items.splice(+rm.dataset.labrm, 1)[0]; b.at = Date.now(); saveBoards(`Removed ${viewLabel(gone)} from ${b.name}.`); return drawHead() }
     const ask = t.closest('[data-labask]'); if (ask) { L.confirm = ask.dataset.labask; drawBoards(); return $('labBoards').querySelector('[data-labdel]')?.focus() }
-    const del = t.closest('[data-labdel]'); if (del) { const b = L.boards.find(x => x.id === del.dataset.labdel); L.boards = L.boards.filter(x => x.id !== del.dataset.labdel); if (L.board === del.dataset.labdel) L.board = null; L.confirm = null; saveBoards(b ? `Deleted the board ${b.name}.` : ''); return drawHead() }
+    const del = t.closest('[data-labdel]'); if (del) { deleteBoard(del.dataset.labdel); return drawHead() }
     const a = t.closest('[data-lab]')?.dataset.lab; if (!a) return;
     if (a === 'save') { L.saving = !L.saving; drawHead(); return L.saving && $('labSaveN')?.focus() }
     if (a === 'cancelsave') { L.saving = false; drawHead(); return pg.querySelector('[data-lab="save"]')?.focus() }
@@ -306,6 +309,51 @@
     if (a === 'closews') { L.board = null; L.cur = null; L.saving = false; tool(null); setEngine(null); return $('labAsk')?.focus() }
   });
   document.addEventListener('submit', ev => { if (ev.target.id !== 'labSaveF') return; ev.preventDefault(); saveView($('labSaveN').value) });
+
+  function deleteBoard(id) {
+    const b = L.boards.find(x => x.id === id); L.boards = L.boards.filter(x => x.id !== id); store.set('fl.labBoardsGone', [...gone(), { id, at: Date.now() }].slice(-100));
+    if (L.board === id) L.board = null; L.confirm = null; saveBoards(b ? `Deleted the board ${b.name}.` : '');
+  }
+  /* ---------- the Boards view (#/boards): every saved board, to open, rename or delete ---------- */
+  const BV = { edit: null, del: null, err: '' };
+  function boardsPage(el) {
+    const all = L.boards, acct = hasAccount();
+    const item = (b, v, i) => `<li class="bd-it"><button type="button" class="bd-open" data-bdview="${b.id}|${i}">${face(v.photo, v.name || SPORT_NAME[v.sport], 'avx av-sm')}<span class="rw-t"><b>${esc(viewLabel(v))}</b><small>${esc(SPORT_NAME[v.sport] || v.sport || '')}${v.view === 'team' ? ' · team' : v.view === 'board' ? ' · prop explorer' : ' · player prop'}</small></span></button>
+        <button type="button" class="ib bd-rm" data-bdrm="${b.id}|${i}" aria-label="Remove ${esc(viewLabel(v))} from ${esc(b.name)}">${ic('x', 16)}</button></li>`;
+    const card = b => { const n = b.items.length, h = 'bdh-' + b.id;
+      const top = BV.edit === b.id
+        ? `<form class="bd-ren" data-bdren="${b.id}"><label class="fl-f" for="bdn-${b.id}">New name for this board</label><div class="lab-save-r"><input class="inp" id="bdn-${b.id}" name="board-name" maxlength="40" value="${esc(b.name)}" autocomplete="off" required aria-describedby="bde-${b.id}"><button class="bt sm" type="submit">Save name</button><button class="bt ghost sm" type="button" data-bd="cancel">Cancel</button></div><p class="lb bd-err" id="bde-${b.id}" role="alert">${esc(BV.err)}</p></form>`
+        : `<div class="bd-top"><div class="bd-t"><h2 id="${h}">${esc(b.name)}</h2><p class="lb">${n} saved ${n === 1 ? 'view' : 'views'} · updated ${ago(b.at)}</p></div>
+            <div class="bd-acts">${n ? `<button type="button" class="bt sm" data-bdview="${b.id}|0">Open in the Lab</button>` : ''}<button type="button" class="bt ghost sm" data-bd="rename" data-id="${b.id}">Rename</button><button type="button" class="bt ghost sm" data-bd="delete" data-id="${b.id}">Delete</button></div></div>`;
+      const ask = BV.del === b.id ? `<div class="bd-ask" role="group" aria-label="Delete ${esc(b.name)}"><p><b>Delete “${esc(b.name)}”?</b> <span class="lb">Its ${n} saved ${n === 1 ? 'view goes' : 'views go'} with it. This can’t be undone.</span></p><div class="lab-board-a"><button type="button" class="bt danger sm" data-labdel="${b.id}">Delete board</button><button type="button" class="bt ghost sm" data-bd="keep">Keep it</button></div></div>` : '';
+      return `<article class="card bd-card" aria-labelledby="${h}">${top}${ask}${n ? `<ul class="bd-items">${b.items.map((v, i) => item(b, v, i)).join('')}</ul>` : '<p class="lb">This board is empty. Save a view to it from the Lab.</p>'}</article>` };
+    el.innerHTML = `<div class="vst bd"><header class="pg-head"><div><h1 class="pg-title" tabindex="-1">Research boards</h1><p class="pg-sub">Players, teams and props you saved from the Lab. ${acct ? 'Kept on your account, on every device you sign in on.' : 'Kept in this browser. Sign in to keep them on your account.'}</p></div>
+        <button type="button" class="bt ghost" data-page="lab">${ic('lab', 18)}Back to the Lab</button></header>
+      ${all.length ? `<div class="vst bd-list">${all.map(card).join('')}</div>`
+        : `<div class="card emp">${ic('save', 28)}<b>No boards yet</b><p>Open a player, a team or the prop explorer in the Lab, then choose “Save to a board”.</p><button type="button" class="bt" data-page="lab">Open the Lab</button></div>`}</div>`;
+  }
+  function drawBoardsPage(focus) { const el = $('pg-boards'); if (!el || el.hidden) return; boardsPage(el); if (focus) (el.querySelector(focus) || el.querySelector('.pg-title'))?.focus() }
+  document.addEventListener('click', ev => {
+    const pg = $('pg-boards'); if (!pg || pg.hidden || !pg.contains(ev.target)) return;
+    const t = ev.target, find = id => L.boards.find(x => x.id === id);
+    const vw = t.closest('[data-bdview]'); if (vw) { const [id, i] = vw.dataset.bdview.split('|'), b = find(id); if (!b) return; window.flPages.show('lab'); return openView(b, +i) }
+    const rm = t.closest('[data-bdrm]'); if (rm) { const [id, i] = rm.dataset.bdrm.split('|'), b = find(id); if (!b) return; const g = b.items.splice(+i, 1)[0]; b.at = Date.now(); saveBoards(`Removed ${viewLabel(g)} from ${b.name}.`); return drawBoardsPage(`[aria-labelledby="bdh-${id}"] .bd-open, [aria-labelledby="bdh-${id}"] [data-bd="rename"]`) }
+    const del = t.closest('[data-labdel]'); if (del) { BV.del = null; deleteBoard(del.dataset.labdel); return drawBoardsPage('.pg-title') }
+    const a = t.closest('[data-bd]'); if (!a) return; const k = a.dataset.bd, id = a.dataset.id;
+    if (k === 'rename') { BV.edit = id; BV.del = null; BV.err = ''; drawBoardsPage(); const i = $('bdn-' + id); i?.focus(); return i?.select() }
+    if (k === 'cancel') { const was = BV.edit; BV.edit = null; BV.err = ''; return drawBoardsPage(`[data-bd="rename"][data-id="${was}"]`) }
+    if (k === 'delete') { BV.del = id; BV.edit = null; drawBoardsPage(); return pg.querySelector('[data-labdel]')?.focus() }
+    if (k === 'keep') { const was = BV.del; BV.del = null; return drawBoardsPage(`[data-bd="delete"][data-id="${was}"]`) }
+  });
+  document.addEventListener('submit', ev => {
+    const f = ev.target.closest?.('[data-bdren]'); if (!f) return; ev.preventDefault();
+    const id = f.dataset.bdren, b = L.boards.find(x => x.id === id), name = $('bdn-' + id).value.trim().slice(0, 40); if (!b) return;
+    if (!name) { BV.err = 'Give the board a name.'; drawBoardsPage(); return $('bdn-' + id)?.focus() }
+    if (L.boards.some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) { BV.err = `You already have a board called “${name}”. Pick another name.`; drawBoardsPage(); return $('bdn-' + id)?.focus() }
+    const was = b.name; b.name = name; b.at = Date.now(); BV.edit = null; BV.err = ''; L.boards.sort((x, y) => y.at - x.at);
+    saveBoards(was === name ? '' : `Renamed ${was} to ${name}.`); drawBoardsPage(`[data-bd="rename"][data-id="${id}"]`);
+  });
+  window.flPages?.add('boards', { title: 'Research boards', render: boardsPage, fresh: true, onHide() { BV.edit = BV.del = null; BV.err = '' } });
 
   window.flLab = { open, recent: () => L.recent, boards: () => L.boards };
   window.flPages?.add('lab', { title: 'The Lab', render,
