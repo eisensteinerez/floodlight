@@ -324,9 +324,9 @@
   // the newest moves across the leagues given, already read: [{ lg, league, name, text, when, from, to }]
   async function latest(leagues, n = 3) {
     const res = await Promise.all((leagues && leagues.length ? leagues : ['nba', 'nfl', 'mlb', 'soccer']).filter(k => LG[k]?.src).map(k => load(k)));
-    const denied = res.length > 0 && res.every(r => r.error === 'denied');
+    const denied = res.length > 0 && res.every(r => r.error === 'denied'), failed = res.length > 0 && res.every(r => ((r.error && r.error !== 'denied') || r.note) && !(r.items || []).length);
     // Home shows moves between teams; injured reserve, practice squad and other roster moves stay on this page
-    return { denied, rows: res.flatMap(r => r.items || []).filter(x => x.type !== 'other' && !x.internal).sort((a, b) => b.when - a.when).slice(0, n).map(x => ({ ...x, league: LG[x.lg].name })) };
+    return { denied, failed, rows: res.flatMap(r => r.items || []).filter(x => x.type !== 'other' && !x.internal).sort((a, b) => b.when - a.when).slice(0, n).map(x => ({ ...x, league: LG[x.lg].name })) };
   }
   // a player's own moves, from the same lists (matched by name where the list gives no id)
   function movesCard(sport, name, id) {

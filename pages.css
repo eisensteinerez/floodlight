@@ -1590,3 +1590,20 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-ev{padding:4px 26px 22px;border-
 .hs-card .sec-h [role="tablist"]{gap:6px}
 .hs-tbl td small{font-size:12px}
 @media (max-width:1100px){.hs-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Home: one shape for every module's loading, failed, finished and empty state */
+.hm-state{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:14px 0;color:var(--text-2)}
+.hm-state > svg{flex:none;color:var(--muted)}
+.hm-state p{flex:1 1 220px;display:grid;gap:3px;margin:0;font:500 14px/1.45 var(--font-body)}
+.hm-state b{color:var(--text);font-weight:700}
+.hm-load{display:grid}
+.hm-c3 .hm-state{padding:10px 0 4px}
+.hm-heat .hm-state{padding:18px 0}
+.hm-thin .hm-state{padding:6px 0 0}
+.hm-empty{min-height:0;padding-block:clamp(28px,5vw,56px)}
+.hm-empty .bt{justify-self:center;margin-top:6px}
+.hm-quick{margin-top:12px}
+.hm-inv-acts{display:flex;flex-wrap:wrap;gap:10px;align-self:end}
+.hm-next{display:flex;align-items:center;gap:8px;margin:10px 0 0;font:500 14px/1.4 var(--font-body);color:var(--text-2)}
+.hm-next svg{flex:none}.hm-next .lk{font-weight:700}
+.hm-next span{display:inline}.hm-next .lk{display:inline;min-height:0;padding:0;margin:0;vertical-align:baseline}

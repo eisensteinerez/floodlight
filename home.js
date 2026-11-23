@@ -95,12 +95,13 @@
   async function load(force) {
     if (noLive()) { H.games = []; H.ufc = []; H.box = []; H.at = Date.now(); H.shown = ymd(H.day); return paint() }   // live scores are switched off for this member
     if (H.loading || (!force && Date.now() - H.at < 25000 && H.shown === ymd(H.day))) return;
-    H.loading = true;
+    H.loading = true; H.err = 0;
     const want = H.day, day = ymd(want), today = sameLocalDay(want);
     const jobs = FEEDS.map(f => j(`${ESPN}${f[1]}/scoreboard${f[0] === 'ufc' || (f[0] === 'tennis' && today) ? '' : `?dates=${day}`}${f[1].includes('college') ? (f[0] === 'basketball' ? '&groups=50' : '') : ''}`)
       .then(d => f[0] === 'ufc' ? (today && (H.ufc = (d.events || []).map(ufcNorm)), []) : (d.events || []).flatMap(ev => norm(ev, f))).catch(() => { H.err++; return [] }));
     if (today) jobs.push(j('/api/box/cards').then(d => { H.box = d.events || []; return [] }).catch(() => []));
     const all = (await Promise.all(jobs)).flat();
+    H.down = H.err >= Math.ceil(FEEDS.length / 2);   // most scoreboards failed: say so instead of "no games"
     H.loading = false;
     if (+want !== +H.day) return load(true);   // the day was changed while this one loaded
     // today: what is live, what starts today, and what finished in the last 12 hours. Another day: that day's games.
@@ -144,6 +145,18 @@
     return live.filter(mine).sort((a, b) => size(b) - size(a))[0] || soon(pre.filter(mine)) || [...live].sort((a, b) => size(b) - size(a))[0] || soon(pre)
       || [...list].sort((a, b) => b.date - a.date || size(b) - size(a))[0] || null;
   }
+  /* The featured game doesn't jump away when it reaches half time or ends: a live game stays featured until it is
+     over, and a finished one stays for 20 minutes with its final score and the next game to watch. A game of your
+     own team starting still takes the spot. */
+  function stickyFeature(list) {
+    const pick = featured(list), prev = H.ftrKey && isToday() ? list.find(g => g.key === H.ftrKey) : null, mineNow = pick && (isMine(pick) || watching(pick.key));
+    if (prev && pick && prev !== pick && !(mineNow && !isMine(prev) && !watching(prev.key))) {
+      if (prev.state === 'in') return prev;
+      if (prev.state === 'post') { H.ftrEnd = H.ftrEnd || Date.now(); if (Date.now() - H.ftrEnd < 20 * 60000) return prev }
+    }
+    if (pick?.key !== H.ftrKey) { H.ftrKey = pick?.key || ''; H.ftrEnd = pick?.state === 'post' ? Date.now() : 0 }
+    return pick;
+  }
   function featureHTML(g, list) {
     const f = noSpoil(facts(g)), soccer = g.sport === 'soccer', pre = g.state === 'pre', live = g.state === 'in';
     // under each name: the latest goal for that side (soccer), or that side's leading player tonight
@@ -159,11 +172,14 @@
         <span class="hm-prob-l"><b>${esc(g.a.name)} ${A}%</b>${pd ? `<span>Draw ${D}%</span>` : '<span>Market chance</span>'}<b>${esc(g.b.name)} ${B}%</b></span>
         <span class="ftr-prob"><i style="flex:${A};background:var(--hc)"></i>${pd ? `<i class="d" style="flex:${D}"></i>` : ''}<i style="flex:${B};background:var(--ac)"></i></span></span>` }
     const liveN = list.filter(x => x.state === 'in').length;
+    // finished and still featured: what to watch next
+    const next = g.state === 'post' && isToday() ? featured(list.filter(x => x !== g && x.state !== 'post')) : null;
+    const after = next ? `<p class="hm-next">${ico('clock', 16)}<span>${f.spoil ? 'This game is over.' : soccer ? 'Full time.' : 'Final.'} Next: <button type="button" class="lk" ${hubAttr(next)}>${esc(next.a.name)} v ${esc(next.b.name)}</button>${next.state === 'in' ? ', live now' : `, ${hm(next.date)}`}</span></p>` : '';
     const acts = `<button type="button" class="ftr-foot" ${hubAttr(g)} data-hubtab="centre">${soccer ? 'Open match centre' : 'Open game'}${ico('arrow', 16)}</button>
       ${soccer && !pre ? `<button type="button" class="bt ghost ftr-alt" ${hubAttr(g)} data-hubtab="pitch">Pitch view</button>` : ''}
       <span class="hm-count num">${liveN ? `${liveN} live · ` : ''}${list.length} game${list.length === 1 ? '' : 's'} ${isToday() ? 'today' : 'this day'}</span>`;
     return window.flFeature({ ...f, as: 'article', cls: 'hm-ftr', label: (live ? 'Featured game, live. ' : 'Featured game. ') + f.label, venue: g.venue,
-      below: (pre && g.date - Date.now() < 3 * 864e5 && g.date > Date.now() ? countdown(+g.date) : '') + prob, acts });
+      below: (pre && g.date - Date.now() < 3 * 864e5 && g.date > Date.now() ? countdown(+g.date) : '') + prob + after, acts });
   }
 
   /* hot and cold: the Lab's heat reading for the players with lines posted today */
@@ -175,28 +191,46 @@
     const today = [...new Set(H.games.filter(g => ['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer').sort((a, b) => b.weight - a.weight).map(g => g.sport === 'soccer' ? 'soccer' : g.lg))].slice(0, 3);
     const sports = today.length ? today : H.at ? [] : null; if (!sports) return;
     HEAT.loading = true;
-    window.flEdge.props(sports.length ? sports : ['nba', 'nfl']).then(r => { HEAT.picks = r.picks; HEAT.denied = r.denied; HEAT.at = Date.now() }).catch(() => { HEAT.picks = [] })
+    window.flEdge.props(sports.length ? sports : ['nba', 'nfl']).then(r => { HEAT.picks = r.picks; HEAT.denied = r.denied; HEAT.at = Date.now()
+      // every board failed and none was kept from an earlier visit: say so, don't call it an empty day
+      HEAT.failed = !r.picks.length && Object.values(r.by || {}).length > 0 && Object.values(r.by).every(x => !x.picks?.length && (x.error || Object.keys(x.errors || {}).length) && x.status !== 401 && x.status !== 403) }).catch(() => { HEAT.picks = []; HEAT.failed = true; HEAT.at = Date.now() })
       .finally(() => { HEAT.loading = false; if (root.classList.contains('hub-on')) paint() });
   }
+  // the states every Home module goes through: loading (with words, not only grey bars), failed (with a retry),
+  // finished (today's games are over: point at tomorrow), and empty (nothing to show, said plainly)
+  const loadingRows = (n, what) => `<div class="hm-load" role="status" aria-live="polite"><span class="sr-only">${what}</span>${'<div class="skl hm-skl" aria-hidden="true"></div>'.repeat(n)}</div>`;
+  const state = (icon, t, d, btn = '') => `<div class="hm-state">${icon ? ico(icon, 20) : ''}<p><b>${t}</b><span>${d}</span></p>${btn}</div>`;
+  const retry = what => `<button type="button" class="bt ghost sm" data-hubretry="${what}">Try again</button>`;
+  const tomorrow = `<button type="button" class="bt ghost sm" data-hubday="1">See tomorrow</button>`;
+  // today's lines are done once every pick's game has started
+  const linesOver = () => isToday() && HEAT.picks?.length > 0 && HEAT.picks.every(p => p.start && p.start < Date.now());
   const heatRow = p => `<button type="button" class="rw" data-hublab="${esc(JSON.stringify(window.flEdge.labArgs(p)))}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}</b><small>${esc([p.team, p.label].filter(Boolean).join(' · '))}</small></span>${window.flHeat.badge(p.heat)}</button>`;
   function heatCard() {
     const E = window.flEdge, has = HEAT.picks && HEAT.picks.length;
     const hot = has ? E.hot(HEAT.picks, 3) : [], cold = has ? E.cold(HEAT.picks, 2) : [];
-    const skl = n => '<div class="skl hm-skl"></div>'.repeat(n);
+    const head = `<div class="sec-h"><h2>Hot right now</h2><button type="button" class="lk" data-shell="lab">Open Lab</button></div>`;
+    // one message for the whole card when there is nothing to split into hot and cold
+    const whole = HEAT.picks == null ? loadingRows(4, 'Reading today’s player lines…')
+      : HEAT.denied ? state('lab', 'The Lab is switched off for you', 'Ask your admin for Lab access to see who is running hot.')
+      : HEAT.failed ? state('', 'Today’s player lines didn’t load', 'The pick’em apps didn’t answer. Nothing is wrong with your account.', retry('heat'))
+      : !has ? state('', 'No player lines yet', isToday() ? 'The apps usually post lines in the morning. This fills in by itself.' : 'Lines are posted on the day of the games.')
+      : linesOver() ? state('', 'Today’s lines are closed', 'Every game with a line has started. Tomorrow’s lines go up in the morning.', tomorrow) : '';
+    if (whole) return `<aside class="card hm-heat" aria-label="Hot and cold players">${head}${whole}</aside>`;
     const none = (t, d) => `<p class="hm-none"><b>${t}</b><span>${d}</span></p>`;
-    return `<aside class="card hm-heat" aria-label="Hot and cold players"><div class="sec-h"><h2>Hot right now</h2><button type="button" class="lk" data-shell="lab">Open Lab</button></div>
-      <div class="hm-rows">${HEAT.picks == null ? skl(3) : HEAT.denied ? none('The Lab is switched off for you', 'Ask your admin for Lab access to see who is running hot.')
-        : hot.length ? hot.map(heatRow).join('') : none('Nobody is running hot', has ? 'No player with a line today reads 60 or more.' : 'The books have not posted player lines for today yet.')}</div>
+    return `<aside class="card hm-heat" aria-label="Hot and cold players">${head}
+      <div class="hm-rows">${hot.length ? hot.map(heatRow).join('') : none('Nobody is running hot', 'No player with a line today reads 60 or more.')}</div>
       <div class="sec-h hm-ice"><h3>Ice cold</h3></div>
-      <div class="hm-rows">${HEAT.picks == null ? skl(2) : HEAT.denied ? '' : cold.length ? cold.map(heatRow).join('') : none('Nobody is ice cold', has ? 'No player with a line today reads under 40.' : 'Check back when lines are posted.')}</div></aside>`;
+      <div class="hm-rows">${cold.length ? cold.map(heatRow).join('') : none('Nobody is ice cold', 'No player with a line today reads under 40.')}</div></aside>`;
   }
 
   /* the three cards: best edge, transfer wire, the Lab */
   function edgeCard() {
-    const E = window.flEdge, top = HEAT.picks ? E.ranked(HEAT.picks)[0] : null, pc = x => Math.round(x * 100);
-    const body = HEAT.picks == null ? '<div class="skl" style="height:150px"></div>'
-      : HEAT.denied ? '<div class="emp"><b>Predictions are switched off for you</b><p>Ask your admin for access.</p></div>'
-      : !top ? `<div class="emp">${ico('pred', 26)}<b>No priced picks yet</b><p>An edge needs a line with a price on both sides. None is posted for today’s games right now.</p></div>`
+    const E = window.flEdge, pc = x => Math.round(x * 100), open = (HEAT.picks || []).filter(p => !p.start || p.start > Date.now()), top = HEAT.picks ? E.ranked(open)[0] : null;
+    const body = HEAT.picks == null ? loadingRows(3, 'Finding the best edge…')
+      : HEAT.denied ? state('pred', 'Predictions are switched off for you', 'Ask your admin for access.')
+      : HEAT.failed ? state('pred', 'Prices didn’t load', 'The apps didn’t answer, so there is no edge to show yet.', retry('heat'))
+      : linesOver() ? state('pred', 'Today’s picks have started', 'Every priced pick is in play. See how they are doing on Predictions, or look at tomorrow.', tomorrow)
+      : !top ? state('pred', 'No priced picks yet', 'An edge needs a line with a price on both sides. None is posted for today’s games right now.')
       : `<button type="button" class="hm-pick" data-hublab="${esc(JSON.stringify(E.labArgs(top)))}">${face(top.photo, top.name, 'avx av-lg')}<span class="rw-t"><b>${esc(top.name)}</b><small>${esc(top.text)}${top.game ? ' · ' + esc(top.game) : ''}</small></span></button>
         <div class="hm-nums"><span class="tile inset"><small class="lb">Our number</small><b class="fig num">${pc(top.ours)}%</b></span><span class="tile inset"><small class="lb">Market</small><b class="fig num">${pc(top.market)}%</b></span>
           <span class="tile inset"><small class="lb">Edge</small><b class="fig num hm-edge">${top.edge > 0 ? '+' : top.edge < 0 ? '−' : ''}${Math.abs(top.edge)}</b></span></div>`;
@@ -209,13 +243,15 @@
   function loadWire() {
     if (WIRE.loading || Date.now() - WIRE.at < 5 * 60000 || !window.flTransfers) return; WIRE.loading = true;
     const fav = (window.S?.me?.prefs?.favSports || []).flatMap(k => WIRE_LG[k] || []);
-    window.flTransfers.latest(fav, 3).then(d => { WIRE.rows = d.rows; WIRE.denied = d.denied }).catch(() => { WIRE.rows = WIRE.rows || [] })
+    window.flTransfers.latest(fav, 3).then(d => { WIRE.rows = d.rows; WIRE.denied = d.denied; WIRE.failed = d.failed && !d.rows.length }).catch(() => { WIRE.rows = WIRE.rows || []; WIRE.failed = !WIRE.rows.length })
       .finally(() => { WIRE.loading = false; WIRE.at = Date.now(); if (root.classList.contains('hub-on')) paint() });
   }
   function wireCard() {
     const rows = WIRE.rows, day = d => d.toLocaleDateString([], { day: 'numeric', month: 'short' });
-    const body = rows == null ? '<div class="skl hm-skl"></div>'.repeat(3)
-      : !rows.length ? `<div class="emp">${ico('transfers', 26)}<b>${WIRE.denied ? 'Transfers are switched off for you' : 'No moves to show'}</b><p>${WIRE.denied ? 'Ask your admin for access.' : 'None of your leagues lists a move right now.'}</p></div>`
+    const body = rows == null ? loadingRows(3, 'Loading the latest moves…')
+      : WIRE.denied ? state('transfers', 'Transfers are switched off for you', 'Ask your admin for access.')
+      : WIRE.failed ? state('transfers', 'The moves didn’t load', 'The league lists didn’t answer.', retry('wire'))
+      : !rows.length ? state('transfers', 'No moves this week', 'None of your leagues has listed a trade or signing lately.')
       : rows.map(t => `<div class="rw"><span class="hm-move" aria-hidden="true">${face(t.from?.logo, t.from?.short || t.from?.name || '–', 'avx av-sm')}${ico('arrow', 14)}${face(t.to?.logo, t.to?.short || t.to?.name || '–', 'avx av-sm')}</span>
           <span class="rw-t"><b>${esc(t.player?.name || t.lead?.name || '')}</b><small>${esc([t.league, [t.from?.short || t.from?.name, t.to?.short || t.to?.name].filter(Boolean).join(' to '), day(t.when)].filter(Boolean).join(' · '))}</small></span><span class="pl">${esc(t.label)}</span></div>`).join('');
     return `<section class="card hm-c3" aria-label="Transfer wire"><div class="sec-h"><h2>Transfer wire</h2><button type="button" class="lk" data-shell="transfers">All moves</button></div><div class="hm-rows">${body}</div></section>`;
@@ -247,7 +283,8 @@
       seen.add(l.name); rows.push({ ...l, g, score: g.weight * 10 + rank * 5 + Math.min(l.val, 60) / 4 });
     }
     rows.sort((a, b) => b.score - a.score);
-    if (!rows.length) return '';
+    if (!rows.length) { const started = list.some(g => g.state !== 'pre');
+      return list.length ? `<section class="card hm-thin" aria-label="Standout lines"><div class="sec-h"><h2>Standout lines</h2></div>${state('', started ? 'No standout lines to show' : 'Standout lines start with the first game', started ? 'The games in play have no player numbers yet, or their scores are hidden.' : `The first game ${isToday() ? 'today' : 'that day'} starts at ${hm([...list].sort((a, b) => a.date - b.date)[0].date)}.`)}</section>` : '' }
     return `<section class="card" aria-label="Standout players"><div class="sec-h"><h2>Standout lines</h2><span class="lb">From ${isToday() ? 'today’s' : 'this day’s'} games</span></div><div class="hm-rows hm-two">${rows.slice(0, 6).map(r => `
       <button type="button" class="rw" ${hubAttr(r.g)}>${face(r.shot, r.name)}<span class="rw-t"><b>${esc(r.name)}</b><small>${esc(r.g.a.name)} v ${esc(r.g.b.name)}</small></span><span class="hm-val"><b class="num">${esc(r.show || r.val)}</b><small class="lb">${esc(r.abbr || r.cat)}</small></span></button>`).join('')}</div></section>`;
   }
@@ -255,15 +292,19 @@
   function mine(list) {
     const F = favList(), has = F.length || MY.sports.length || MY.watch.length;
     if (MY.edit) return editor(list);
-    if (!has) return MY.skip ? '' : `<section class="card hm-mine hm-invite" aria-label="Make Home yours"><div class="rw-t"><h2>Make Home yours</h2><p>Pick the sports and teams you care about and they come first here: your games at the top, your sports ahead of the rest.</p></div>
-      <div class="cx-row"><button type="button" class="bt" data-hubmy="edit">Choose sports and teams</button><button type="button" class="bt ghost" data-hubmy="skip">Not now</button></div></section>`;
+    if (!has) return MY.skip ? '' : `<section class="card hm-mine hm-invite" aria-label="Make Home yours"><div class="rw-t"><h2>Make Home yours</h2><p>Tap the sports you follow. Your games then sit at the top of Home and your sports come ahead of the rest.</p>
+        <div class="cx-row hm-quick" role="group" aria-label="Your sports">${SPORTS.filter(x => !['all', 'boxing', 'ufc'].includes(x[0])).map(([k, l]) => `<button type="button" class="cx" aria-pressed="false" data-hubsport="${k}">${esc(l)}</button>`).join('')}</div></div>
+      <div class="hm-inv-acts"><button type="button" class="bt" data-hubmy="edit">Choose teams too</button><button type="button" class="bt ghost" data-hubmy="skip">Not now</button></div></section>`;
     const rank = g => (g.state === 'in' ? 0 : g.state === 'pre' ? 1 : 2), games = list.filter(g => isMine(g, F) || watching(g.key)).sort((a, b) => rank(a) - rank(b) || a.date - b.date);
     const live = games.filter(g => g.state === 'in').length, gone = MY.watch.filter(w => !list.some(g => g.key === w.key)).length;
-    const sub = games.length ? `${games.length} ${isToday() ? 'today' : 'this day'}${live ? ` · ${live} live` : ''}` : F.length || MY.watch.length ? `None of your teams play ${isToday() ? 'today' : 'this day'}` : 'Follow a team or watch a game to fill this';
+    const sub = games.length ? `${games.length} ${isToday() ? 'today' : 'this day'}${live ? ` · ${live} live` : ''}` : F.length || MY.watch.length ? `None of your teams play ${isToday() ? 'today' : 'this day'}` : 'No teams followed yet';
+    // nothing of yours on the board: say what to do next, right here
+    const empty = games.length ? '' : F.length || MY.watch.length ? `<div class="hm-state">${ico('clock', 20)}<p><b>None of your teams play ${isToday() ? 'today' : 'this day'}</b><span>Look at another day, or follow more teams.</span></p><button type="button" class="bt ghost sm" data-hubday="1">Tomorrow</button><button type="button" class="bt ghost sm" data-hubmy="edit">Follow teams</button></div>`
+      : `<div class="hm-state">${ico('star', 20)}<p><b>Follow a team to fill this row</b><span>Your sports are set. Pick teams from today’s games, or from any team’s page.</span></p><button type="button" class="bt sm" data-hubmy="edit">Choose teams</button></div>`;
     const tag = g => watching(g.key) && !isMine(g, F) ? '<span class="pl hm-wtag">Watching</span>' : '';
     const recents = MY.recent.filter(r => list.some(g => g.key === r.key) && !games.some(g => g.key === r.key)).slice(0, 4), lab = (store.get('fl.labRecent', []) || []).slice(0, 3);
     return `<section class="card hm-mine" aria-label="Your games"><div class="sec-h"><h2>Your games</h2><span class="lb">${sub}</span><button type="button" class="lk" data-hubmy="edit">Edit your Home</button></div>
-      ${games.length ? `<div class="g4 hm-cards">${games.slice(0, 8).map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tag(g) })).join('')}</div>` : ''}
+      ${games.length ? `<div class="g4 hm-cards">${games.slice(0, 8).map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tag(g) })).join('')}</div>` : empty}
       ${F.length || MY.sports.length ? `<div class="cx-row hm-chips" aria-label="What you follow">${MY.sports.map(k => `<span class="pl solid">${esc((SPORTS.find(x => x[0] === k) || [k, k])[1])}</span>`).join('')}${F.slice(0, 14).map(f => `<span class="pl">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}</span>`).join('')}${F.length > 14 ? `<span class="pl">+${F.length - 14} more</span>` : ''}</div>` : ''}
       ${recents.length || lab.length ? `<div class="hm-back"><span class="lb">Pick up where you left off</span><div class="cx-row">${recents.map(r => { const g = list.find(x => x.key === r.key); return `<button type="button" class="cx sm" ${hubAttr(g)}>${esc(g.a.name)} v ${esc(g.b.name)}</button>` }).join('')}${lab.map(r => `<button type="button" class="cx sm" data-hublab="${esc(JSON.stringify(r.args || { q: r.q }))}">${ico('lab', 14)}${esc(r.label || r.q)}</button>`).join('')}</div></div>` : ''}
       ${gone && !games.length ? `<p class="lb">${gone} watched ${gone === 1 ? 'game is' : 'games are'} on another day.</p>` : ''}</section>`;
@@ -291,7 +332,7 @@
 
   function paint() {
     const list = H.games, live = list.filter(g => g.state === 'in'), today = isToday(), ready = H.at && H.shown === ymd(H.day);
-    const ftr = ready ? featured(list) : null;
+    const ftr = ready ? stickyFeature(list) : null;
     // the row of four: games in play, or the next to start when nothing is live; never the featured one twice
     const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (likes(g) ? 40 : 0);   // your favorite sports come first
     const rest = list.filter(g => g !== ftr);
@@ -310,10 +351,11 @@
       <div class="g2 hm-top${MY.off.includes('hot') ? ' solo' : ''}">
         ${noLive() ? `<div class="card feature emp hm-empty">${ico('members', 30)}<b>Live scores are switched off for you</b><p>Ask your admin for access to see games, scores and lineups here.</p></div>`
           : !ready ? '<div class="skl hm-ftr-skl"></div>' : ftr ? featureHTML(ftr, list)
-          : `<div class="card feature emp hm-empty">${ico('live', 30)}<b>No games ${today ? 'today' : 'on this day'}</b><p>${H.err && !list.length ? 'The scoreboards did not answer. This page tries again every 30 seconds.' : 'Pick another day above, or choose a sport to see its schedule.'}</p></div>`}
+          : H.down && !list.length ? `<div class="card feature emp hm-empty">${ico('live', 30)}<b>The scoreboards didn’t load</b><p>This page tries again every 30 seconds.</p><button type="button" class="bt ghost sm" data-hubretry="games">Try now</button></div>`
+          : `<div class="card feature emp hm-empty">${ico('live', 30)}<b>No games ${today ? 'today' : 'on this day'}</b><p>Pick another day above, or choose a sport to see its schedule.</p></div>`}
         ${MY.off.includes('hot') ? '' : heatCard()}
       </div>
-      <section class="hm-live" aria-label="${rowTitle}"${noLive() ? ' hidden' : ''}><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
+      <section class="hm-live" aria-label="${rowTitle}"${noLive() || (ready && !list.length) ? ' hidden' : ''}><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
         ${!ready ? `<div class="g4 hm-cards">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>` : four.length ? `<div class="g4 hm-cards">${four.map(card).join('')}</div>`
           : `<p class="hm-none"><b>Nothing else ${today ? 'today' : 'on this day'}</b><span>The featured game is the only one on the board.</span></p>`}</section>
       ${MY.off.includes('three') ? '' : `<div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>`}
@@ -359,6 +401,8 @@
     const d = ev.target.closest('[data-hubday]');
     if (d) { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + +d.dataset.hubday); if (+t === +H.day) return; H.day = t; H.games = []; paint(); load(true);
       return setTimeout(() => sec.querySelector('.hm-day.on')?.focus(), 0) }
+    const rt = ev.target.closest('[data-hubretry]');
+    if (rt) { const k = rt.dataset.hubretry; if (k === 'heat') { HEAT.at = 0; HEAT.picks = null; HEAT.failed = false; loadHeat() } else if (k === 'wire') { WIRE.at = 0; WIRE.rows = null; WIRE.failed = false; loadWire() } else { H.err = 0; load(true) } return paint() }
     const my = ev.target.closest('[data-hubmy],[data-hubsport],[data-hubfav],[data-hubunfav],[data-hubunwatch]');
     if (my) { const m = my.dataset;
       if (m.hubmy === 'edit') { MY.edit = true; paint(); return sec.querySelector('#hmEditH')?.focus() }
