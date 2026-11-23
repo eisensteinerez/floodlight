@@ -89,9 +89,39 @@ def log_kickoffs(now=None):
         mk = s.get("market")
         if isinstance(mk, dict) and all(isinstance(mk.get(k), (int, float)) for k in ("home", "away")):
             e["market"] = {k: round(mk[k], 3) for k in ("home", "draw", "away") if isinstance(mk.get(k), (int, float))}
+        e["receipt"] = make_receipt(e)
         with _lock:
             RECORD[key] = e
             _state["dirty"] = True
+
+
+def make_receipt(e, backfilled=False):
+    """The forecast as it was first published, frozen (gradebook.receipt). The graded pick is the last one before
+    kick-off; when that differs from the first, both are on the record (readings), and this receipt keeps the first."""
+    f = e.get("first") or {}
+    pick = f.get("pick") or e.get("pick")
+    mk = f.get("market") or {}
+    ours, market = f.get("top", e.get("top")), mk.get(pick) if isinstance(mk, dict) else None
+    side = {"home": e.get("home"), "away": e.get("away"), "draw": "Draw"}
+    return gradebook.receipt(
+        id=e["key"], publishedAt=f.get("at") or e.get("made"), event=str(e.get("id") or "") or None, start=e.get("ko"), league=e.get("lg") or e.get("sport"),
+        team=e.get("home"), opp=e.get("away"), matchup=f"{e.get('home')} vs {e.get('away')}", market="Match result", marketId=f"{e.get('src') or 'espn'}:{e.get('id')}:result",
+        pick=side.get(pick, pick), side=pick, provider="Sportsbooks" if market is not None else None, modelProb=ours, marketProb=market,
+        rawEdge=None if market is None or ours is None else round((ours - market) * 100), confidence=f.get("conf") or e.get("conf"),
+        sources=["Floodlight forecast model"] + (["Sportsbook prices, margin removed"] if market is not None else []), backfilled=backfilled)
+
+
+def ensure_receipt(e):
+    if isinstance(e.get("receipt"), dict):
+        return False
+    return gradebook.keep_receipt(e, make_receipt(e, backfilled=True))
+
+
+def _closing(e):
+    """The last forecast before kick-off and the market's chance for its pick: the match's closing line."""
+    last = (e.get("readings") or [{}])[-1] or {}
+    mk = last.get("market") or {}
+    return {"line": None, "side": e.get("pick"), "market": mk.get(e.get("pick")) if isinstance(mk, dict) else None, "price": None, "at": last.get("at")}
 
 
 # ---------- grading ----------
@@ -129,7 +159,7 @@ def _fm_final(e):
 def grade(e, status, sc, by="server", now=None):
     src = "FotMob match page" if e.get("src") == "fm" else "ESPN game summary"
     if status == "void":
-        return gradebook.set_result(e, "void", "", "Postponed or cancelled", by=by, source=src, calc="The match was not played, so the pick is void", now=now)
+        return gradebook.set_result(e, "void", "", "Postponed or cancelled", by=by, source=src, calc="The match was not played, so the pick is void", now=now, closing=_closing(e))
     hs, as_ = sc
     actual = "home" if hs > as_ else "away" if as_ > hs else "draw"
     if e["sport"] == "football" and actual == "draw":
@@ -140,7 +170,7 @@ def grade(e, status, sc, by="server", now=None):
     calc = f"Final {e.get('home')} {hs}, {e.get('away')} {as_}: {side.get(actual) if actual == 'draw' else str(side.get(actual)) + ' won'}. " \
            f"We picked {side.get(e['pick']) if e['pick'] == 'draw' else str(side.get(e['pick'])) + ' to win'}, so it is a " \
            f"{ {'won': 'hit', 'lost': 'miss', 'push': 'push (a tie)'}[result] }."
-    changed = gradebook.set_result(e, result, actual, "", by=by, source=src, calc=calc, now=now)
+    changed = gradebook.set_result(e, result, actual, "", by=by, source=src, calc=calc, now=now, closing=_closing(e))
     e.update({"final": [hs, as_], "exact": bool(e.get("score") and list(e["score"]) == [hs, as_])})
     return changed
 
@@ -216,7 +246,11 @@ def entries(limit=1500, receipts=False, tests=False, now=None):
         rows = sorted((e for e in RECORD.values() if tests or not e.get("test")), key=lambda e: e["ko"], reverse=True)[:limit]
         out = []
         for e in rows:
+            if receipts and ensure_receipt(e):
+                _state["dirty"] = True
             r = {k: e.get(k) for k in PUBLIC + (RECEIPT if receipts else ())}
+            if receipts:
+                r.update({"receipt": e.get("receipt"), "receiptOk": gradebook.receipt_ok(e.get("receipt")), "grading": gradebook.grading(e)})
             r["state"] = gradebook.state(e["ko"], e.get("result"), GRADE_AFTER, e.get("corrections"), now)
             if e.get("test"):
                 r["test"] = True

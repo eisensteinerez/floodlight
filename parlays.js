@@ -37,6 +37,11 @@
   // every parlay with a pick still to be decided. A parlay that has already lost keeps its other picks moving, so each one still gets its result.
   const tracked = () => C.list().filter(p => unsettled(p) && Math.max(...p.legs.map(l => l.start)) > Date.now() - 4 * 864e5);
   const info = (p, l) => V.live.get(p.id + '|' + l.id) || {};
+  /* Player news: a pick whose player is listed Out, from the same ESPN injury reports as the Injuries page
+     (injuries.js, kept ten minutes). On a draft the pick can't go in. On a locked parlay it will be void if he doesn't
+     play, so it drops out of the combined chance before the game, and the card says why the number moved. */
+  const outOf = l => { const I = window.flInjuries; if (l.type !== 'prop' || l.res || !I?.PATH[l.lg] || l.start <= Date.now()) return null; const s = I.status(l.lg, l.player); return s && s.lv === 'out' ? s : null };
+  const askNews = legs => { const I = window.flInjuries; if (!I) return; for (const lg of new Set(legs.filter(l => l.type === 'prop' && !l.res && l.start > Date.now()).map(l => l.lg))) if (I.PATH[lg]) I.load(lg) };
   async function follow(p, l, force) {
     const k = p.id + '|' + l.id, was = V.live.get(k) || {};
     if (l.res) return;
@@ -76,13 +81,18 @@
     const legs = p.legs.map(l => { const i = info(p, l), g = i.g; return { l, i, key: g ? `${l.lg}:${g.eid}` : l.gameKey || l.id } });
     const val = f => C.combine(legs.map(x => ({ id: x.l.id, gameKey: x.key, v: f(x) })), x => x.v);
     const one = x => x.l.res === 'hit' || x.l.res === 'push' || x.l.res === 'void' ? 1 : x.l.res === 'miss' ? 0 : null;
-    const v = x => one(x) ?? (x.i.r ? x.i.r.p ?? (['push', 'void'].includes(x.i.r.state) ? 1 : null) : C.start0(x.l)), now = val(v), vals = new Map(legs.map(x => [x.l.id, v(x)]));
+    const v = x => one(x) ?? (outOf(x.l) ? 1 : x.i.r ? x.i.r.p ?? (['push', 'void'].includes(x.i.r.state) ? 1 : null) : C.start0(x.l)), now = val(v), vals = new Map(legs.map(x => [x.l.id, v(x)]));
     const adj = now?.linked ? C.estimate(p.legs, l => vals.get(l.id)) : null;   // the rough range once linked picks are allowed for (parlaycore estimate)
     const open = legs.filter(x => !x.l.res && !['hit', 'miss', 'push', 'void'].includes(x.i.r?.state)), priced = open.filter(x => x.i.mk?.p != null).length;
     const books = open.length && priced === open.length ? val(x => one(x) ?? x.i.mk?.p ?? (x.i.r?.p === 1 ? 1 : x.i.r?.p === 0 ? 0 : null)) : null;
     const start = p.ours0 ?? C.combine(p.legs, C.start0)?.p ?? null;
     const anyLive = legs.some(x => !x.l.res && x.i.g?.state === 'in'), next = Math.min(...p.legs.filter(l => !l.res && l.start > Date.now()).map(l => l.start));
-    return { legs, now, adj, books, priced, openN: open.length, start, anyLive, next: isFinite(next) ? next : null };
+    // why the number is not where it started: the picks that settled, were ruled out or moved most (parlaycore explainChange)
+    const said = x => x.l.res === 'hit' ? 'hit' : x.l.res === 'miss' ? 'missed' : x.l.res === 'void' ? 'is void and drops out' : x.l.res === 'push' ? 'pushed and drops out' : outOf(x.l) ? 'was ruled out, so it will be void and drops out' : '';
+    const why = now && start != null ? C.explainChange({ p: start, legs: p.legs.map(l => ({ id: l.id, name: l.short || l.text, v: C.start0(l) })) },
+      { p: now.p, legs: legs.map(x => ({ id: x.l.id, name: x.l.short || x.l.text, v: vals.get(x.l.id), why: said(x) })) }) : '';
+    const outs = p.legs.filter(outOf), corr = C.correlation(p.legs.filter(l => !l.res));
+    return { legs, now, adj, books, priced, openN: open.length, start, anyLive, next: isFinite(next) ? next : null, why, outs, corr };
   }
   function sample(p, R) {
     if (!R.anyLive || R.now?.p == null) return;
@@ -94,6 +104,7 @@
     if (V.busy) return; V.busy = true;
     try {
       const list = tracked();
+      askNews(list.flatMap(p => p.legs));
       await Promise.all(list.map(async p => {
         const results = (await Promise.all(p.legs.map(l => follow(p, l, force).catch(() => null)))).filter(Boolean);
         if (!results.length) return;
@@ -165,14 +176,15 @@
     const g = i.g, mk = !l.res && r.state !== 'pre' || r.state === 'pre' ? i.mk : null, live = r.state === 'live';
     const mark = { hit: ['check', 'Hit'], miss: ['x', 'Missed'], push: ['minus', 'Push: on the line exactly'], void: ['minus', 'Void: it does not count'], pre: ['clock', 'Not started'], settle: ['clock', 'Waiting for the final count'], 'lost-track': ['help', 'Game not found'], wait: ['clock', 'Waiting'] }[r.state];
     const w = live && r.p != null ? (r.there ? [1, 'Already there', 'check'] : r.gone ? [0, 'Out of reach', 'x'] : word(r.p)) : null;
-    const verdict = w ? `<span class="pl py-word ${w[2]}">${ic(w[2], 14)}${w[1]}</span>` : `<span class="pl py-word ${r.state}">${ic(mark?.[0] || 'clock', 14)}${mark?.[1] || 'Waiting'}</span>`;
+    const out = r.state === 'pre' ? outOf(l) : null;
+    const verdict = out ? `<span class="pl py-word out">${ic('x', 14)}Ruled out</span>` : w ? `<span class="pl py-word ${w[2]}">${ic(w[2], 14)}${w[1]}</span>` : `<span class="pl py-word ${r.state}">${ic(mark?.[0] || 'clock', 14)}${mark?.[1] || 'Waiting'}</span>`;
     const ours = r.p != null && !['hit', 'miss'].includes(r.state) ? `<div><dt>${live ? 'Our live read' : 'Our number'}</dt><dd class="num">${pct(r.p)}%</dd></div>` : '';
     const books = l.res || ['hit', 'miss', 'push', 'void'].includes(r.state) ? '' : mk?.p != null ? `<div><dt>Books ${live ? 'right now' : 'now'}</dt><dd class="num">${pct(mk.p)}%${mk.price != null ? `<small>best ${C.amTxt(mk.price)}${mk.book ? ' on ' + esc(mk.book) : ''}</small>` : ''}</dd></div>`
       : mk?.other != null ? `<div><dt>Books now</dt><dd class="py-moved">Line moved to ${l.type === 'spread' && mk.other > 0 ? '+' : ''}${fmt(mk.other)}</dd></div>`
       : live || r.state === 'pre' ? `<div><dt>Books now</dt><dd class="py-moved">${C.LG[l.lg]?.board ? 'No price posted' : 'Not covered for this league'}</dd></div>` : '';
     return `<li class="py-leg ${r.state}${live ? ' on' : ''}">
       <span class="py-mark ${r.state}" aria-hidden="true">${live ? '<i class="dot-live"></i>' : ic(mark?.[0] || 'clock', 16)}</span>
-      <div class="py-lt"><b>${esc(l.text)}</b><small>${esc(l.res && !g ? [l.game, typeof l.final === 'string' ? 'Final: ' + l.final : ''].filter(Boolean).join(' · ') : gameLine(l, g))}</small>${r.note ? `<small class="py-note">${esc(r.note)}</small>` : ''}</div>
+      <div class="py-lt"><b>${esc(l.text)}</b><small>${esc(l.res && !g ? [l.game, typeof l.final === 'string' ? 'Final: ' + l.final : ''].filter(Boolean).join(' · ') : gameLine(l, g))}</small>${r.note ? `<small class="py-note">${esc(r.note)}</small>` : ''}${out ? `<small class="py-note">${esc(`${l.player} is listed ${out.status || 'Out'}${out.what ? ` (${out.what})` : ''}. If he doesn’t play, this pick is void and drops out of the parlay.`)}</small>` : ''}</div>
       ${verdict}${progress(l, r)}
       ${ours || books ? `<dl class="py-nums">${ours}${books}</dl>` : ''}${legHist(p, l)}</li>`;
   }
@@ -219,16 +231,18 @@
   const nameOf = p => p.name || `${plural(p.legs.length, 'pick')} · ${dayOf(p.at)}`;
   function card(p) {
     const R = parlayRead(p), n = p.legs.length, open = p.status === 'open', now = R.now, hits = p.legs.filter(l => l.res === 'hit').length, left = p.legs.filter(l => !l.res).length;
-    const delta = open && R.anyLive && now && R.start != null ? pct(now.p) - pct(R.start) : null;
+    const moved = R.anyLive || R.outs.length || p.legs.some(l => l.res), delta = open && moved && now && R.start != null ? pct(now.p) - pct(R.start) : null;
+    const limits = open && R.corr.label === 'Strong' && now && pct(now.lo) !== pct(now.hi);   // too strongly linked for one number: the hard limits instead
     const status = !open ? `<span class="pl py-st ${p.status}">${ic(p.status === 'won' ? 'check' : p.status === 'lost' ? 'x' : 'minus', 14)}${p.status === 'won' ? 'Won' : p.status === 'lost' ? 'Lost' : 'Push'}</span>`
       : R.anyLive ? `<span class="pl live"><i></i>Live</span>` : R.next ? `<span class="pl">${ic('clock', 14)}Starts ${esc(when(R.next))}</span>` : `<span class="pl">${ic('clock', 14)}Waiting for results</span>`;
-    const range = now ? `${pct(now.p)}%` : '–';
+    const range = !now ? '–' : limits ? `${pct(now.lo)}–${pct(now.hi)}%` : `${pct(now.p)}%`;
     const mood = !open ? '' : delta == null ? (now ? '' : 'Not enough to go on yet') : delta > 0 ? `${ic('up', 16)}Up ${delta} ${delta === 1 ? 'point' : 'points'} since the start` : delta < 0 ? `${ic('down', 16)}Down ${-delta} ${delta === -1 ? 'point' : 'points'} since the start` : `${ic('minus', 16)}Level with the start`;
-    const head = open ? `<div class="py-read"><div class="py-now"><span class="lb">${R.anyLive ? 'Our live read' : 'Our number'}: ${n === 1 ? 'chance it hits' : `chance all ${n} hit`}</span><b class="fig num py-big">${range}</b>${mood ? `<span class="py-mood">${mood}</span>` : ''}
+    const head = open ? `<div class="py-read"><div class="py-now"><span class="lb">${R.anyLive ? 'Our live read' : 'Our number'}: ${n === 1 ? 'chance it hits' : `chance all ${n} hit`}</span><b class="fig num py-big">${range}</b>${mood ? `<span class="py-mood">${mood}</span>` : ''}${limits ? '<span class="lb">Limits only: these picks are too strongly linked to multiply</span>' : ''}${R.why && delta ? `<span class="lb py-whymove">${esc(R.why)}</span>` : ''}
           ${hits ? `<span class="lb">${hits} of ${n} already in${left ? `, ${left} to go` : ''}</span>` : ''}</div>
         <dl class="py-facts">${R.start != null ? `<div><dt>At the start</dt><dd class="num">${pct(R.start)}%</dd></div>` : ''}
           <div><dt>Books right now</dt><dd class="num">${R.books ? pct(R.books.p) + '%' : '–'}<small>${R.books ? (R.books.p > .003 && R.books.p < .997 ? 'fair price ' + C.amTxt(C.amFromP(R.books.p)) : '') : R.openN ? `${R.priced} of ${plural(R.openN, 'pick')} priced` : ''}</small></dd></div>${priceBits(p)}</dl>${trail(p, R)}</div>
-        ${now?.linked && pct(now.lo) !== pct(now.hi) ? `<p class="py-link lb">${ic('help', 14)}Some of these picks are from the same game, so they move together. The number multiplies them as if they didn't.${R.adj && !R.adj.conflict ? ` Allowing for the links, a rough range is ${pct(R.adj.lo) === pct(R.adj.hi) ? pct(R.adj.lo) + '%' : `${pct(R.adj.lo)}–${pct(R.adj.hi)}%`}.` : ''} Whatever the link, it sits between ${pct(now.lo)}% and ${pct(now.hi)}%.</p>` : ''}${history(p)}`
+        ${R.corr.label ? `<p class="py-corr ${R.corr.label.toLowerCase()}">${ic('help', 14)}<span><b>${esc(R.corr.head)}.</b> ${esc(R.corr.text)}</span></p>` : ''}
+        ${now?.linked && !limits && !R.corr.label && pct(now.lo) !== pct(now.hi) ? `<p class="py-link lb">${ic('help', 14)}Some of these picks are from the same game, so they move together. The number multiplies them as if they didn't.${R.adj && !R.adj.conflict ? ` Allowing for the links, a rough range is ${pct(R.adj.lo) === pct(R.adj.hi) ? pct(R.adj.lo) + '%' : `${pct(R.adj.lo)}–${pct(R.adj.hi)}%`}.` : ''} Whatever the link, it sits between ${pct(now.lo)}% and ${pct(now.hi)}%.</p>` : ''}${history(p)}`
       : `<div class="py-read done"><div class="py-now"><span class="lb">${p.status === 'won' ? `All ${n === 1 ? 'in' : n + ' hit'}` : p.status === 'lost' ? `${hits} of ${n} hit` : 'Stake back'}</span>${(() => { const pr = C.priceOf(p), st = p.stake ?? 1; return pr && p.status !== 'push' ? `<b class="fig num py-big">${p.status === 'won' ? '+' + fmt(Math.round(st * (pr.dec - 1) * 100) / 100) : '−' + fmt(st)}<small> ${pr.est ? 'units, at a fair price' : 'units'}</small></b>` : '' })()}</div>
         <dl class="py-facts">${R.start != null ? `<div><dt>Our number at the start</dt><dd class="num">${pct(R.start)}%</dd></div>` : ''}${priceBits(p)}</dl></div>${history(p)}`;
     const tools = V.confirm === p.id ? `<div class="py-tools"><b>Delete “${esc(nameOf(p))}”? It comes off your record too.</b><button type="button" class="bt sm danger" data-pyyes="${p.id}" data-fk="yes-${p.id}">Delete parlay</button><button type="button" class="bt sm ghost" data-py="keep" data-fk="keep-${p.id}">Keep it</button></div>`
@@ -239,7 +253,7 @@
       : `<div class="py-tools"><button type="button" class="bt sm ghost" data-pyedit="${p.id}" data-fk="edit-${p.id}">${ic('edit', 16)}${p.odds != null ? 'Name and price' : 'Add your price'}</button><button type="button" class="bt sm ghost" data-pydel="${p.id}" data-fk="del-${p.id}">${ic('trash', 16)}Delete</button>
           ${p.local ? `<span class="lb">Kept in this browser only. Log in to keep it with your account.</span>` : ''}</div>`;
     return `<article class="card py-card ${p.status}${R.anyLive ? ' on' : ''}" data-py-card="${p.id}" aria-label="${esc(nameOf(p))}">
-      <header class="py-h"><div class="py-name"><h3>${esc(nameOf(p))}</h3><small>${plural(n, 'pick')} · locked in ${esc(dayOf(p.at))}, ${esc(clock(p.at))}</small></div>${status}</header>
+      <header class="py-h"><div class="py-name"><h3>${esc(nameOf(p))}</h3><small>${plural(n, 'pick')} · ${ic('lock', 12)}Picks locked ${esc(dayOf(p.at))}, ${esc(clock(p.at))}${open ? ' · name, price and stake can still be edited' : ''}</small></div>${status}</header>
       ${head}${open || unsettled(p) ? `<ol class="py-legs" aria-label="Picks">${p.legs.map(l => legRow(p, l)).join('')}</ol>${tools}`
         : `<details class="py-fold"${V.unfold.has(p.id) ? ' open' : ''} data-pyfold="${p.id}"><summary data-fk="fold-${p.id}">${plural(n, 'pick')}: ${esc(p.legs.map(l => l.short || l.text).join(' · '))}</summary><ol class="py-legs" aria-label="Picks">${p.legs.map(l => legRow(p, l)).join('')}</ol>${tools}</details>`}</article>`;
   }
@@ -339,7 +353,7 @@
       V.draft.legs = V.draft.legs.filter(l => !clash(l)); V.draft.legs.push(leg);
       const r = V.draft.legs.length > 1 ? C.strongest(leg, V.draft.legs.slice(0, -1)) : null;
       V.priceNote = gone.length ? `${leg.short || leg.text} replaced ${gone.map(l => l.short || l.text).join(' and ')}: ${why}.` : '';
-      say(`Added ${leg.text}.${gone.length ? ' ' + V.priceNote : ''}${r && r.level !== 'independent' ? ` ${({ slight: 'Slightly related', strong: 'Strongly related', conflict: 'Conflicting' })[r.level]} with ${r.with.short || r.with.text}: ${r.why}` : ''}`) }
+      say(`Added ${leg.text}.${gone.length ? ' ' + V.priceNote : ''}${r && r.level !== 'independent' ? ` ${LEVEL[(r.leg = leg, labelOf(r))]?.[0] || 'Linked'} with ${r.with.short || r.with.text}: ${r.why}` : ''}`) }
     if (i >= 0) { V.priceNote = ''; say(`Took out ${leg.text}.`) }
     V.err = ''; V.said = ''; saveDraft(); draw();
   }
@@ -427,29 +441,30 @@
       : `<p class="lb">No player or team matches “${esc(V.q)}”.</p>`}</div><p class="lb">The percentage on each button is the Lab's own number for that side of the line.</p>`;
   }
   /* ---------- the ticket: how each pick relates to the ones before it, and the chance they all hit ---------- */
-  const LEVEL = { independent: ['Independent', 1], slight: ['Slightly related', 2], strong: ['Strongly related', 3], conflict: ['Conflicting', 4] };
+  // the same four words as the Predictions slip (parlaycore correlation): Low, Moderate, Strong, Conflicting
+  const LEVEL = { independent: ['Not linked', 0], Low: ['Low correlation', 1], Moderate: ['Moderate correlation', 2], Strong: ['Strong correlation', 3], Conflicting: ['Conflicting', 4] };
+  const labelOf = r => r.level === 'independent' ? 'independent' : C.correlation([r.leg, r.with]).label || 'Low';
   const shortOf = l => l?.short || l?.text || '';
   // a small four-step meter. The words are always shown; the steps only repeat them
   function meter(r) {
-    const [label, k] = LEVEL[r.level], o = shortOf(r.with);
+    const [label, k] = LEVEL[r.label || r.level] || LEVEL.Low, o = shortOf(r.with);
     const tie = r.level === 'independent' ? '' : r.level === 'conflict' ? `with ${o}` : r.dir === 'together' ? `moves with ${o}` : r.dir === 'against' ? `pulls against ${o}` : `linked to ${o}`;
     return `<div class="py-rel ${r.level}"><span class="py-mtr" aria-hidden="true">${[1, 2, 3, 4].map(i => `<i${i <= k ? ' class="on"' : ''}></i>`).join('')}</span>
       <span class="py-rt"><span><b>${label}</b>${tie ? ` <span>${esc(tie)}</span>` : ''}</span><small>${esc(r.why)}</small></span></div>`;
   }
   // each pick after the first, against the picks above it: the strongest tie wins
-  const ties = legs => legs.map((l, i) => i ? C.strongest(l, legs.slice(0, i)) : null);
-  function relSummary(legs, rs) {
-    const by = k => rs.filter(r => r?.level === k).length, games = new Set(C.linkKeys(legs)).size;
-    if (by('conflict')) return { level: 'conflict', text: `${by('conflict') === 1 ? 'One pick' : `${by('conflict')} picks`} can’t hit alongside another. Take ${by('conflict') === 1 ? 'one of the pair' : 'one of each pair'} out to lock in.` };
-    if (!by('strong') && !by('slight')) return { level: 'independent', text: `${legs.length === 2 ? 'Both picks come' : `All ${legs.length} picks come`} from different games, so each result stands on its own.` };
-    const links = [by('strong') && plural(by('strong'), 'strong link'), by('slight') && plural(by('slight'), 'slight link')].filter(Boolean).join(' and ');
-    return { level: by('strong') ? 'strong' : 'slight', text: `${plural(legs.length, 'pick')} from ${plural(games, 'game')}: ${links}. Linked picks don’t act like separate bets, so the chance is a range. Books usually price a same-game parlay below the multiplied chance.` };
+  const ties = legs => legs.map((l, i) => { if (!i) return null; const r = C.strongest(l, legs.slice(0, i)); r.leg = l; r.label = labelOf(r); return r });
+  function relSummary(legs) {
+    const c = C.correlation(legs), games = new Set(C.linkKeys(legs)).size;
+    if (!c.label) return { level: 'independent', text: `${legs.length === 2 ? 'Both picks come' : `All ${legs.length} picks come`} from different games, so each result stands on its own.` };
+    const level = { Low: 'slight', Moderate: 'slight', Strong: 'strong', Conflicting: 'conflict' }[c.label];
+    return { level, label: c.label, text: c.label === 'Conflicting' ? `${c.text} It can’t be locked in until then.` : `${plural(legs.length, 'pick')} from ${plural(games, 'game')}. ${c.text}` };
   }
   // the short warning kept with the parlay when it is locked in: what the member was told
   function warnOf(legs) {
-    const rs = ties(legs), S = relSummary(legs, rs); if (S.level === 'independent' || S.level === 'conflict') return '';
-    const top = rs.filter(Boolean).sort((a, b) => (b.level === 'strong') - (a.level === 'strong'))[0];
-    return `${LEVEL[top.level][0]}: ${shortOf(legs[rs.indexOf(top)])} and ${shortOf(top.with)}. ${top.why}`.slice(0, 240);
+    const rs = ties(legs), S = relSummary(legs); if (S.level === 'independent' || S.level === 'conflict') return '';
+    const top = rs.filter(Boolean).sort((a, b) => (LEVEL[b.label]?.[1] || 0) - (LEVEL[a.label]?.[1] || 0))[0];
+    return `${LEVEL[top.label]?.[0] || 'Linked'}: ${shortOf(legs[rs.indexOf(top)])} and ${shortOf(top.with)}. ${top.why}`.slice(0, 240);
   }
   const pts = d => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)} ${Math.abs(d) === 1 ? 'point' : 'points'}`;
   // the range on a 0-to-top scale: the band is the adjusted range, the bar is the plain product, the diamond is the books
@@ -465,33 +480,48 @@
       <li><b>Adjusted for linked picks.</b> For picks from one game we judge each pair: independent, slightly or strongly related, and which way. Each judgement stands for a loose band of how much the two could move together, and the low and high ends of those bands give the range. It never goes past the hard limits: no higher than the least likely pick from that game, and no lower than the chances alone guarantee. The bands are judgement, not measurement, so treat the range as rough.</li>
       <li><b>Sportsbook price implies.</b> The odds you typed, turned into a chance (that includes the book’s cut). With no odds typed, each pick’s book price with the cut taken out, multiplied. A book prices a same-game parlay with its own model, usually lower.</li>
       <li><b>Difference.</b> Our independent estimate minus the books’ number, in percentage points.</li></ul></details>`;
+  // when the draft's chance changes (a pick added or taken out, prices refreshed), one line says from what, to what, and why
+  function chanceNote(legs) {
+    const e = legs.length > 1 ? C.estimate(legs, C.start0) : null, cur = { p: e && !e.conflict ? e.p : null, legs: legs.map(l => ({ id: l.id, name: l.short || l.text, v: C.start0(l) })) };
+    const last = V.lastCh; V.lastCh = cur;
+    const t = C.explainChange(last, cur); if (t) { V.chNote = t; setTimeout(() => say(t), 0) } else if (cur.p == null) V.chNote = '';
+    return V.chNote ? `<p class="py-hint py-chg">${esc(V.chNote)}</p>` : '';
+  }
   function chances(legs, srcTxt) {
-    const e = C.estimate(legs, C.start0), mk = C.combine(legs, l => l.market0), odds = parseOdds(V.draft.odds), typed = odds != null && !Number.isNaN(odds);
+    const e = C.estimate(legs, C.start0), strong = C.correlation(legs).label === 'Strong', mk = C.combine(legs, l => l.market0), odds = parseOdds(V.draft.odds), typed = odds != null && !Number.isNaN(odds);
     if (!e) return `<div class="py-tt"><div><span class="py-k">Chance all ${legs.length} hit</span><b class="num py-tbig">–</b></div></div><p class="py-hint">One of these picks has no number yet, so there is no chance to show.</p>`;
     const book = typed ? { p: 1 / C.dec(odds), src: `From the odds you typed, ${C.amTxt(odds)}, which include the book’s cut` } : mk ? { p: mk.p, src: srcTxt } : null;
     const range = pct(e.lo) === pct(e.hi) ? `${pct(e.lo)}%` : `${pct(e.lo)}–${pct(e.hi)}%`, d = book && !e.conflict ? pct(e.p) - pct(book.p) : null;
     const dr = book && e.linked && !e.conflict ? [pct(e.lo) - pct(book.p), pct(e.hi) - pct(book.p)] : null;
     return `<div class="py-prob" role="group" aria-label="${legs.length === 2 ? 'Chance both hit' : `Chance all ${legs.length} hit`}"><span class="py-k">${legs.length === 2 ? 'Chance both hit' : `Chance all ${legs.length} hit`}</span>
-      <dl class="py-pq"><div class="big"><dt>Independent estimate</dt><dd class="num">${e.conflict ? '–' : pct(e.p) + '%'}</dd><small>${e.conflict ? 'Not shown while two picks clash' : 'Our chances, multiplied'}</small></div>
-        <div class="big"><dt>Adjusted for linked picks</dt><dd class="num">${e.conflict ? '0%' : e.linked ? range : 'Same'}</dd><small>${e.conflict ? 'Two picks can’t both hit' : e.linked ? 'A rough range, not a measurement' : 'No two picks share a game'}</small></div>
+      <dl class="py-pq"><div class="big"><dt>Independent estimate</dt><dd class="num">${e.conflict ? '–' : pct(e.p) + '%'}</dd><small>${e.conflict ? 'Not shown while two picks clash' : strong ? 'Our chances multiplied, which strongly linked picks don’t allow' : 'Our chances, multiplied'}</small></div>
+        <div class="big"><dt>Adjusted for linked picks</dt><dd class="num">${e.conflict ? '0%' : strong ? `${pct(e.flo)}–${pct(e.fhi)}%` : e.linked ? range : 'Same'}</dd><small>${e.conflict ? 'Two picks can’t both hit' : strong ? 'Too strongly linked for us to model, so these are the hard limits only' : e.linked ? 'A rough range, not a measurement' : 'No two picks share a game'}</small></div>
         <div><dt>Sportsbook price implies</dt><dd class="num">${book ? pct(book.p) + '%' : '–'}</dd><small class="py-src">${esc(book ? book.src : srcTxt)}</small></div>
         <div><dt>Difference</dt><dd class="num">${d == null ? '–' : pts(d)}</dd><small>${d == null ? (e.conflict ? 'Fix the conflict first' : 'Needs a book price for every pick') : `${d > 0 ? 'Ours is above the books' : d < 0 ? 'Ours is below the books' : 'Level with the books'}${dr && dr[0] !== dr[1] ? `. With the range: ${pts(dr[0]).replace(/ points?$/, '')} to ${pts(dr[1])}` : ''}`}</small></div></dl>
-      ${e.conflict ? '' : rangeBar(e, book)}${HOWCALC}</div>`;
+      ${chanceNote(legs)}${e.conflict ? '' : rangeBar(e, book)}${HOWCALC}</div>`;
   }
   function ticket() {
     const legs = V.draft.legs, n = legs.length, c = n ? C.combine(legs, C.start0) : null, mk = n ? C.combine(legs, l => l.market0) : null;
     // where "the books" number comes from, and how old it is
     const priced = legs.filter(l => l.market0 != null), srcs = [...new Set(priced.map(l => l.msrc).filter(Boolean))], oldest = Math.min(...priced.map(l => l.mAt || Date.now()));
     const srcTxt = priced.length ? `${srcs.length ? srcs.join(', ') : 'the books'}, read ${new Date(oldest).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${priced.length < n ? ` · ${n - priced.length} ${n - priced.length === 1 ? 'pick has' : 'picks have'} no price` : ''}` : 'No book posts a price for these picks';
-    const rs = ties(legs), sum = n > 1 ? relSummary(legs, rs) : null;
+    const rs = ties(legs), sum = n > 1 ? relSummary(legs) : null;
+    askNews(legs);
+    const issues = C.legIssues(legs, Date.now(), outOf), bad = legs.filter(l => issues.get(l.id).some(x => x.blocks));
     // why Lock it in is off, said beside it: every rule that fired, in words
-    const blocks = n ? C.blockers(legs) : [], stale = blocks.find(b => b.kind === 'stale'), why = V.saving ? ['Saving…'] : V.repricing ? ['Refreshing prices…'] : blocks.map(b => b.why);
+    const outs = legs.filter(outOf), blocks = n ? [...C.blockers(legs), ...(outs.length ? [{ kind: 'out', ids: outs.map(l => l.id), why: `${outs.map(l => l.player).join(' and ')} ${outs.length === 1 ? 'is' : 'are'} listed Out. Take ${outs.length === 1 ? 'that pick' : 'those picks'} out to lock in the rest.` }] : [])] : [], stale = blocks.find(b => b.kind === 'stale'), why = V.saving ? ['Saving…'] : V.repricing ? ['Refreshing prices…'] : blocks.map(b => b.why);
     const off = V.saving || V.repricing || blocks.length > 0;
-    const legLi = (l, i) => `<li class="py-dli${blocks.some(b => b.kind !== 'stale' && b.ids.includes(l.id)) ? ' bad' : ''}"><div class="py-dlr"><span class="rw-t"><b>${esc(l.text)}</b><small>${esc(`${l.game ? l.game + ' · ' : ''}${l.start < Date.now() ? 'Already started' : when(l.start)}${l.edited ? (l.posted != null ? ` · your line, posted ${fmt(l.posted)}` : ' · your own line, none posted') : ''}`)}</small></span><button type="button" class="ib py-rm" data-pyrm="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Take out ${esc(l.text)}">${ic('x', 16)}</button></div>${rs[i] ? meter(rs[i]) : ''}</li>`;
-    return `<section class="card py-ticket${n ? ' has' : ''}" id="pyTicket" tabindex="-1" aria-label="The parlay you are building"><div class="sec-h"><h2>${n === 1 ? 'Your tracked pick' : 'Your parlay'}</h2>${n ? `<span class="pl">${plural(n, 'pick')}</span>` : ''}</div>
+    // each pick says what is wrong with it, beside it: started (market closed), clashing, ruled out, or starting soon
+    const legLi = (l, i) => { const xs = issues.get(l.id), stop = xs.some(x => x.blocks);
+      return `<li class="py-dli${stop ? ' bad' : ''}"><div class="py-dlr"><span class="rw-t"><b>${esc(l.text)}</b><small>${esc(`${l.game ? l.game + ' · ' : ''}${l.start < Date.now() ? 'Already started' : when(l.start)}${l.edited ? (l.posted != null ? ` · your line, posted ${fmt(l.posted)}` : ' · your own line, none posted') : ''}`)}</small>
+        ${xs.map(x => `<small class="py-iss ${x.kind}">${ic(x.blocks ? 'x' : 'clock', 12)}<span>${x.blocks ? '<b>Can’t go in.</b> ' : ''}${esc(x.why)}</span></small>`).join('')}</span><button type="button" class="ib py-rm" data-pyrm="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Take out ${esc(l.text)}">${ic('x', 16)}</button></div>${rs[i] && !xs.some(x => x.kind === 'conflict') ? meter(rs[i]) : ''}</li>`; };
+    const first = Math.min(...legs.filter(l => l.start > Date.now()).map(l => l.start)), closes = isFinite(first) && first - Date.now() < 3 * 36e5 ? first : null;
+    return `<section class="card py-ticket${n ? ' has' : ''}" id="pyTicket" tabindex="-1" aria-label="The parlay you are building"><div class="sec-h"><h2>${n === 1 ? 'Your tracked pick' : 'Your parlay'}</h2>${n ? `<span class="pl">${ic('edit', 12)}Editable · ${plural(n, 'pick')}</span>` : ''}</div>
       ${n === 1 ? '<p class="py-hint">One pick is tracked on its own. Add a second to make it a parlay.</p>' : ''}
       ${n ? `<ul class="py-dl">${legs.map(legLi).join('')}</ul>
-        ${sum ? `<p class="py-relsum ${sum.level}" role="note">${ic(sum.level === 'independent' ? 'check' : 'help', 16)}<span>${esc(sum.text)}</span></p>` : ''}
+        ${bad.length ? `<p class="py-bad" role="note">${ic('x', 16)}<span>${bad.length === 1 ? 'One pick can’t go in.' : `${bad.length} picks can’t go in.`} The reason is under ${bad.length === 1 ? 'it' : 'each one'}.</span><button type="button" class="bt sm ghost" data-py="dropbad" data-fk="dropbad">Take out ${bad.length === 1 ? 'that pick' : `those ${bad.length}`}</button></p>` : ''}
+        ${closes ? `<p class="py-hint py-closes">${ic('clock', 14)}Lock in before ${esc(when(closes))}, when the first game starts and its market closes.</p>` : ''}
+        ${sum ? `<p class="py-relsum ${sum.level}" role="note">${ic(sum.level === 'independent' ? 'check' : 'help', 16)}<span>${sum.label === 'Low' || sum.label === 'Conflicting' ? `<b>${esc(sum.label === 'Conflicting' ? 'Conflicting' : 'Low correlation')}.</b> ` : ''}${esc(sum.text)}</span></p>` : ''}
         ${n === 1 ? `<div class="py-tt"><div><span class="py-k">Chance it hits</span><b class="num py-tbig">${c ? pct(c.p) + '%' : '–'}</b></div>
           <div class="py-tm"><span class="py-k">Books say</span><b class="num">${mk ? pct(mk.p) + '%' : '–'}</b><small class="py-src">${esc(srcTxt)}</small></div></div>` : chances(legs, srcTxt)}
         <div class="py-fields"><label class="fl-f"><span>Name (optional)</span><input class="inp" id="pyName" data-fk="name" maxlength="80" placeholder="Sunday four-leg" value="${esc(V.draft.name)}" autocomplete="off"></label>
@@ -549,6 +579,8 @@
     if (d.pystep) { const [eid, kind, by] = d.pystep.split('|'), g = V.games?.find(x => x.eid === eid); if (!g) return; (V.lines[eid] || (V.lines[eid] = {}))[kind] = half(lineOf(g, kind).v + +by); if (kind === 'total' && V.lines[eid][kind] < .5) V.lines[eid][kind] = .5; return draw() }
     if (d.pyleg) { try { return addLeg(JSON.parse(d.pyleg)) } catch (x) { return } }
     if (d.pyrm) { const l = V.draft.legs.find(x => x.id === d.pyrm); V.draft.legs = V.draft.legs.filter(x => x.id !== d.pyrm); V.err = ''; V.priceNote = ''; saveDraft(); if (l) say(`Took out ${l.text}.`); draw(); return (document.querySelector('#pg-parlays [data-pyrm]') || $('pyTicket'))?.focus({ preventScroll: true }) }
+    if (d.py === 'dropbad') { const iss = C.legIssues(V.draft.legs, Date.now(), outOf), gone = V.draft.legs.filter(l => iss.get(l.id).some(x => x.blocks));
+      V.draft.legs = V.draft.legs.filter(l => !gone.includes(l)); V.err = ''; saveDraft(); say(`Took out ${gone.map(l => l.text).join(', ')}.`); draw(); return $('pyTicket')?.focus({ preventScroll: true }) }
     if (d.py === 'empty') { V.draft = { legs: [], name: '', odds: '', stake: '' }; V.err = ''; V.priceNote = ''; saveDraft(); return draw() }
     if (d.py === 'lock') return lock();
     if (d.py === 'reprice') return reprice();
@@ -574,6 +606,7 @@
     else if (id === 'pyQ') { V.q = e.target.value; clearTimeout(V.qt); V.qt = setTimeout(draw, 160) }
   });
   document.addEventListener('toggle', e => { const d = e.target; if (d?.dataset?.pyfold) d.open ? V.unfold.add(d.dataset.pyfold) : V.unfold.delete(d.dataset.pyfold) }, true);
+  document.addEventListener('fl:injuries', () => { if (window.flPages.current() === 'parlays' && !V.busy) draw() });   // a player ruled out updates the cards and the draft
   document.addEventListener('fl:parlays', () => { if (window.flPages.current() === 'parlays' && !V.busy) draw() });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && window.flPages.current() === 'parlays' && Date.now() - V.at > 20000) refresh() });
 

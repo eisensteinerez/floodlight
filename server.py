@@ -2154,8 +2154,13 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
         return self.send_auth(404, {"error": "unknown endpoint"})
 
+    # The pick record is read from memory in a few milliseconds, so it never waits behind the slow odds and player-line
+    # requests for one of the few API threads (on Render, Predictions asks for six sports' lines at once, and the record
+    # request used to time out in the browser while it queued: "The record did not load").
+    QUICK = ("/api/me", "/api/version", "/api/record", "/api/props/record", "/api/grading/status")
+
     def do_GET(self):
-        if self.path.startswith("/api/") and not self.path.startswith(("/api/me", "/api/version")):
+        if self.path.startswith("/api/") and not self.path.split("?", 1)[0] in self.QUICK and not self.path.startswith("/api/me"):
             with _api_gate:
                 return self._do_GET()
         return self._do_GET()
