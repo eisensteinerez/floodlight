@@ -47,7 +47,7 @@
       </section>
       <section class="card rf-share" aria-labelledby="rfShH"><div class="sec-h"><h2 id="rfShH">Share your research</h2></div>
         <div class="rf-sh-grid">
-          <div class="tile"><h3>Your week</h3>${recapLine()}<button type="button" class="bt sm" data-rf="recap"${V.recap ? '' : ' disabled'}>Make the picture</button></div>
+          <div class="tile"><h3>Your week</h3>${recapLine()}<button type="button" class="bt sm" data-rf="recap"${V.recap ? '' : ' disabled'}>Make my recap picture</button></div>
           <div class="tile"><h3>Player cards and evidence</h3><p class="lb">Open a player in the Lab or a pick on Predictions and use Share. The picture says it is research, not a guarantee.</p><button type="button" class="bt sm ghost" data-shell="lab">Open the Lab</button></div>
           <div class="tile"><h3>Boards</h3><p class="lb">Share a saved board from the Lab as a read-only link. Friends see the lines and notes, and can’t change anything.</p><button type="button" class="bt sm ghost" data-shell="lab">Go to my boards</button></div>
         </div>
