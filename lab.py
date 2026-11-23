@@ -28,6 +28,7 @@ import urllib.parse
 import urllib.request
 
 import discord_bot as bot
+import players
 import teamcheck
 import labfight   # UFC and boxing fighters in the same shape as a player
 
@@ -219,12 +220,12 @@ def _deeper(sport, p):
     return {**p, "games": sorted(games, key=lambda g: g["date"], reverse=True)}
 
 
-def player(sport, name, stat=""):
+def player(sport, name, stat="", q_team=""):
     if sport not in bot.SPORTS:
         raise LookupError("Pick a sport.")
     if not (name or "").strip():
         raise LookupError("Type a player's name.")
-    p = bot.load_player(sport, name.strip())
+    p = bot.load_player(sport, name.strip(), q_team)
     if sport == "soccer":
         bot.soccer_deep(p, 20)
     else:
@@ -258,6 +259,10 @@ def player(sport, name, stat=""):
     except Exception:
         pass
     ex = _extras(sport, p, name.strip())
+    rec = players.get(p["fid"], False) if p.get("fid") else None
+    if rec and rec.get("teamId"):   # the crest of the record's team, not of whatever the player's own page says
+        ex["crest"] = (f"https://www.mlbstatic.com/team-logos/{rec['teamId']}.svg" if sport == "mlb"
+                       else f"https://a.espncdn.com/i/teamlogos/{sport}/500/{str(rec.get('teamAbbr') or '').lower()}.png")
     # the books' team for this name against the team of the player whose games these are
     book_team = next((x["team"] for x in lines if x.get("team")), "")
     ok = teamcheck.same(sport, book_team, p.get("teamAbbr"))
@@ -266,6 +271,7 @@ def player(sport, name, stat=""):
     return {"sport": sport, "sportLabel": bot.SPORTS[sport], "name": p["name"], "team": p.get("team") or "", "photo": img_url(p.get("photo")),
             "crest": img_url(ex.get("crest")), "pos": " · ".join(x for x in (ex.get("num") and "#" + ex["num"], ex.get("pos")) if x), "next": nxt,
             "want": bot.stat_key(sport, stat) if stat else None, "teamOk": ok, "teamNote": team_note, "bookTeam": book_team,
+            "fid": p.get("fid") or "", "registry": players.view(players.get(p["fid"], False)) if p.get("fid") else None,
             "seasonStart": bot.season_start(sport).isoformat(), "stats": stats, "games": games, "lines": lines, "at": int(time.time())}
 
 
@@ -274,19 +280,44 @@ def board(sport, count=24):
         raise LookupError("Pick a sport.")
     # "at" is when the books were actually read; the board is kept for 15 minutes, and the pages show its age
     b = bot.memo(("labboard", sport), 900, lambda: dict(bot.props_board(sport, None, count, None if sport == "soccer" else _deeper), at=int(time.time())))
-    rows = [{"player": r["player"], "team": r.get("team") or "", "opp": r.get("opp") or "", "k": r["k"], "label": r["label"], "line": r["line"],
+    rows = [dict(_row(sport, r), **_who(sport, r)) for r in b["rows"]]
+    if sport in players.SPORTS:
+        players.check_board(sport, [(players.get(r.get("fid"), False) if r.get("fid") else None, r.get("team")) for r in b["rows"]])
+    return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"], "at": b.get("at"), "ttl": 900}
+
+
+def _who(sport, r):
+    """Who the prop is for, from the player record (players.py): the team every page shows, whether it is verified,
+    and what the checks found. With no record (soccer, or a name no roster lists) the books' team stays, unverified."""
+    book = next((x.get("book") for x in r.get("offers") or [] if x.get("book")), "the books")
+    canon = lambda t: teamcheck.canon(sport, t) or (t or "")
+    out = {"bookTeam": r.get("team") or "", "team": canon(r.get("team")), "opp": canon(r.get("opp")), "fid": r.get("fid") or "",
+           "teamName": "", "teamStatus": "unknown", "rosterAt": None, "prev": None, "flags": [], "hold": False}
+    rec = players.get(r["fid"], False) if sport in players.SPORTS and r.get("fid") else None
+    if not rec:
+        return out
+    codes, note = players.check_row(sport, rec, book, r.get("team"), r.get("opp"))
+    v = players.view(rec)
+    out.update(team=v["teamAbbr"] or out["team"], teamName=v["teamName"], teamStatus=v["status"], rosterAt=v["rosterAt"], prev=v["prev"],
+               flags=codes, hold=v["status"] == "checking" or any(c in players.ROW_HOLD for c in codes))
+    if note:
+        out["teamNote"], out["teamOk"] = note, False if out["hold"] else out.get("teamOk")
+    return out
+
+
+def _row(sport, r):
+    return {"player": r["player"], "team": r.get("team") or "", "opp": r.get("opp") or "", "k": r["k"], "label": r["label"], "line": r["line"],
              "side": r["side"], "l5": r["l5"]["pct"], "l10": r["l10"]["pct"], "l20": r["l20"]["pct"], "avg": _r(r["avg"]),
              "books": sorted({x["book"] for x in r["offers"]}),
              # what the site's own pages need to show the same heat reading the Lab shows for this player and line:
              # the games behind the hit rates (value, home or away, minutes), newest first, and every posted price
-             "games": [[_r(v), None if h is None else int(bool(h)), _r(m, 1), o, oa] for v, h, m, o, oa in r.get("recent") or []],
+             "games": [[_r(v), None if h is None else int(bool(h)), _r(m, 1), o, oa, (d[0] or "") if d else ""] for v, h, m, o, oa, *d in r.get("recent") or []],
              "offers": [{"book": x.get("book"), "line": x.get("line"), "kind": x.get("kind") or "standard", "pOver": x.get("pOver")} for x in r["offers"]],
              "start": next((x.get("start") for x in r["offers"] if x.get("start")), None), "photo": img_url(r.get("photo")),
              "n": r["l10"].get("n"), "hit": r["l10"].get("hit"),
              # the book's team against the team of the player whose games were read (None: can't tell)
              "teamOk": r.get("team_ok"), "foundTeam": r.get("found_team") or "",
-             "teamNote": teamcheck.note(sport, r.get("team"), r.get("found_abbr"), r.get("found_team"), "MLB" if sport == "mlb" else "ESPN") if r.get("team_ok") is False else ""} for r in b["rows"]]
-    return {"sport": sport, "rows": rows, "checked": b["lines"], "errors": b["errors"], "at": b.get("at"), "ttl": 900}
+             "teamNote": teamcheck.note(sport, r.get("team"), r.get("found_abbr"), r.get("found_team"), "MLB" if sport == "mlb" else "ESPN") if r.get("team_ok") is False else ""}
 
 
 # ---------- teams ----------
@@ -581,7 +612,7 @@ def handle(path, q, signed_in=False):
             if path == "board":
                 return 200, {"sport": sp, "rows": [], "checked": 0, "errors": [], "note": "Sportsbooks don't post player props for fights. Search a fighter to see every fight, stat by stat."}
         if path == "player":
-            return 200, player(sp, q.get("name") or "", q.get("stat") or "")
+            return 200, player(sp, q.get("name") or "", q.get("stat") or "", (q.get("team") or "")[:8])
         if path == "team":
             return 200, team(sp, q.get("name") or "")
         if path == "board":

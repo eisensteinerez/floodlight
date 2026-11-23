@@ -299,7 +299,24 @@ def season_start(sport):
 
 
 # ---------- finding a player and loading their games (research.js rsFindPlayer / rsLoad*) ----------
-def find_player(sport, name):
+def find_player(sport, name, team=None):
+    """{"id", "lg", "name", "fid"} for a name. NBA, WNBA, NFL, NHL and MLB come from the player record (players.py),
+    read from the teams' rosters, so every page gets the same person and team; team (any abbreviation) settles two
+    players with one name. The provider's own search is the fallback for names no roster lists."""
+    if sport in ("nba", "wnba", "nfl", "nhl", "mlb"):
+        import players
+        if players._state.get("loaded"):
+            try:
+                r = players.find(sport, name, team, search=search_player)
+            except Exception:
+                r = None
+            if r:
+                return {"id": r["pid"], "lg": sport, "name": r["name"], "fid": r["fid"]}
+    return search_player(sport, name)
+
+
+def search_player(sport, name):
+    """The provider's own search: ESPN's (MLB's for baseball). Fuzzy, and it knows nothing about teams."""
     def go():
         if sport == "soccer":
             return {"name": name}
@@ -453,12 +470,13 @@ def soccer_deep(p, n=10):
         list(ex.map(one, p["games"][:n]))
 
 
-def load_player(sport, name):
-    """A player's games, newest first: {sport, id, name, team, photo, games: [{date, opp, home, raw...}]}."""
+def load_player(sport, name, team=None):
+    """A player's games, newest first: {sport, id, fid, name, team, teamAbbr, photo, games: [{date, opp, home, raw...}]}.
+    The team is the player record's (players.py) when there is one; team is a hint for two players with one name."""
     def go():
         if sport == "soccer":
             return soccer_player(name)
-        o = find_player(sport, name)
+        o = find_player(sport, name, team)
         if not o:
             raise LookupError(f"Couldn't find a {SPORTS[sport]} player called {name}.")
         if sport == "mlb":
@@ -491,8 +509,16 @@ def load_player(sport, name):
                 uniq.append(g)
         if not uniq:
             raise LookupError(f"No recent games found for {o.get('name') or name}.")
-        return {"sport": sport, "id": str(o["id"]), "name": o.get("name") or name, "team": team, "teamAbbr": abbr, "photo": photo, "games": uniq}
-    return memo(("player", sport, norm(name)), 3600, go)
+        fid = o.get("fid") or (f"{sport}:{o['id']}" if sport in ("nba", "wnba", "nfl", "nhl", "mlb") else None)
+        if fid:   # the team every page shows is the player record's, never this page's own reading
+            import players
+            rec = players.get(fid) if players._state.get("loaded") else None
+            if rec:
+                team, abbr = rec.get("teamName") or team, rec.get("teamAbbr") or abbr
+                photo = rec.get("photo") or photo
+        return {"sport": sport, "id": str(o["id"]), "fid": fid, "name": o.get("name") or name, "team": team, "teamAbbr": abbr, "photo": photo, "games": uniq}
+    import teamcheck as _tc
+    return memo(("player", sport, norm(name), _tc.canon(sport, team) or ""), 3600, go)
 
 
 # ---------- maths (research.js rsRate) ----------
@@ -719,7 +745,7 @@ def props_board(sport, stat=None, count=10, deepen=None):
 
     def analyse(n):
         try:
-            p = load_player(sport, players[n][0]["player"])
+            p = load_player(sport, players[n][0]["player"], players[n][0].get("team"))
             if deepen and len(p["games"]) < 60:   # the Lab reads up to 60 games back; fetch the older seasons it would
                 p = deepen(sport, p)
         except Exception:
@@ -734,9 +760,11 @@ def props_board(sport, stat=None, count=10, deepen=None):
             side, best = ("over", o10) if (o10["pct"] or 0) >= (u10["pct"] or 0) else ("under", u10)
             r.update(side=side, l10=best, l5=o5 if side == "over" else rate(gs[:5], sd["get"], r["line"], "under"),
                      l20=o20 if side == "over" else rate(gs[:20], sd["get"], r["line"], "under"), avg=o10["avg"], label=sd["l"],
-                     recent=[(sd["get"](g), g.get("home"), g.get("min"), g.get("opp") or "", g.get("oppAbbr") or "") for g in gs[:60]], photo=p.get("photo"),
+                     recent=[(sd["get"](g), g.get("home"), g.get("min"), g.get("opp") or "", g.get("oppAbbr") or "",
+                             g["date"].isoformat() if hasattr(g.get("date"), "isoformat") else "") for g in gs[:60]], photo=p.get("photo"),
                      # does the book's team match the team of the player whose games these are?
-                     found_team=p.get("team") or "", found_abbr=p.get("teamAbbr") or "", team_ok=teamcheck.same(sport, r.get("team"), p.get("teamAbbr")))
+                     found_team=p.get("team") or "", found_abbr=p.get("teamAbbr") or "", team_ok=teamcheck.same(sport, r.get("team"), p.get("teamAbbr")),
+                     fid=p.get("fid"))
 
     with cf.ThreadPoolExecutor(4) as ex:
         list(ex.map(analyse, order))

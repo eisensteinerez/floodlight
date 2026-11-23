@@ -1,0 +1,43 @@
+# Grades Floodlight's own picks (match forecasts and player props) every hour and keeps the record safe.
+# The server on Render often can't reach ESPN and loses its files on each deploy, so the grading runs here and the
+# merged record is kept in the record-data branch, encrypted with a key made from the bot token (site_grader.py).
+# Needs the DISCORD_BOT_TOKEN repository secret that the pick grader already uses.
+name: Grade site picks
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: grade-site
+  cancel-in-progress: false
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load the saved record
+        run: |
+          mkdir -p data
+          if git fetch --depth=1 origin record-data 2>/dev/null; then git show FETCH_HEAD:site-record.enc > data/site-record.enc 2>/dev/null || rm -f data/site-record.enc; fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "cryptography>=42"
+      - run: python3 site_grader.py run
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          RECORD_DATA_DIR: data
+      - name: Save the record
+        if: always()
+        run: |
+          [ -f data/site-record.enc ] || exit 0
+          cd data
+          git init -q -b record-data
+          git config user.name "floodlight-bot"
+          git config user.email "floodlight-bot@users.noreply.github.com"
+          git add site-record.enc
+          git commit -qm "Site record $(date -u +%FT%TZ)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" record-data
