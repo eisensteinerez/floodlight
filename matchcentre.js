@@ -15,7 +15,7 @@
   const UNIT = { soccer: ['goal', 'goals'], hockey: ['goal', 'goals'], baseball: ['run', 'runs'], football: ['point', 'points'], basketball: ['point', 'points'] };
   const RUN_MIN = { basketball: 8, football: 14, hockey: 3, soccer: 3, baseball: 4 };   // unanswered scoring worth a mention
   const LIVE_MS = 20000, IDLE_MS = 90000;
-  const M = { g: null, d: null, at: 0, err: '', loading: false, timer: 0, tick: 0, sel: null, every: false, mode: 'lead', from: null, seq: 0 };
+  const M = { odds: null, oddsAt: 0, oddsErr: '', oddsBusy: false, g: null, d: null, at: 0, err: '', loading: false, timer: 0, tick: 0, sel: null, every: false, mode: 'lead', from: null, seq: 0 };
 
   /* ---------- spoiler-free ---------- */
   const SP = store.get('fl.spoil', { all: false, hide: [], show: [] });
@@ -104,7 +104,7 @@
     const tv = [...new Set((raw.broadcasts || []).map(x => x.media?.shortName || x.station || x.media?.name).filter(Boolean))].slice(0, 4);
     const stats = (() => { const T = raw.boxscore?.teams || [], of = t => T.find(x => String(x.team?.id) === t.id)?.statistics || [], A = of(a), B = of(b);
       return A.map(s => ({ label: s.label || s.name, a: s.displayValue, b: B.find(x => x.name === s.name)?.displayValue })).filter(s => s.label && s.a != null && s.b != null).slice(0, 8) })();
-    return { sport, halves: sport === 'basketball' && /college/.test(g.path || ''), a, b, state, detail: st.shortDetail || st.detail || '', desc: st.description || '', date: comp.date ? new Date(comp.date) : g.date, plays, pts, scoreOk, changes, ties, bigA, bigB, bigRuns, nowRun, wps,
+    return { slug: raw.header?.league?.slug || '', sport, halves: sport === 'basketball' && /college/.test(g.path || ''), a, b, state, detail: st.shortDetail || st.detail || '', desc: st.description || '', date: comp.date ? new Date(comp.date) : g.date, plays, pts, scoreOk, changes, ties, bigA, bigB, bigRuns, nowRun, wps,
       periods: Math.max(a.lines.length, b.lines.length), leaders: { a: leadersOf(a), b: leadersOf(b) }, xi: { a: xi(a), b: xi(b) }, five: { a: five(a), b: five(b) }, hurt: { a: hurt(a), b: hurt(b) }, form: { a: form(a), b: form(b) }, series, tv,
       venue: raw.gameInfo?.venue?.fullName || g.venue || '', crowd: raw.gameInfo?.attendance || 0, stats };
   }
@@ -115,9 +115,51 @@
     try {
       const raw = await timeout(fetch(`${ESPN}${g.path}/summary?event=${encodeURIComponent(g.id)}`).then(r => { if (!r.ok) throw new Error(r.status === 404 ? 'This game has no detail feed yet.' : 'The game feed answered with an error.'); return r.json() }), 12000);
       if (seq !== M.seq) return;
-      M.d = norm(raw, g); M.at = Date.now(); M.err = '';
+      M.d = norm(raw, g); M.at = Date.now(); M.err = ''; loadOdds();
     } catch (e) { if (seq !== M.seq) return; M.err = e.message && !/Failed to fetch|NetworkError|Load failed/i.test(e.message) ? e.message : 'The game feed did not answer.' }
     finally { if (seq === M.seq) { M.loading = false; paint() } }
+  }
+
+  /* ---------- prices, book by book ----------
+     The same odds board the sport pages read (odds.py): each book's own price, the chance inside it, and which book has
+     the best price for each side. Shown for comparison only. With one book posting there is nothing to compare, and the
+     card says so. A book that did not answer is named. */
+  const BOOKS = { draftkings: 'DraftKings', fanduel: 'FanDuel', kalshi: 'Kalshi', polymarket: 'Polymarket' };
+  function oddsQuery(g, d) {
+    const L = Object.values(window.flParlay?.LG || {}).find(x => x.path === g.path && x.board); if (!L) return null;
+    const soccer = g.sport === 'soccer', lg = soccer ? d.slug : L.board[1]; if (!lg) return null;
+    const home = d.a.home ? d.a : d.b, away = d.a.home ? d.b : d.a;
+    return new URLSearchParams({ sport: L.board[0], lg, id: /^\d+$/.test(g.id) ? g.id : '', home: home.full || home.name, away: away.full || away.name, date: (d.date || g.date).toISOString(), kx: soccer ? '' : L.board[2], espn: soccer ? 'soccer/' + lg : L.path });
+  }
+  function loadOdds() {
+    const g = M.g, d = M.d; if (!g || !d || M.oddsBusy || d.state === 'post') return;
+    if (M.oddsAt && Date.now() - M.oddsAt < (d.state === 'in' ? 45000 : 5 * 60000)) return;
+    const q = oddsQuery(g, d); if (!q) { M.odds = M.odds || { none: true }; return }
+    const seq = M.seq; M.oddsBusy = true;
+    timeout(fetch('/api/odds/board?' + q, { credentials: 'same-origin' }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'The prices did not load.'); return j }), 25000)
+      .then(j => { if (seq !== M.seq) return; M.odds = j; M.oddsAt = Date.now(); M.oddsErr = '' }, e => { if (seq !== M.seq) return; M.oddsErr = e.message || 'The prices did not load.'; M.oddsAt = Date.now() - 30000 })
+      .finally(() => { if (seq === M.seq) { M.oddsBusy = false; paint() } });
+  }
+  const am = p => p?.am == null ? '–' : (p.am > 0 ? '+' : '') + p.am;
+  function prices(d, hide) {
+    const o = M.odds; if (d.state === 'post' || o?.none) return '';
+    if (hide) return `<section class="card gx-card" aria-label="Prices">${`<div class="sec-h"><h3>Prices, book by book</h3></div>`}${hidden('Live prices show who is ahead')}</section>`;
+    if (!o) return `<section class="card gx-card" aria-label="Prices"><div class="sec-h"><h3>Prices, book by book</h3></div>${M.oddsErr ? `<p class="gx-none">${esc(M.oddsErr)} <button type="button" class="bt sm" data-gx="odds">Try again</button></p>` : '<div class="skl" style="height:120px"></div>'}</section>`;
+    const home = d.a.home ? 'a' : 'b', keyOf = t => (t === d[home] ? 'home' : 'away'), cols = d.sport === 'soccer' ? [[d.a, keyOf(d.a)], [null, 'draw'], [d.b, keyOf(d.b)]] : [[d.a, keyOf(d.a)], [d.b, keyOf(d.b)]];
+    const offers = o.ml?.offers || [], many = offers.length > 1, bad = Object.keys(o.errors || {}).map(k => BOOKS[k] || k);
+    const cell = (of, k, best) => { const p = of?.[k]; return `<td class="r num${best ? ' best' : ''}">${p ? `<b>${am(p)}</b><small>${Math.round(p.p * 100)}%</small>${best ? '<em class="pl gx-best">Best</em>' : ''}` : '<span class="lb">–</span>'}</td>` };
+    const ml = offers.length ? `<div class="tbx-wrap"><table class="tbx gx-px"><caption class="sr-only">To win: each book's price and the chance inside it</caption><thead><tr><th scope="col">To win</th>${cols.map(([t]) => `<th scope="col" class="r">${esc(t ? t.abbr || t.name : 'Draw')}</th>`).join('')}</tr></thead>
+      <tbody>${offers.map(of => `<tr><th scope="row">${esc(BOOKS[of.book] || of.book)}${of.exchange ? ' <small class="lb">exchange</small>' : ''}</th>${cols.map(([, k]) => cell(of, k, many && o.ml.best?.[k]?.book === of.book)).join('')}</tr>`).join('')}
+        ${o.ml.fair && Object.keys(o.ml.fair).length ? `<tr class="gx-fair"><th scope="row">With the margin taken out</th>${cols.map(([, k]) => `<td class="r num">${o.ml.fair[k] != null ? Math.round(o.ml.fair[k] * 100) + '%' : '–'}</td>`).join('')}</tr>` : ''}</tbody></table></div>` : '';
+    // the spread and total most books share (the one with the most prices; closest to even when tied)
+    const main = (xs, ks) => [...(xs || [])].sort((x, y) => y.offers.length - x.offers.length || Math.abs((x.fair?.[ks[0]] ?? .5) - .5) - Math.abs((y.fair?.[ks[0]] ?? .5) - .5))[0];
+    const sp = main(o.spreads, ['home']), tt = main(o.totals, ['over']), sgn = v => (v > 0 ? '+' : '') + v;
+    const side = (label, off, k, best) => `<div class="gx-pxr"><span>${label}</span><span class="gx-pxb">${off.filter(x => x[k]).map(x => `<span class="${off.length > 1 && best?.[k]?.book === x.book ? 'best' : ''}"><small class="lb">${esc(BOOKS[x.book] || x.book)}</small> <b class="num">${am(x[k])}</b></span>`).join('') || '<span class="lb">–</span>'}</span></div>`;
+    const hl = sp ? (d[home] === d.a ? sp.homeLine : -sp.homeLine) : null;
+    const lines = sp || tt ? `<div class="gx-pxl">${sp ? side(`${esc(d.a.abbr || d.a.name)} ${sgn(hl)}`, sp.offers, keyOf(d.a), sp.best) + side(`${esc(d.b.abbr || d.b.name)} ${sgn(-hl)}`, sp.offers, keyOf(d.b), sp.best) : ''}${tt ? side(`Over ${tt.line}`, tt.offers, 'over', tt.best) + side(`Under ${tt.line}`, tt.offers, 'under', tt.best) : ''}</div>` : '';
+    if (!ml && !lines) return `<section class="card gx-card" aria-label="Prices"><div class="sec-h"><h3>Prices, book by book</h3></div><p class="gx-none">No book we read has a price up for this game right now.${bad.length ? ` ${esc(bad.join(' and '))} did not answer.` : ''}</p></section>`;
+    return `<section class="card gx-card" aria-label="Prices"><div class="sec-h"><h3>Prices, book by book</h3><span class="lb">${many ? 'Best price marked' : ''}</span></div>${ml}${lines}
+      <p class="lb gx-pxn">Read <time data-gxago="${M.oddsAt}">${ago(M.oddsAt)}</time>; ${d.state === 'in' ? 're-read every 45 seconds while the game is live' : 're-read every 5 minutes before the start'}. ${!many && offers.length ? `Only ${esc(BOOKS[offers[0].book] || offers[0].book)} has this game up, so there is nothing to compare yet. ` : ''}${bad.length ? `${esc(bad.join(' and '))} did not answer this time. ` : ''}The percentage is the chance inside each price, margin included. Shown for research; Floodlight does not take bets.</p></section>`;
   }
 
   /* ---------- pieces ---------- */
@@ -283,6 +325,7 @@
           ${L ? `<section class="card gx-card" aria-labelledby="gxXiH"><div class="sec-h"><h3 id="gxXiH">${d.xi.a || d.xi.b ? 'Lineups' : d.five.a || d.five.b ? 'Starters' : 'Leaders'}</h3></div>${L}</section>` : ''}
         </div><div class="gx-c">
           <section class="card gx-card" aria-labelledby="gxTlH"><div class="sec-h"><h3 id="gxTlH">Timeline</h3><span class="lb">Newest first</span></div>${timeline(d, hide)}</section>
+          ${prices(d, hide)}
           ${F ? `<section class="card gx-card" aria-label="Form, series and team numbers">${F}</section>` : ''}
         </div></div>`;
     }
@@ -298,7 +341,7 @@
   function open(o, from) {
     const g = o.key ? o : find(o);
     if (!g || !CAN.has(g.sport) || !g.path) return false;
-    M.seq++; M.g = g; M.d = null; M.at = 0; M.err = ''; M.loading = false; M.sel = null; M.every = false; M.mode = 'lead'; M.from = from || document.activeElement;
+    M.seq++; M.g = g; M.d = null; M.at = 0; M.err = ''; M.odds = null; M.oddsAt = 0; M.oddsErr = ''; M.oddsBusy = false; M.loading = false; M.sel = null; M.every = false; M.mode = 'lead'; M.from = from || document.activeElement;
     window.flHome?.seen(g);
     host.hidden = false; root.classList.add('gx-on'); paint(); sheet.focus({ preventScroll: true }); load();
     clearInterval(M.timer); M.timer = setInterval(() => { if (document.hidden || host.hidden) return; const live = (M.d?.state || M.g.state) === 'in'; if (Date.now() - (M.at || 0) >= (live ? LIVE_MS : IDLE_MS) - 500) load(true) }, 5000);
@@ -330,6 +373,7 @@
     const k = t.dataset.gx;
     if (k === 'close') return close();
     if (k === 'retry') return load();
+    if (k === 'odds') { M.oddsAt = 0; M.oddsErr = ''; loadOdds(); return paint() }
     if (k === 'every') { M.every = !M.every; return paint() }
     if (k === 'watch') { window.flHome?.watch(M.g); return paint() }
     if (k === 'hide') { setSpoil(M.g.key, true); return paint() }
