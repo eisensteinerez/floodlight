@@ -135,6 +135,7 @@
     H.at = Date.now(); H.shown = day;
     if (root.classList.contains('hub-on')) paint();
     if (today) { H.live = liveGames().length; document.dispatchEvent(new CustomEvent('fl:hub', { detail: { live: H.live } })) }
+    else document.dispatchEvent(new Event('fl:hubday'));   // another day's board (Live reads it)
   }
   const sameLocalDay = d => { const n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate() };
   const liveGames = () => H.games.filter(g => g.state === 'in');
@@ -455,6 +456,7 @@
   function setSports(list) { MY.sports = SPORTS.map(s => s[0]).filter(k => k !== 'all' && list.includes(k)); saveMine(); if (root.classList.contains('hub-on')) paint() }
   window.flHome = { watch, watching, seen, mine: () => MY, isMine: g => isMine(g), following, follow: (g, t) => { follow(g, t); if (root.classList.contains('hub-on')) paint(); return following(g, t) }, setSports, SPORTS };
   window.flHub = { show, hide, load, on: () => root.classList.contains('hub-on'), games: () => H.games, open: g => openGame(g.sport, g.lg, g.id), card, ufc: () => H.ufc, at: () => H.at,
+    day: () => H.day, setDay(d) { if (+d === +H.day) return load(); H.day = d; H.games = []; H.at = 0; return load(true) },
     today() { if (!sameLocalDay(H.day)) { const d = new Date(); d.setHours(0, 0, 0, 0); H.day = d; H.games = []; return load(true) } return load() } };
 
   // Home opens the hub (capture phase, ahead of the older Home behaviour in shell.js)
