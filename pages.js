@@ -12,7 +12,7 @@
     s.setAttribute('aria-label', defs.get(name)?.title || name); shell()?.prepend(s); els.set(name, s); return s;
   }
   // a page that belongs to a service a member does not have opens the "Ask your admin" page in its place
-  const NEEDS = { lab: 'lab', predictions: 'predictions', transfers: 'transfers', live: 'live', parlays: 'predictions', history: 'predictions' };
+  const NEEDS = { lab: 'lab', predictions: 'predictions', transfers: 'transfers', live: 'live', parlays: 'predictions', history: 'predictions', boards: 'lab' };
   function show(name, arg, opts = {}) {
     if (NEEDS[name] && window.flAccess && !window.flAccess.has(NEEDS[name]) && defs.has('noaccess')) { arg = NEEDS[name]; name = 'noaccess' }
     const d = defs.get(name); if (!d) return false;

@@ -1470,3 +1470,27 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
 .al-state{margin:4px 0 10px;max-width:68ch}
 .al-who{margin:0 0 6px}
 .st-row:has(input:disabled) .st-l{opacity:.62}
+
+/* ---------- Research boards (#/boards, labpage.js) ---------- */
+.bd-list{gap:var(--gap,16px)}
+.bd-card{display:grid;gap:14px;padding:20px 22px}
+.bd-top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:10px 16px}
+.bd-t{min-width:0}
+.bd-t h2{margin:0;font:var(--display-weight,700) clamp(20px,2.2vw,26px)/1.15 var(--font-display);letter-spacing:var(--display-track,0);overflow-wrap:anywhere;text-wrap:balance}
+.bd-t p{margin:4px 0 0}
+.bd-acts{display:flex;flex-wrap:wrap;gap:8px}
+.bd-ren{display:grid;gap:8px}
+.bd-err{margin:0;color:var(--bad,var(--live))}
+.bd-err:empty{display:none}
+.bd-ask{display:grid;gap:10px;padding:12px 14px;border:1px solid var(--border-2);border-radius:var(--radius-tile);background:var(--surface-2)}
+.bd-ask p{margin:0}
+.bd-items{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:8px}
+.bd-it{display:flex;align-items:center;gap:4px;min-width:0;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface-2)}
+.bd-open{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:44px;border:0;background:none;color:inherit;text-align:left;cursor:pointer;border-radius:inherit}
+.bd-open:hover b{text-decoration:underline;text-underline-offset:3px}
+.bd-open:focus-visible,.bd-rm:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bd-open .rw-t{min-width:0}
+.bd-open .rw-t b{display:block;overflow-wrap:anywhere;font:600 14px/1.3 var(--font-body)}
+.bd-open .rw-t small{font:500 12px/1.3 var(--font-body);color:var(--muted)}
+.bd-rm{flex:none;margin-right:4px}
+:root[data-theme] .bd-open .rw-t b{white-space:normal;overflow:visible;text-overflow:clip}
