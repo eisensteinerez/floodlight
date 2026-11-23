@@ -105,6 +105,7 @@
   /* ---------- live toasts: a followed team scores, or a followed game ends ---------- */
   const seen = new Map();
   document.addEventListener('fl:hub', () => {
+    if (window.flAlerts?.on()) return;   // with alerts on, alerts.js says it (as a notification, or a note like this one)
     const favs = (window.S?.fav || []).map(f => norm(f.name)).filter(Boolean); if (!favs.length) return;
     for (const g of window.flHub?.games?.() || []) {
       const mine = [g.a, g.b].some(t => favs.includes(norm(t.full)) || favs.includes(norm(t.name))); if (!mine) continue;

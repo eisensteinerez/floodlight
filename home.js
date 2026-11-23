@@ -336,7 +336,7 @@
     window.flShell?.sync?.();
   }
   function hide() { if (!root.classList.contains('hub-on')) return; root.classList.remove('hub-on'); sec.hidden = true; clearInterval(poll) }
-  window.flHome = { watch, watching, seen, mine: () => MY };
+  window.flHome = { watch, watching, seen, mine: () => MY, isMine: g => isMine(g) };
   window.flHub = { show, hide, load, on: () => root.classList.contains('hub-on'), games: () => H.games, open: g => openGame(g.sport, g.lg, g.id), card, ufc: () => H.ufc, at: () => H.at,
     today() { if (!sameLocalDay(H.day)) { const d = new Date(); d.setHours(0, 0, 0, 0); H.day = d; H.games = []; return load(true) } return load() } };
 
