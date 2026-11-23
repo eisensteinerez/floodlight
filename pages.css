@@ -1956,3 +1956,7 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 }
 @keyframes twdUp{from{transform:translateY(28px);opacity:0}}
 @media (prefers-reduced-motion:reduce){.twd-panel{animation:none}}
+/* team impact: one checked sentence about the roster, with where and when it was read */
+.twd-impact{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-tile);background:var(--surface-2)}
+.twd-impact .lb{margin:0;color:var(--text-2)}
+.twd-imp{margin:0;font:600 16px/1.45 var(--font-body);color:var(--text)}

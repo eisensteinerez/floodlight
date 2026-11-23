@@ -256,7 +256,7 @@
     return `<tr class="tw-row"><td data-l="Player">${who}</td>
       <td data-l="Move">${move}</td>
       <td data-l="Type"><span class="pl${it.type === 'trade' || it.type === 'transfer' ? ' solid' : ''}">${esc(it.label)}</span></td>
-      <td data-l="Details" class="tw-det"><button type="button" class="tw-open" data-twmove="${esc(it.id)}" aria-haspopup="dialog"><span class="tw-line">${esc(w.line)}</span>${w.sub ? `<span class="tw-sub">${esc(w.sub)}</span>` : ''}<span class="tw-cue" aria-hidden="true">Details, source and related moves ${ic('right', 14)}</span></button></td>
+      <td data-l="Details" class="tw-det"><button type="button" class="tw-open" data-twmove="${esc(it.id)}" aria-haspopup="dialog"><span class="tw-line">${esc(w.line)}</span>${w.sub ? `<span class="tw-sub">${esc(w.sub)}</span>` : ''}<span class="tw-cue" aria-hidden="true">Details and source ${ic('right', 14)}</span></button></td>
       <td data-l="When" class="num tw-when"><time datetime="${it.when.toISOString()}" title="${esc(it.when.toLocaleString())}">${esc(ago(it.when))}</time></td></tr>`;
   }
   // The window state and the next key date show only once an admin has entered a real date. Until then they are left
@@ -476,8 +476,55 @@
       </div>`;
     if (T.impact?.[it.id]) fillImpact(it);
   }
-  function impact() {}
-  function fillImpact() {}
+
+  /* ---------- team impact ----------
+     "The signing gives the Denver Broncos four active safeties." Said only when it can be checked: an NFL or NBA
+     signing, claim, promotion or activation from the last week, the team's roster loads from ESPN, the player is on it
+     (so the roster is newer than the move), and his position is known. Players on injured reserve, suspended, inactive
+     or on the practice squad are not counted. Anything less and nothing is shown. */
+  const IMPACT = { sign: 'signing', two_way: 'signing', claim: 'claim', promote: 'promotion', activate: 'activation' };
+  const RPATH = { nfl: 'football/nfl', nba: 'basketball/nba' };
+  const POS_NAMES = { QB: ['quarterback', 'quarterbacks'], RB: ['running back', 'running backs'], FB: ['fullback', 'fullbacks'], WR: ['wide receiver', 'wide receivers'],
+    TE: ['tight end', 'tight ends'], OT: ['offensive tackle', 'offensive tackles'], T: ['tackle', 'tackles'], G: ['guard', 'guards'], OG: ['guard', 'guards'], C: ['center', 'centers'],
+    OL: ['offensive lineman', 'offensive linemen'], DE: ['defensive end', 'defensive ends'], DT: ['defensive tackle', 'defensive tackles'], NT: ['nose tackle', 'nose tackles'],
+    DL: ['defensive lineman', 'defensive linemen'], LB: ['linebacker', 'linebackers'], OLB: ['outside linebacker', 'outside linebackers'], ILB: ['inside linebacker', 'inside linebackers'],
+    MLB: ['middle linebacker', 'middle linebackers'], EDGE: ['edge rusher', 'edge rushers'], CB: ['cornerback', 'cornerbacks'], S: ['safety', 'safeties'], FS: ['free safety', 'free safeties'],
+    SS: ['strong safety', 'strong safeties'], DB: ['defensive back', 'defensive backs'], K: ['kicker', 'kickers'], PK: ['kicker', 'kickers'], P: ['punter', 'punters'],
+    LS: ['long snapper', 'long snappers'], PG: ['point guard', 'point guards'], SG: ['shooting guard', 'shooting guards'], SF: ['small forward', 'small forwards'],
+    PF: ['power forward', 'power forwards'], F: ['forward', 'forwards'] };
+  const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+  const NOT_ACTIVE = /injur|reserve|\bIR\b|\bPUP\b|physically unable|suspend|inactive|non-football|\bNFI\b|practice squad|out for (?:the )?season|exempt|commissioner/i;
+  const ROSTERS = new Map();   // `${lg}:${teamId}` -> { at, list, ok } (or { promise } while loading)
+  function rosterOf(lg, id) {
+    const k = `${lg}:${id}`, c = ROSTERS.get(k);
+    if (c && (c.promise || Date.now() - c.at < 10 * 60000)) return c.promise || Promise.resolve(c);
+    // NFL groups athletes as offense / defense / specialTeam, each with items; NBA lists them flat
+    const promise = fetch(`https://site.api.espn.com/apis/site/v2/sports/${RPATH[lg]}/teams/${encodeURIComponent(id)}/roster`).then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+      .then(d => { const raw = Array.isArray(d?.athletes) ? d.athletes : [], list = raw.some(g => Array.isArray(g?.items)) ? raw.flatMap(g => g.items || []) : raw; return { at: Date.now(), list, ok: list.length > 0 } })
+      .catch(() => ({ at: Date.now(), list: [], ok: false }))
+      .then(v => { ROSTERS.set(k, v); return v });
+    ROSTERS.set(k, { promise });
+    return promise;
+  }
+  const isActive = a => { const st = a.status || {}, words = [st.type, st.name, st.abbreviation].filter(Boolean).join(' ');
+    if (words && (NOT_ACTIVE.test(words) || (st.type && !/^active$/i.test(st.type)))) return false;
+    return !(a.injuries || []).some(j => NOT_ACTIVE.test([j.status, j.type?.description, j.type?.name].filter(Boolean).join(' '))) };
+  function impactOf(it, r) {
+    if (!r?.ok) return null;
+    const me = r.list.find(a => norm(a.displayName || a.fullName) === norm(it.player?.name)); if (!me || !isActive(me)) return null;   // not on the roster yet: it is older than the move
+    const pos = me.position?.abbreviation || it.player?.pos || '', names = POS_NAMES[pos]; if (!names) return null;
+    const n = r.list.filter(a => a.position?.abbreviation === pos && isActive(a)).length; if (n < 1) return null;
+    return { text: `The ${IMPACT[it.kind]} gives the ${it.lead.name} ${WORDS[n] || n} active ${n === 1 ? names[0] : names[1]}.`, at: r.at };
+  }
+  T.impact = {};
+  function impact(it) {
+    if (!RPATH[it.lg] || !IMPACT[it.kind] || !it.lead?.id || !it.player?.name || Date.now() - it.when > 7 * 864e5) return;
+    rosterOf(it.lg, it.lead.id).then(r => { const x = impactOf(it, r); if (!x) return; T.impact[it.id] = x; if (D.id === it.id) fillImpact(it) });
+  }
+  function fillImpact(it) {
+    const x = T.impact[it.id], box = dHost?.querySelector('[data-twimpact]'); if (!x || !box) return;
+    box.innerHTML = `<p class="lb">Roster impact</p><p class="twd-imp">${esc(x.text)}</p><p class="lb">Roster from ESPN, read ${esc(new Date(x.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</p>`;
+  }
   document.addEventListener('submit', ev => { const f = ev.target.closest('[data-twdform]'); if (!f) return; ev.preventDefault(); T.dateOpen = true;
     post('/api/admin/transfers/dates', { op: 'add', league: T.lg, label: f.label.value, start: f.start.value, end: f.end.value }).then(r => { T.dates = r.dates || []; T.dateMsg = 'Saved.' }).catch(e => { T.dateMsg = e.message }).then(draw) });
 
