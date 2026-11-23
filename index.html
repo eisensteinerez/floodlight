@@ -3884,7 +3884,9 @@ const COLORS = ['#E5383B', '#F4A62A', '#2BB673', '#2F6FED', '#A0522D', '#E2559B'
 const initials = s => (s || '?').split(/[\s._]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
 function avatarHTML(size = 'sm'){
   const me = S.me, col = me?.prefs?.color || COLORS[3];
-  return me ? `<span class="av ${size}" style="--av:${esc(col)}">${esc(initials(me.display))}</span>`
+  // a member's photo sits over their initials, which show if there is none or it fails to load
+  const pic = me?.prefs?.photo ? `<img class="av-pic" src="/api/avatar?u=${encodeURIComponent(me.username)}&amp;v=${+me.prefs.photo}" alt="" decoding="async" onerror="this.remove()">` : '';
+  return me ? `<span class="av ${size}${pic ? ' has-pic' : ''}" style="--av:${esc(col)}">${esc(initials(me.display))}${pic}</span>`
     : `<span class="av ${size} guest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span>`;
 }
 function renderProfileBtn(){ const b = $('profileBtn'); if (!b) return; b.innerHTML = avatarHTML('sm'); b.setAttribute('aria-label', S.me ? `Your profile, ${S.me.display}` : 'Log in or create a profile') }

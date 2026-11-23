@@ -258,7 +258,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 .thp-d{display:flex;gap:3px}.thp-d i{flex:1;height:8px;border-radius:calc(var(--radius-tile)/5);background:var(--surface-2);border:1px solid var(--border)}.thp-d i.on{background:var(--pill-bg);border-color:transparent}
 .thp-m{flex:1;display:flex;align-items:center;justify-content:space-around;border-radius:calc(var(--radius-card)/4);background:var(--panel);border:1px solid var(--border);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .thp-m em{width:14px;height:14px;border-radius:50%;border:1px solid var(--border-2);background:var(--surface-2)}
-.thp-m strong{font:var(--score-weight) 20px/1 var(--font-display);color:var(--text);display:flex;align-items:center;gap:2px}.thp-m small{opacity:.5;font-size:14px}
+.thp-m strong{font:var(--score-weight) 20px/1 var(--font-display);color:var(--text);display:flex;align-items:center;gap:2px}.thp-m small{font-size:14px;color:inherit}   /* the colon in the little score: full strength, so it passes contrast like the digits (it was at half opacity) */
 .thp-r{display:flex;gap:3px}.thp-r i{flex:1;height:10px;border-radius:calc(var(--radius-tile)/5);background:var(--surface);border:1px solid var(--border)}
 [data-theme-preview="team-colors"] .thp-m{background:linear-gradient(105deg,var(--thp-a) 0 50%,var(--thp-b) 50% 100%);border-color:transparent}
 [data-theme-preview="team-colors"] .thp-m strong{background:var(--text);color:var(--surface);border-radius:6px;padding:2px 6px;font-size:16px}

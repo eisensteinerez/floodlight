@@ -26,10 +26,12 @@
         <div class="cx-row me-acts"><button type="button" class="bt" data-me="login">Log in</button><button type="button" class="bt ghost" data-me="signup">Create account</button></div></div>${record}</section>`;
     const since = u.created ? new Date(u.created * 1000).toLocaleDateString([], { month: 'long', year: 'numeric' }) : '';
     const role = u.role === 'admin' || u.role === 'owner' ? 'Owner' : u.role === 'manager' ? 'Admin' : u.role === 'pending' || u.status === 'paused' ? 'Paused' : 'Member';
-    return `<section class="card feature me-head" aria-label="Your profile"><span class="me-av" style="--av:${esc(u.prefs?.color || 'var(--accent-fill)')}" aria-hidden="true">${initials(u.display)}</span>
+    const pic = u.prefs?.photo ? `<img src="/api/avatar?u=${encodeURIComponent(u.username)}&amp;v=${+u.prefs.photo}" alt="" width="112" height="112" decoding="async" onerror="this.remove()">` : '';
+    return `<section class="card feature me-head" aria-label="Your profile"><span class="me-av${pic ? ' has-pic' : ''}" style="--av:${esc(u.prefs?.color || 'var(--accent-fill)')}" aria-hidden="true">${initials(u.display)}${pic}</span>
       <div class="me-id"><h1 class="pg-title" tabindex="-1">${esc(u.display)}</h1><p class="me-meta"><span>@${esc(u.username)}</span>${since ? `<span>Member since ${esc(since)}</span>` : ''}<span class="pl">${role}</span></p>
         ${u.prefs?.bio ? `<p class="me-bio">${esc(u.prefs.bio)}</p>` : `<p class="me-bio none">No bio yet. Say who you support and what you follow.</p>`}
-        <div class="cx-row me-acts"><button type="button" class="bt" data-me="edit">${ic('edit', 18)}Edit profile</button><button type="button" class="bt ghost" data-page="settings">${ic('gear', 18)}Settings</button></div></div>${record}</section>`;
+        <div class="cx-row me-acts"><button type="button" class="bt" data-me="edit">${ic('edit', 18)}Edit profile</button><button type="button" class="bt ghost" data-mephoto="pick" aria-describedby="mePhotoMsg">${ic('profile', 18)}${pic ? 'Change photo' : 'Add a photo'}</button>${pic ? '<button type="button" class="bt ghost" data-mephoto="remove">Remove photo</button>' : ''}<button type="button" class="bt ghost" data-page="settings">${ic('gear', 18)}Settings</button></div>
+        <input type="file" id="mePhoto" accept="image/*" hidden><p class="lb me-photo-msg" id="mePhotoMsg" role="status" aria-live="polite">${esc(P.msg)}</p></div>${record}</section>`;
   }
 
   /* ---------- the results chart: one line, a step for each finished parlay ----------
@@ -115,6 +117,36 @@
     if (fk && el.contains(a) === false) el.querySelector(fk)?.focus({ preventScroll: true });
   }
   const redraw = () => { const el = document.getElementById('pg-profile'); if (el && !el.hidden) render(el) };
+
+  /* ---------- the member's photo ----------
+     Cropped to a square from the middle and made at most 256 pixels a side here, in the browser, then sent once
+     (server.py keeps it and checks the size again). Initials show wherever there is no photo or it fails to load. */
+  const P = { msg: '', busy: false };
+  async function shrink(file) {
+    const bmp = await createImageBitmap(file), s = Math.min(bmp.width, bmp.height), out = Math.min(256, s);
+    const c = document.createElement('canvas'); c.width = c.height = out; const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+    x.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, out, out); bmp.close?.();
+    for (const [type, q] of [['image/webp', .86], ['image/webp', .72], ['image/jpeg', .86], ['image/jpeg', .7], ['image/jpeg', .55]]) {
+      const url = c.toDataURL(type, q); if (url.startsWith('data:' + type) && url.length * .75 < 46000) return url }
+    throw new Error('too big');
+  }
+  async function photo(kind, file) {
+    if (P.busy) return; const say = t => { P.msg = t; const m = document.getElementById('mePhotoMsg'); if (m) m.textContent = t };
+    if (kind === 'set' && file.size > 25e6) return say('That file is over 25 MB. Choose a smaller picture.');
+    P.busy = true; say(kind === 'set' ? 'Saving your photo…' : 'Removing your photo…');
+    try {
+      const body = kind === 'set' ? { data: await shrink(file).catch(() => { throw new Error('That picture could not be read. Try a JPEG or PNG.') }) } : { remove: true };
+      const r = await fetch('/api/me/photo', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'The photo did not save. Try again.');
+      try { S.me = d.user } catch (x) {} P.msg = kind === 'set' ? 'Photo saved.' : 'Photo removed. Your initials show instead.';
+      document.dispatchEvent(new Event('fl:me')); try { typeof renderProfileBtn === 'function' && renderProfileBtn() } catch (x) {}
+      setTimeout(() => document.querySelector(`#pg-profile [data-mephoto="pick"]`)?.focus({ preventScroll: true }), 0);
+      clearTimeout(P.t); P.t = setTimeout(() => { P.msg = ''; const m = document.getElementById('mePhotoMsg'); if (m) m.textContent = '' }, 8000);
+    } catch (e) { say(e.message || 'The photo did not save. Try again.') }
+    finally { P.busy = false }
+  }
+  document.addEventListener('click', e => { const b = e.target.closest?.('#pg-profile [data-mephoto]'); if (!b) return; if (b.dataset.mephoto === 'pick') document.getElementById('mePhoto')?.click(); else photo('remove') });
+  document.addEventListener('change', e => { if (e.target.id === 'mePhoto' && e.target.files?.[0]) photo('set', e.target.files[0]) });
 
   document.addEventListener('click', e => {
     const pg = e.target.closest?.('#pg-profile'); if (!pg) return;

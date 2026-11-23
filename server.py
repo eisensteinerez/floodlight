@@ -1324,7 +1324,7 @@ def members_view(actor):
     now = time.time()
     _mstate["invites"][:] = [i for i in _mstate["invites"] if i.get("exp", 0) > now - 30 * 86400]
     rows = [{"username": u["username"], "display": u.get("prefs", {}).get("display") or u["username"], "email": u.get("email") or "",
-             "color": u.get("prefs", {}).get("color") or "", "rank": rank_of(u), "status": "paused" if is_paused(u) else "active",
+             "color": u.get("prefs", {}).get("color") or "", "photo": u.get("prefs", {}).get("photo") or 0, "rank": rank_of(u), "status": "paused" if is_paused(u) else "active",
              "off": [] if rank_of(u) != "member" else off_of(u), "created": u.get("created", 0), "seen": u.get("seen", 0),
              "fixed": bool(ADMIN and u["username"].lower() == ADMIN)} for u in _users.values()]
     order = {"owner": 0, "admin": 1, "member": 2}
@@ -1480,6 +1480,82 @@ def admin_action(path, body, actor):
 def invite_for(token):
     now = time.time()
     return next((i for i in _mstate["invites"] if token and hmac.compare_digest(i.get("token", ""), token) and i.get("exp", 0) > now), None)
+
+
+# ---------- member photos: a small square picture per member, initials where there is none ----------
+# The page resizes the picture to at most 256 pixels a side before it is sent. The server checks it is really a JPEG,
+# PNG or WebP of that size and under 48 KB, and keeps it in avatars.json (and the database copy when one is set, so it
+# survives a restart). The member's prefs carry the time it was set, which the page adds to the picture's address.
+AVATARS_FILE = CACHE_DIR / "avatars.json"
+_avatars = storage.load(AVATARS_FILE, {})   # {username lower: {"type", "data" (base64), "at"}}
+AVATAR_MAX_BYTES, AVATAR_MAX_PX = 48_000, 256
+
+
+def _img_size(b):
+    """(media type, width, height) read from the file's own header, or None when it is not a JPEG, PNG or WebP."""
+    import struct
+    if b[:8] == b"\x89PNG\r\n\x1a\n" and len(b) >= 24:
+        w, h = struct.unpack(">II", b[16:24])
+        return "image/png", w, h
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP" and len(b) >= 30:
+        kind = b[12:16]
+        if kind == b"VP8X":
+            return "image/webp", 1 + int.from_bytes(b[24:27], "little"), 1 + int.from_bytes(b[27:30], "little")
+        if kind == b"VP8 ":
+            return "image/webp", int.from_bytes(b[26:28], "little") & 0x3FFF, int.from_bytes(b[28:30], "little") & 0x3FFF
+        if kind == b"VP8L":
+            bits = int.from_bytes(b[21:25], "little")
+            return "image/webp", (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+        return None
+    if b[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(b):
+            if b[i] != 0xFF:
+                i += 1
+                continue
+            m = b[i + 1]
+            if m in (0xD8, 0x01) or 0xD0 <= m <= 0xD7:
+                i += 2
+                continue
+            seg = int.from_bytes(b[i + 2:i + 4], "big")
+            if 0xC0 <= m <= 0xCF and m not in (0xC4, 0xC8, 0xCC):
+                h, w = struct.unpack(">HH", b[i + 5:i + 9])
+                return "image/jpeg", w, h
+            i += 2 + seg
+    return None
+
+
+def set_avatar(user, body):
+    import base64
+    key = user["username"].lower()
+    if body.get("remove"):
+        _avatars.pop(key, None)
+        storage.save(AVATARS_FILE, _avatars)
+        with _acct_lock:
+            user.setdefault("prefs", {}).pop("photo", None)
+            _save_accounts()
+        return 200, {"user": public_user(user)}
+    m = re.fullmatch(r"data:(image/(?:webp|jpeg|png));base64,([A-Za-z0-9+/=]+)", str(body.get("data") or ""))
+    if not m:
+        return 400, {"error": "Send a JPEG, PNG or WebP picture."}
+    try:
+        raw = base64.b64decode(m.group(2), validate=True)
+    except Exception:
+        return 400, {"error": "That picture could not be read."}
+    if len(raw) > AVATAR_MAX_BYTES:
+        return 413, {"error": "That picture is too large. Try a smaller one."}
+    size = _img_size(raw)
+    if not size or size[0] != m.group(1):
+        return 400, {"error": "That file is not a JPEG, PNG or WebP picture."}
+    if not (0 < size[1] <= AVATAR_MAX_PX and 0 < size[2] <= AVATAR_MAX_PX):
+        return 400, {"error": f"Pictures are kept at {AVATAR_MAX_PX} pixels or smaller a side."}
+    at = int(time.time())
+    _avatars[key] = {"type": size[0], "data": base64.b64encode(raw).decode(), "at": at}
+    storage.save(AVATARS_FILE, _avatars)
+    with _acct_lock:
+        user.setdefault("prefs", {})["photo"] = at
+        _save_accounts()
+    return 200, {"user": public_user(user)}
 
 
 # ---------- parlays: what a member is tracking, and their record ----------
@@ -1856,6 +1932,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not has(user, "predictions"):
                 return self.send_auth(403, {"error": "Your account doesn't include Predictions. Ask your admin for access.", "service": "predictions"})
             return self.send_auth(*parlays_action(body, user))
+        if u.path == "/api/me/photo":   # set or remove the member's own photo (set_avatar)
+            return self.send_auth(*set_avatar(user, body))
         if u.path == "/api/me/prefs":
             if "follows" in body and not has(user, "alerts"):
                 return self.send_auth(403, {"error": "Your account doesn't include Alerts. Ask your admin for access.", "service": "alerts"})
@@ -2017,6 +2095,19 @@ class Handler(SimpleHTTPRequestHandler):
                     q.pop("id")
                 b = odds.board(q)
                 return self.send_json({**b, "value": odds.value_picks(b)})
+            if u.path == "/api/avatar":   # a member's photo (set_avatar); the address carries the time it was set, so it caches for a day
+                a = _avatars.get(str(q.get("u") or "").lower())
+                if not a:
+                    return self.send_json({"error": "no photo"}, 404)
+                import base64
+                data = base64.b64decode(a["data"])
+                self.send_response(200)
+                self.send_header("Content-Type", a["type"])
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                return self.wfile.write(data)
             if u.path == "/api/odds/history":   # every kept price reading for a game (linehist.py), same inputs as the board
                 if q.get("sport") not in ("soccer", "football", "basketball", "baseball") or not re.fullmatch(r"[A-Za-z0-9_.]{1,20}", q.get("lg", "")):
                     return self.send_json({"error": "bad request"}, 400)
