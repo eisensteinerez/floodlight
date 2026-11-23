@@ -127,7 +127,7 @@
       + `<div class="flm-g">${u ? mi('profile', 'My profile', 'data-page="profile"') + mi('edit', 'Edit profile', 'data-menu="edit"') : ''}${mi('ticket', 'My parlays', 'data-shell="parlays"')}${mi('members', 'Members', 'data-shell="members"', '', ' flm-narrow')}
         ${mi('sun', 'Your day', 'data-page="today"')}${mi('week', 'Your week', 'data-page="recap"')}${mi('bell', 'Alerts', 'data-page="inbox"')}${mi('trophy', 'Private competitions', 'data-page="groups"')}${mi('transfers', 'Transfers', 'data-shell="transfers"')}
         ${mi('gear', 'Settings', 'data-page="settings"')}${mi('palette', 'Theme', 'data-page="settings" data-arg="theme"', `<em>${esc(theme)}</em>`)}${favThemes()}
-        ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help and feedback', 'data-page="guide" data-arg="help"')}${mi('clock', 'Trust and data', 'data-page="status"')}${window.flApp?.canInstall?.() ? mi('install', 'Install Floodlight', 'data-install') : ''}</div>`
+        ${mi('book', 'How to use Floodlight', 'data-page="guide"')}${mi('spark', 'What’s new', 'data-page="guide" data-arg="new"')}${mi('help', 'Help center', 'data-page="help"')}${u ? mi('members', 'Invite friends', 'data-page="invite"') : ''}${mi('clock', 'Trust and data', 'data-page="status"')}${window.flApp?.canInstall?.() ? mi('install', 'Install Floodlight', 'data-install') : ''}</div>`
       + (window.flAdmin?.menu?.(mi) || '')
       + (u ? `<div class="flm-g flm-end">${mi('out', 'Sign out', 'data-act="logout"', '', ' danger')}</div>` : '');
   }
