@@ -20,12 +20,16 @@
   const SPORT_NAME = { nba: 'NBA', wnba: 'WNBA', nfl: 'NFL', nhl: 'NHL', mlb: 'MLB', soccer: 'Soccer', cfb: 'College football' };
   const SPORT_ORDER = ['nba', 'nfl', 'nhl', 'mlb', 'wnba', 'soccer', 'cfb'];
   const WHEN = [['tonight', 'Tonight'], ['tomorrow', 'Tomorrow'], ['week', 'This week']];
-  const MIN = [[0, 'Any edge'], [3, '3+'], [5, '5+'], [10, '10+']];
-  const SORT = [['edge', 'Biggest edge'], ['conf', 'Most confident'], ['soon', 'Starting soonest']];
+  const MIN = [[0, 'Any'], [3, '3+'], [5, '5+'], [10, '10+']];
+  const SORT = [['edge', 'Biggest'], ['conf', 'Most confident'], ['soon', 'Soonest']];
+  const KIND = [['all', 'Props and match results'], ['prop', 'Player props only'], ['match', 'Match results only']];
+  const TRACK_SINCE = Date.UTC(2026, 10, 23, 12);   // grading rebuilt and running on its own (PR 54, 2026-11-23)
+  const FULL_AT = 20;                               // graded picks before the full performance module is shown
   const LIVE_FOR = 5 * 3600e3;   // a started prop stays in "Live" this long; nothing tells us when its game ends
   const STALE = 30 * 60000;      // a reading of the books older than this is marked stale (the server re-reads them every 15 minutes)
   const P = { sport: 'all', when: 'tonight', min: 0, sort: 'edge', props: null, matches: null, record: null, loading: false, at: 0, denied: false, all: false,
     open: new Set(), ev: new Map(), pending: new Set(), fcAt: 0, recAt: 0, fcError: '', recError: '', fcStatus: 0, srcOpen: false, retries: 0, retryT: 0,
+    kind: 'all', priced: false, clean: false, mine: false, more: false, ctx: new Map(), ctxAsked: new Set(),
     slip: store.get('fl.slip', []), follow: store.get('fl.pdFollow', []), seen: store.get('fl.lineSeen', {}), tried: new Map(), slips: store.get('fl.slips', []), confirm: null, saved: 0, timer: 0 };
 
   /* ---------- data ---------- */
@@ -96,22 +100,47 @@
     return rows;
   }
   const failed = () => sources().filter(x => x.state === 'failed' || (x.state === 'stale' && x.note));
-  const STATE_TXT = { ok: 'Up to date', loading: 'Checking…', stale: 'Stale', failed: 'Did not load', off: 'Not in your access' };
+  const STATE_TXT = { ok: 'Up to date', loading: 'Checking…', stale: 'Delayed, last reading shown', failed: 'Delayed', off: 'Not in your access' };
+  /* What the sources say, in one sentence (item 21): how many price sources updated, which ones are delayed by name,
+     when we checked, and whether the board is safe to use. Everything else sits in the panel the indicator opens. */
+  const clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  function health() {
+    const src = sources().filter(x => x.key !== 'rec' && x.state !== 'off'), wait = src.filter(x => x.state === 'loading');
+    const part = src.filter(x => x.state === 'ok' && /did not answer/.test(x.note));
+    const late = src.filter(x => x.state === 'failed' || x.state === 'stale');
+    // the books that did not answer inside a sport that otherwise did, named once each
+    const books = [...new Set(part.flatMap(x => (x.note.match(/^(.*) did not answer/) || [, ''])[1].split(' and ').filter(Boolean)))];
+    const names = [...late.map(x => x.key === 'fc' ? 'match forecasts' : x.name.replace(' player lines', ' lines')), ...books];
+    const oldest = late.filter(x => x.at).reduce((a, x) => Math.min(a, x.at), Infinity);
+    const safe = !late.some(x => x.state === 'stale' && x.at && Date.now() - x.at > 2 * STALE);
+    return { src, wait, total: src.length, late, part, names, books, oldest, safe,
+      bad: late.length > 0 || books.length > 0, last: Math.max(0, ...src.filter(x => x.state === 'ok').map(x => x.at || 0)) };
+  }
+  function healthText(h) {
+    if (!h.bad) return { head: `All ${h.total} price sources updated`, sub: '' };
+    const lst = xs => xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+    const updated = h.total - h.late.length;
+    const head = `${updated} of ${h.total} price sources updated`;
+    const who = h.names.length ? `${lst(h.names.map((x, i) => i ? x : x.charAt(0).toUpperCase() + x.slice(1)))} ${h.names.length === 1 ? 'is' : 'are'} temporarily delayed.` : 'Some market prices are delayed.';
+    return { head, sub: `${who} Predictions using the available prices are still shown.` };
+  }
+  const srcNote = x => x.state === 'failed' ? 'No answer yet; it is tried again by itself' : x.state === 'stale' && x.at ? 'Showing the last reading' : x.note.replace(/ did not answer/g, ' delayed');
   function drawFresh() {
-    const el = $('pdFresh'); if (!el) return;
-    if (P.denied) { el.innerHTML = ''; return }
-    const src = sources(), wait = src.filter(x => x.state === 'loading'), bad = src.filter(x => x.state === 'failed'), old = src.filter(x => x.state === 'stale');
-    const partial = src.filter(x => x.state === 'ok' && /did not answer/.test(x.note)), last = Math.max(0, ...src.filter(x => x.state === 'ok').map(x => x.at || 0));
-    const head = P.loading ? `<span class="pd-spin" aria-hidden="true"></span><b>Checking ${wait.length ? esc(wait.map(x => x.key.length <= 5 && SPORT_NAME[x.key] ? SPORT_NAME[x.key] : x.name.toLowerCase()).slice(0, 4).join(', ')) + (wait.length > 4 ? ' and more' : '') : 'the books'}…</b><span class="lb">${src.some(x => x.state === 'loading' && x.at) ? 'Showing the last reading meanwhile' : 'Picks appear as each source answers'}</span>`
-      : last ? `<span class="pd-dot${bad.length || old.length ? ' warn' : ''}" aria-hidden="true"></span><b>Updated ${agoTag(P.at)}</b><span class="lb">Player lines can be up to 15 minutes behind the books</span>`
-      : `<span class="pd-dot warn" aria-hidden="true"></span><b>Nothing has loaded yet</b>`;
-    const flags = [bad.length ? `<span class="pl pd-flag bad">${ic('x', 14)}${bad.length} did not load</span>` : '', old.length ? `<span class="pl pd-flag">${old.length} stale</span>` : '', partial.length && !bad.length ? `<span class="pl pd-flag">${partial.length === 1 ? 'A book' : 'Some books'} did not answer</span>` : ''].join('');
-    el.innerHTML = `<div class="pd-fresh-top" role="status"><span class="pd-fresh-l">${head}</span><span class="pd-fresh-r">${flags}
-        <button type="button" class="bt ghost sm" data-pd="reload" data-fk="reload-top"${P.loading ? ' disabled' : ''}>${bad.length || old.length ? 'Retry' : 'Refresh'}</button></span></div>
-      <details class="pd-src"${P.srcOpen ? ' open' : ''}><summary data-fk="src">Sources and delays</summary>
-        <div class="tbx-wrap"><table class="tbx"><thead><tr><th scope="col">Source</th><th scope="col">Read from</th><th scope="col" class="r">Picks</th><th scope="col">Last read</th><th scope="col">Status</th></tr></thead>
-          <tbody>${src.map(x => `<tr class="pd-s-${x.state}"><th scope="row">${esc(x.name)}</th><td>${esc(x.from || '–')}${x.note ? `<small class="pd-s-note">${esc(x.note)}</small>` : ''}</td><td class="r num">${x.state === 'loading' && !x.at ? '–' : x.n}</td><td>${x.at ? agoTag(x.at) : '–'}</td><td><span class="pd-st ${x.state}">${STATE_TXT[x.state]}</span></td></tr>`).join('')}</tbody></table></div>
-        <p class="lb">Player lines are read from the pick'em apps and re-read at most every 15 minutes, so a line or price here can be up to 15 minutes behind the app. A reading older than 30 minutes is marked stale. Match forecasts say when each one was made when you open the pick. If a source does not answer, the page keeps its last reading, says so here, and tries again by itself.</p></details>`;
+    const stat = $('pdStat'), el = $('pdFresh'); if (!stat || !el) return;
+    if (P.denied) { stat.innerHTML = ''; el.innerHTML = ''; return }
+    const h = health(), T = healthText(h);
+    const short = P.loading ? `Checking ${h.wait.length ? h.wait.length + ' ' + (h.wait.length === 1 ? 'source' : 'sources') : 'the books'}…`
+      : !h.last && !h.late.some(x => x.at) ? 'Nothing has loaded yet' : `Updated ${P.at ? `<span data-pdago="${P.at}">${ago(P.at)}</span>` : 'just now'}${h.bad ? ' · Some sources delayed' : ''}`;
+    stat.innerHTML = `<button type="button" class="pd-stat${h.bad ? ' warn' : ''}" data-pd="src" data-fk="src" aria-expanded="${P.srcOpen}" aria-controls="pdFresh">${P.loading ? '<span class="pd-spin" aria-hidden="true"></span>' : `<span class="pd-dot${h.bad || !h.last ? ' warn' : ''}" aria-hidden="true"></span>`}<span>${short}</span><span class="sr-only">. Show the price sources</span></button>`;
+    if (!P.srcOpen) { el.innerHTML = ''; el.hidden = true; return }
+    el.hidden = false;
+    const src = sources();
+    el.innerHTML = `<div class="card pd-srcp" role="region" aria-label="Price sources">
+        <div class="pd-srcp-h"><span class="rw-t"><b>${esc(T.head)}</b>${T.sub ? `<small>${esc(T.sub)}</small>` : ''}</span><button type="button" class="bt ghost sm" data-pd="reload" data-fk="reload-top"${P.loading ? ' disabled' : ''}>${h.bad ? 'Retry' : 'Refresh'}</button></div>
+        <p class="pd-srcp-m"><span>Checked ${P.at ? esc(clock(P.at)) : '–'}</span><span class="pd-safe ${h.safe ? 'ok' : 'warn'}">${h.safe ? 'Safe to use: every pick shows when its price was last read' : `Use with care: some prices are from ${esc(clock(h.oldest))}`}</span></p>
+        <div class="tbx-wrap"><table class="tbx"><caption class="sr-only">Every source, when it was read and its status</caption><thead><tr><th scope="col">Source</th><th scope="col">Read from</th><th scope="col" class="r">Picks</th><th scope="col">Last read</th><th scope="col">Status</th></tr></thead>
+          <tbody>${src.map(x => `<tr class="pd-s-${x.state}"><th scope="row">${esc(x.name)}</th><td>${esc(x.from || '–')}${srcNote(x) ? `<small class="pd-s-note">${esc(srcNote(x))}</small>` : ''}</td><td class="r num">${x.state === 'loading' && !x.at ? '–' : x.n}</td><td>${x.at ? agoTag(x.at) : '–'}</td><td><span class="pd-st ${x.state}">${STATE_TXT[x.state]}</span></td></tr>`).join('')}</tbody></table></div>
+        <p class="lb">Player lines are read from the pick’em apps at most every 15 minutes, so a line can be up to 15 minutes behind the app. A reading older than 30 minutes is marked stale. If a source is delayed, the page keeps its last reading and tries again by itself.</p></div>`;
   }
   const allPicks = () => [...(P.props?.picks || []).map(p => ({ ...p, short: `${p.name.split(' ').slice(-1)[0]} ${p.text.toLowerCase()}` })), ...(P.matches || [])];
   const stateOf = (p, now) => !p.start || p.start > now ? 'pre' : p.type === 'prop' ? (now - p.start < LIVE_FOR ? 'live' : 'gone') : 'live';
@@ -123,29 +152,33 @@
   }
   const time = d => !d ? 'Today' : (dayStart(d).getTime() === dayStart(new Date()).getTime() ? '' : d.toLocaleDateString([], { weekday: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   function lists() {
-    const now = new Date(), every = allPicks(), bySport = every.filter(p => P.sport === 'all' || p.sport === P.sport);
+    const now = new Date(), every = allPicks(), bySport = every.filter(p => (P.sport === 'all' || p.sport === P.sport) && (P.kind === 'all' || p.type === P.kind)
+      && (!P.mine || following(p)) && (!P.clean || !warnsOf(p).length));
     const live = bySport.filter(p => stateOf(p, now) === 'live');
     const pre = bySport.filter(p => stateOf(p, now) === 'pre' && inWhen(p, now));
     const cmp = { edge: (a, b) => b.edge - a.edge || b.ours - a.ours, conf: (a, b) => b.ours - a.ours, soon: (a, b) => (a.start || 0) - (b.start || 0) || b.ours - a.ours }[P.sort];
     const ranked = pre.filter(p => p.edge != null && p.edge >= P.min).sort(cmp);
-    const bare = P.min > 0 ? [] : pre.filter(p => p.edge == null).sort(P.sort === 'soon' ? cmp : (a, b) => b.ours - a.ours);
+    const bare = P.min > 0 || P.priced ? [] : pre.filter(p => p.edge == null).sort(P.sort === 'soon' ? cmp : (a, b) => b.ours - a.ours);
     const done = (P.record || []).filter(e => ['won', 'lost'].includes(e.result) && e.ko * 1000 > now - 27 * 3600e3 && (P.sport === 'all' || (e.sport === 'soccer' ? 'soccer' : e.lg === 'nfl' ? 'nfl' : 'cfb') === P.sport)).sort((a, b) => b.ko - a.ko);
     return { every, live, ranked, bare, done, sports: SPORT_ORDER.filter(s => every.some(p => p.sport === s)) };
   }
 
   /* ---------- the page ---------- */
-  function render(el) {
-    el.innerHTML = `<div class="vst pd">
-      <header class="pg-head"><div><h1 class="pg-title" tabindex="-1">Predictions</h1><p class="pg-sub">Where our numbers disagree with the market, ranked by edge.</p></div></header>
-      <div class="pd-filters" id="pdFilters"></div>
-      <div class="pd-fresh" id="pdFresh"></div>
-      <details class="pd-defs"><summary>What the numbers on a pick mean</summary><dl>
+  const DEFS = `<dl class="pd-dl">
         <div><dt>Floodlight’s chance</dt><dd>Our projection for this side of the line, from past games with the recent ones counting more. It is the number we stand behind.</dd></div>
         <div><dt>Market’s chance</dt><dd>What the app’s price says, with its margin taken out. Shown only where an app posts both sides.</dd></div>
         <div><dt>Hit rate</dt><dd>What actually happened: how often this side came in over recent games. It feeds our chance but is not the same thing.</dd></div>
-        <div><dt>Edge and confidence</dt><dd>The edge is the gap between our chance and the market’s. Confidence is how much stands behind our chance. A big edge read from few or uneven games has modest confidence, and each pick’s evidence says how wide its range is.</dd></div></dl></details>
+        <div><dt>Edge and confidence</dt><dd>The edge is the gap between our chance and the market’s. Confidence is how much stands behind our chance. A big edge read from few or uneven games has modest confidence, and each pick’s evidence says how wide its range is.</dd></div>
+        <div><dt>Warnings</dt><dd>A tag such as Small sample or Lineup not confirmed says what makes a pick shakier than usual. Open the pick to read why.</dd></div></dl>`;
+  function render(el) {
+    el.innerHTML = `<div class="vst pd">
+      <header class="pg-head"><div><h1 class="pg-title" tabindex="-1">Predictions</h1><p class="pg-sub">Where our numbers disagree with the market, ranked by edge.</p></div>${window.flHelp?.button ? window.flHelp.button('predictions') : ''}</header>
+      <div class="pd-filters" id="pdFilters"></div>
+      <div class="pd-fresh" id="pdFresh" hidden></div>
+      ${window.flHelp?.panel ? window.flHelp.panel('predictions', 'What the numbers on a pick mean', DEFS) : ''}
       <div class="g2 pd-cols"><div class="vst pd-board" id="pdBoard" aria-live="polite"></div><aside class="vst pd-side" id="pdSide" aria-label="Your slip and our results"></aside></div>
       <p class="lb pd-note">These are estimates from past games and posted prices, not guarantees. <a class="lk" href="#/guide/predictions" data-page="guide" data-arg="predictions">How we work out an edge</a></p>
+      ${window.flHelp?.panel ? '' : `<details class="pd-defs"><summary>What the numbers on a pick mean</summary>${DEFS}</details>`}
       <section class="card pd-more" aria-label="More prediction tools"><div class="sec-h"><h2>More prediction tools</h2></div>
         <div class="cx-row"><button type="button" class="cx" data-pd="soccer">${ic('soccer', 18)}Soccer picks, match by match</button><button type="button" class="cx" data-page="history">${ic('trophy', 18)}Pick history: every hit and miss</button><button type="button" class="cx" data-page="injuries">${ic('help', 18)}Injuries and lineups</button><button type="button" class="cx" data-shell="lab">${ic('lab', 18)}Open the Lab</button></div></section>
     </div>`;
@@ -161,13 +194,23 @@
   document.addEventListener('input', e => { const r = e.target.closest?.('#pg-predictions [data-evline]'); if (!r) return; const k = r.closest('[data-pdk]')?.dataset.pdk; if (k) P.tried.set(k, +r.value) });
   document.addEventListener('fl:lm', () => { if (P.open.size && !document.getElementById('pg-predictions')?.hidden) draw() });   // a price history landed (linemove.js)
 
+  /* One compact bar: Sport | Date | Edge | Sort, then More filters, then one small sources indicator. */
+  const moreCount = () => [P.kind !== 'all', P.priced, P.clean, P.mine].filter(Boolean).length;
   function drawFilters(L) {
-    const chip = (k, l, n) => `<button type="button" class="cx" role="radio" aria-checked="${P.sport === k}" tabindex="${P.sport === k ? 0 : -1}" data-pdsport="${k}" data-fk="sp-${k}">${esc(l)}${n != null && !(P.loading && !n) ? `<span class="num pd-n">${n}</span>` : ''}</button>`;
-    const now = new Date(), count = s => L.every.filter(p => (s === 'all' || p.sport === s) && stateOf(p, now) !== 'gone').length;
-    const seg = (name, label, opts, cur) => `<div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([k, l]) => `<button type="button" role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" tabindex="${cur === k ? 0 : -1}" data-pd${name}="${k}" data-fk="${name}-${k}">${esc(l)}</button>`).join('')}</div>`;
-    $('pdFilters').innerHTML = `<div class="cx-row scroll" role="radiogroup" aria-label="Sport">${chip('all', 'All sports', count('all'))}${L.sports.map(s => chip(s, SPORT_NAME[s], count(s))).join('')}</div>
-      <div class="pd-ctl">${seg('when', 'When', WHEN, P.when)}<div class="pd-min"><span class="lb" id="pdMinL">Minimum edge</span>${seg('min', 'Minimum edge', MIN, P.min)}</div>
-        <label class="fl-f pd-sort"><span class="sr-only">Sort by</span><select class="inp" id="pdSort" data-fk="sort">${SORT.map(([k, l]) => `<option value="${k}"${P.sort === k ? ' selected' : ''}>Sort: ${esc(l.toLowerCase())}</option>`).join('')}</select></label></div>`;
+    const now = new Date(), count = sp => L.every.filter(p => (sp === 'all' || p.sport === sp) && stateOf(p, now) !== 'gone').length;
+    const sel = (key, label, opts, cur) => `<label class="pd-fs"><span class="pd-fs-l" id="pdF-${key}">${label}</span><select class="inp sm" data-pdsel="${key}" data-fk="sel-${key}" aria-labelledby="pdF-${key}">${opts.map(([k, l]) => `<option value="${k}"${String(cur) === String(k) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
+    const sports = [['all', `All${P.loading && !count('all') ? '' : ` (${count('all')})`}`], ...L.sports.map(sp => [sp, `${SPORT_NAME[sp]} (${count(sp)})`])];
+    if (P.sport !== 'all' && !L.sports.includes(P.sport)) sports.push([P.sport, `${SPORT_NAME[P.sport] || P.sport} (0)`]);
+    const n = moreCount(), chk = (k, l) => `<label class="pd-chk"><input type="checkbox" data-pdchk="${k}" data-fk="chk-${k}"${P[k] ? ' checked' : ''}><span>${esc(l)}</span></label>`;
+    $('pdFilters').innerHTML = `<div class="pd-fbar" role="group" aria-label="Filter the picks">
+        ${sel('sport', 'Sport', sports, P.sport)}${sel('when', 'Date', WHEN, P.when)}${sel('min', 'Edge', MIN, P.min)}${sel('sort', 'Sort', SORT, P.sort)}
+        <button type="button" class="bt ghost sm pd-morebtn" data-pd="more" data-fk="more" aria-expanded="${P.more}" aria-controls="pdMore">More filters${n ? ` <span class="pd-n num">${n}</span>` : ''}<svg class="pd-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <span class="pd-fbar-end" id="pdStat"></span></div>
+      <div class="pd-more-f" id="pdMore"${P.more ? '' : ' hidden'}>
+        ${sel('kind', 'Show', KIND, P.kind)}
+        <fieldset class="pd-chks"><legend class="sr-only">Narrow the board</legend>${chk('priced', 'Only picks with a market price')}${chk('clean', 'Hide picks with an uncertainty warning')}${chk('mine', 'Only picks I follow')}</fieldset>
+        ${n ? `<button type="button" class="lk" data-pd="clear" data-fk="clear-more">Clear all filters</button>` : ''}
+      </div>`;
   }
 
   const inSlip = id => P.slip.some(l => l.id === id);
@@ -224,7 +267,7 @@
   let evT = 0;
   const evRedraw = () => { if (!P.open.size || !$('pdBoard')) return; clearTimeout(evT); evT = setTimeout(draw, 60) };
   document.addEventListener('fl:evidence', evRedraw);
-  document.addEventListener('fl:injuries', () => { evRedraw(); checkInjuries() });
+  document.addEventListener('fl:injuries', () => { if ($('pdBoard') && window.flPages.current() === 'predictions') { clearTimeout(evT); evT = setTimeout(draw, 60) } checkInjuries() });
   /* alerts for the picks you follow: injury news on the player, a line move, and the result once it is graded */
   const pickAlert = kind => window.flAlerts?.pick?.(kind);
   function checkInjuries() {
@@ -251,13 +294,57 @@
   }
   setInterval(() => { if (!P.follow.length) return; [...new Set(P.follow.map(f => f.sport))].forEach(sp => window.flInjuries?.load(sp)); checkResults() }, 10 * 60000);
   setTimeout(() => { [...new Set(P.follow.map(f => f.sport))].forEach(sp => window.flInjuries?.load(sp)); checkResults() }, 8000);
-  // a prop's team is the player record's (players.js), filled in place; a match names its two teams
-  const who = p => p.type === 'prop' && p.fid ? `<span data-flreg="${esc(p.fid)}" data-flreg-show="team">${esc(p.teamName || p.team)}</span>${p.opp ? ' v ' + esc(p.opp) : ''}`
-    : esc(p.type === 'prop' ? p.game : p.text === 'Draw' ? '' : p.game);
+  /* ---------- the game behind a pick: opponent, start, home or away, availability, last price update (item 26) ---------- */
+  const SCHED = { nba: 'basketball/nba', wnba: 'basketball/wnba', nfl: 'football/nfl', nhl: 'hockey/nhl', mlb: 'baseball/mlb' };
+  const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const tm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // today's scoreboard for the sport, read once through the shared schedule (schedule.js), then the page redraws
+  function games(sport, d) {
+    const path = SCHED[sport]; if (!path || !d || !window.flSched) return null;
+    const key = `${sport}:${ymd(d)}`, have = P.ctx.get(key); if (have) return have;
+    if (!P.ctxAsked.has(key)) { P.ctxAsked.add(key); window.flSched.day({ path, day: ymd(d) }).then(r => { P.ctx.set(key, r.status === 'error' ? [] : r.games || []); draw() }, () => P.ctx.set(key, [])) }
+    return null;
+  }
+  function ctx(p) {
+    if (p.type === 'match') { const m = p.m; return { us: m.home, them: m.away, home: null, match: true } }
+    const evs = games(p.sport, p.start), mine = [p.team, p.teamName].map(tm).filter(Boolean);
+    const ev = (evs || []).find(e => (e.competitions?.[0]?.competitors || []).some(c => mine.includes(tm(c.team?.abbreviation)) || mine.includes(tm(c.team?.displayName))));
+    const cs = ev?.competitions?.[0]?.competitors || [], me = cs.find(c => mine.includes(tm(c.team?.abbreviation)) || mine.includes(tm(c.team?.displayName))), op = cs.find(c => c !== me);
+    return { us: me?.team?.location || p.teamName || p.team, them: op?.team?.location || op?.team?.displayName || p.opp, home: me ? me.homeAway === 'home' : null };
+  }
+  const matchup = p => { const c = ctx(p); if (c.match) return `${esc(c.us)} v ${esc(c.them)}`; if (!c.them) return esc(c.us || ''); return `${esc(c.us || '')} ${c.home === true ? 'vs' : c.home === false ? 'at' : 'v'} ${esc(c.them)}` };
+  const injAsked = new Map();   // sport -> when the report was last asked for, so a report that fails is not asked for on every redraw
+  // availability from the league injury report (injuries.js): not listed is "Not on the injury report", never "confirmed"
+  function avail(p) {
+    if (p.type !== 'prop') return null;
+    const I = window.flInjuries; if (!I?.PATH?.[p.sport]) return null;
+    if (!I.ready(p.sport)) { const t = injAsked.get(p.sport) || 0; if (Date.now() - t > 5 * 60000) { injAsked.set(p.sport, Date.now()); I.load(p.sport) } return null }
+    const st = I.status(p.sport, p.name); if (!st) return { lv: 'ok', txt: 'Not on the injury report' };
+    return { lv: st.lv, txt: st.status || I.LEVEL_NAME[st.lv] };
+  }
+  /* uncertainty warnings (item 27), from the same checks as the evidence panel (evidence.js), strongest first */
+  const WARN_ORDER = ['Listed out', 'Lineup not confirmed', 'Possible data mismatch', 'Recently transferred', 'Returning from injury or a long absence', 'Role recently changed', 'Expected minutes uncertain', 'Small sample', 'Providers disagree', 'Model and market disagree', 'Opponent data unavailable', 'Opponent data limited', 'Market moved', 'Back-to-back', 'No market price'];
+  const warnRank = t => { const i = WARN_ORDER.findIndex(w => t.startsWith(w)); return i < 0 ? 50 : i };
+  const warnMemo = new WeakMap();
+  function warnsOf(p) {
+    if (warnMemo.has(p)) return warnMemo.get(p);
+    let out = []; try { out = window.flEvidence?.flags ? window.flEvidence.flags(p) : [] } catch (e) { out = [] }
+    const mv = moved(p); if (mv && ((mv.kind === 'line' && Math.abs(mv.to - mv.from) >= 1) || (mv.kind === 'price' && Math.abs(pct(mv.to) - pct(mv.from)) >= 8)) && !out.some(([t]) => t.startsWith('Market moved'))) out.push(['Market moved heavily', mv.say]);
+    out = out.filter(([t]) => t !== 'Back-to-back' && t !== 'No market price').sort((a, b) => warnRank(a[0]) - warnRank(b[0]));
+    warnMemo.set(p, out); return out;
+  }
+  // a started pick that is in the record with its first reading saved before the start: "Locked before start"
+  function lockedRec(p) {
+    if (p.type === 'match') { const e = (P.record || []).find(x => x.key === p.m.key); return e && e.locked && (e.first?.at || e.made) < e.ko ? e : null }
+    const norm = x => tm(x); const e = (P.propRec || []).find(x => norm(x.player) === norm(p.name) && x.k === p.k && Math.abs(x.start * 1000 - +p.start) < 6 * 3600e3);
+    return e && e.first?.at && e.first.at < e.start ? e : null;
+  }
+  const lockTag = e => e ? `<span class="pl fl-lock" title="Saved with its original numbers ${esc(new Date((e.first?.at || e.made) * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}, before the start. It is graded automatically on that line.">${ic('check', 12)}Locked before start</span>` : '';
   function card(p, rank, now) {
     const st = stateOf(p, now), on = inSlip(p.id), k = keyOf(p), open = P.open.has(k), mv = moved(p), fol = following(p);
     const when = st === 'live' ? `<span class="pl live"><i></i>Live</span>` : esc(time(p.start));
     const badge = p.heat != null ? window.flHeat.badge(p.heat) : p.conf ? `<span class="pl">${esc(p.conf)}</span>` : '';
+    const W = warnsOf(p), av = avail(p), lk = st !== 'pre' ? lockedRec(p) : null;
     const old = p.type === 'prop' && p.at && now - p.at > STALE ? `<span class="pl pd-flag" title="This line was last read ${esc(ago(p.at))}">Read ${esc(ago(p.at))}</span>` : '';
     const mvTag = mv ? `<span class="pl pd-moved" title="${esc(mv.say)}">${ic(mv.to > mv.from ? 'up' : 'down', 14)}${esc(mv.txt)}<span class="sr-only">. ${esc(mv.say)}</span></span>` : '';
     const bar = (label, v, cls) => `<div class="pd-bar ${cls}"><dt>${label}</dt><dd>${v == null ? `<span class="lb">No two-sided price posted</span>` : `<span class="trak"><i style="width:${pct(v)}%"></i></span><b class="num">${pct(v)}%</b>`}</dd></div>`;
@@ -266,13 +353,15 @@
     const multi = lines.length > 1 || lines.some(o => o.line !== p.line);
     return `<article class="card pd-pk${p.edge != null && p.edge < 0 ? ' neg' : ''}${open ? ' open' : ''}" data-pk="${esc(p.id)}" data-pdk="${esc(k)}">
       <div class="pd-top">${rank ? `<span class="pd-rank num" aria-hidden="true">${rank}</span>` : ''}${face(p.photo, p.name, 'avx av-lg' + (p.type === 'match' ? ' crest' : ''))}
-        <button type="button" class="pd-open" data-pdev="${esc(k)}" data-fk="open-${esc(k)}" aria-expanded="${open}" aria-controls="ev-${esc(k)}"><b>${esc(p.name)}</b><span>${esc(p.text)}</span><small>${[who(p), esc(SPORT_NAME[p.sport] || '')].filter(Boolean).join(' · ')}${st === 'live' ? '' : ' · ' + when}</small>
+        <button type="button" class="pd-open" data-pdev="${esc(k)}" data-fk="open-${esc(k)}" aria-expanded="${open}" aria-controls="ev-${esc(k)}"><b>${esc(p.name)}</b><span>${esc(p.text)}</span><small class="pd-mu">${[matchup(p), st === 'live' ? '' : when].filter(Boolean).join(' · ')}</small>
           <em class="pd-cue">${open ? 'Hide the evidence' : 'See the evidence'}<svg class="pd-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></em></button>
         <span class="pd-tags">${st === 'live' ? when : ''}${old}${badge}</span>
         <div class="pd-edge"><span class="lb">Edge</span><b class="num">${edgeTxt(p.edge)}</b>${p.edge == null ? '<span class="sr-only">no market price</span>' : ''}</div>
         <button type="button" class="ib solid pd-add" data-pdadd="${esc(p.id)}" data-fk="add-${esc(p.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove' : 'Add'} ${esc(p.name)}, ${esc(p.text)}, ${on ? 'from' : 'to'} your slip">${ic(on ? 'check' : 'plus', 20)}</button></div>
       <dl class="pd-bars">${bar('Floodlight’s chance', p.ours, 'ours')}${bar('Market’s chance', p.market, 'mkt')}
         ${p.type === 'prop' && p.h10 ? `<div class="pd-hr"><dt>Hit rate, last ${p.h10.n}</dt><dd><b class="num">${p.h10.hit} of ${p.h10.n}</b></dd></div>` : ''}</dl>
+      <p class="pd-ctx">${[esc(SPORT_NAME[p.sport] || ''), av ? `<span class="pd-av ${esc(av.lv)}">${esc(av.txt)}</span>` : '', p.type === 'prop' && p.at ? `<span>Price updated ${agoTag(p.at)}</span>` : p.type === 'match' && P.fcAt ? `<span>Forecast read ${agoTag(P.fcAt)}</span>` : ''].filter(Boolean).join('<span aria-hidden="true"> · </span>')}${lk ? lockTag(lk) : ''}</p>
+      ${W.length ? `<ul class="pd-warns" aria-label="Uncertainty">${W.slice(0, 3).map(([t, w]) => `<li title="${esc(w)}">${ic('help', 13)}<span>${esc(t)}</span><span class="sr-only">: ${esc(w)}</span></li>`).join('')}${W.length > 3 ? `<li class="pd-wmore"><span>${W.length - 3} more in the evidence</span></li>` : ''}</ul>` : ''}
       ${mv || fol || multi ? `<div class="pd-meta">${mvTag}${fol ? `<span class="pl pd-fol">${ic('star', 14)}Following${fol.alert != null ? ` · alert at ${edgeTxt(fol.alert)}` : ''}</span>` : ''}${multi ? `<p class="pd-lines"><span class="lb">Lines posted</span>${lines.map(o => `<span class="pd-ln${o.line === p.line ? ' on' : ''}">${esc(BOOK[o.book] || o.book)} <b class="num">${fmtL(o.line)}</b></span>`).join('')}</p>` : ''}</div>` : ''}
       ${p.reasons.length ? `<ul class="cx-row pd-why" aria-label="Why">${p.reasons.map(r => `<li class="pl">${esc(r)}</li>`).join('')}</ul>` : ''}
       ${evidence(p)}</article>`;
@@ -326,8 +415,9 @@
     if (P.denied) { el.innerHTML = `<div class="card emp">${ic('members', 28)}<b>Predictions aren't part of your access yet</b><p>Your admin decides which parts of Floodlight each member can open. Ask them to switch Predictions on for you.</p><button type="button" class="bt" data-page="members">See your access</button></div>`; return }
     const CAP = 12, shown = P.all ? L.ranked : L.ranked.slice(0, CAP);
     // a source that did not answer is said here, above the picks it would have fed, with the way to try again
-    let h = '', alert = !P.loading && down.length ? `<div class="card pd-alert" role="alert">${ic('help', 22)}<span class="rw-t"><b>${down.length === 1 ? esc(down[0].name) + ' did not load' : `${down.length} sources did not load`}</b>
-        <small>${esc(down.map(x => x.name + (x.at ? ` (showing the reading from ${ago(x.at)})` : '')).join(', '))}. The rest of the board is complete.${P.retries && P.retries <= 2 && P.retryT ? ' Trying again by itself.' : ''}</small></span><button type="button" class="bt sm" data-pd="reload" data-fk="reload-alert">Retry now</button></div>` : '';
+    // a delayed source is said once, above the picks, in one line with the time and a retry (the indicator has the details)
+    const H = health(), T = healthText(H);
+    let h = '', alert = !P.loading && H.late.some(x => x.state === 'failed' || (x.state === 'stale' && x.note)) ? `<p class="pd-delay" role="status">${ic('help', 18)}<span><b>${esc(T.head)}.</b> ${esc(T.sub.replace(' Predictions using the available prices are still shown.', ''))}<span class="pd-delay-x"> Predictions using the available prices are still shown. <span class="lb">Checked ${esc(clock(P.at || Date.now()))}.</span></span></span><button type="button" class="bt ghost sm" data-pd="reload" data-fk="reload-alert">Retry</button></p>` : '';
     if (L.live.length) h += `<section aria-label="Live picks"><div class="sec-h"><h2>Live</h2><span class="lb">The game has started, so the price has moved</span></div><div class="vst pd-list">${L.live.map(p => card(p, 0, now)).join('')}</div></section>`;
     if (shown.length) h += `<section aria-label="The edge board"><div class="sec-h"><h2>${L.live.length ? 'Still to start' : 'The edge board'}</h2><span class="lb">${L.ranked.length} ${L.ranked.length === 1 ? 'pick' : 'picks'} with a market price</span></div><div class="vst pd-list">${shown.map((p, i) => card(p, i + 1, now)).join('')}</div>
       ${L.ranked.length > CAP ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show the top ' + CAP : `Show all ${L.ranked.length}`}</button>` : ''}</section>`;
@@ -339,7 +429,7 @@
     if (L.bare.length) h += `<section aria-label="Picks with no market price"><div class="sec-h"><h2>Our number only</h2><span class="lb">No book posts both sides of these lines, so there is no edge to rank</span></div><div class="vst pd-list">${L.bare.slice(0, P.all ? 60 : 6).map(p => card(p, 0, now)).join('')}</div>
       ${L.bare.length > 6 && !L.ranked.length ? `<button type="button" class="bt ghost wide" data-pd="all" data-fk="all">${P.all ? 'Show fewer' : `Show all ${L.bare.length}`}</button>` : ''}</section>`;
     if (L.done.length) h += `<section aria-label="Finished in the last day"><div class="sec-h"><h2>Finished</h2><span class="lb">Results stay here for a day</span></div><div class="card pd-done">${L.done.map(e => { const hit = e.result === 'won', pick = e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`;
-      return `<div class="rw"><span class="rw-t"><b>${esc(pick)}</b><small>${esc(e.home)} ${Array.isArray(e.final) ? `${e.final[0]}–${e.final[1]}` : 'v'} ${esc(e.away)} · we said ${pct(e.top)}%</small></span><span class="pl pd-res ${hit ? 'hit' : 'miss'}">${ic(hit ? 'check' : 'x', 14)}${hit ? 'Hit' : 'Miss'}</span></div>` }).join('')}</div></section>`;
+      return `<div class="rw"><span class="rw-t"><b>${esc(pick)}</b><small>${esc(e.home)} ${Array.isArray(e.final) ? `${e.final[0]}–${e.final[1]}` : 'v'} ${esc(e.away)} · we said ${pct(e.top)}%</small></span><span class="pd-resw"><span class="pl pd-res ${hit ? 'hit' : 'miss'}">${ic(hit ? 'check' : 'x', 14)}${hit ? 'Hit' : 'Miss'}</span>${['server', 'github'].includes(e.by) && e.locked && (e.first?.at || e.made) < e.ko ? lockTag(e) : ''}</span></div>` }).join('')}</div></section>`;
     if (P.loading && waiting.length) h += `<section aria-label="Still loading"><div class="sec-h"><h2 class="pd-wait-h">More on the way</h2><span class="lb">${esc(waiting.map(x => x.name).join(', '))}</span></div><div class="vst pd-list">${skel(L.every.length ? 1 : 3)}</div></section>`;
     if (!L.live.length && !shown.length && !L.bare.length && !(P.loading && waiting.length)) {
       const any = L.every.some(p => stateOf(p, now) !== 'gone'), filtered = P.sport !== 'all' || P.when !== 'tonight' || P.min > 0;
@@ -387,14 +477,14 @@
   function slipCard() {
     const n = P.slip.length, ours = n ? combine(P.slip, 'ours') : null, mk = n ? combine(P.slip, 'market') : null, noMk = P.slip.filter(l => l.market == null).length;
     const games = [...new Set(P.slip.filter(l => P.slip.filter(x => x.gameKey === l.gameKey).length > 1).map(l => l.game))];
-    return `<section class="card pd-slip${n ? ' has' : ''}" aria-label="Your slip"><div class="sec-h"><h2>Your slip</h2>${n ? `<span class="pl">${n} ${n === 1 ? 'pick' : 'picks'}</span>` : ''}</div>
+    return `<section class="card pd-slip${n ? ' has' : ' none'}" aria-label="Your slip"><div class="sec-h"><h2>${n ? 'Your slip' : 'Your slip is empty'}</h2>${n ? `<span class="pl">${n} ${n === 1 ? 'pick' : 'picks'}</span>` : ''}</div>
       ${n ? `<ul class="pd-legs">${P.slip.map(l => `<li><span class="rw-t"><b>${esc(l.short)}</b><small>${esc(l.game || '')}</small></span><b class="num">${pct(l.ours)}%</b><button type="button" class="ib pd-rm" data-pdadd="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Remove ${esc(l.short)} from your slip">${ic('x', 16)}</button></li>`).join('')}</ul>
         <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${range(ours)}</b></div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk ? range(mk) : '–'}</b></div></div>
         <p class="pd-warn">${games.length ? `${ic('help', 16)}<span><b>Linked picks.</b> ${games.length === 1 ? `More than one pick comes from ${esc(games[0] || 'the same game')}` : 'Some picks come from the same games'}, so they move together and can't be multiplied. The range shows the limits the true chance sits between.</span>`
           : n > 1 ? `<span>No two picks come from the same game, so the chances are multiplied together.</span>` : `<span>Add another pick to see the chance they all hit.</span>`}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}</p>
         <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="track" data-fk="track">${ic('ticket', 18)}Track it live</button><button type="button" class="bt ghost pd-clear" data-pd="save" data-fk="save">Save slip</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
         <p class="pd-said" role="status">${P.saved ? `Saved. ${window.S?.me ? 'It is kept with your account.' : 'It is kept in this browser; log in to keep it with your account.'}` : ''}</p>`
-        : `<p class="pd-empty">Your slip is empty. Press ${ic('plus', 14)}<span class="sr-only">the plus button</span> on a pick to add it, and see the chance they all hit.</p>`}
+        : `<p class="pd-empty">Add two or more picks to compare their combined chance.</p>`}
       ${P.slips.length ? `<div class="pd-saved"><span class="pd-k">Saved slips</span>${P.slips.slice(0, 3).map(s => { const c = combine(s.legs, 'ours');
         return P.confirm === s.id ? `<div class="pd-sv"><span class="rw-t"><b>Delete “${esc(s.name)}”?</b></span><button type="button" class="bt sm danger" data-pdyes="${s.id}" data-fk="yes-${s.id}">Delete slip</button><button type="button" class="bt sm ghost" data-pd="keep" data-fk="keepit">Keep it</button></div>`
           : `<div class="pd-sv"><button type="button" class="pd-load" data-pdload="${s.id}" data-fk="load-${s.id}"><b>${esc(s.name)}</b><small>${c ? range(c) + ' at the time' : ''}</small></button><button type="button" class="ib pd-rm" data-pddel="${s.id}" data-fk="del-${s.id}" aria-label="Delete the saved slip ${esc(s.name)}">${ic('x', 16)}</button></div>` }).join('')}</div>` : ''}</section>`;
@@ -416,8 +506,13 @@
   const sportKey = e => SPORT_KEY[e.sport] || 'cfb';
   function resultsCard() {
     const R = results(), H = 120, col = v => v == null ? 0 : Math.max(3, Math.round(v * H));
-    if (!R.n) return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
-      <div class="emp">${ic('bars', 26)}<b>${P.recError ? 'The record did not load' : 'No graded picks in the last 90 days'}</b><p>${P.recError ? 'Press Retry at the top of the page to ask again. ' : ''}Every pick shown here is locked before its start and graded when the result is in, good or bad.${R.waiting ? ` ${R.waiting} ${R.waiting === 1 ? 'prop is' : 'props are'} waiting for a result.` : ''}</p></div></section>`;
+    // until 20 picks are graded, one quiet line instead of an empty chart (item 6)
+    if (R.n < FULL_AT) {
+      const since = new Date(Math.min(TRACK_SINCE, ...((window.flHistory ? window.flHistory.all(P.record, P.propRec) : []).map(e => e.t * 1000).filter(Boolean)))).toLocaleDateString([], { month: 'long', day: 'numeric' });
+      return `<section class="pd-track" aria-label="How we have done">${ic('clock', 16)}<p>${P.recError ? `The record did not load. <button type="button" class="lk" data-pd="reload" data-fk="rec-retry">Try again</button>`
+        : `Performance tracking started ${esc(since)}. ${R.n ? `${R.n} of ${FULL_AT} finished picks graded so far; the full record shows from ${FULL_AT}.` : 'Finished picks will appear here.'}${R.waiting ? ` <span class="lb">${R.waiting} waiting for a result.</span>` : ''}`}
+        ${R.n || R.waiting ? `<button type="button" class="lk" data-page="history" data-fk="hist">See Pick history</button>` : ''}</p></section>`;
+    }
     const vsTxt = R.vs == null ? '–' : (R.vs > 0 ? '+' : R.vs < 0 ? '−' : '') + Math.abs(R.vs).toFixed(1);
     return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
       <p class="lb">When we said a pick would hit X% of the time, how often did it? ${R.props ? `Match forecasts and ${R.props} graded ${R.props === 1 ? 'prop' : 'props'}` : 'Match forecasts so far'}, last 90 days.</p>
@@ -451,7 +546,7 @@
           <b class="num pd-foled">${p ? edgeTxt(p.edge) : '–'}</b><button type="button" class="ib sm" data-pdfollow="${esc(f.k)}" data-fk="unf-${esc(f.k)}" aria-label="Stop following ${esc(f.name)}, ${esc(f.text)}">${ic('x', 16)}</button></li>` }).join('')}</ul>
       <p class="lb">Alerts show on this page while Floodlight is open, and as browser notifications when Alerts are on in Settings.</p></section>`;
   }
-  function drawSide(L) { $('pdSide').innerHTML = slipCard() + followCard() + (P.pending.has('rec') && !P.record ? `<div class="card pd-res-card" aria-hidden="true"><div class="skl" style="height:22px;width:60%"></div><div class="skl" style="height:150px"></div><div class="pd-tiles"><i class="skl"></i><i class="skl"></i><i class="skl"></i></div></div>` : resultsCard()) + fadeCard(L) }
+  function drawSide(L) { $('pdSide').innerHTML = slipCard() + followCard() + (P.pending.has('rec') && !P.record ? `<div class="pd-track" aria-hidden="true"><i class="skl" style="height:18px;width:80%"></i></div>` : resultsCard()) + fadeCard(L) }
 
   /* ---------- actions ---------- */
   function openPick(id) {
@@ -489,15 +584,21 @@
     if (d.pd === 'track') { const live = new Map(allPicks().map(p => [p.id, p])); return window.flParlays?.build(P.slip.map(l => live.get(l.id) || { gone: true })) }   // the slip becomes a parlay to lock in and follow
     if (d.pd === 'empty') { P.slip = []; store.set('fl.slip', P.slip); P.saved = 0; return draw() }
     if (d.pd === 'all') { P.all = !P.all; return draw() }
-    if (d.pd === 'clear') { P.sport = 'all'; P.when = 'tonight'; P.min = 0; return draw() }
+    if (d.pd === 'clear') { Object.assign(P, { sport: 'all', when: 'tonight', min: 0, kind: 'all', priced: false, clean: false, mine: false, all: false }); return draw() }
+    if (d.pd === 'more') { P.more = !P.more; draw(); if (P.more) $('pdMore')?.querySelector('select, input')?.focus({ preventScroll: true }); return }
+    if (d.pd === 'src') { P.srcOpen = !P.srcOpen; return draw() }
     if (d.pd === 'reload') { P.retries = 0; return load(true) }
     if (d.pd === 'soccer') return oldPicks('today');
     if (d.pd === 'record') return oldPicks('record');
     if (t.matches('article[data-pk]') && !e.target.closest('button, a, select, label, .pd-ev, .pd-evbar') && !String(getSelection?.() || '')) { toggleEvidence(d.pdk); return document.querySelector(`#pg-predictions [data-pdk="${CSS.escape(d.pdk)}"] .pd-open`)?.focus({ preventScroll: true }) }   // anywhere on the card: the evidence
   });
-  document.addEventListener('change', e => { if (e.target.id === 'pdSort') { P.sort = e.target.value; draw() }
+  document.addEventListener('change', e => {
+    const sel = e.target.closest?.('#pg-predictions [data-pdsel]');
+    if (sel) { const k = sel.dataset.pdsel, v = sel.value; P[k] = k === 'min' ? +v : v; P.all = false;
+      if (k === 'sport' && v !== 'all') window.flRecent?.note({ kind: 'filters', key: 'filters:predictions', label: `Predictions for ${SPORT_NAME[v] || v}`, sub: 'The last filter you chose', open: { page: 'predictions', filters: { sport: v } } });
+      return draw() }
+    const ck = e.target.closest?.('#pg-predictions [data-pdchk]'); if (ck) { P[ck.dataset.pdchk] = ck.checked; P.all = false; return draw() }
     const al = e.target.dataset?.pdalert; if (al != null) { const f = P.follow.find(x => x.k === al); if (f) { f.alert = e.target.value === '' ? null : +e.target.value; saveFollow(); draw() } } });
-  document.addEventListener('toggle', e => { if (e.target.matches?.('#pg-predictions .pd-src')) P.srcOpen = e.target.open }, true);
   setInterval(() => { if (window.flPages.current() !== 'predictions' || document.hidden) return; document.querySelectorAll('#pg-predictions [data-pdago]').forEach(t => { const x = ago(+t.dataset.pdago); if (t.textContent !== x) t.textContent = x }) }, 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && window.flPages.current() === 'predictions' && Date.now() - P.at > 5 * 60000) load(true) });
   // saved slips follow the account
