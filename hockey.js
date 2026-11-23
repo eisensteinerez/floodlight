@@ -883,7 +883,7 @@ async function hkSearch(q){
   render = function(){
     if (S.sport !== 'hockey') { $('hk').hidden = true; return _render.apply(this, arguments) }
     document.querySelectorAll('.sport-sw button').forEach(b => { const on = b.dataset.sport === 'hockey'; b.classList.toggle('on', on); b.setAttribute('aria-selected', on) });
-    document.querySelectorAll('main.shell > section').forEach(s => { s.hidden = s.id !== 'hk' });
+    document.querySelectorAll('main.shell > section').forEach(s => { if (s.id !== 'hub' && !s.classList.contains('flpage')) s.hidden = s.id !== 'hk' });   // Home and the full pages show and hide themselves
     document.querySelector('.shell').classList.remove('mk-page');
     renderHockey(); hkTicker();
   };

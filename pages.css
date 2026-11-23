@@ -1531,3 +1531,30 @@ html:root[data-theme="stadium-gold"] .pd-leg .said{background:var(--chart-under)
 :is(.me-av,.flm-av,.av,.mb-av) > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .me-photo-msg{margin:6px 0 0;min-height:1.2em}
 .me-photo-msg:empty{display:none}
+
+/* ---------- Home: standout lines at phone width ----------
+   A long stat line ("27/45, 304 YDS, 1 TD, 2 INT") took the row and cut the player's name to "Jos…". Below 560px the
+   line moves under the name, so both read in full. Seen first in Stadium Gold on live NFL data; it holds in every theme. */
+@media (max-width:560px){
+  .hm-two .rw:has(> .hm-val){flex-wrap:wrap;row-gap:4px}
+  .hm-two .rw > .rw-t{flex:1 1 0;min-width:0}
+  .hm-two .rw > .hm-val{flex:1 0 100%;display:flex;align-items:baseline;gap:8px;padding-left:56px;text-align:left}
+}
+
+/* ---------- Predictions: finished picks keep "we said N%" ----------
+   The line under each finished pick ("Denver Broncos 38–24 Las Vegas Raiders · we said 81%") was cut to one line, which
+   dropped the number we gave, the point of the row. It wraps now. */
+:root[data-theme] .pd-done .rw-t small{white-space:normal;overflow:visible;text-overflow:clip;text-wrap:pretty}
+
+/* ---------- Stadium Gold: the pick card's evidence bar and panel (live-data pass) ----------
+   The Stadium Gold pick card has no padding of its own (each band carries it), so the evidence bar added later sat
+   on the card's bottom edge with 20px-tall links. It gets the band's padding and shading, 44px targets, and the
+   open evidence panel gets the same side padding. */
+html:root[data-theme="stadium-gold"] .pd-pk .pd-why:has(+ .pd-evbar){border-radius:0}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-evbar{margin:0;padding:2px 26px 10px;border-radius:0 0 var(--radius-card) var(--radius-card);background:rgba(0,0,0,.3)}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-evbar:has(+ .pd-ev){border-radius:0}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-evbar :is(.pd-evb,.pd-share){min-height:44px}
+html:root[data-theme="stadium-gold"] .pd-pk .pd-ev{padding:4px 26px 22px;border-radius:0 0 var(--radius-card) var(--radius-card);background:rgba(0,0,0,.3)}
+@media (max-width:560px){html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-evbar,.pd-ev){padding-left:16px;padding-right:16px}}
+/* the evidence bar: Share sits at the right with the likely range beside it, not floating in the middle */
+.pd-evbar .pd-share{margin-left:auto}

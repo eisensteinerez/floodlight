@@ -609,7 +609,7 @@ async function tnSearch(q){
   render = function(){
     if (S.sport !== 'tennis') { $('tn').hidden = true; return _render.apply(this, arguments) }
     document.querySelectorAll('.sport-sw button').forEach(b => { const on = b.dataset.sport === 'tennis'; b.classList.toggle('on', on); b.setAttribute('aria-selected', on) });
-    document.querySelectorAll('main.shell > section').forEach(s => { s.hidden = s.id !== 'tn' });
+    document.querySelectorAll('main.shell > section').forEach(s => { if (s.id !== 'hub' && !s.classList.contains('flpage')) s.hidden = s.id !== 'tn' });   // Home and the full pages show and hide themselves
     document.querySelector('.shell').classList.remove('mk-page');
     renderTennis(); tnTicker();
   };

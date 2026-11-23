@@ -149,7 +149,7 @@
     // under each name: the latest goal for that side (soccer), or that side's leading player tonight
     const under = t => { const goal = soccer ? g.goals.filter(x => x.t === t.id).slice(-1)[0] : null, lead = !soccer ? g.leaders.find(l => String(l.team) === t.id) : null;
       return goal ? `<span class="ftr-g"><span>${esc(goal.who)} <b>${esc(goal.min)}</b>${goal.pen ? ' (pen)' : goal.og ? ' (og)' : ''}</span></span>`
-        : lead && !pre ? `<span class="ftr-g"><span>${esc(lead.name)} <b>${esc(lead.show || lead.val)} ${esc(lead.abbr)}</b></span></span>`
+        : lead && !pre ? `<span class="ftr-g"><span>${esc(lead.name)} <b>${esc(lead.show || lead.val)}${/[a-z]/i.test(String(lead.show || '')) ? '' : ' ' + esc(lead.abbr)}</b></span></span>`
         : soccer && live ? '<span class="ftr-g"><span>No goals yet</span></span>' : '' };
     if (!f.spoil) { f.a.under = under(g.a); f.b.under = under(g.b) }
     // the chance bar: the books' prices, each turned into a chance and scaled so the three add to 100
