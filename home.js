@@ -138,7 +138,7 @@
   async function load(force) {
     if (noLive()) { H.games = []; H.ufc = []; H.box = []; H.at = Date.now(); H.shown = ymd(H.day); return paint() }   // live scores are switched off for this member
     if (H.loading || (!force && Date.now() - H.at < 25000 && H.shown === ymd(H.day))) return;
-    H.loading = true; H.err = 0;
+    H.loading = true; H.err = 0; if (!H.at) { H.t0 = Date.now(); wakeSlow() }
     const want = H.day, day = ymd(want), today = sameLocalDay(want);
     // a dated scoreboard goes through the one schedule request (schedule.js), so Home counts a league's day exactly as
     // its sport page does: same league id (FBS is group 80, Division I basketball group 50), same local day
@@ -170,7 +170,7 @@
     label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
     a: { name: g.a.name, ab: g.a.ab, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, ab: g.b.ab, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date });
-  const noSpoil = f => { if (f.state === 'pre' || !window.flMC?.spoil(f.id)) return f; f.spoil = true; f.label = f.label.replace(/ \S+ to \S+ /, ' v ') + ', score hidden'; for (const t of [f.a, f.b]) { t.lose = false; t.win = false } return f };
+  const noSpoil = f => { if (f.state === 'pre' || !window.flMC?.spoil(f.id)) return f; f.spoil = true; f.label = f.label.replace(/ \S+ to \S+ /, ' v ') + ', score hidden by spoiler-free mode'; for (const t of [f.a, f.b]) { t.lose = false; t.win = false } return f };
   const hubAttr = g => `data-hub="${esc(g.sport)}|${esc(g.lg || '')}|${esc(g.id)}"`;
   const card = g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g) });
   const ico = (k, s = 16) => (window.flShell?.ic ? window.flShell.ic(k, s) : '');
@@ -309,7 +309,7 @@
     // the leagues playing today, biggest first; with no games at all, ask the two the books post most lines for
     const today = [...new Set(H.games.filter(g => ['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer').sort((a, b) => b.weight - a.weight).map(g => g.sport === 'soccer' ? 'soccer' : g.lg))].slice(0, 3);
     const sports = today.length ? today : H.at ? [] : null; if (!sports) return;
-    HEAT.loading = true;
+    HEAT.loading = true; HEAT.t0 = Date.now(); wakeSlow();
     window.flEdge.props(sports.length ? sports : ['nba', 'nfl']).then(r => { HEAT.picks = r.picks; HEAT.denied = r.denied; HEAT.at = Date.now()
       // every board failed and none was kept from an earlier visit: say so, don't call it an empty day
       HEAT.failed = !r.picks.length && Object.values(r.by || {}).length > 0 && Object.values(r.by).every(x => !x.picks?.length && (x.error || Object.keys(x.errors || {}).length) && x.status !== 401 && x.status !== 403) }).catch(() => { HEAT.picks = []; HEAT.failed = true; HEAT.at = Date.now() })
@@ -317,6 +317,13 @@
   }
   // the states every Home module goes through: loading (with words, not only grey bars), failed (with a retry),
   // finished (today's games are over: point at tomorrow), and empty (nothing to show, said plainly)
+  /* A skeleton is only for the first few seconds. A block still empty after SLOW_MS says so and offers a retry, in a box
+     the same height as the skeleton, so nothing below jumps. */
+  const SLOW_MS = 12000;
+  let P0 = 0;   // when Home first drew
+  const slow = t0 => Date.now() - (t0 || P0 || Date.now()) > SLOW_MS;
+  let slowT = 0; const wakeSlow = () => { clearTimeout(slowT); slowT = setTimeout(() => { if (root.classList.contains('hub-on')) paint() }, SLOW_MS + 200) };
+  const slowState = (n, t, what) => `<div class="hm-slow" style="--rows:${n}">${state('', t, 'Nothing is wrong with your account. It may just be a busy moment for the source.', retry(what))}</div>`;
   const loadingRows = (n, what) => `<div class="hm-load" role="status" aria-live="polite"><span class="sr-only">${what}</span>${'<div class="skl hm-skl" aria-hidden="true"></div>'.repeat(n)}</div>`;
   const state = (icon, t, d, btn = '') => `<div class="hm-state">${icon ? ico(icon, 20) : ''}<p><b>${t}</b><span>${d}</span></p>${btn}</div>`;
   const retry = what => `<button type="button" class="bt ghost sm" data-hubretry="${what}">Try again</button>`;
@@ -329,7 +336,7 @@
     const hot = has ? E.hot(HEAT.picks, 3) : [], cold = has ? E.cold(HEAT.picks, 2) : [];
     const head = `<div class="sec-h"><h2>Hot right now</h2><button type="button" class="lk" data-shell="lab">Open Lab</button></div>`;
     // one message for the whole card when there is nothing to split into hot and cold
-    const whole = HEAT.picks == null ? loadingRows(4, 'Reading today’s player lines…')
+    const whole = HEAT.picks == null ? (slow(HEAT.t0) ? slowState(4, 'Live insights are taking longer than expected.', 'heat') : loadingRows(4, 'Reading today’s player lines…'))
       : HEAT.denied ? state('lab', 'The Lab is switched off for you', 'Ask your admin for Lab access to see who is running hot.')
       : HEAT.failed ? state('', 'Today’s player lines didn’t load', 'The pick’em apps didn’t answer. Nothing is wrong with your account.', retry('heat'))
       : !has ? state('', 'No player lines yet', isToday() ? 'The apps usually post lines in the morning. This fills in by itself.' : 'Lines are posted on the day of the games.')
@@ -345,7 +352,7 @@
   /* the three cards: best edge, transfer wire, the Lab */
   function edgeCard() {
     const E = window.flEdge, pc = x => Math.round(x * 100), open = (HEAT.picks || []).filter(p => !p.start || p.start > Date.now()), top = HEAT.picks ? E.ranked(open)[0] : null;
-    const body = HEAT.picks == null ? loadingRows(3, 'Finding the best edge…')
+    const body = HEAT.picks == null ? (slow(HEAT.t0) ? slowState(3, 'The best edge is taking longer than expected.', 'heat') : loadingRows(3, 'Finding the best edge…'))
       : HEAT.denied ? state('pred', 'Predictions are switched off for you', 'Ask your admin for access.')
       : HEAT.failed ? state('pred', 'Prices didn’t load', 'The apps didn’t answer, so there is no edge to show yet.', retry('heat'))
       : linesOver() ? state('pred', 'Today’s picks have started', 'Every priced pick is in play. See how they are doing on Predictions, or look at tomorrow.', tomorrow)
@@ -360,14 +367,14 @@
   // the member's favorite sports decide which leagues feed the wire; with none chosen it reads every league that has a source
   const WIRE_LG = { basketball: ['nba'], football: ['nfl'], baseball: ['mlb'], soccer: ['soccer'], cbb: ['cbb'], cfb: ['cfb'] };
   function loadWire() {
-    if (WIRE.loading || Date.now() - WIRE.at < 5 * 60000 || !window.flTransfers) return; WIRE.loading = true;
+    if (WIRE.loading || Date.now() - WIRE.at < 5 * 60000 || !window.flTransfers) return; WIRE.loading = true; WIRE.t0 = Date.now(); wakeSlow();
     const fav = (window.S?.me?.prefs?.favSports || []).flatMap(k => WIRE_LG[k] || []);
     window.flTransfers.latest(fav, 3).then(d => { WIRE.rows = d.rows; WIRE.denied = d.denied; WIRE.failed = d.failed && !d.rows.length }).catch(() => { WIRE.rows = WIRE.rows || []; WIRE.failed = !WIRE.rows.length })
       .finally(() => { WIRE.loading = false; WIRE.at = Date.now(); if (root.classList.contains('hub-on')) paint() });
   }
   function wireCard() {
     const rows = WIRE.rows, day = d => d.toLocaleDateString([], { day: 'numeric', month: 'short' });
-    const body = rows == null ? loadingRows(3, 'Loading the latest moves…')
+    const body = rows == null ? (slow(WIRE.t0) ? slowState(3, 'The latest moves are taking longer than expected.', 'wire') : loadingRows(3, 'Loading the latest moves…'))
       : WIRE.denied ? state('transfers', 'Transfers are switched off for you', 'Ask your admin for access.')
       : WIRE.failed ? state('transfers', 'The moves didn’t load', 'The league lists didn’t answer.', retry('wire'))
       : !rows.length ? state('transfers', 'No moves this week', 'None of your leagues has listed a trade or signing lately.')
@@ -545,18 +552,20 @@
      is zero is left out, except the count of games, so the row never shows a row of zeros. */
   function cmdRow(list) {
     if (!isToday() || noLive() || !list.length) return '';
-    const open = list.filter(g => g.state !== 'post'), live = list.filter(g => g.state === 'in').length;
-    const watchable = open.filter(g => g.watch ? ['national', 'local', 'streaming'].some(k => (g.watch[k] || []).length) : (g.tvs || []).length).length;
+    const live = list.filter(g => g.state === 'in').length, soon = list.filter(g => g.state === 'pre').length;
+    // "On national TV": games still to start on a national network in the US listing (the same count Today in 60 seconds
+    // gives). Local channels and team apps are left out, so it is the games most people can turn on, not every listing.
+    const watchable = list.filter(g => g.state === 'pre' && g.tvNat).length;
     const E = window.flEdge, top = HEAT.picks && E ? E.ranked(HEAT.picks.filter(p => !p.start || p.start > Date.now()))[0] : null;
     const day0 = new Date(); day0.setHours(0, 0, 0, 0);
     const fol = (store.get('fl.pdFollow', []) || []).filter(f => f && f.start && f.start >= +day0 && f.start < +day0 + 864e5).length;
-    const it = (k, n, l, cls = '') => `<button type="button" class="hm-cmd-i${cls}" data-hubcmd="${k}"><b class="num">${n}</b><span>${l}</span></button>`;
+    const it = (k, n, l, cls = '', say = '') => `<button type="button" class="hm-cmd-i${cls}" data-hubcmd="${k}" title="${esc(say)}" aria-label="${esc(`${n} ${l}. ${say}`)}"><b class="num">${n}</b><span>${l}</span></button>`;
     return `<nav class="hm-cmd" aria-label="${isNight() ? 'Tonight' : 'Today'} at a glance">${[
-      live ? it('live', live, 'live', ' is-live') : '',
-      it('games', list.length, `game${list.length === 1 ? '' : 's'} today`),
-      watchable ? it('watch', watchable, 'to watch') : '',
-      top && top.edge > 0 ? it('edge', `+${top.edge}`, 'best edge', ' is-edge') : '',
-      fol ? it('follow', fol, `followed pick${fol === 1 ? '' : 's'}`) : ''].join('')}</nav>`;
+      live ? it('live', live, 'live', ' is-live', 'Games in play now. Opens Live, filtered to them') : '',
+      soon ? it('games', soon, 'still to start', '', 'Today’s games that have not started. Opens Live, filtered to them') : it('games', list.length, `game${list.length === 1 ? '' : 's'} today`, '', 'Every game today has started. Opens today’s results'),
+      watchable ? it('watch', watchable, 'on national TV', '', 'Games on national TV that have not started yet. Opens Live, filtered to them') : '',
+      top && top.edge > 0 ? it('edge', `+${top.edge}`, 'best edge', ' is-edge', 'The biggest gap between our number and the market today. Opens Predictions') : '',
+      fol ? it('follow', fol, `followed pick${fol === 1 ? '' : 's'}`, '', 'Picks you follow with a game today. Opens Predictions') : ''].join('')}</nav>`;
   }
   const isNight = () => new Date().getHours() >= 17;
   function days() {
@@ -566,7 +575,7 @@
   }
 
   function paint() {
-    RATE = new WeakMap();
+    RATE = new WeakMap(); if (!P0) { P0 = Date.now(); wakeSlow() }
     const list = H.games, live = list.filter(g => g.state === 'in'), today = isToday(), ready = H.at && H.shown === ymd(H.day);
     const ftr = ready ? stickyFeature(list) : null;
     // Up next: four games, live ones first, from the tab the member picked. Never the featured game twice.
@@ -590,7 +599,7 @@
       top: () => `${!noLive() && ready && list.length ? `<div class="hm-fmode"><span class="lb" id="hmFmL">Feature</span><div class="cx-row scroll" role="radiogroup" aria-labelledby="hmFmL">${FMODES.map(([k, l]) => `<button type="button" class="cx sm" role="radio" aria-checked="${MY.fmode === k}" tabindex="${MY.fmode === k ? 0 : -1}" data-hubfm="${k}">${l}</button>`).join('')}</div></div>` : ''}
       <div class="g2 hm-top${MY.off.includes('hot') ? ' solo' : ''}">
         ${noLive() ? `<div class="card feature emp hm-empty">${ico('members', 30)}<b>Live scores are switched off for you</b><p>Ask your admin for access to see games, scores and lineups here.</p></div>`
-          : !ready ? '<div class="skl hm-ftr-skl"></div>' : ftr ? featureHTML(ftr, list)
+          : !ready ? (slow(H.t0) ? `<div class="card feature emp hm-empty hm-slow-ftr" role="status">${ico('live', 30)}<b>Scores are taking longer than expected</b><p>The scoreboards have not answered yet. Home keeps trying on its own.</p><button type="button" class="bt ghost sm" data-hubretry="games">Try again</button></div>` : '<div class="skl hm-ftr-skl" role="status" aria-label="Loading the featured game"></div>') : ftr ? featureHTML(ftr, list)
           : list.length && MY.fmode !== 'top' ? `<div class="card feature emp hm-empty">${ico(MY.fmode === 'mine' ? 'star' : MY.fmode === 'edge' ? 'pred' : MY.fmode === 'tv' ? 'tv' : 'clock', 30)}<b>${MY.fmode === 'mine' ? `None of your teams play ${today ? 'today' : 'on this day'}` : MY.fmode === 'edge' ? 'No game has a strong prediction edge yet' : MY.fmode === 'tv' ? `No game on national TV ${today ? 'today' : 'on this day'}` : 'No game left to start'}</b>
               <p>${MY.fmode === 'mine' ? (favList().length ? 'Pick another day above, or follow more teams.' : 'Follow a team and its games will be featured here.') : MY.fmode === 'edge' ? 'An edge needs a priced player line 10 points or more away from the market. Lines usually go up in the morning.' : 'Try another day, or go back to the most important game.'}</p>
               <div class="hm-inv-acts"><button type="button" class="bt sm" data-hubfm="top">Show the most important game</button>${MY.fmode === 'mine' ? '<button type="button" class="bt ghost sm" data-hubmy="edit">Follow teams</button>' : ''}</div></div>`
@@ -601,7 +610,7 @@
       live: () => MY.off.includes('live') ? '' : `<section class="hm-live" id="hmUp" aria-labelledby="hmUpH"${noLive() || (ready && !list.length) ? ' hidden' : ''}><div class="sec-h"><h2 id="hmUpH" tabindex="-1">${row.lv.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
         <div class="seg hm-uptabs" role="radiogroup" aria-label="Which games">${[['you', 'For you'], ['major', 'Major games'], ['tv', 'On TV'], ['all', 'All sports']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${tab === k}" class="${tab === k ? 'on' : ''}" tabindex="${tab === k ? 0 : -1}" data-hubup="${k}">${l}</button>`).join('')}</div>
         ${fell ? `<p class="lb hm-fell">${esc(fell)}</p>` : ''}
-        ${!ready ? `<div class="g4 hm-cards">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>` : four.length ? `<div class="g4 hm-cards">${four.map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tab !== 'all' && reason(g, tab === 'tv' ? 'tv' : '') ? `<span class="lb hm-why1">${esc(reason(g, tab === 'tv' ? 'tv' : '').split('. ')[0])}</span>` : '' })).join('')}</div>`
+        ${!ready ? (slow(H.t0) ? '' : `<div class="g4 hm-cards" aria-hidden="true">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>`) : four.length ? `<div class="g4 hm-cards">${four.map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tab !== 'all' && reason(g, tab === 'tv' ? 'tv' : '') ? `<span class="lb hm-why1">${esc(reason(g, tab === 'tv' ? 'tv' : '').split('. ')[0])}</span>` : '' })).join('')}</div>`
           : `<p class="hm-none"><b>${tab === 'tv' ? `No other games on national TV ${today ? 'today' : 'on this day'}` : tab === 'major' ? `No other major games ${today ? 'today' : 'on this day'}` : `Nothing else ${today ? 'today' : 'on this day'}`}</b><span>${tab === 'all' ? 'The featured game is the only one on the board.' : 'Choose All sports to see every game.'}</span></p>`}</section>`,
       three: () => `${MY.off.includes('three') ? '' : `<div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>`}`,
       low: () => `${((f, st) => f && st ? `<div class="g2 hm-low">${st}<div class="vst">${f}</div></div>` : f ? `<div class="g3 hm-fights">${f}</div>` : st)(today && !MY.off.includes('fights') ? fightTiles() : '', MY.off.includes('standouts') ? '' : standouts(list))}`,
@@ -671,7 +680,7 @@
     if (up) { MY.up = up.dataset.hubup; store.set('fl.upTab', MY.up); paint(); const sel = sec.querySelector(`.hm-uptabs [data-hubup="${MY.up}"]`);
       if (up.dataset.hubjump) { const h = $('hmUpH'); h?.scrollIntoView({ block: 'start', behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth' }); h?.focus({ preventScroll: true }) } else sel?.focus(); return }
     const rt = ev.target.closest('[data-hubretry]');
-    if (rt) { const k = rt.dataset.hubretry; if (k === 'heat') { HEAT.at = 0; HEAT.picks = null; HEAT.failed = false; loadHeat() } else if (k === 'wire') { WIRE.at = 0; WIRE.rows = null; WIRE.failed = false; loadWire() } else { H.err = 0; load(true) } return paint() }
+    if (rt) { const k = rt.dataset.hubretry; if (k === 'heat') { HEAT.at = 0; HEAT.picks = null; HEAT.failed = false; HEAT.loading = false; loadHeat() } else if (k === 'wire') { WIRE.at = 0; WIRE.rows = null; WIRE.failed = false; WIRE.loading = false; loadWire() } else { H.err = 0; H.loading = false; H.t0 = Date.now(); wakeSlow(); load(true) } return paint() }
     const my = ev.target.closest('[data-hubmy],[data-hubsport],[data-hubfav],[data-hubunfav],[data-hubunwatch],[data-hublv]');
     if (my) { const m = my.dataset;
       if (m.hubmy === 'edit') { MY.edit = true; paint(); return sec.querySelector('#hmEditH')?.focus() }
@@ -695,7 +704,9 @@
     const cmd = ev.target.closest('[data-hubcmd]');
     if (cmd) { const k = cmd.dataset.hubcmd, P = window.flPages;
       if (k === 'edge' || k === 'follow') return P?.show('predictions');
-      return P?.show('live', k === 'watch' ? 'watch:any' : undefined) || document.querySelector('[data-shell="live"]')?.click() }
+      const soon = H.games.some(g => g.state === 'pre');
+      const arg = k === 'live' ? 'show:live' : k === 'watch' ? 'show:next,watch:national' : k === 'games' ? (soon ? 'show:next' : 'show:done') : undefined;
+      return P?.show('live', arg) || document.querySelector('[data-shell="live"]')?.click() }
     const lab = ev.target.closest('[data-hublab]');
     if (lab) { let a = {}; try { a = JSON.parse(lab.dataset.hublab) } catch (e) {} return openLab(a) }
     const go = ev.target.closest('[data-hubgo]');

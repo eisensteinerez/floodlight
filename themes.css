@@ -961,3 +961,15 @@ html[data-theme="stadium-gold"]:not(.hub-on):not([data-page="predictions"]):not(
 .gs-back{border-color:color-mix(in oklab,var(--accent) 60%,var(--border-2,var(--border)))}
 .gs-back .gs-back-go{font-weight:700}
 .gs-back .gs-back-go svg{color:var(--accent)}
+/* Admin mode, kept out of the way: room under the page for the corner bar on wide screens; on phones it lives in the
+   three-dot menu and the menu button carries an "Admin" tag while it is on */
+html.own-bar-on body{padding-bottom:76px}
+.tb-dots{position:relative}
+.tb-dots.own-tagged::after{content:"Admin";position:absolute;right:-6px;bottom:-6px;padding:2px 5px;border-radius:var(--radius-pill);background:var(--accent-fill,var(--accent));color:var(--on-accent,#111);font:700 9.5px/1.2 var(--font-body);letter-spacing:.02em;pointer-events:none}
+.flm-own-sw[aria-checked="true"] em{color:var(--accent)}
+.flm-note{margin:0;padding:6px 14px 8px;font:500 12.5px/1.4 var(--font-body);color:var(--muted)}
+/* tablet landscape and small laptops: the header's sections, search, Members and the menu fit on one line */
+@media (min-width:821px) and (max-width:1100px){.tbn{padding:0 8px;font-size:14px}.tb-members{padding:0 14px}:root[data-theme] .top-in{gap:8px}:root[data-theme="stadium-gold"] .tb-nav{margin-left:2px}:root[data-theme="stadium-gold"] .tb-nav::after,:root[data-theme="stadium-gold"] .tb-brand::after{margin:0 2px 0 6px}}
+@media (min-width:821px) and (max-width:1000px){.tb-members{display:none}.flm-narrow{display:flex!important}}
+@media (min-width:821px) and (max-width:960px){.tb-brand b{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}:root[data-theme] .tb-search{flex:none}}
+.flm-narrow{display:none!important}

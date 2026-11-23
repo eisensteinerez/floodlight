@@ -136,7 +136,7 @@
   function loadFc() {
     if (FC.busy || (FC.list && Date.now() - FC.at < 600000)) return;
     FC.busy = true;
-    fetch('/api/forecast/list', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(d => { FC.list = d?.matches || []; FC.at = Date.now() }, () => { FC.list = FC.list || [] }).finally(() => { FC.busy = false; if (!host.hidden) paint() });
+    fetch('/api/forecast/list', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(d => { FC.list = d?.matches || []; FC.at = Date.now() }, () => { FC.list = FC.list || [] }).finally(() => { FC.busy = false; if (!host.hidden) paint(); document.dispatchEvent(new CustomEvent('fl:fc')) });
   }
   function fcFor(g, d) {
     if (!FC.list) return null;
@@ -340,7 +340,7 @@
     const stats = d.stats.length && d.state !== 'pre' && !hide ? `<div class="gx-ser"><h4>Team numbers</h4><table class="tbx gx-st"><thead><tr><th scope="col" class="r">${esc(d.a.abbr || d.a.name)}</th><th scope="col"><span class="sr-only">Stat</span></th><th scope="col">${esc(d.b.abbr || d.b.name)}</th></tr></thead><tbody>${d.stats.map(x => `<tr><td class="r num">${esc(x.a)}</td><th scope="row">${esc(x.label)}</th><td class="num">${esc(x.b)}</td></tr>`).join('')}</tbody></table></div>` : '';
     return f || ser || stats ? `${f ? `<div class="gx-ser"><h4>Recent form</h4>${f}</div>` : ''}${ser}${stats}` : '';
   }
-  const hidden = why => `<div class="gx-hid">${ic('help', 22)}<p><b>Hidden while spoiler-free is on.</b> ${why}, so it stays covered until you reveal the score.</p><button type="button" class="bt sm" data-gx="reveal">Reveal this game</button></div>`;
+  const hidden = why => `<div class="gx-hid">${ic('help', 22)}<p><b>Hidden while spoiler-free is on.</b> ${why}, so it stays covered until you reveal the score.</p><button type="button" class="bt sm" data-gx="reveal" aria-label="Reveal this section and the score of this game">Reveal this section</button></div>`;
 
   /* ---------- the sheet ---------- */
   const host = document.createElement('div'); host.id = 'flMC'; host.className = 'gx'; host.hidden = true;
@@ -359,19 +359,19 @@
   function head(g, d, hide, secs = []) {
     const a = d?.a || g.a, b = d?.b || g.b, state = d?.state || g.state, live = state === 'in', N = now(g, d, hide);
     const has = t => N.poss && String(t.id) === N.poss ? `<span class="gx-poss" title="Has the ball"><i aria-hidden="true"></i><span class="sr-only">has the ball</span></span>` : '';
-    const sc = t => state === 'pre' ? '' : `<b class="gx-sc num">${hide ? '–' : esc(t.score)}</b>`;
+    const sc = t => state === 'pre' ? '' : `<b class="gx-sc num">${hide ? '<span aria-hidden="true">–</span><span class="sr-only">Score hidden by spoiler-free mode</span>' : esc(t.score)}</b>`;
     const status = state === 'pre' ? `${day(d?.date || g.date)} · ${hm(d?.date || g.date)}` : hide ? (live ? 'In play' : 'Finished') : (d?.detail || g.clock || '');
     const lines = d && !hide && state !== 'pre' && d.periods > 1 && d.periods <= 12 ? `<table class="gx-lines"><thead><tr><th scope="col"><span class="sr-only">Team</span></th>${Array.from({ length: d.periods }, (_, i) => `<th scope="col">${perShort(d, i + 1)}</th>`).join('')}<th scope="col">T</th></tr></thead>
       <tbody>${[a, b].map(t => `<tr><th scope="row">${esc(t.abbr || t.name)}</th>${Array.from({ length: d.periods }, (_, i) => `<td class="num">${esc(t.lines[i] ?? '–')}</td>`).join('')}<td class="num"><b>${esc(t.score)}</b></td></tr>`).join('')}</tbody></table>` : '';
     return `<header class="gx-head" data-gxk="head" style="${window.flTeamColours ? window.flTeamColours({ hc: a.color, ac: b.color }) : ''}">
       <div class="gx-bar"><span class="gx-lg">${live ? '<span class="pl live"><i></i>Live</span>' : state === 'post' ? '<span class="pl">Final</span>' : '<span class="pl">Upcoming</span>'}<span class="lb">${esc(g.lgName || g.short || '')}</span></span>
-        <span class="gx-tools">${window.flShare ? `<button type="button" class="bt ghost sm" data-gx="share">${window.flShare.ICON}Share</button>` : ''}${window.flHome && state !== 'post' ? `<button type="button" class="bt ghost sm" data-gx="watch" aria-pressed="${window.flHome.watching(g.key)}" aria-label="${window.flHome.watching(g.key) ? `Following ${esc(a.full || a.name)} v ${esc(b.full || b.name)}. Stop following` : `Follow game: ${esc(a.full || a.name)} v ${esc(b.full || b.name)}`}">${window.flHome.watching(g.key) ? 'Following' : 'Follow game'}</button>` : ''}${state === 'pre' ? '' : `<button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}">${hide ? 'Reveal score' : 'Hide score'}</button>`}<button type="button" class="ib" data-gx="close" aria-label="Close match centre">${ic('x', 18) || '×'}</button></span></div>
-      <h2 class="gx-title" id="gxTitle" tabindex="-1"><span class="sr-only">${esc(state === 'pre' ? `${a.full || a.name} v ${b.full || b.name}, ${status}` : hide ? `${a.full || a.name} v ${b.full || b.name}, score hidden, ${status}` : `${a.full || a.name} ${a.score}, ${b.full || b.name} ${b.score}, ${state === 'post' ? 'final' : clockWords({ sport: g.sport, detail: status }) || status}`)}</span><span class="gx-tv" aria-hidden="true"><span class="gx-team">${crest(a)}<span><span class="gx-full">${esc(a.full || a.name)}</span><span class="gx-short">${esc(a.name || a.full)}</span></span>${has(a)}${a.record ? `<small class="lb">${esc(a.record)}</small>` : ''}</span>
+        <span class="gx-tools">${window.flShare ? `<button type="button" class="bt ghost sm" data-gx="share">${window.flShare.ICON}Share</button>` : ''}${window.flHome && state !== 'post' ? `<button type="button" class="bt ghost sm" data-gx="watch" aria-pressed="${window.flHome.watching(g.key)}" aria-label="${window.flHome.watching(g.key) ? `Following ${esc(a.full || a.name)} v ${esc(b.full || b.name)}. Stop following` : `Follow game: ${esc(a.full || a.name)} v ${esc(b.full || b.name)}`}">${window.flHome.watching(g.key) ? 'Following' : 'Follow game'}</button>` : ''}${state === 'pre' ? '' : `<button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}" aria-label="${esc(`${hide ? 'Reveal score' : 'Hide score'}: ${a.full || a.name} v ${b.full || b.name}`)}">${hide ? 'Reveal score' : 'Hide score'}</button>`}<button type="button" class="ib" data-gx="close" aria-label="Close match centre">${ic('x', 18) || '×'}</button></span></div>
+      <h2 class="gx-title" id="gxTitle" tabindex="-1"><span class="sr-only">${esc(state === 'pre' ? `${a.full || a.name} v ${b.full || b.name}, ${status}` : hide ? `${a.full || a.name} v ${b.full || b.name}, score hidden by spoiler-free mode, ${status}` : `${a.full || a.name} ${a.score}, ${b.full || b.name} ${b.score}, ${state === 'post' ? 'final' : clockWords({ sport: g.sport, detail: status }) || status}`)}</span><span class="gx-tv" aria-hidden="true"><span class="gx-team">${crest(a)}<span><span class="gx-full">${esc(a.full || a.name)}</span><span class="gx-short">${esc(a.name || a.full)}</span></span>${has(a)}${a.record ? `<small class="lb">${esc(a.record)}</small>` : ''}</span>
         <span class="gx-mid">${state === 'pre' ? `<b class="gx-vs">v</b>` : `${sc(a)}<i aria-hidden="true">:</i><span class="sr-only"> to </span>${sc(b)}`}<small class="${live ? 'on' : ''}">${esc(status)}</small></span>
         <span class="gx-team">${crest(b)}<span><span class="gx-full">${esc(b.full || b.name)}</span><span class="gx-short">${esc(b.name || b.full)}</span></span>${has(b)}${b.record ? `<small class="lb">${esc(b.record)}</small>` : ''}</span></span></h2>
       ${N.line ? `<p class="gx-now"><span class="lb">Latest</span> ${esc(N.line.slice(0, 220))}</p>` : ''}
       ${lines}
-      ${secs.length > 2 ? `<nav class="gx-nav" aria-label="Sections of this game"><ul>${secs.map(([k, l], i) => `<li><a href="#gxs-${k}" data-gxgo="${k}"${i === 0 ? ' aria-current="true"' : ''}>${esc(l)}</a></li>`).join('')}</ul></nav>` : ''}
+      ${secs.length > 2 ? `<nav class="gx-nav" aria-label="Sections of this game"><ul>${secs.map(([k, l], i) => `<li><a href="#gxs-${k}" data-gxgo="${k}" aria-label="${esc(l)}, jump to section"${i === 0 ? ' aria-current="true"' : ''}>${esc(l)}</a></li>`).join('')}</ul></nav>` : ''}
       <p class="gx-meta lb">${state === 'pre' ? '' : [d?.venue || g.venue, d?.crowd ? `${d.crowd.toLocaleString()} there` : '', watchLine(g, d) ? `${esc(watchLine(g, d))} (US listing)` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('')}</p>
     </header>`;
   }
@@ -426,7 +426,7 @@
     const fol = window.flHome?.follow ? `<div class="gx-follow" data-gxk="follow" role="group" aria-label="Follow the teams">${[['a', g.a], ['b', g.b]].map(([k, t]) => { const on = !!window.flHome.following?.(g, t);
       return `<button type="button" class="cx sm" data-gx="follow" data-side="${k}" aria-pressed="${on}" aria-label="${on ? `Following ${esc(t.full || t.name)}` : `Follow ${esc(t.full || t.name)}`}">${ic('star', 14)}${on ? 'Following' : 'Follow'} ${esc(t.full || t.name)}</button>` }).join('')}</div>` : '';
     const html = `${head(g, d, hide, secs)}<div class="gx-body" aria-busy="${M.loading && !d}">${fresh}${fol}${body}
-      <footer class="gx-foot" data-gxk="foot"><button type="button" class="bt" data-gx="full" aria-label="Open full game page on ${esc(g.sport)}">Open full game page${ic('arrow', 16)}</button>
+      <footer class="gx-foot" data-gxk="foot"><button type="button" class="bt" data-gx="full" aria-label="Open full match page: ${esc(`${g.a?.full || g.a?.name || ''} v ${g.b?.full || g.b?.name || ''}`)}">Open full match page${ic('arrow', 16)}</button>
         <label class="gx-all" for="gxAll"><input class="sw" type="checkbox" role="switch" id="gxAll" data-gx="all" aria-label="Spoiler-free: hide every score until I reveal it" ${SP.all ? 'checked' : ''}> Spoiler-free: hide every score until I reveal it</label></footer></div>`;
     // every refresh changes only what moved, so the buttons, switch and headings a reader is on stay the same elements
     if (window.flMorph) window.flMorph(sheet, html.replace(/<h3 id="/g, '<h3 tabindex="-1" id="'));
@@ -489,8 +489,9 @@
     const g = o.key ? o : find(o);
     if (!g || !CAN.has(g.sport) || !g.path) return false;
     M.seq++; M.g = g; M.d = null; M.at = 0; M.err = ''; M.gone = false; M.miss = 0; M.odds = null; M.oddsAt = 0; M.oddsErr = ''; M.oddsBusy = false; M.loading = false; M.sel = null; M.every = false; M.mode = 'lead'; M.from = from || document.activeElement;
+    M.fromSel = ['data-hub', 'data-live', 'data-hubcmd', 'data-hubtab'].filter(k => M.from?.hasAttribute?.(k)).map(k => `[${k}="${CSS.escape(M.from.getAttribute(k))}"]`).join('') || (M.from?.id ? '#' + CSS.escape(M.from.id) : '');
     window.flHome?.seen(g); sheet.innerHTML = ''; sheet.classList.remove('gx-tight'); loadFc();
-    host.hidden = false; root.classList.add('gx-on'); paint();
+    host.hidden = false; root.classList.add('gx-on'); paint(); window.flOverlay?.open(host, { from: M.from });
     const t = sheet.querySelector('#gxTitle'); if (t) { t.setAttribute('tabindex', '-1'); t.focus({ preventScroll: true }) } else sheet.focus({ preventScroll: true });
     load();
     clearInterval(M.timer); M.timer = setInterval(() => { if (document.hidden || host.hidden) return; const live = (M.d?.state || M.g.state) === 'in'; if (Date.now() - (M.at || 0) >= (live ? LIVE_MS : IDLE_MS) * (window.flSaver?.() ? 4 : 1) - 500) load(true) }, 5000);
@@ -498,8 +499,10 @@
     return true;
   }
   function close() {
-    if (host.hidden) return; host.hidden = true; root.classList.remove('gx-on'); clearInterval(M.timer); clearInterval(M.tick); M.seq++;
-    const f = M.from; M.g = null; M.d = null; if (f && document.contains(f)) f.focus({ preventScroll: true });
+    if (host.hidden) return; host.hidden = true; root.classList.remove('gx-on'); clearInterval(M.timer); clearInterval(M.tick); M.seq++; window.flOverlay?.close(host, { focus: false });
+    // the opener may have been redrawn while the game was open (Home and Live refresh): find its new copy by what it opens
+    let f = M.from; if (f && !document.contains(f) && M.fromSel) f = document.querySelector(M.fromSel);
+    M.g = null; M.d = null; if (f && document.contains(f)) f.focus({ preventScroll: true });
   }
   // the scoreboard keeps the score in the header current between feed reads
   /* A game that ends stays open and turns to Final. Only a game the provider takes away is called unavailable: it has to
@@ -566,7 +569,7 @@
       const i = pool.indexOf(M.sel), j = ev.key === 'Home' ? 0 : ev.key === 'End' ? pool.length - 1 : i < 0 ? (ev.key === 'ArrowLeft' ? pool.length - 1 : 0) : Math.max(0, Math.min(pool.length - 1, i + (ev.key === 'ArrowRight' ? 1 : -1)));
       ev.preventDefault(); select(pool[j]); sheet.querySelector('[data-gxflow]')?.focus({ preventScroll: true }); return;
     }
-    if (ev.key === 'Tab') {   // keep the keyboard inside the sheet while it is open
+    if (ev.key === 'Tab' && !window.flOverlay) {   // keep the keyboard inside the sheet (overlay.js does this when it is loaded)
       const f = [...sheet.querySelectorAll('button:not([disabled]),[href],input,select,[tabindex]:not([tabindex="-1"])')].filter(x => x.offsetParent !== null); if (!f.length) return;
       const first = f[0], last = f[f.length - 1];
       if (ev.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { ev.preventDefault(); last.focus() } else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus() }
@@ -579,5 +582,7 @@
     if (open({ sport, id }, t)) { ev.stopPropagation(); ev.preventDefault() }
   }, true);
 
-  window.flMC = { open, close, spoil, previewScores, setSpoil, setSpoilAll, spoilAll: () => !!SP.all, state: M, can: s => CAN.has(s) };
+  // whether Floodlight published a pick for this game (Live's "Predictions available"); the list loads on first ask
+  const hasPick = g => { if (!FC.list) { loadFc(); return false } return !!fcFor(g, null)?.pick };
+  window.flMC = { hasPick, open, close, spoil, previewScores, setSpoil, setSpoilAll, spoilAll: () => !!SP.all, state: M, can: s => CAN.has(s) };
 })();
