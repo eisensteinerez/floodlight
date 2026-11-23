@@ -1996,6 +1996,8 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .lv-upd{display:flex;align-items:center;gap:8px;margin:0}
 .lv-filt{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 20px}
 .lv-sort select{min-height:40px;width:auto}
+.lv-sels{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;margin-left:auto}
+@media (max-width:640px){.lv-sels{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-left:0}.lv-sels .lv-sort{display:grid;gap:4px}.lv-sels select{width:100%}}
 /* a filtered view says what it is showing, so it never reads as the whole board */
 .lv-scope{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0;padding:10px 14px;border:1px solid var(--border-2);border-left:4px solid var(--accent);border-radius:var(--radius-tile);background:var(--surface);font:500 14px/1.4 var(--font-body);color:var(--text-2)}
 .lv-scope b{color:var(--text)}.lv-scope .lk{margin-left:auto}

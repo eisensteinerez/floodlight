@@ -1184,6 +1184,8 @@ document.addEventListener('error', ev => {
 <script src="fmt.js"></script>
 <script src="admin.js"></script>
 <script src="statfx.js"></script>
+<script src="morph.js"></script>
+<script src="broadcast.js"></script>
 <script>
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const BASE2 = 'https://site.api.espn.com/apis/v2/sports/soccer';
@@ -1528,16 +1530,16 @@ let sumSeq = 0;
 async function loadPickedEvent(id){
   const p = S.picks.find(x => String(x.id) === String(id)); if (!p) return null;
   if (p.src === 'fm' && p.fmId) { openFMMatch(p.fmId); return 'fm' }
-  const d = new Date(p.date), slug = p.slug || 'all';
+  const d = new Date(p.date), slug = p.slug || 'all'; let read = 0;
   for (const day of [d, new Date(+d - DAY), new Date(+d + DAY)]) {
     try {
-      const j = await getJSON(`${BASE}/${slug}/scoreboard?dates=${ymd(day)}`);
+      const j = await getJSON(`${BASE}/${slug}/scoreboard?dates=${ymd(day)}`); read++;
       const ev = (j.events || []).find(x => String(x.id) === String(id));
       const m = ev && norm(ev, slug);
       if (m) { S.extra.set(m.id, m); return m }
     } catch {}
   }
-  return null;
+  return read ? null : 'offline';   // the schedule answered and the game is not on it, or nothing answered at all
 }
 let selBusy = null;
 async function select(id){
@@ -1546,7 +1548,8 @@ async function select(id){
     selBusy = id; $('sheet').classList.add('open'); $('sheet').innerHTML = `<div class="sheet-body">${flSkeleton()}</div>`;
     const m = await loadPickedEvent(id).finally(() => { selBusy = null });
     if (m === 'fm') return;
-    if (!m) { $('announce').textContent = "Couldn't load that match."; $('sheet').innerHTML = `<div class="sheet-body">${flErrorState("Couldn't load that match", 'It may have been removed, or the connection dropped.', 'closesheet')}</div>`; return }
+    if (m === 'offline') { $('sheet').innerHTML = `<div class="sheet-body">${flErrorState("Couldn't reach the schedule", 'Check your connection, then open the match again.', 'closesheet', 'Close')}</div>`; return }
+    if (!m) { $('announce').textContent = 'This match is no longer available.'; $('sheet').innerHTML = `<div class="sheet-body">${flErrorState('This match is no longer available', 'The provider has taken it off the schedule, or it is a game that has expired.', 'closesheet', 'Close')}</div>`; return }
   }
   if (viewBlocked({ type: 'match' })) return;
   S.sel = id; S.summary = null; S.stack = [{type:'match', id}]; S.tblSeason = null;
@@ -1576,7 +1579,8 @@ async function loadSummary(){
   } catch { if (seq === sumSeq) S.summary = { error: true } }
   if (S.stack[S.stack.length-1]?.type === 'match') renderSheet();
 }
-function refreshSheetHero(){ if (S.stack[S.stack.length-1]?.type !== 'match') return; const h = document.querySelector('.hero'); if (h) h.outerHTML = hero(S.events.get(S.sel)) }
+// the score refresh patches the header in place, so its close and expand buttons are never rebuilt under the reader
+function refreshSheetHero(){ if (S.stack[S.stack.length-1]?.type !== 'match') return; const h = document.querySelector('#sheet .hero'); if (!h) return; if (window.flMorph) flMorph.one(h, hero(S.events.get(S.sel))); else h.outerHTML = hero(S.events.get(S.sel)) }
 
 function hero(e){
   const sum = S.summary; const showScore = e.state !== 'pre';
@@ -1591,7 +1595,7 @@ function hero(e){
   return `<div class="hero mh${e.state === 'in' ? ' is-live' : ''}" style="--hc:${e.hc};--ac:${e.ac}">
     <div class="mh-fx" aria-hidden="true"><b>${esc(e.home.abbr || '')}</b><b>${esc(e.away.abbr || '')}</b></div>
     <div class="hero-top"><div class="lgname">${e.league.logo?`<img src="${esc(e.league.logo)}" width="16" height="16" alt="">`:''}<span>${esc(e.league.name)}${e.note?' · '+esc(e.note):''}</span></div>
-      <button class="icon-btn expand" data-act="expand" aria-pressed="${!!S.big}" aria-label="${S.big ? 'Exit large view' : 'View larger'}" title="${S.big ? 'Exit large view' : 'View larger'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <button class="icon-btn expand" data-act="expand" aria-pressed="${!!S.big}" aria-label="${S.big ? 'Shrink match centre' : 'Expand match centre'}" title="${S.big ? 'Shrink match centre' : 'Expand match centre'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${S.big ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'}</svg></button><button class="icon-btn close" id="closeBtn" aria-label="Close match centre" title="Close match centre"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="board">
       <div class="side">${e.home.logo?`<img src="${esc(e.home.logo)}" alt="">`:''}<strong><button class="linkbtn" data-team="${esc(e.home.id)}" data-lg="${esc(e.summarySlug||e.slug)}">${esc(e.home.full||e.home.name)}</button></strong>${form(e.home.form)}</div>
       <div class="score">${showScore
@@ -1638,10 +1642,12 @@ function renderSheet(){
   S.curTabs = TB;
   const sheet = $('sheet');
   const scroll = sheet.querySelector('.sheet-body')?.scrollTop || 0;
-  sheet.innerHTML = `<div class="sheet-body">${hero(e)}
+  // the same match redrawn (a live refresh, a tab change) is patched in place; another match or panel is drawn fresh
+  const same = window.flMorph && S.fxPage === 'm' + e.id && sheet.querySelector(':scope > .sheet-body > .hero');
+  (same ? html => flMorph(sheet, html) : html => { sheet.innerHTML = html })(`<div class="sheet-body">${hero(e)}
     <div class="tabs" role="tablist">${TB.map(([k,l])=>`<button class="tab${S.tab===k?' on':''}" role="tab" aria-selected="${S.tab===k}" data-tab="${k}" tabindex="${S.tab===k?0:-1}" aria-controls="pane">${tabIco(k)}<span>${l}</span></button>`).join('')}</div>
-    <div class="pane" id="pane" role="tabpanel" data-pane="${S.tab}" style="--hc:${e.hc};--ac:${e.ac}">${pane(e)}</div></div>`;
-  sheet.querySelector('.sheet-body').scrollTop = scroll;
+    <div class="pane" id="pane" role="tabpanel" data-pane="${S.tab}" aria-label="${esc((TB.find(t => t[0] === S.tab) || [])[1] || 'Match')}" style="--hc:${e.hc};--ac:${e.ac}">${pane(e)}</div></div>`);
+  if (!same) sheet.querySelector('.sheet-body').scrollTop = scroll;
   fxEnter(sheet, 'm' + e.id, S.tab);
   wiPaint();
   if (S.focusTab) { sheet.querySelector('.tab.on')?.focus(); S.focusTab = false }
@@ -3730,7 +3736,14 @@ function setBig(on){
   if (S.stack.length || S.sel) renderSheet();
   if (on) window.scrollTo({ top: 0 });
 }
-function closeSheet(quiet){   // quiet: closed by the site itself (a page or sport change), not by the user, so nothing is announced
+// The site's one spoken-status line is read once and then emptied, so an old message ("Following Arsenal", a goal) never
+// sits in the page for a screen reader to find later on Parlays or Members. Changing page empties it at once.
+(() => { const a = $('announce'); if (!a) return; let t = 0;
+  new MutationObserver(() => { clearTimeout(t); if (a.textContent) t = setTimeout(() => { a.textContent = '' }, 7000) }).observe(a, { childList: true, characterData: true, subtree: true });
+  document.addEventListener('fl:page', () => { clearTimeout(t); a.textContent = '' }) })();
+// Closing a match, a player, a team or any other panel says nothing: focus going back to where the reader was is the
+// signal. Only a match that has gone away is announced ("This match is no longer available"), see select().
+function closeSheet(quiet){
   const leagueRoot = S.stack.length === 1 && S.stack[0].type === 'league';
   if (S.big) setBig(false);
   S.sel = null; S.summary = null;
@@ -3740,7 +3753,6 @@ function closeSheet(quiet){   // quiet: closed by the site itself (a page or spo
   // closing a match inside a league goes back to that league; closing the league page itself empties the panel
   if (!leagueRoot && S.sport === 'soccer' && scopeLeague() && matchMedia('(min-width:821px)').matches) return openLeague(scopeLeague());
   S.stack = []; syncStage(); $('sheet').innerHTML = emptySheet();
-  if (!quiet) $('announce').textContent = 'Match closed';
 }
 function leagueData(v){
   const key = `${v.id}|${v.season}`;

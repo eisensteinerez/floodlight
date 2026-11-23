@@ -107,15 +107,15 @@
         lgName: sport === 'soccer' ? (c.competitionType?.text || '') : short, id: String(sport === 'tennis' ? c.id : ev.id), date: new Date(c.date || ev.date), state: st.state || 'pre',
         clock: st.shortDetail || st.detail || '', detail: st.shortDetail || st.detail || '', final: st.shortDetail || 'Final', a, b, weight, leaders,
         sit: c.situation ? { text: c.situation.downDistanceText || c.situation.shortDownDistanceText || '', poss: String(c.situation.possession || ''), red: !!c.situation.isRedZone, last: c.situation.lastPlay?.text || '' } : null,
-        tv: c.broadcasts?.[0]?.names?.[0] || c.geoBroadcasts?.[0]?.media?.shortName || '', ...tvOf(c), ...stageOf(ev, c, sport, a, b), venue: c.venue?.fullName || ev.venue?.displayName || '', draw, goals, note: /postpon|cancel|delay/i.test(st.description || '') ? st.description : '' };
+        ...tvOf(c), ...stageOf(ev, c, sport, a, b), venue: c.venue?.fullName || ev.venue?.displayName || '', draw, goals, note: /postpon|cancel|delay/i.test(st.description || '') ? st.description : '' };
     });
   }
-  // every channel the feed names, and the first national one (ESPN marks those with market type "National")
+  /* every channel the feed names, written out in full and sorted by broadcast.js: national TV, local TV (a team's
+     regional network or station) and streaming, plus whether any of it is free. tvNat is a real national network only;
+     tv is the one name a card prints. */
   function tvOf(c) {
-    const geo = (c.geoBroadcasts || []).map(b => ({ n: b.media?.shortName || '', nat: /national/i.test(b.market?.type || '') && !/radio/i.test(b.type?.shortName || '') }));
-    const tvs = [...new Set([...(c.broadcasts || []).flatMap(b => b.names || []), ...geo.map(b => b.n)].filter(Boolean))];
-    const nat = geo.find(b => b.nat && b.n)?.n || tvs.find(n => NAT_TV.test(n.trim())) || '';
-    return { tvs, tvNat: nat };
+    const w = window.flTV ? window.flTV.of(c) : { all: [], national: [], local: [], streaming: [], other: [], best: '', unknown: true };
+    return { tv: w.best, tvs: w.all, tvNat: w.national[0] || '', watch: w };
   }
   // what kind of game it is: playoffs or a knockout round, youth or reserve teams, and (soccer) which competition
   function stageOf(ev, c, sport, a, b) {
@@ -189,7 +189,6 @@
   /* ---------- how much a game matters ----------
      One points table ranks every game on Home: the featured game, "Up next" and the briefing all use it, and each
      reason keeps its points so Home can say why a game was picked. The soonest game is not the biggest one. */
-  const NAT_TV = /^(ABC|CBS|NBC|FOX|FS1|FS2|ESPN|ESPN2|ESPNU|ESPNEWS|TNT|TBS|truTV|NBA TV|NFL Network|NFL Net|NHL Network|MLB Network|Prime Video|Amazon Prime Video|Peacock|Apple TV\+?|Netflix|USA Network|USA Net|CBSSN|CBS Sports Network|BTN|Big Ten Network|SEC Network|ACC Network|Telemundo|Universo|Univision|UniMás|TUDN|TNT Sports|Max)$/i;
   const TOP_LG = { nfl: 'NFL', nba: 'NBA', mlb: 'MLB', nhl: 'NHL' };
   const TOP_SOCCER = /premier-league|laliga|la-liga|serie-a|bundesliga|ligue-1|champions-league|europa-league|conference-league|world-cup|major-league-soccer|\bmls\b|european-championship|copa-america|nations-league|fa-cup|copa-del-rey/i;
   const YOUTH = /\bu-?(1[5-9]|2[0-3])\b|\byouth\b|\breserves?\b/i;
