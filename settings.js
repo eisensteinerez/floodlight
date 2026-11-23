@@ -80,13 +80,14 @@
     if (PV.cmp === th) PV.cmp = '';
     const seg = (name, label, opts, val) => `<div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([k, l]) => `<button type="button" role="radio" aria-checked="${val === k}" class="${val === k ? 'on' : ''}" tabindex="${val === k ? 0 : -1}" data-pv${name}="${k}">${esc(l)}</button>`).join('')}</div>`;
     const sp = spoilOn();
-    el.innerHTML = `<div class="st-h"><h2 id="stPvH">Preview on your real pages</h2></div>
+    // in full screen a round close button stays in the corner whatever is scrolled, so leaving is one press away
+    el.innerHTML = `${PV.full ? `<button type="button" class="pv-x" data-pvfull aria-label="Exit full screen preview"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>` : ''}<div class="st-h"><h2 id="stPvH">Preview on your real pages</h2></div>
       <p class="lb">Today’s real games and picks, drawn in any theme. Looking at a theme here does not change yours until you press Use.</p>
       <div class="pv-bar">
         <div class="cx-row scroll" role="radiogroup" aria-label="Theme to preview">${THEMES.map(([id, name]) => `<button type="button" class="cx" role="radio" aria-checked="${th === id}" tabindex="${th === id ? 0 : -1}" data-pvtheme="${id}">${esc(name)}${id === cur ? '<span class="pv-yours">yours</span>' : ''}</button>`).join('')}</div>
         <div class="pv-row">${seg('page', 'Page', PAGES, PV.page)}${seg('device', 'Screen size', DEVICES, PV.device)}
           <label class="pv-cmp"><span>Side by side with</span><select class="inp sm" data-pvcmp><option value="">No second theme</option>${THEMES.filter(([id]) => id !== th).map(([id, name]) => `<option value="${id}"${PV.cmp === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>
-          <span class="pv-acts"><button type="button" class="bt ghost" data-pvfull aria-pressed="${PV.full}">${FULL_IC(PV.full)}${PV.full ? 'Exit full screen' : 'Full screen'}</button>
+          <span class="pv-acts"><button type="button" class="bt ghost" data-pvfull>${FULL_IC(PV.full)}${PV.full ? 'Exit full screen' : 'Full screen'}</button>
           <button type="button" class="bt pv-use" data-theme-pick="${th}"${th === cur ? ' disabled' : ''}>${th === cur ? `${esc(nameOf(th))} is your theme` : `Use ${esc(nameOf(th))}`}</button></span></div>
         ${sp ? `<label class="pv-sc"><input class="sw" type="checkbox" role="switch" data-pvscores${PV.scores ? ' checked' : ''}><span><b>Show scores in the preview</b><span class="lb">Spoiler-free is on, so scores are hidden. This shows them inside the preview only.</span></span></label>` : ''}
       </div>`;
@@ -180,8 +181,8 @@
   function pvFull(on) {
     const card = document.querySelector('.pv-card'); if (!card) return; PV.full = on;
     card.classList.toggle('full', on); root.classList.toggle('pv-lock', on);
-    if (on) { PV.back = document.activeElement; card.setAttribute('role', 'dialog'); card.setAttribute('aria-modal', 'true'); addEventListener('resize', pvFit) }
-    else { card.removeAttribute('role'); card.removeAttribute('aria-modal'); removeEventListener('resize', pvFit) }
+    if (on) { PV.back = document.activeElement; card.setAttribute('role', 'dialog'); card.setAttribute('aria-modal', 'true'); addEventListener('resize', pvFit); window.flOverlay?.open(card, { from: PV.back, trap: false }) }
+    else { card.removeAttribute('role'); card.removeAttribute('aria-modal'); removeEventListener('resize', pvFit); window.flOverlay?.close(card, { focus: false }) }
     pvControls(); if (!PV.panes.length) pvStart(); else pvFit();
     const b = card.querySelector('[data-pvfull]'); (on ? b : (PV.back?.isConnected ? PV.back : b))?.focus({ preventScroll: !on });
   }
@@ -239,9 +240,16 @@
     if (tab === 'data') return `<section class="card feature st-card" aria-labelledby="stDataH">${head('stDataH', 'Data')}
         <div class="st-rows">${row('stSaver', 'Data saver', 'Live scores, Home and the match centre refresh every 2 minutes instead of every 30 seconds. Uses less data and battery. Kept on this device.', look().saver)}</div></section>`;
     if (tab === 'access') return `<section class="card feature st-card" aria-labelledby="stAccH">${head('stAccH', 'Accessibility')}
-        <div class="st-rows">${row('prefMotion', 'Reduce motion', 'Turns off pulsing, flicker and grow-in animations.', p.motion)}${row('prefContrast', 'High contrast', 'Stronger text and borders.', p.contrast)}${row('prefAlerts', 'Announce goals', 'Reads out a goal in a match you have open, for screen readers.', ls.get('fl.alerts', 'true') !== 'false')}</div>
-        <div class="st-foot"><button type="button" class="bt ghost sm" data-streset="access">Reset accessibility</button></div></section>`;
-    if (tab === 'advanced') return `<section class="card st-card st-reset" aria-labelledby="stResetH">${head('stResetH', 'Restore all defaults')}
+        <div class="st-rows">${row('prefMotion', 'Reduce motion', 'Turns off pulsing, flicker and grow-in animations.', p.motion)}${row('prefContrast', 'High contrast', 'Stronger text and borders.', p.contrast)}${row('prefAlerts', 'Announce goals', 'Reads out a goal in a match you have open, for screen readers.', ls.get('fl.alerts', 'true') !== 'false')}</div></section>`;
+    // every reset lives here, away from the settings it undoes: one part at a time, or everything (asked once)
+    if (tab === 'advanced') return `<section class="card st-card st-reset" aria-labelledby="stPartH">${head('stPartH', 'Reset one part')}
+        <p class="lb">Each button puts one group back to how it started, straight away. Nothing else changes.</p>
+        <div class="st-resets">
+          <div class="st-rs"><div><b>Text size and brightness</b><small>Back to normal size and the theme’s own brightness.</small></div><button type="button" class="bt ghost sm" data-streset="look">Reset text size and brightness</button></div>
+          <div class="st-rs"><div><b>Accessibility</b><small>Motion and contrast back to normal; goal announcements back on.</small></div><button type="button" class="bt ghost sm" data-streset="access">Reset accessibility</button></div>
+          ${window.flAlerts ? `<div class="st-rs"><div><b>Alerts</b><small>Alerts off and every alert choice back to its default.</small></div><button type="button" class="bt ghost sm" data-streset="alerts">Reset alerts</button></div>` : ''}
+        </div></section>
+      <section class="card st-card st-reset" aria-labelledby="stResetH">${head('stResetH', 'Restore all defaults')}
         <p class="lb">Puts the theme, text size, brightness, motion, contrast, alerts and data saver on this device back to how they started. Teams you follow, your watchlist and saved slips are kept.</p>
         ${RESET.confirm ? `<div class="st-confirm" role="group" aria-label="Confirm"><b>Restore every setting on this page?</b><button type="button" class="bt sm" data-streset="all-yes">Restore defaults</button><button type="button" class="bt ghost sm" data-streset="all-no">Keep my settings</button></div>`
           : '<div><button type="button" class="bt ghost sm" data-streset="all">Restore all defaults…</button></div>'}</section>`;
@@ -258,7 +266,6 @@
           <div class="st-row"><div class="st-l"><span id="stBrL">Brightness</span><small>Dims or lifts the whole page without changing the theme.</small></div>
             <div class="st-c seg st-seg" role="radiogroup" aria-labelledby="stBrL">${BRIGHT.map(([v, l]) => `<button type="button" role="radio" aria-checked="${br === v}" class="${br === v ? 'on' : ''}" data-bright-pick="${v}">${l}</button>`).join('')}</div></div>
         </div>
-        <div class="st-foot"><button type="button" class="bt ghost sm" data-streset="look">Reset text size and brightness</button></div>
       </div>`;
   }
   function render(el, arg) {
@@ -317,6 +324,7 @@
     const r = ev.target.closest?.('[data-streset]'); if (!r) return; const k = r.dataset.streset, el = document.getElementById('pg-settings');
     if (k === 'look') { if (typeof S !== 'undefined') { S.prefs.size = 1; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } setBright(''); saved(); return el?.querySelector('[data-streset="look"]')?.focus() }
     if (k === 'access') { if (typeof S !== 'undefined') { S.prefs.motion = false; S.prefs.contrast = false; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } ls.set('fl.alerts', 'true'); sync(); saved(); return el?.querySelector('[data-streset="access"]')?.focus() }
+    if (k === 'alerts') { window.flAlerts?.reset?.(); saved(); return el?.querySelector('[data-streset="alerts"]')?.focus() }
     if (k === 'all') { RESET.confirm = true; sync(); return el?.querySelector('[data-streset="all-yes"]')?.focus() }
     if (k === 'all-no') { RESET.confirm = false; sync(); return el?.querySelector('[data-streset="all"]')?.focus() }
     if (k === 'all-yes') { RESET.confirm = false; resetLook(); setLook({ saver: false }); window.flAlerts?.reset?.(); setTheme('night-match'); saved(); el?.querySelector('#stResetH')?.setAttribute('tabindex', '-1'); el?.querySelector('#stResetH')?.focus(); const s = document.getElementById('stSaved'); if (s) s.textContent = 'Defaults restored' }

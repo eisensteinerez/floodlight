@@ -94,7 +94,7 @@
           <div class="st-c al-q"><input class="sw" type="checkbox" role="switch" id="al-quiet" data-al="quiet" ${A.quiet ? 'checked' : ''} ${A.on ? '' : 'disabled'}>
             ${A.quiet ? `<label class="sr-only" for="al-qf">From</label><select class="inp sm" id="al-qf" data-alq="qFrom">${[...Array(24).keys()].map(h => `<option value="${h}"${h === A.qFrom ? ' selected' : ''}>${hr(h)}</option>`).join('')}</select><span aria-hidden="true">to</span><label class="sr-only" for="al-qt">To</label><select class="inp sm" id="al-qt" data-alq="qTo">${[...Array(24).keys()].map(h => `<option value="${h}"${h === A.qTo ? ' selected' : ''}>${hr(h)}</option>`).join('')}</select>` : ''}</div></div>
       </div>
-      ${A.on ? `<p class="al-state lb" role="status">${esc(state)}</p><div class="st-foot">${p === 'default' ? '<button type="button" class="bt sm" data-al-ask>Allow browser notifications</button>' : ''}<button type="button" class="bt ghost sm" data-al-test>Show a sample alert</button><button type="button" class="bt ghost sm" data-al-reset>Reset alerts</button></div>` : ''}
+      ${A.on ? `<p class="al-state lb" role="status">${esc(state)}</p><div class="st-foot">${p === 'default' ? '<button type="button" class="bt sm" data-al-ask>Allow browser notifications</button>' : ''}<button type="button" class="bt ghost sm" data-al-test>Show a sample alert</button></div>` : ''}
     </section>`;
   }
   const repaint = focusId => { const el = document.getElementById('stAlerts'); if (!el) return; el.outerHTML = card(); if (focusId) document.getElementById(focusId)?.focus() };
