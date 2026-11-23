@@ -274,3 +274,14 @@ def test_a_provider_id_reposted_with_a_new_number_is_a_new_posting():
     mon = sched(ev("400", sunday, DAL, WSH, "post"), ev("402", NOW + 30 * H, DAL, NYG))
     v = run([row(player="Joe Milton", team_="DAL", opp="", books=(("sleeper", "jm1"),), line=180.5)], schedule=mon)
     assert v["rows"] and v["rows"][0]["eventId"] == "402"
+
+
+def test_the_public_summary_counts_open_and_removed_markets_and_names_providers():
+    fresh()
+    run([row(), row(player="Saquon Barkley", start=NOW - H, books=(("prizepicks", "pp9"),))], errors={"sleeper": "timed out"})
+    s = M.summary(now=NOW)
+    nfl = next(x for x in s["sports"] if x["sport"] == "nfl")
+    assert nfl["open"] == 1                          # Hurts on PrizePicks; his Sleeper line waits for Sleeper to answer
+    assert nfl["removed"] == {M.LABEL["started"]: 1, M.LABEL["provider_unavailable"]: 1}
+    names = {p["name"]: p["ok"] for p in nfl["providers"]}
+    assert names["PrizePicks"] is True and names["Sleeper"] is False

@@ -530,6 +530,41 @@ def monitor(now=None):
             ]}
 
 
+PROVIDER_NAME = {"prizepicks": "PrizePicks", "sleeper": "Sleeper", "underdog": "Underdog", "kalshi": "Kalshi"}
+
+
+def summary(now=None):
+    """The public view for the Trust and Data Center page: per sport, how many markets are open and verified, how
+    many were taken off in the last day and why, each provider's last good read, and the schedule read. No market
+    is re-read for it."""
+    _load()
+    now = now if now is not None else D["now"]()
+    with _lock:
+        ms = list(S["markets"].values())
+        provs = {k: dict(v) for k, v in S["providers"].items()}
+        scheds = {k: {"ok": v.get("ok"), "at": v.get("at")} for k, v in S["schedules"].items()}
+    out = {}
+    for m in ms:
+        sp = m.get("sport") or ""
+        x = out.setdefault(sp, {"sport": sp, "open": 0, "removed": {}, "lastVerified": None, "providers": [], "schedule": None})
+        if m.get("status") == "open" and (m.get("start") or 0) > now:
+            x["open"] += 1
+            x["lastVerified"] = max(x["lastVerified"] or 0, m.get("verifiedAt") or 0) or None
+        elif m.get("status") != "open" and now - (m.get("removedAt") or 0) < 86400:
+            lab = LABEL.get(m.get("status"), m.get("status"))
+            x["removed"][lab] = x["removed"].get(lab, 0) + 1
+    for k, v in provs.items():
+        sp, _, b = k.partition(":")
+        x = out.setdefault(sp, {"sport": sp, "open": 0, "removed": {}, "lastVerified": None, "providers": [], "schedule": None})
+        x["providers"].append({"key": b, "name": PROVIDER_NAME.get(b, b.title()), "ok": bool(v.get("ok")), "at": v.get("at"), "checked": v.get("checked")})
+    for sp, v in scheds.items():
+        if sp in out:
+            out[sp]["schedule"] = v
+    for x in out.values():
+        x["providers"].sort(key=lambda p: p["name"])
+    return {"at": int(now), "maxAge": MAX_AGE, "fresh": FRESH, "sports": sorted(out.values(), key=lambda x: x["sport"])}
+
+
 # ---------- the live feeds (wired by server.py) ----------
 def espn_schedule(get_json, espn_base, paths):
     """A schedule reader for setup(): ESPN scoreboards from three days back to eight days ahead, in one request."""

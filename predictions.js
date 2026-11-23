@@ -482,6 +482,9 @@
     const risks = W.length ? `<ul class="ev-warns" aria-label="Things to weigh">${W.map(([t, w]) => `<li><b>${esc(t)}</b><small>${esc(w)}</small></li>`).join('')}</ul>` : '<p class="lb">Nothing unusual stands out for this pick.</p>';
     return `<section class="ev-sec pd-sup"><h4>Supported edge</h4>${edges}</section><section class="ev-sec"><h4>The game and the market</h4>${game}</section><section class="ev-sec"><h4>Things to weigh</h4>${risks}</section>`;
   }
+  // what "Report incorrect data" sends with the member's note (datastatus.js opens the dialog)
+  const reportOf = p => ({ marketId: p.mid || p.id, eventId: p.eventId || p.v?.event?.id || '', player: p.name, provider: (p.books || []).map(b => BOOK[b] || b).join(', '),
+    sport: p.sport, stat: p.text, line: p.line, side: p.side, verifiedAt: p.at ? Math.round(+new Date(p.at) / 1000) : '', page: '#/predictions' });
   function evidence(p) {
     if (!window.flEvidence) return '';
     const k = keyOf(p), on = P.open.has(k), R = rangeOf(p), fol = following(p);
@@ -489,6 +492,7 @@
     return `<div class="pd-evbar"><button type="button" class="lk" data-pdopen="${esc(p.id)}" data-fk="lab-${esc(k)}">${ic('lab', 16)}Open in the Lab<span class="sr-only">: ${esc(p.name)}, ${esc(p.text)}</span></button>
         <button type="button" class="lk pd-folb" data-pdfollow="${esc(k)}" data-fk="fol-${esc(k)}" aria-pressed="${!!fol}">${ic('star', 16)}${fol ? 'Following' : 'Follow'}<span class="sr-only"> ${esc(p.name)}, ${esc(p.text)}</span></button>
         ${window.flShare ? `<button type="button" class="lk pd-share" data-pdshare="${esc(p.id)}" data-fk="sh-${esc(k)}">${window.flShare.ICON}Share<span class="sr-only"> ${esc(p.name)}, ${esc(p.text)} as a picture</span></button>` : ''}
+        <button type="button" class="lk pd-rep" data-report="${esc(JSON.stringify(reportOf(p)))}" data-fk="rep-${esc(k)}">${ic('help', 16)}Report incorrect data<span class="sr-only">: ${esc(p.name)}, ${esc(p.text)}</span></button>
         ${R ? `<span class="lb num pd-rng" title="${p.type === 'prop' ? 'One standard error either side, from the games behind the reading' : 'The span between our model alone and the market'}">Likely ${pct(R.lo)}–${pct(R.hi)}%</span>` : ''}${alertSel}</div>
       ${on ? `<div class="pd-ev" id="ev-${esc(k)}" role="region" aria-label="Evidence for ${esc(p.name)}, ${esc(p.text)}">${support(p)}${p.type === 'prop' ? window.flEvidence.prop(p) : window.flEvidence.match(p, P.ev.get(p.id))}${window.flShare || window.flBoards ? `<div class="pd-evfoot">${window.flBoards ? `<button type="button" class="bt ghost sm" data-pdboard="${esc(k)}" data-fk="bd-${esc(k)}">${window.flShell?.ic?.('save', 16) || ''}Save to a board</button>` : ''}${window.flShare ? `<button type="button" class="bt ghost sm" data-pdshareev="${esc(p.id)}" data-fk="shev-${esc(k)}">${window.flShare.ICON}Share this evidence</button>` : ''}</div>` : ''}</div>` : ''}`;
   }

@@ -2330,6 +2330,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if role_of(user) != "admin":
                     return self.send_json({"error": "Only admins can see this."}, 403)
                 return self.send_json(monitor_report())
+            if u.path == "/api/trust":   # the Trust and Data Center page: verified markets per sport and incidents, no re-read
+                return self.send_json({"markets": markets.summary(), "incidents": health.incidents(), "now": int(time.time())}, max_age=60)
             if u.path == "/api/corrections":   # the public correction log (corrections.py)
                 return self.send_json({"entries": corrections.entries(), "now": int(time.time())}, max_age=60)
             if u.path in ("/api/admin/alerts", "/api/admin/flags"):   # owner alerts and the players being re-checked
