@@ -1046,12 +1046,39 @@ def _mlb_moves(days=21):
     out.sort(key=lambda m: m["date"], reverse=True)
     return out[:600]
 
+def _espn_teams(path):
+    """The league's teams, so a sentence that names another team ("from Dallas") can be matched to it."""
+    try:
+        d = fetch(f"https://site.api.espn.com/apis/site/v2/sports/{path}/teams", 86400, as_json=True) or {}
+    except Exception:
+        return []
+    out = []
+    for lgx in (d.get("sports") or [{}])[0].get("leagues") or []:
+        for x in lgx.get("teams") or []:
+            t = x.get("team") or {}
+            logo = next((l.get("href") for l in t.get("logos") or [] if l.get("href")), "")
+            out.append({"id": str(t.get("id") or ""), "name": t.get("displayName") or "", "location": t.get("location") or "", "nickname": t.get("name") or "",
+                        "abbr": t.get("abbreviation") or "", "short": t.get("shortDisplayName") or t.get("name") or "", "logo": logo, "color": t.get("color") or ""})
+    return out
+
+SOURCE_LINK = {"nba": "https://www.espn.com/nba/transactions", "nfl": "https://www.espn.com/nfl/transactions", "mlb": "https://www.mlb.com/transactions"}
+
 def league_moves(lg):
     src, path = MOVE_SRC[lg]
     if not src:
         return {"league": lg, "source": "", "moves": []}
     try:
-        return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": _espn_moves(path) if src == "espn" else _mlb_moves()}
+        if src == "espn":
+            import moves_parse
+            rows = _espn_moves(path)
+            # one event per player per sentence, read on the server (moves_parse.py); the raw rows stay for older pages
+            out = {"league": lg, "source": "ESPN", "status": "Official", "link": SOURCE_LINK.get(lg, ""), "moves": rows}
+            try:
+                out["events"] = [moves_parse.public(e) for e in moves_parse.events(lg, rows, _espn_teams(path))]
+            except Exception as e:   # the page falls back to reading the raw rows itself
+                print("moves_parse failed:", lg, repr(e))
+            return out
+        return {"league": lg, "source": "MLB", "status": "Official", "link": SOURCE_LINK.get(lg, ""), "moves": _mlb_moves()}
     except Exception as e:
         print(f"moves {lg}: {e}", file=sys.stderr)
         return {"league": lg, "source": "ESPN" if src == "espn" else "MLB", "moves": [], "error": "The moves list did not answer. It will be tried again shortly."}
