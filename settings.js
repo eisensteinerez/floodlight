@@ -226,15 +226,27 @@
   }
 
 
-  function render(el) {
+  /* ---------- the page is six tabs; one shows at a time ---------- */
+  const TABS = [['appearance', 'Appearance'], ['alerts', 'Alerts'], ['home', 'Home'], ['data', 'Data'], ['access', 'Accessibility'], ['advanced', 'Advanced']];
+  const ST = { tab: 'appearance' };
+  const tabOf = a => a === 'theme' ? 'appearance' : TABS.some(t => t[0] === a) ? a : null;
+  const row = (id, label, help, on) => `<div class="st-row"><div class="st-l"><label for="${id}">${label}</label><small>${help}</small></div><div class="st-c"><input class="sw" type="checkbox" role="switch" id="${id}" ${on ? 'checked' : ''}></div></div>`;
+  function panel(tab) {
     const cur = current(), p = prefs(), si = sizeIndex(), br = root.dataset.bright || '';
-    if (!el.querySelector('#stMain')) { pvStop(); el.innerHTML = `<div id="stMain" class="vst"></div><section class="card feature st-card pv-card" aria-labelledby="stPvH"><div id="stPvCtl" class="vst"></div><div class="pv-stage" id="stPvStage"><button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button></div><div id="stPvScores" class="pv-scores"></div></section>` }
-    if (PV.theme == null) PV.theme = cur;
-    pvControls();
-    el.querySelector('#stMain').innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks, reads and alerts you.</p><p class="lb st-where">${typeof S !== 'undefined' && S.me ? 'Your theme and favorite themes follow your account. Everything else on this page is kept on this device only.' : 'Everything on this page is kept on this device. Sign in and your theme follows you to other devices too.'}</p></div></header>
-      <div class="card feature st-card">
-        <p class="st-crumb">Settings › Appearance</p>
-        <div class="st-h"><h2 id="stThemeH">Theme</h2><span class="st-saved" id="stSaved" role="status" aria-live="polite"></span></div>
+    const head = (id, t) => `<div class="st-h"><h2 id="${id}">${t}</h2><span class="st-saved" id="stSaved" role="status" aria-live="polite"></span></div>`;
+    if (tab === 'alerts') return window.flAlerts?.card() || '<div class="card emp"><b>Alerts are not available here</b></div>';
+    if (tab === 'home') return window.flOnboard?.settingsCard() || '<div class="card emp"><b>Home setup is not available here</b></div>';
+    if (tab === 'data') return `<section class="card feature st-card" aria-labelledby="stDataH">${head('stDataH', 'Data')}
+        <div class="st-rows">${row('stSaver', 'Data saver', 'Live scores, Home and the match centre refresh every 2 minutes instead of every 30 seconds. Uses less data and battery. Kept on this device.', look().saver)}</div></section>`;
+    if (tab === 'access') return `<section class="card feature st-card" aria-labelledby="stAccH">${head('stAccH', 'Accessibility')}
+        <div class="st-rows">${row('prefMotion', 'Reduce motion', 'Turns off pulsing, flicker and grow-in animations.', p.motion)}${row('prefContrast', 'High contrast', 'Stronger text and borders.', p.contrast)}${row('prefAlerts', 'Announce goals', 'Reads out a goal in a match you have open, for screen readers.', ls.get('fl.alerts', 'true') !== 'false')}</div>
+        <div class="st-foot"><button type="button" class="bt ghost sm" data-streset="access">Reset accessibility</button></div></section>`;
+    if (tab === 'advanced') return `<section class="card st-card st-reset" aria-labelledby="stResetH">${head('stResetH', 'Restore all defaults')}
+        <p class="lb">Puts the theme, text size, brightness, motion, contrast, alerts and data saver on this device back to how they started. Teams you follow, your watchlist and saved slips are kept.</p>
+        ${RESET.confirm ? `<div class="st-confirm" role="group" aria-label="Confirm"><b>Restore every setting on this page?</b><button type="button" class="bt sm" data-streset="all-yes">Restore defaults</button><button type="button" class="bt ghost sm" data-streset="all-no">Keep my settings</button></div>`
+          : '<div><button type="button" class="bt ghost sm" data-streset="all">Restore all defaults…</button></div>'}</section>`;
+    return `<div class="card feature st-card">
+        ${head('stThemeH', 'Theme')}
         <p class="lb st-favnote"><span>Have more than one you like? Star them on your profile and switch between them from the menu.</span> <button type="button" class="lk" data-page="profile" data-arg="themes">Star favorite themes</button></p>
         <div class="st-themes" role="radiogroup" aria-labelledby="stThemeH">
           ${THEMES.map(([id, name, desc]) => `<button type="button" class="st-theme${id === cur ? ' on' : ''}" role="radio" aria-checked="${id === cur}" tabindex="${id === cur ? 0 : -1}" data-theme-pick="${id}">
@@ -245,24 +257,42 @@
             <div class="st-c st-size"><span class="st-a" aria-hidden="true">A</span><input id="stSize" type="range" min="0" max="${SIZES.length - 1}" step="1" value="${si}" aria-valuetext="${sizeTxt(si)}"><span class="st-a big" aria-hidden="true">A</span><span class="chip st-val num" id="stSizeV">${sizeTxt(si)}</span></div></div>
           <div class="st-row"><div class="st-l"><span id="stBrL">Brightness</span><small>Dims or lifts the whole page without changing the theme.</small></div>
             <div class="st-c seg st-seg" role="radiogroup" aria-labelledby="stBrL">${BRIGHT.map(([v, l]) => `<button type="button" role="radio" aria-checked="${br === v}" class="${br === v ? 'on' : ''}" data-bright-pick="${v}">${l}</button>`).join('')}</div></div>
-          <div class="st-row"><div class="st-l"><label for="prefMotion">Reduce motion</label><small>Turns off pulsing, flicker and grow-in animations.</small></div>
-            <div class="st-c"><input class="sw" type="checkbox" role="switch" id="prefMotion" ${p.motion ? 'checked' : ''}></div></div>
-          <div class="st-row"><div class="st-l"><label for="prefContrast">High contrast</label><small>Stronger text and borders.</small></div>
-            <div class="st-c"><input class="sw" type="checkbox" role="switch" id="prefContrast" ${p.contrast ? 'checked' : ''}></div></div>
-          <div class="st-row"><div class="st-l"><label for="prefAlerts">Announce goals</label><small>Reads out a goal in a match you have open, for screen readers.</small></div>
-            <div class="st-c"><input class="sw" type="checkbox" role="switch" id="prefAlerts" ${ls.get('fl.alerts', 'true') !== 'false' ? 'checked' : ''}></div></div>
         </div>
-        <div class="st-foot"><button type="button" class="bt ghost sm" data-streset="look">Reset text, brightness and motion</button></div>
-      </div>${window.flAlerts?.card() || ''}
-      <section class="card feature st-card" aria-labelledby="stDataH"><p class="st-crumb">Settings › Data</p><div class="st-h"><h2 id="stDataH">Data</h2></div>
-        <div class="st-rows"><div class="st-row"><div class="st-l"><label for="stSaver">Data saver</label><small>Live scores, Home and the match centre refresh every 2 minutes instead of every 30 seconds. Uses less data and battery. Kept on this device.</small></div>
-          <div class="st-c"><input class="sw" type="checkbox" role="switch" id="stSaver" ${look().saver ? 'checked' : ''}></div></div></div></section>
-      ${window.flOnboard?.settingsCard() || ''}
-      <section class="card st-card st-reset" aria-labelledby="stResetH"><div class="st-h"><h2 id="stResetH">Restore all defaults</h2></div>
-        <p class="lb">Puts the theme, text size, brightness, motion, contrast, alerts and data saver on this device back to how they started. Teams you follow, your watchlist and saved slips are kept.</p>
-        ${RESET.confirm ? `<div class="st-confirm" role="group" aria-label="Confirm"><b>Restore every setting on this page?</b><button type="button" class="bt sm" data-streset="all-yes">Restore defaults</button><button type="button" class="bt ghost sm" data-streset="all-no">Keep my settings</button></div>`
-          : '<div><button type="button" class="bt ghost sm" data-streset="all">Restore all defaults…</button></div>'}</section>`;
+        <div class="st-foot"><button type="button" class="bt ghost sm" data-streset="look">Reset text size and brightness</button></div>
+      </div>`;
   }
+  function render(el, arg) {
+    const cur = current(), t = tabOf(arg); if (t) ST.tab = t;
+    if (!el.querySelector('#stMain')) { pvStop(); el.innerHTML = `<div id="stMain" class="vst"></div><section class="card feature st-card pv-card" aria-labelledby="stPvH" hidden><div id="stPvCtl" class="vst"></div><div class="pv-stage" id="stPvStage"><button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button></div></section>
+        <details class="card st-card drw st-a11y" id="stA11y" hidden><summary>Accessibility details <span class="lb">How readable each theme is</span></summary><div class="drw-b"><div id="stPvScores" class="pv-scores"></div></div></details>` }
+    if (PV.theme == null) PV.theme = cur;
+    pvControls();
+    const signed = typeof S !== 'undefined' && S.me, tab = ST.tab;
+    el.querySelector('#stMain').innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Settings</h1><p class="pg-sub">How Floodlight looks, reads and alerts you.</p></div>${window.flHelp ? `<div class="pg-acts">${flHelp.button('settings', 'Where your settings are kept')}</div>` : ''}</header>
+      ${window.flHelp?.panel('settings', 'Where your settings are kept', `<p>${signed ? 'Your theme and favorite themes follow your account. Everything else here is kept on this device only.' : 'Everything here is kept on this device. Sign in and your theme follows you to other devices too.'}</p><p>A change applies at once and is saved. Nothing reloads.</p>`) || ''}
+      <div class="st-tabs cx-row scroll" role="tablist" aria-label="Settings sections">${TABS.map(([k, n]) => `<button type="button" class="cx" role="tab" id="stTab-${k}" aria-selected="${k === tab}" aria-controls="stPanel" tabindex="${k === tab ? 0 : -1}" data-sttab="${k}">${n}</button>`).join('')}</div>
+      <div class="st-panel vst" id="stPanel" role="tabpanel" aria-labelledby="stTab-${tab}">${panel(tab)}</div>`;
+    const pv = el.querySelector('.pv-card'), a11y = el.querySelector('#stA11y');
+    if (pv) { if (tab !== 'appearance' && !pv.hidden) pvReset(); pv.hidden = tab !== 'appearance' }
+    if (a11y) a11y.hidden = tab !== 'access';
+    const on = el.querySelector('[data-sttab][aria-selected="true"]'), bar = on?.parentElement; if (bar && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2);
+  }
+  // the live preview is taken down when its tab is left, and starts again from its button
+  function pvReset() { pvStop(); const b = document.getElementById('stPvStage'); if (b) { b.classList.remove('two'); b.innerHTML = `<button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button>` } }
+  function goTab(k, focus) {
+    if (!TABS.some(t => t[0] === k) || k === ST.tab) return; ST.tab = k; RESET.confirm = false;
+    const el = document.getElementById('pg-settings'); if (!el) return; render(el);
+    try { history.replaceState(history.state, '', '#/settings/' + k) } catch (e) {}
+    if (focus) el.querySelector(`#stTab-${k}`)?.focus();
+    if (k === 'appearance') watchPv(el);
+  }
+  document.addEventListener('click', ev => { const t = ev.target.closest?.('[data-sttab]'); if (t) goTab(t.dataset.sttab, true) });
+  document.addEventListener('keydown', ev => {
+    const t = ev.target.closest?.('[data-sttab]'); if (!t || !/^Arrow(Left|Right)$|^Home$|^End$/.test(ev.key)) return;
+    const n = TABS.length, i = TABS.findIndex(x => x[0] === t.dataset.sttab);
+    const j = ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : ev.key === 'ArrowRight' ? (i + 1) % n : (i - 1 + n) % n;
+    ev.preventDefault(); goTab(TABS[j][0], true);
+  });
   function sync() { const el = document.getElementById('pg-settings'); if (!el || el.hidden) return; const f = document.activeElement, pick = f?.dataset?.themePick, id = f?.id; render(el);
     if (pick) el.querySelector(`[data-theme-pick="${current()}"]`)?.focus(); else if (id) document.getElementById(id)?.focus() }
   function saved() { const s = document.getElementById('stSaved'); if (!s) return; s.textContent = 'Saved'; s.classList.add('on'); clearTimeout(saved.t); saved.t = setTimeout(() => { const n = document.getElementById('stSaved'); if (n) { n.textContent = ''; n.classList.remove('on') } }, 1800) }
@@ -285,7 +315,8 @@
   function resetLook() { if (typeof S !== 'undefined') { S.prefs.size = 1; S.prefs.motion = false; S.prefs.contrast = false; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } ls.set('fl.alerts', 'true'); setBright('') }
   document.addEventListener('click', ev => {
     const r = ev.target.closest?.('[data-streset]'); if (!r) return; const k = r.dataset.streset, el = document.getElementById('pg-settings');
-    if (k === 'look') { resetLook(); saved(); return el?.querySelector('[data-streset="look"]')?.focus() }
+    if (k === 'look') { if (typeof S !== 'undefined') { S.prefs.size = 1; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } setBright(''); saved(); return el?.querySelector('[data-streset="look"]')?.focus() }
+    if (k === 'access') { if (typeof S !== 'undefined') { S.prefs.motion = false; S.prefs.contrast = false; try { localStorage.setItem('fl.prefs', JSON.stringify(S.prefs)) } catch {} typeof applyPrefs === 'function' && applyPrefs() } ls.set('fl.alerts', 'true'); sync(); saved(); return el?.querySelector('[data-streset="access"]')?.focus() }
     if (k === 'all') { RESET.confirm = true; sync(); return el?.querySelector('[data-streset="all-yes"]')?.focus() }
     if (k === 'all-no') { RESET.confirm = false; sync(); return el?.querySelector('[data-streset="all"]')?.focus() }
     if (k === 'all-yes') { RESET.confirm = false; resetLook(); setLook({ saver: false }); window.flAlerts?.reset?.(); setTheme('night-match'); saved(); el?.querySelector('#stResetH')?.setAttribute('tabindex', '-1'); el?.querySelector('#stResetH')?.focus(); const s = document.getElementById('stSaved'); if (s) s.textContent = 'Defaults restored' }
@@ -305,10 +336,13 @@
   document.addEventListener('click', ev => { const t = ev.target.closest?.('[data-theme-use]'); if (t) setTheme(t.dataset.themeUse) });
   window.flTheme = { list: THEMES, get: current, name: () => nameOf(current()), set: setTheme, scheme: () => root.dataset.scheme, favs, fav, preview };
   // the menu's Theme item lands on the picker itself
-  function onShow(el, arg) {
+  function watchPv(el) {
     // the preview starts by itself once it scrolls into view, and is taken down when Settings is left
-    if (!PV.panes.length && 'IntersectionObserver' in window) { const box = el.querySelector('#stPvStage'); if (box) { const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); if (window.flPages.current() === 'settings') pvStart() } }, { rootMargin: '200px' }); io.observe(box) } }
+    if (!PV.panes.length && 'IntersectionObserver' in window) { const box = el.querySelector('#stPvStage'); if (box) { const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); if (window.flPages.current() === 'settings' && ST.tab === 'appearance') pvStart() } }, { rootMargin: '200px' }); io.observe(box) } }
+  }
+  function onShow(el, arg) {
+    if (ST.tab === 'appearance') watchPv(el);
     if (arg !== 'theme') return; setTimeout(() => { el.querySelector('#stThemeH')?.scrollIntoView({ block: 'center' }); el.querySelector('[data-theme-pick][aria-checked="true"]')?.focus({ preventScroll: true }) }, 40) }
-  window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true, onHide() { pvStop(); const b = document.getElementById('stPvStage'); if (b) { b.classList.remove('two'); b.innerHTML = `<button type="button" class="bt ghost" data-pvpage="${PV.page}">Show the live preview</button>` } } });
+  window.flPages?.add('settings', { title: 'Settings', render, onShow, fresh: true, onHide: pvReset });
   document.addEventListener('fl:hub', () => { const el = document.getElementById('pg-settings'); if (el && !el.hidden && !el.querySelector('.thp.real') && sample() && !el.contains(document.activeElement)) sync() }, { once: false });
 })();
