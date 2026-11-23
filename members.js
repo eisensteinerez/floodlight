@@ -75,9 +75,9 @@
     const host = el(); if (!host || host.hidden) return;
     const act = document.activeElement, keepSel = act && host.contains(act) ? (act.id ? '#' + CSS.escape(act.id) : act.dataset.k ? `[data-k="${CSS.escape(act.dataset.k)}"]` : null) : null, caret = act?.selectionStart;
     if (!M.d) {
-      host.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Members</h1><p class="pg-sub">Everyone gets every service by default</p></div></header>
+      host.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Members</h1><p class="pg-sub">Who can use Floodlight, and what each person can open.</p></div></header>
         ${M.err ? `<div class="card emp">${ic('members', 30)}<b>The member list did not load</b><p>${esc(M.err)}</p><button type="button" class="bt" data-mb="retry">Try again</button></div>`
-          : '<div class="g4 mb-tiles">' + '<div class="skl mb-skl-t"></div>'.repeat(4) + '</div><div class="skl mb-skl"></div>'}`;
+          : '<div class="skl mb-skl"></div>'}`;
       return;
     }
     const d = M.d, all = rows(), people = all.filter(r => r.kind === 'member'), list = shown();
@@ -85,27 +85,23 @@
     if (M.sel && !find(M.sel)) M.sel = null;
     for (const k of [...M.picked]) if (!find(k)) M.picked.delete(k);
     const sel = M.sel ? find(M.sel) : null;
-    const tile = (n, label, sub) => `<div class="tile mb-tile"><span class="lb">${label}</span><b class="fig num">${n}</b><small class="lb">${sub}</small></div>`;
     const chip = (k, label, n) => `<button type="button" class="cx sm" data-mb="filter" data-v="${k}" data-k="f-${k}" aria-pressed="${M.filter === k}">${label}<span class="num mb-n">${n}</span></button>`;
     const th = (k, label, cls = '') => `<th scope="col" class="${cls}" aria-sort="${M.sort === k ? (M.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="mb-sort" data-mb="sort" data-v="${k}" data-k="s-${k}">${label}<i aria-hidden="true">${M.sort === k ? (M.dir > 0 ? '↑' : '↓') : ''}</i></button></th>`;
     const pickable = list.filter(r => r.kind === 'member' && !r.self && !r.locked), allPicked = pickable.length > 0 && pickable.every(r => M.picked.has(r.key));
     const small = all.length <= 2;   // just the owner, or one more: no tiles, filters or bulk controls to wade through
     M.bulkOk = all.filter(r => r.kind === 'member' && !r.self && !r.locked).length >= 2; if (!M.bulkOk) M.picked.clear();
     const svcNames = d.services.map(s => s[1]);
+    const summary = [people.length === 1 ? 'Just you so far' : `${people.length} members`, pending ? `${pending} invite${pending === 1 ? '' : 's'} waiting` : '', custom ? `${custom} with custom access` : `everyone has all ${svcNames.length} services`].filter(Boolean).join(' · ');
+    const solo = all.length === 1 && !sel;
     host.innerHTML = `
-      <header class="pg-head"><div><h1 class="pg-title">Members</h1><p class="pg-sub">Everyone gets every service by default</p></div>
-        <button type="button" class="bt" data-mb="invite-open" data-k="invite-open" aria-expanded="${!!M.invite}">${ic('plus', 18)}Invite member</button></header>
+      <header class="pg-head"><div><h1 class="pg-title">Members</h1><p class="pg-sub">${esc(summary.charAt(0).toUpperCase() + summary.slice(1))}.</p></div>
+        <div class="pg-acts"><button type="button" class="bt" data-mb="invite-open" data-k="invite-open" aria-expanded="${!!M.invite}">${ic('plus', 18)}Invite member</button>${window.flHelp?.button('members', 'What owners, admins and members can do') || ''}</div></header>
+      ${window.flHelp?.panel('members', 'What owners, admins and members can do', roleGuide(svcNames)) || ''}
       ${inviteCard()}
-      ${roleGuide(svcNames)}
-      ${small ? `<p class="mb-sum">${[people.length === 1 ? 'Just you so far.' : `${people.length} members.`, pending ? `${pending} invite${pending === 1 ? '' : 's'} waiting.` : '', custom ? `${custom} with custom access.` : `Everyone has all ${svcNames.length} services.`].filter(Boolean).join(' ')}</p>` : `<div class="g4 mb-tiles">${tile(people.length, 'Members', people.length === 1 ? 'Just you so far' : `${people.filter(r => r.status === 'active').length} active`)}
-        ${tile(people.length - custom, 'With all services', people.length ? `${Math.round((people.length - custom) / people.length * 100)}% of members` : 'No members yet')}
-        ${tile(custom, 'Custom access', custom ? 'At least one service off' : 'Nobody is limited')}
-        ${tile(pending, 'Invites pending', pending ? 'Waiting to be accepted' : 'No open invites')}</div>`}
-      ${policyCard()}
       <p class="sr-only" role="status" aria-live="polite">${esc(M.note)}</p>
       ${M.note ? `<p class="mb-note" aria-hidden="true">${esc(M.note)}</p>` : ''}
       ${M.temp ? `<div class="tile mb-temp"><div><b>Temporary password for ${esc(M.temp.name)}</b><code class="num">${esc(M.temp.password)}</code><small class="lb">Pass it on yourself. They are logged out everywhere until they use it.</small></div><button type="button" class="bt ghost sm" data-mb="temp-done" data-k="temp-done">Done</button></div>` : ''}
-      <div class="mb-main${sel ? ' has-sel' : ''}${all.length === 1 && !sel ? ' solo' : ''}">
+      ${solo ? soloCard(all[0], svcNames.length) : `<div class="mb-main${sel ? ' has-sel' : ''}">
         <section class="card mb-list" aria-label="Member list">
           ${small ? '' : `<div class="mb-bar"><label class="fl-f mb-search"><span class="sr-only">Search members</span><input class="inp" id="mbQ" type="search" placeholder="Search by name, username or email" value="${esc(M.q)}" autocomplete="off"></label>
             ${small ? '' : `<div class="cx-row" role="group" aria-label="Show">${chip('all', 'All', all.length)}${chip('staff', 'Owners and admins', all.filter(r => r.rank !== 'member').length)}${chip('custom', 'Custom access', custom)}${chip('paused', 'Paused', people.filter(r => r.status === 'paused').length)}${chip('invited', 'Invited', d.invites.length)}</div>`}</div>`}
@@ -117,9 +113,10 @@
             <tbody>${list.map(row).join('')}</tbody></table></div>`
             : `<div class="emp">${ic('search', 28)}<b>${all.length ? 'Nobody matches' : 'No members yet'}</b><p>${all.length ? 'Clear the search or pick another filter.' : 'Invite the first member with the button above.'}</p>${all.length ? '<button type="button" class="bt ghost" data-mb="clear-filter" data-k="clear-filter">Show everyone</button>' : ''}</div>`}
         </section>
-        ${sel ? detail(sel) : all.length === 1 ? '' : `<aside class="card mb-detail mb-none" aria-label="Member details"><div class="emp">${ic('members', 28)}<b>Pick a member</b><p>Choose someone from the list to see what they can open and change it.</p></div></aside>`}
-      </div>
-      ${logCard()}${feedbackCard()}`;
+        ${sel ? detail(sel) : `<aside class="card mb-detail mb-none" aria-label="Member details"><div class="emp">${ic('members', 28)}<b>Pick a member</b><p>Choose someone from the list to see what they can open and change it.</p></div></aside>`}
+      </div>`}
+      ${logCard()}${feedbackCard()}
+      ${policyCard()}`;
     const back = keepSel || (M.refocus && !M.ask ? `[data-k="${CSS.escape(M.refocus)}"]` : null); if (back && !M.ask) M.refocus = null;
     if (back) { const t = host.querySelector(back); if (t) { t.focus({ preventScroll: true }); if (t.id === 'mbQ' && caret != null) try { t.setSelectionRange(caret, caret) } catch (e) {} } }
     drawMenu(); drawAsk();
@@ -139,11 +136,16 @@
 
   /* Roles and services, explained once at the top: what each role can do, and the services "every service" means. */
   function roleGuide(svc) {
-    return `<details class="card mb-guide"><summary>What owners, admins and members can do, and the ${svc.length} services</summary>
-      <dl class="mb-gd"><div><dt>Owner</dt><dd>Everything: invites, services, roles, removing anyone, and the rule for new members. Only an owner can change another owner.</dd></div>
+    return `<dl class="mb-gd"><div><dt>Owner</dt><dd>Everything: invites, services, roles, removing anyone, and the access defaults for new members. Only an owner can change another owner.</dd></div>
         <div><dt>Admin</dt><dd>Invites members, switches their services on and off, pauses or removes them. Can’t change or remove an owner.</dd></div>
         <div><dt>Member</dt><dd>Uses the services switched on for them. Can’t open this page.</dd></div></dl>
-      <p class="lb">The ${svc.length} services: ${svc.map(esc).join(', ')}. Owners and admins always have all of them.</p></details>`;
+      <p>The ${svc.length} services: ${svc.map(esc).join(', ')}. Owners and admins always have all of them. New members get every service unless Access defaults, at the bottom of this page, says otherwise.</p>`;
+  }
+  /* just the owner so far: one compact card in place of an empty table */
+  function soloCard(r, n) {
+    return `<section class="card mb-solo" aria-label="Your account"><div class="mb-solo-me">${avatar(r, 'av-lg')}<div><b>${esc(r.name)} <span class="lb">(you)</span></b><small class="lb">${RANK[r.rank]} · all ${n} services ${statusPill(r)}</small></div>
+        <button type="button" class="bt ghost sm" data-mb="open" data-v="${esc(r.key)}" data-k="o-${esc(r.key)}">See details</button></div>
+      <p class="mb-solo-p">Nobody else has joined yet. Use <b>Invite member</b> to send a link; they get every service the moment they join.</p></section>`;
   }
   /* before a member's services change: what they will be able to open, and what they lose, then Save or Cancel */
   function preview(r) {
@@ -204,11 +206,13 @@
 
   function policyCard() {
     const d = M.d, p = d.policy, owner = d.me.rank === 'owner';
-    return `<section class="card mb-policy" aria-labelledby="mbPolH"><div class="mb-pol-top"><div><h2 id="mbPolH">New members get every service</h2>
+    return `<details class="card drw mb-policy" id="mbDefaults"${M.polOpen ? ' open' : ''}><summary>Access defaults <span class="lb">${p.allNew ? 'New members get every service' : `New members start with ${p.start.length} of ${total()} services`}</span></summary>
+      <div class="drw-b"><div class="mb-pol-top"><div><h2 id="mbPolH">Give new members every service</h2>
         <p class="lb">${p.allNew ? `Anyone who joins can open all ${total()} services straight away, and any service added later.` : 'Switched off. New members start with only the services ticked below.'}${owner ? '' : ' Only an owner can change this.'}</p></div>
         <input class="sw" type="checkbox" role="switch" id="mbPolAll" data-mb="policy-all" aria-labelledby="mbPolH" ${p.allNew ? 'checked' : ''} ${owner ? '' : 'disabled'}></div>
-      ${p.allNew ? '' : `<fieldset class="mb-start" ${owner ? '' : 'disabled'}><legend class="lb">New members start with</legend>${d.services.map(([k, n]) => `<label class="cx sm mb-tick"><input type="checkbox" class="mb-box" data-mb="policy-start" data-v="${k}" data-k="ps-${k}" ${p.start.includes(k) ? 'checked' : ''}>${esc(n)}</label>`).join('')}</fieldset>`}</section>`;
+      ${p.allNew ? '' : `<fieldset class="mb-start" ${owner ? '' : 'disabled'}><legend class="lb">New members start with</legend>${d.services.map(([k, n]) => `<label class="cx sm mb-tick"><input type="checkbox" class="mb-box" data-mb="policy-start" data-v="${k}" data-k="ps-${k}" ${p.start.includes(k) ? 'checked' : ''}>${esc(n)}</label>`).join('')}</fieldset>`}</div></details>`;
   }
+  document.addEventListener('toggle', ev => { if (ev.target.id === 'mbDefaults') M.polOpen = ev.target.open }, true);
 
   function detail(r) {
     const d = M.d, me = d.me;
@@ -240,7 +244,7 @@
     return `<section class="card mb-log" aria-labelledby="mbLogH"><div class="sec-h"><h2 id="mbLogH">Activity</h2><span class="lb num">${log.length ? `${log.length} most recent change${log.length === 1 ? '' : 's'}` : ''}</span></div>
       ${log.length ? `<ol class="mb-log-l">${log.slice(0, n).map(x => `<li><span class="mb-log-w"><b>${esc(x.by)}</b> ${esc(x.what)}</span><time class="lb num" datetime="${new Date(x.at * 1000).toISOString()}">${stamp(x.at)}</time></li>`).join('')}</ol>
         ${log.length > 12 ? `<button type="button" class="bt ghost sm" data-mb="log-more" data-k="log-more" aria-expanded="${M.logAll}">${M.logAll ? 'Show fewer' : `Show all ${log.length}`}</button>` : ''}`
-        : `<div class="emp">${ic('book', 26)}<b>No changes yet</b><p>Every invite, role change, pause, service switch and removal is listed here with who did it and when.</p></div>`}</section>`;
+        : '<p class="lb mb-log-none">No changes yet. Every invite, role change, pause, service switch and removal will be listed here, with who did it and when.</p>'}</section>`;
   }
   function feedbackCard() {
     const f = M.d.feedback || []; if (!f.length) return '';
