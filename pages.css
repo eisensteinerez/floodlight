@@ -1807,7 +1807,25 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-evbar :is(.lk){min-height:44px}
 .lc-h .lc-sw{width:6px;height:28px;border-radius:3px;background:var(--lc-c);flex:none}
 .lc-ss{color:var(--text)}
 @media (forced-colors:active){.lc-chart .pt{fill:CanvasText;stroke:CanvasText}.lc-chart .pt.m,.lc-chart .pt.e{fill:Canvas}.lc-hd:focus-visible .kn{stroke:Highlight}}
-@media (max-width:520px){.lc-fig{padding:12px}.lc-opts{display:grid;grid-template-columns:minmax(0,1fr)}.lc-opts .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;width:100%;box-sizing:border-box}:root[data-theme] .lc-opts .seg button{padding:0 6px;font-size:13px}.lc-stat select{min-width:0;width:100%}}
+/* Trends: the filters, the counts, and the line under each run that sets it against the price */
+.tr-f{display:grid;gap:12px;margin:0;min-width:0}
+.tr-fh{float:left;width:100%;margin:0 0 4px;padding:0;font:700 16px/1.3 var(--font-body);color:var(--text)}
+.tr-fh+*{clear:both}
+.tr-fg{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 14px}
+.tr-fl{display:grid;gap:4px;min-width:0}
+.tr-fl select{width:100%;min-height:44px}
+.tr-fs{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+.tr-count{margin:0;color:var(--text-2)}
+.tr-count b{color:var(--text)}
+.tr-li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 6px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.tr-li:last-child{border-bottom:0}
+.tr-save{width:44px;height:44px}
+.tr-ctx{grid-column:1/-1;margin:0 8px;font-size:13px;line-height:1.45;color:var(--text-2)}
+.tr-ctx b{display:block;color:var(--text);font-weight:700}
+.tr-ctx.rare b::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:1px;background:var(--accent);transform:rotate(45deg);vertical-align:1px}
+.tr-empty{margin:0}
+.tr-more{justify-self:start;margin:0}
+@media (max-width:520px){.tr-t small{white-space:normal}.tr-fg{grid-template-columns:repeat(2,minmax(0,1fr))}.lc-fig{padding:12px}.lc-opts{display:grid;grid-template-columns:minmax(0,1fr)}.lc-opts .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;width:100%;box-sizing:border-box}:root[data-theme] .lc-opts .seg button{padding:0 6px;font-size:13px}.lc-stat select{min-width:0;width:100%}}
 /* both players in: the slots stay side by side on a phone, photo above the name */
 @media (max-width:820px){.lc-slots.both{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px}.lc-slots.both .lc-slot{min-height:0;padding:12px}.lc-slots.both .lc-who{flex-direction:column;align-items:flex-start;gap:8px}.lc-slots.both .rw-t b{white-space:normal}.lc-slots.both .lc-sa{gap:4px 12px}}
 

@@ -6,7 +6,8 @@
    be narrowed to the dates both played, the games they played against each other, (for teammates) the games one
    played while the other sat, home or away, and the games against tonight's opponent.
    Trends: before a player is chosen, today's strongest trends from the posted lines: the longest runs over or under a
-   line, and whose last five games are furthest from their last twenty. Each opens that player's trend view.
+   line, and whose last five games are furthest from their last twenty, with filters. Every run is set against the
+   market's price and the player's own hit rate, so a long run that the price expects is not sold as a surprise.
    Every number is counted from the games /api/lab/player and the board return; nothing is estimated here. */
 (() => {
   const $ = id => document.getElementById(id);
@@ -413,47 +414,137 @@
   document.addEventListener('dragstart', ev => { const c = ev.target.closest?.('[data-cmpdrag]'); if (!c) return; ev.dataTransfer.setData('application/x-fl-player', c.dataset.cmpdrag); ev.dataTransfer.setData('text/plain', JSON.parse(c.dataset.cmpdrag).name || ''); ev.dataTransfer.effectAllowed = 'copy' });
 
   /* ---------------- Trends ---------------- */
-  const T = { host: null, api: null, q: '' };
-  function streak(p) {   // how many games in a row, newest first, on the side of the line the latest one landed
-    const vs = (p.games || []).map(g => g.v).filter(v => v != null && v !== p.line); if (!vs.length) return null;
+  /* Filters are the ones today's board can answer: sport and league, stat, the side of the run, how many games stand
+     behind the line, home or away games only, the book that posts the line, and when the game starts. The board has no
+     game dates, opponent rankings or starting roles, so there is no filter for rest days, opponent strength or role. */
+  const GROUP = { nba: 'Basketball', wnba: 'Basketball', nfl: 'Football', nhl: 'Hockey', mlb: 'Baseball', soccer: 'Soccer' };
+  const TIMES = [['early', 'Before 5 pm'], ['mid', '5 pm to 8 pm'], ['late', '8 pm or later']];
+  const F0 = { sport: '', lg: '', stat: '', side: '', min: 0, venue: 'all', book: '', time: '', order: 'long' };
+  const FKEY = 'fl.trends.filters';
+  const T = { host: null, api: null, q: '', f: (() => { try { return { ...F0, ...JSON.parse(sessionStorage.getItem(FKEY) || '{}') } } catch (e) { return { ...F0 } } })(), more: false, rows: {} };
+  const FLAB = { sport: 'Sport', lg: 'League', stat: 'Stat', side: 'Side', min: 'Minimum sample', venue: 'Games counted', book: 'Posted on', time: 'Game time' };
+  const vgames = (p, venue) => (p.games || []).filter(g => g.v != null && (venue === 'all' || !venue || g.home === (venue === 'home')));
+  function streak(p, venue) {   // how many games in a row, newest first, on the side of the line the latest one landed
+    const vs = vgames(p, venue).map(g => g.v).filter(v => v !== p.line); if (!vs.length) return null;
     const over = vs[0] > p.line; let n = 0; for (const v of vs) { if ((v > p.line) !== over) break; n++ }
     return { n, over };
   }
-  function shift(p) {
-    const vs = (p.games || []).map(g => g.v).filter(v => v != null); if (vs.length < 12) return null;
-    const a5 = vs.slice(0, 5).reduce((a, b) => a + b, 0) / 5, a20 = vs.slice(0, 20).reduce((a, b) => a + b, 0) / Math.min(20, vs.length);
+  function shift(p, venue) {
+    const vs = vgames(p, venue).map(g => g.v); if (vs.length < 12) return null;
+    const a5 = mean(vs.slice(0, 5)), a20 = mean(vs.slice(0, 20));
     return a20 ? { a5, a20, pct: (a5 - a20) / Math.max(1, Math.abs(a20)) } : null;
+  }
+  // the market's chance of the over at exactly this line, the books' margin already out (the same reading as edge.js)
+  const mOver = p => { const pr = (p.offers || []).filter(o => o.pOver != null && o.line === p.line); return pr.length ? mean(pr.map(o => o.pOver)) : null };
+  const oneIn = P => P >= .67 ? 'most of the time' : P < .001 ? 'less than 1 time in 1,000' : `about 1 time in ${Math.round(1 / P).toLocaleString()}`;
+  /* is the run a surprise? The chance of n in a row on that side is p^n, with p from the market's price when a book posts
+     a two-sided one, else from the player's own hit rate over the games behind the line. At 10% or more the run is
+     ordinary for that price; under 5% it is longer than the price expects. */
+  function context(p, s, venue) {
+    const side = s.over ? 'over' : 'under', m = mOver(p), mk = m == null ? null : s.over ? m : 1 - m;
+    const gs = vgames(p, venue).filter(g => g.v !== p.line), hit = gs.filter(g => s.over ? g.v > p.line : g.v < p.line).length, b = gs.length ? hit / gs.length : null;
+    const ref = mk != null ? 'market' : b != null && gs.length >= 8 ? 'baseline' : null;
+    if (!ref) return { P: null, label: '', why: `Only ${games(gs.length)} behind this line, too few to say whether the run is unusual.`, tone: 'n' };
+    const pr = ref === 'market' ? mk : b, P = Math.pow(Math.min(1, Math.max(0, pr)), s.n), what = ref === 'market' ? 'the market price' : 'their own hit rate';
+    const label = P >= .1 ? `Long streak, but consistent with ${what}` : P < .05 ? `Longer than expected based on ${ref === 'market' ? 'the market' : 'their own hit rate'}` : `A little long for ${what}`;
+    const base = `Baseline: ${side} in ${hit} of ${gs.length} games behind the line (${pct(b)}%).`;
+    const why = ref === 'market' ? `Market: ${pct(mk)}% ${side}. A ${s.n}-game run happens ${oneIn(P)} at that price. ${base}` : `No book posts a two-sided price at this line. ${base} A ${s.n}-game run happens ${oneIn(P)} at that rate.`;
+    return { P, ref, label, why, tone: P >= .1 ? 'ok' : P < .05 ? 'rare' : 'n' };
+  }
+  const tbucket = p => { const d = p.start ? new Date(p.start) : null; if (!d || isNaN(d)) return ''; const h = d.getHours(); return h < 17 ? 'early' : h < 20 ? 'mid' : 'late' };
+  // does a pick pass every filter (side is checked on the run, not here); skip leaves one filter out, to say which one to loosen
+  function passes(p, f, skip) {
+    const on = k => k !== skip;
+    if (on('sport') && f.sport && GROUP[p.sport] !== f.sport) return false;
+    if (on('lg') && f.lg && p.sport !== f.lg) return false;
+    if (on('stat') && f.stat && p.label !== f.stat) return false;
+    if (on('min') && f.min && vgames(p, on('venue') ? f.venue : 'all').length < f.min) return false;
+    if (on('book') && f.book && !(p.books || []).includes(f.book)) return false;
+    if (on('time') && f.time && tbucket(p) !== f.time) return false;
+    return true;
+  }
+  const uniq = xs => { const seen = new Set(); return xs.filter(x => !seen.has(x.p.sport + x.p.name) && seen.add(x.p.sport + x.p.name)) };   // one row per player in each list
+  function lists(pool, f, skip) {
+    const venue = skip === 'venue' ? 'all' : f.venue, pp = pool.filter(p => passes(p, f, skip));
+    let runs = pp.map(p => ({ p, s: streak(p, venue) })).filter(x => x.s && x.s.n >= 4 && (skip === 'side' || !f.side || (f.side === 'over') === x.s.over)).map(x => ({ ...x, c: context(x.p, x.s, venue) }));
+    runs = runs.sort((a, b) => f.order === 'rare' ? (a.c.P ?? 2) - (b.c.P ?? 2) || b.s.n - a.s.n : b.s.n - a.s.n || (a.c.P ?? 2) - (b.c.P ?? 2));
+    const moves = pp.map(p => ({ p, m: shift(p, venue) })).filter(x => x.m && Math.abs(x.m.pct) >= 0.15).sort((a, b) => Math.abs(b.m.pct) - Math.abs(a.m.pct));
+    return { runs: uniq(runs), up: uniq(moves.filter(x => x.m.pct > 0)), down: uniq(moves.filter(x => x.m.pct < 0)) };
   }
   const spark = vs => { if (vs.length < 2) return ''; const W = 96, H = 26, max = Math.max(...vs), min = Math.min(...vs), r = max - min || 1, o = [...vs].reverse();
     return `<svg class="tr-spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${o.map((v, i) => `${(i / (o.length - 1) * (W - 4) + 2).toFixed(1)},${(H - 3 - (v - min) / r * (H - 6)).toFixed(1)}`).join(' ')}"/></svg>` };
-  function trendRow(p, note) {
-    const args = window.flEdge.labArgs(p);
-    return `<li><button type="button" class="tr-row" data-tropen="${esc(JSON.stringify({ ...args, mode: 'trend' }))}" draggable="true" data-cmpdrag="${esc(JSON.stringify({ sport: p.sport, name: p.name, stat: p.k }))}">${face(p.photo, p.name)}<span class="tr-t"><b>${esc(p.name)}</b><small>${esc(`${p.label} · line ${fmt(p.line)}`)}</small></span>
-      <span class="tr-r"><span class="tr-note">${note}</span>${spark((p.games || []).slice(0, 10).map(g => g.v).filter(v => v != null))}</span></button></li>`;
+  const trItem = (p, sub) => ({ kind: 'trend', key: `trend:${p.sport}:${p.name}:${p.k}:${p.line}`, label: `${p.name}, ${String(p.label || p.k).toLowerCase()}`, sub, photo: p.photo || '', open: { trend: { sport: p.sport, name: p.name, stat: p.k, line: p.line } } });
+  function trendRow(x, note, id, sub) {
+    const p = x.p, args = window.flEdge.labArgs(p); T.rows[id] = trItem(p, sub);
+    const c = x.c;
+    return `<li class="tr-li"><button type="button" class="tr-row" data-tropen="${esc(JSON.stringify({ ...args, mode: 'trend' }))}" data-trid="${id}" draggable="true" data-cmpdrag="${esc(JSON.stringify({ sport: p.sport, name: p.name, stat: p.k }))}">${face(p.photo, p.name)}<span class="tr-t"><b>${esc(p.name)}</b><small>${esc(`${p.label} · line ${fmt(p.line)}`)}</small></span>
+      <span class="tr-r"><span class="tr-note">${note}</span>${spark((p.games || []).slice(0, 10).map(g => g.v).filter(v => v != null))}</span></button>
+      ${window.flBoards ? `<button type="button" class="ib tr-save" data-trsave="${id}" aria-label="Save ${esc(p.name)}, ${esc(String(p.label).toLowerCase())}, to a board">${ic('save', 18)}</button>` : ''}
+      ${c ? `<p class="tr-ctx ${c.tone}">${c.label ? `<b>${esc(c.label)}</b> ` : ''}<span>${esc(c.why)}</span></p>` : ''}</li>`;
   }
+  const saveF = () => { try { sessionStorage.setItem(FKEY, JSON.stringify(T.f)) } catch (e) {} };
+  const active = f => Object.keys(FLAB).filter(k => k === 'venue' ? f.venue !== 'all' : !!f[k]);
+  const fText = (k, v) => k === 'min' ? `${v}+ games` : k === 'venue' ? (v === 'home' ? 'home games' : 'away games') : k === 'time' ? TIMES.find(t => t[0] === v)?.[1] : k === 'side' ? `${v} runs` : k === 'lg' ? NAME[v] : v;
+  let noteT = 0;
   function trends(host, o = {}, api) {
-    T.host = host; T.api = api;
-    const picks = window.flEdge ? window.flEdge.all() : [], sport = o.sport;
-    const pool = picks.filter(p => !p.yes && (!sport || p.sport === sport));
-    const runs = pool.map(p => ({ p, s: streak(p) })).filter(x => x.s && x.s.n >= 4).sort((a, b) => b.s.n - a.s.n);
-    const uniq = xs => { const seen = new Set(); return xs.filter(x => !seen.has(x.p.name) && seen.add(x.p.name)) };   // one row per player in each list
-    const longRuns = uniq(runs).slice(0, 6);
-    const moves = pool.map(p => ({ p, m: shift(p) })).filter(x => x.m && Math.abs(x.m.pct) >= 0.15).sort((a, b) => Math.abs(b.m.pct) - Math.abs(a.m.pct));
-    const up = uniq(moves.filter(x => x.m.pct > 0)).slice(0, 5), down = uniq(moves.filter(x => x.m.pct < 0)).slice(0, 5);
-    const loading = window.flEdge && !picks.length && !T.tried;
-    const list = (title, sub, rows, note) => `<section class="card tr-card" aria-labelledby="tr-${title.replace(/\W+/g, '')}"><header><h3 id="tr-${title.replace(/\W+/g, '')}">${title}</h3><p class="lb">${sub}</p></header>
-      ${rows.length ? `<ul class="tr-list">${rows.map(x => trendRow(x.p, note(x))).join('')}</ul>` : `<p class="lb">${loading ? 'Reading today’s lines…' : 'Nothing stands out here on today’s lines.'}</p>`}</section>`;
+    T.host = host; T.api = api; T.rows = {};
+    if (o.filters && typeof o.filters === 'object') { T.f = { ...F0, ...o.filters }; saveF() }
+    if (o.sport && NAME[o.sport] && T.oSport !== o.sport) { T.oSport = o.sport; T.f.sport = GROUP[o.sport]; T.f.lg = '' }
+    const f = T.f, picks = window.flEdge ? window.flEdge.all() : [];
+    const pool = picks.filter(p => !p.yes);
+    // the choices each filter offers come from today's lines, so no option leads to nothing
+    const inSport = pool.filter(p => !f.sport || GROUP[p.sport] === f.sport), inLg = inSport.filter(p => !f.lg || p.sport === f.lg);
+    const sportsOn = [...new Set(pool.map(p => GROUP[p.sport]).filter(Boolean))], lgs = [...new Set(inSport.map(p => p.sport))];
+    const statsOn = [...new Set(inLg.map(p => p.label).filter(Boolean))].sort(), booksOn = [...new Set(inLg.flatMap(p => p.books || []))].sort(), timesOn = TIMES.filter(t => inLg.some(p => tbucket(p) === t[0]));
+    const L = lists(pool, f), loading = window.flEdge && !picks.length && !T.tried;
+    const act = active(f), focus = (() => { const a = document.activeElement; if (!a || !host.contains(a)) return ''; if (a.id) return '#' + CSS.escape(a.id); const n = a.getAttributeNames().find(x => x.startsWith('data-tr')); return n ? `[${n}="${CSS.escape(a.getAttribute(n))}"]` : '' })();
+    // nothing left: the filter that, loosened, brings back the most runs
+    const loosen = () => { let best = null; for (const k of act) { const n = lists(pool, f, k).runs.length; if (n && (!best || n > best.n)) best = { k, n } } return best };
+    const sel = (k, label, opts, cur) => `<label class="tr-fl"><span class="lb">${label}</span><select class="inp" id="trf-${k}" data-trf="${k}">${opts.map(([v, l]) => `<option value="${esc(v)}"${String(cur) === String(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
+    const filters = pool.length ? `<fieldset class="card tr-f"><legend class="tr-fh">Filter today’s trends</legend><div class="tr-fg">
+        ${sportsOn.length > 1 ? sel('sport', 'Sport', [['', 'Every sport'], ...sportsOn.map(s => [s, s])], f.sport) : ''}
+        ${lgs.length > 1 && f.sport ? sel('lg', 'League', [['', `Every ${f.sport.toLowerCase()} league`], ...lgs.map(l => [l, NAME[l]])], f.lg) : ''}
+        ${sel('stat', 'Stat', [['', 'Every stat'], ...statsOn.map(s => [s, s])], f.stat)}
+        ${sel('side', 'Side of the run', [['', 'Either side'], ['over', 'Over runs'], ['under', 'Under runs']], f.side)}
+        ${sel('min', 'Minimum sample', [[0, 'Any sample'], [10, '10+ games'], [20, '20+ games'], [40, '40+ games']], f.min)}
+        ${sel('venue', 'Games counted', [['all', 'All games'], ['home', 'Home only'], ['away', 'Away only']], f.venue)}
+        ${booksOn.length > 1 ? sel('book', 'Posted on', [['', 'Any book'], ...booksOn.map(b => [b, b])], f.book) : ''}
+        ${timesOn.length > 1 ? sel('time', 'Game time (your time)', [['', 'Any time'], ...timesOn], f.time) : ''}
+        ${sel('order', 'Order runs by', [['long', 'Longest first'], ['rare', 'Least expected first']], f.order)}
+      </div><div class="tr-fs"><p class="tr-count" role="status"><b class="num">${L.runs.length}</b> ${L.runs.length === 1 ? 'run matches' : 'runs match'} · <b class="num">${L.up.length}</b> heating up · <b class="num">${L.down.length}</b> cooling off</p>
+        ${act.length ? `<button type="button" class="lk" data-trclear="all">Clear filters</button>` : ''}</div></fieldset>` : '';
+    const runEmpty = () => { if (loading) return 'Reading today’s lines…'; if (!pool.length) return 'No lines are posted yet today. Check back closer to game time.'; if (!act.length) return 'Nothing stands out here on today’s lines.';
+      const b = loosen(); return b ? `No runs match these filters. Loosen “${FLAB[b.k]}” (${esc(fText(b.k, f[b.k]))}) and ${b.n} ${b.n === 1 ? 'run matches' : 'runs match'}. <button type="button" class="lk" data-trclear="${b.k}">Clear ${esc(FLAB[b.k].toLowerCase())}</button>` : 'No runs match these filters. <button type="button" class="lk" data-trclear="all">Clear filters</button>' };
+    const list = (title, sub, rows, note, empty, lid, extra = '') => `<section class="card tr-card" aria-labelledby="tr-${lid}"><header><h3 id="tr-${lid}">${title}</h3><p class="lb">${sub}</p></header>
+      ${rows.length ? `<ul class="tr-list">${rows.map((x, i) => trendRow(x, note(x), `${lid}-${i}`, note(x).replace(/<[^>]+>/g, ''))).join('')}</ul>${extra}` : `<p class="lb tr-empty">${empty()}</p>`}</section>`;
+    const runRows = T.more ? L.runs : L.runs.slice(0, 6);
+    const moveEmpty = () => loading ? 'Reading today’s lines…' : act.length && pool.length ? 'No player matches these filters here. Loosen one above.' : 'Nothing stands out here on today’s lines.';
     host.innerHTML = `<div class="ltr">
       <form class="tr-ask card" data-trask><label class="lb" for="trQ">Trend for any player</label><div class="lc-in">${ic('search', 18)}<input class="inp" id="trQ" type="search" autocomplete="off" placeholder="Type a player’s name" value="${esc(T.q)}"><button class="bt sm" type="submit">Show the trend</button></div>
         <p class="lb">Or start from today’s lines below. Every trend opens that player’s games as a line, with the average and the posted line.</p></form>
+      ${filters}
       <div class="g3 tr-grid">
-        ${list('Longest runs', 'Games in a row on one side of today’s line', longRuns, x => `<b class="num">${x.s.n}</b> straight ${x.s.over ? 'over' : 'under'}`)}
-        ${list('Heating up', 'Last 5 games against the last 20', up, x => `<b class="num">${fmt(x.m.a5)}</b> <span class="lb">from ${fmt(x.m.a20)}</span>`)}
-        ${list('Cooling off', 'Last 5 games against the last 20', down, x => `<b class="num">${fmt(x.m.a5)}</b> <span class="lb">from ${fmt(x.m.a20)}</span>`)}
+        ${list('Longest runs', `Games in a row on one side of today’s line${f.venue !== 'all' ? `, ${f.venue} games only` : ''}, against the price`, runRows, x => `<b class="num">${x.s.n}</b> straight ${x.s.over ? 'over' : 'under'}`, runEmpty, 'runs',
+          L.runs.length > 6 ? `<button type="button" class="lk tr-more" data-trmore aria-expanded="${T.more}">${T.more ? 'Show the top 6' : `Show all ${L.runs.length}`}</button>` : '')}
+        ${list('Heating up', 'Last 5 games against the last 20', L.up.slice(0, 5), x => `<b class="num">${fmt(x.m.a5)}</b> <span class="lb">from ${fmt(x.m.a20)}</span>`, moveEmpty, 'up')}
+        ${list('Cooling off', 'Last 5 games against the last 20', L.down.slice(0, 5), x => `<b class="num">${fmt(x.m.a5)}</b> <span class="lb">from ${fmt(x.m.a20)}</span>`, moveEmpty, 'down')}
       </div>
-      <p class="lb">Counted from the games behind each posted line. A run says what happened, not what happens next.</p></div>`;
+      <p class="lb">Counted from the games behind each posted line. The chance of a run is the price (or the hit rate) multiplied game by game, as if each game were independent. A run says what happened, not what happens next.</p></div>`;
+    if (focus) host.querySelector(focus)?.focus({ preventScroll: true });
     if (!host.dataset.trWired) { host.dataset.trWired = 1;
-      host.addEventListener('click', ev => { const r = ev.target.closest('[data-tropen]'); if (!r) return; let a = {}; try { a = JSON.parse(r.dataset.tropen) } catch (e) {} T.api?.openPlayer(a) });
+      host.addEventListener('click', ev => {
+        const sv = ev.target.closest('[data-trsave]'); if (sv) { const it = T.rows[sv.dataset.trsave]; return it && window.flBoards?.offer(it, sv) }
+        const cl = ev.target.closest('[data-trclear]'); if (cl) { const k = cl.dataset.trclear; if (k === 'all') T.f = { ...F0, order: T.f.order }; else T.f[k] = F0[k]; if (k === 'sport' || k === 'all') T.f.lg = ''; saveF(); trends(host, {}, T.api); return host.querySelector('#trf-stat, #trQ')?.focus({ preventScroll: true }) }
+        if (ev.target.closest('[data-trmore]')) { T.more = !T.more; return trends(host, {}, T.api) }
+        const r = ev.target.closest('[data-tropen]'); if (!r) return; let a = {}; try { a = JSON.parse(r.dataset.tropen) } catch (e) {}
+        try { const it = T.rows[r.dataset.trid]; if (it) window.flRecent?.note(it) } catch (e) {}
+        T.api?.openPlayer(a) });
+      host.addEventListener('change', ev => { const s = ev.target.closest('[data-trf]'); if (!s) return; const k = s.dataset.trf;
+        T.f[k] = k === 'min' ? +s.value : s.value; if (k === 'sport') T.f.lg = ''; if (k === 'sport' || k === 'lg') { T.f.stat = ''; T.f.book = ''; T.f.time = '' }
+        saveF(); trends(host, {}, T.api);
+        // the chosen filters, for "Continue researching" (only once they settle, and only when some are set)
+        clearTimeout(noteT); noteT = setTimeout(() => { const a = active(T.f); if (!a.length) return;
+          try { window.flRecent?.note({ kind: 'filters', key: 'trends:' + JSON.stringify(T.f), label: `Trends: ${a.map(k => fText(k, T.f[k])).join(', ')}`, sub: host.querySelector('.tr-count')?.textContent.trim() || '', open: { page: 'trends', filters: { ...T.f } } }) } catch (e) {} }, 1200) });
       host.addEventListener('submit', ev => { if (!ev.target.matches('[data-trask]')) return; ev.preventDefault(); const q = $('trQ').value.trim(); T.q = q; if (q.length > 1) T.api?.openPlayer({ sport: o.sport || 'nba', name: q, mode: 'trend' }) });
     }
     if (loading && !T.waiting) { T.waiting = true; window.flEdge.props(null).catch(() => {}).finally(() => { T.waiting = false; T.tried = true; if (document.contains(host) && !host.hidden) trends(host, o, api) }) }
@@ -467,5 +558,5 @@
     const k = !C.a ? 'a' : !C.b ? 'b' : 'b'; put(k, p.name);
     C.host.closest('.lab-ws')?.scrollIntoView({ behavior: document.documentElement.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' });
   }
-  window.flLabTools = { compare, trends, add, state: C, _t: { streak, shift, summary, combined, meet, cmpItem } };
+  window.flLabTools = { compare, trends, add, state: C, _t: { streak, shift, summary, combined, meet, context, lists, cmpItem } };
 })();
