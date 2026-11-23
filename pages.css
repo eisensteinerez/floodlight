@@ -1356,20 +1356,57 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 
 /* ---------- Settings: the live theme preview (settings.js) ---------- */
 .pv-card{display:grid;gap:18px}.pv-card .st-h{margin:0}.pv-card p{margin:0}
-#stPvCtl{gap:14px}
+#stPvCtl{display:contents}   /* so the sticky bar sticks within the whole card, not just the controls */
 .pv-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}.pv-use{margin-left:auto}
-.pv-yours{margin-left:4px;font-size:12px;color:inherit;opacity:.8}
-.pv-box{position:relative;width:100%;min-height:120px;display:grid;place-items:center;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--inset);overflow:hidden}
-.pv-box[data-device="phone"]{width:var(--pv-w,390px);max-width:100%;margin-inline:auto;border-radius:34px;border-width:6px;border-color:var(--border-2)}
+:root[data-theme] .pv-yours{margin-left:4px;font-size:12px;color:inherit;opacity:.85}
+.pv-stage{display:flex;justify-content:center;align-items:flex-start;gap:16px;min-height:120px}
+.pv-stage>.bt{align-self:center}
+.pv-pane{margin:0;display:grid;gap:8px;justify-items:center;min-width:0}
+.pv-cap{font-weight:700;font-size:14px;color:var(--text)}.pv-cap .lb{font-weight:500;margin-left:4px}
+.pv-stage:not(.two) .pv-cap{display:none}
+.pv-box{position:relative;box-sizing:border-box;max-width:100%;min-height:120px;display:grid;place-items:center;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--inset);overflow:hidden}
+.pv-box[data-device="phone"],.pv-box[data-device="tablet"]{border-radius:34px;border-width:6px;border-color:var(--border-2)}
+.pv-box[data-device="tablet"]{border-radius:22px}
 .pv-frame{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--bg);opacity:0;transition:opacity .25s}
 .pv-box.ready .pv-frame{opacity:1}.pv-box.ready .pv-wait{display:none}
-.pv-wait{display:flex;align-items:center;gap:10px}
+.pv-wait{display:grid;gap:8px;justify-items:center;width:min(240px,80%)}
+.pv-wait progress{width:100%;height:6px;appearance:none;-webkit-appearance:none;border:0;border-radius:99px;background:var(--surface-2);overflow:hidden;accent-color:var(--accent)}
+.pv-wait progress::-webkit-progress-bar{background:var(--surface-2);border-radius:99px}
+.pv-wait progress::-webkit-progress-value{background:var(--accent);border-radius:99px;transition:width .3s}
+.pv-wait progress::-moz-progress-bar{background:var(--accent);border-radius:99px}
+/* the controls stay in reach while the preview scrolls past */
+.pv-bar{position:sticky;top:12px;z-index:3;display:grid;gap:12px;padding:12px;margin:-12px;border-radius:var(--radius-tile);background:var(--surface)}
+:root[data-theme="aurora-glass"] .pv-bar{background:color-mix(in oklab,var(--bg) 82%,transparent);backdrop-filter:blur(14px)}
+.pv-cmp{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-2)}.pv-cmp select{max-width:180px}
+.pv-acts{display:flex;flex-wrap:wrap;gap:10px;margin-left:auto}.pv-acts .bt{display:inline-flex;align-items:center;gap:8px}
+.pv-row .pv-use{margin-left:0}
+.pv-sc{display:flex;align-items:flex-start;gap:12px;font-size:14px;cursor:pointer}.pv-sc>span{display:grid;gap:2px}.pv-sc b{color:var(--text)}
+/* full screen: the card fills the window */
+:root.pv-lock,:root.pv-lock body{overflow:hidden}
+:root.pv-lock .shell{z-index:200}   /* the page column is its own layer; lift it over the header and tab bar while the preview fills the window */
+:root[data-theme] .pv-card.full{display:grid;grid-auto-rows:max-content;position:fixed;inset:0;z-index:200;margin:0;max-width:none;border-radius:0;overflow:auto;overscroll-behavior:contain;background:var(--bg);padding:20px clamp(16px,3vw,40px) 40px;align-content:start}
+:root[data-theme] .pv-card.full .pv-bar{top:0;margin:-20px calc(-1 * clamp(16px,3vw,40px)) 0;padding:14px clamp(16px,3vw,40px);border-radius:0;background:var(--bg);border-bottom:1px solid var(--border)}
+.pv-card.full>#stPvCtl>p,.pv-card.full>#stPvCtl>.st-h{display:none}
+/* readability scores */
+.pv-scores{display:grid;gap:8px}.pv-scores h3{margin:0;font-size:16px}
+.pv-tw{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-tile)}
+.pv-tw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pv-ct{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
+.pv-ct th,.pv-ct td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text)}
+.pv-ct thead th{font-size:12px;font-weight:600;color:var(--text-2);text-transform:none}
+.pv-ct tbody tr:last-child>*{border-bottom:0}
+.pv-ct tbody th{font-weight:700}.pv-ct tbody th .lb{font-weight:500;margin-left:6px}
+.pv-ct tr.on>*{background:var(--surface-2)}
+.pv-ct .num{font-variant-numeric:tabular-nums}
+.pv-g{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:var(--radius-pill);font-size:12px;font-weight:600;border:1px solid var(--border-2);color:var(--text-2)}
+.pv-g.g-aaa{border-color:var(--accent);color:var(--text)}
+.pv-g.g-too{border-color:var(--live);color:var(--text)}
 .thp.real .thp-m em{background-size:contain;background-repeat:no-repeat;background-position:center;border-radius:0;border-color:transparent;background-color:transparent}
 [data-theme-preview="team-colors"].thp.real .thp-m em{background-color:var(--surface);border-radius:4px;background-size:80%}
 /* inside a preview frame: nothing that pops over the page */
 :root.fl-preview #toasts,:root.fl-preview .tour,:root.fl-preview #flBright,:root.fl-preview .flmenu{display:none!important}
 :root.fl-preview{scrollbar-width:none}:root.fl-preview::-webkit-scrollbar{display:none}
-@media (max-width:640px){.pv-use{margin-left:0;width:100%}}
+@media (max-width:640px){.pv-acts{margin-left:0;width:100%}.pv-acts .bt{flex:1;justify-content:center}.pv-bar{position:static}.pv-card.full .pv-bar{position:sticky}.pv-stage.two{flex-direction:column;align-items:center}}
 
 /* ---------- Home: Your games, the invitation, and the editor (home.js) ---------- */
 .hm-mine{display:grid;gap:16px}.hm-mine .sec-h{margin:0;flex-wrap:wrap;align-items:center}.hm-mine .sec-h .lb{margin-right:auto}

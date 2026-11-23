@@ -20,10 +20,13 @@
   /* ---------- spoiler-free ---------- */
   const SP = store.get('fl.spoil', { all: false, hide: [], show: [] });
   const saveSp = () => { SP.hide = SP.hide.slice(-200); SP.show = SP.show.slice(-200); store.set('fl.spoil', SP); root.classList.toggle('no-spoil', !!SP.all); document.dispatchEvent(new CustomEvent('fl:spoil')) };
-  const spoil = key => !!key && !SP.show.includes(key) && (SP.all || SP.hide.includes(key));
+  // a Settings preview frame can show scores inside the preview only, so themes are compared on the same scoreboard; nothing is saved
+  let pvShow = !!window.FL_PREVIEW && /[?&]flscores=1/.test(location.search);
+  const spoil = key => !pvShow && !!key && !SP.show.includes(key) && (SP.all || SP.hide.includes(key));
+  const previewScores = on => { if (!window.FL_PREVIEW || pvShow === !!on) return; pvShow = !!on; root.classList.toggle('no-spoil', !!SP.all && !pvShow); document.dispatchEvent(new CustomEvent('fl:spoil')) };
   function setSpoil(key, hide) { SP.hide = SP.hide.filter(k => k !== key); SP.show = SP.show.filter(k => k !== key); (hide ? SP.hide : SP.show).push(key); if (!hide && !SP.all) SP.show = SP.show.filter(k => k !== key); saveSp() }
   function setSpoilAll(on) { SP.all = !!on; SP.show = []; if (!on) SP.hide = []; saveSp() }
-  root.classList.toggle('no-spoil', !!SP.all);
+  root.classList.toggle('no-spoil', !!SP.all && !pvShow);
 
   /* ---------- reading the feed ---------- */
   const timeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('It took too long to answer.')), ms))]);
@@ -489,5 +492,5 @@
     if (open({ sport, id }, t)) { ev.stopPropagation(); ev.preventDefault() }
   }, true);
 
-  window.flMC = { open, close, spoil, setSpoil, setSpoilAll, spoilAll: () => !!SP.all, state: M, can: s => CAN.has(s) };
+  window.flMC = { open, close, spoil, previewScores, setSpoil, setSpoilAll, spoilAll: () => !!SP.all, state: M, can: s => CAN.has(s) };
 })();
