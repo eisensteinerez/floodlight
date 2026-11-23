@@ -57,7 +57,8 @@
     if (root.classList.contains('hub-on')) paint() });
   const watching = key => MY.watch.some(w => w.key === key);
   function watch(g, on = !watching(g.key)) { MY.watch = MY.watch.filter(w => w.key !== g.key); if (on) MY.watch.push({ key: g.key, sport: g.sport, id: g.id, a: g.a?.name || '', b: g.b?.name || '', at: Date.now() }); saveMine(); if (root.classList.contains('hub-on')) paint(); return on }
-  function seen(g) { MY.recent = [{ key: g.key, sport: g.sport, id: g.id, a: g.a?.name || '', b: g.b?.name || '', at: Date.now() }, ...MY.recent.filter(r => r.key !== g.key)].slice(0, 8); store.set('fl.recentGames', MY.recent) }
+  function seen(g) { MY.recent = [{ key: g.key, sport: g.sport, id: g.id, a: g.a?.name || '', b: g.b?.name || '', at: Date.now() }, ...MY.recent.filter(r => r.key !== g.key)].slice(0, 8); store.set('fl.recentGames', MY.recent)
+    window.flRecent?.note({ kind: 'game', key: 'game:' + g.key, label: `${g.a?.name || ''} v ${g.b?.name || ''}`, sub: [g.lgName || g.short, g.date ? new Date(g.date).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · '), photo: g.a?.logo || '', photo2: g.b?.logo || '', open: { game: { sport: g.sport, lg: g.lg || '', id: g.id } } }) }
   const likes = g => MY.sports.includes(g.sport);
   const PRE = { football: 'fb', basketball: 'bb', hockey: 'hk', baseball: 'bs' };   // the ids the sport pages give a followed team
   const favId = (g, t) => PRE[g.sport] ? `${PRE[g.sport]}-${g.lg}-${t.id}` : t.id;
@@ -72,6 +73,7 @@
   const sec = document.createElement('section'); sec.id = 'hub'; sec.className = 'hub'; sec.setAttribute('aria-label', 'Live Hub'); sec.hidden = true;
   document.querySelector('.shell')?.prepend(sec);
   document.addEventListener('fl:spoil', () => { if (root.classList.contains('hub-on')) paint() });
+  document.addEventListener('fl:recent', () => { if (root.classList.contains('hub-on') && !sec.contains(document.activeElement)) paint() });
 
   const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   const timeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms))]);
@@ -419,17 +421,27 @@
       ${F.length || MY.sports.length ? `<div class="cx-row hm-chips" aria-label="What you follow">${MY.sports.map(k => `<span class="pl solid">${esc((SPORTS.find(x => x[0] === k) || [k, k])[1])}</span>`).join('')}${F.slice(0, 14).map(f => `<span class="pl">${f.logo ? `<img class="hm-plimg" src="${esc(f.logo)}" alt="" loading="lazy">` : ''}${esc(f.name)}</span>`).join('')}${F.length > 14 ? `<span class="pl">+${F.length - 14} more</span>` : ''}</div>` : ''}
       ${gone && !games.length ? `<p class="lb">${gone} watched ${gone === 1 ? 'game is' : 'games are'} on another day.</p>` : ''}</section>`;
   }
-  /* Continue researching: the games and Lab searches you opened last, so a return visit starts where the last one ended. */
+  /* Continue researching: the last things you looked at, anywhere on the site (recent.js keeps them): two players you
+     compared, a trend, a pick's evidence, an unfinished parlay, a game, a player or team in the Lab. Each card reopens
+     it; each can be pinned, saved to a board or removed, and the whole history can be cleared. */
+  const BACK = { all: false, confirm: false };
   function back(list) {
-    if (MY.off.includes('back')) return '';
-    const F = favList(), inMine = g => isMine(g, F) || watching(g.key);
-    const games = MY.recent.map(r => list.find(g => g.key === r.key)).filter(g => g && !inMine(g)).slice(0, 4);
-    const lab = (store.get('fl.labRecent', []) || []).slice(0, 4);
-    if (!games.length && !lab.length) return '';
-    const st = g => g.state === 'in' ? '<span class="pl live"><i></i>Live</span>' : g.state === 'pre' ? `<small class="lb">${esc(hm(g.date))}</small>` : '<small class="lb">Final</small>';
-    return `<section class="card hm-back" aria-labelledby="hmBackH"><div class="sec-h"><h2 id="hmBackH">Continue researching</h2><span class="lb">What you opened last</span></div>
-      <div class="hm-back-g">${games.length ? `<div><h3 class="lb">Games</h3><ul class="hm-bl">${games.map(g => `<li><button type="button" class="hm-bi" ${hubAttr(g)}><span>${esc(g.a.name)} v ${esc(g.b.name)}</span>${st(g)}</button></li>`).join('')}</ul></div>` : ''}
-        ${lab.length ? `<div><h3 class="lb">In the Lab</h3><ul class="hm-bl">${lab.map(r => `<li><button type="button" class="hm-bi" data-hublab="${esc(JSON.stringify(r.args || { q: r.q }))}">${ico('lab', 16)}<span>${esc(r.label || r.q)}</span></button></li>`).join('')}</ul></div>` : ''}</div></section>`;
+    if (MY.off.includes('back') || !window.flRecent) return '';
+    const R = window.flRecent, F = favList(), items = R.list().filter(x => x.kind !== 'game' || !(r => r && (isMine(r, F) || watching(r.key)))(list.find(g => 'game:' + g.key === x.key)));
+    if (!items.length) return '';
+    const shown = BACK.all ? items.slice(0, 16) : items.slice(0, 6);
+    const KIND = { player: 'Player', team: 'Team', compare: 'Comparison', trend: 'Trend', pred: 'Prediction', parlay: 'Parlay draft', game: 'Game', filters: 'Filters', props: 'Prop explorer', note: 'Note' };
+    const live = x => { if (x.kind !== 'game') return ''; const g = list.find(y => 'game:' + y.key === x.key); return !g ? '' : g.state === 'in' ? '<span class="pl live"><i></i>Live</span>' : g.state === 'pre' ? `<span class="lb">${esc(hm(g.date))}</span>` : '<span class="lb">Final</span>' };
+    const faces = x => x.photo || x.photo2 ? `<span class="rc-faces" aria-hidden="true">${[x.photo, x.photo2].filter(Boolean).map((src, i) => face(src, i ? '' : x.label, 'avx av-sm')).join('')}</span>` : `<span class="rc-ic" aria-hidden="true">${ico(x.kind === 'compare' ? 'swap' : x.kind === 'trend' ? 'trend' : x.kind === 'pred' ? 'pred' : x.kind === 'parlay' ? 'ticket' : x.kind === 'game' ? 'live' : x.kind === 'filters' ? 'grid' : 'lab', 18)}</span>`;
+    const head = x => { const v = R.verb(x); return v ? `${v} ${x.label}` : x.label };
+    const tile = x => { const k = esc(x.key);
+      return `<li class="rc${x.pinned ? ' pinned' : ''}"><button type="button" class="rc-open" data-hubrc="open|${k}">${faces(x)}<span class="rw-t"><small class="lb">${esc(KIND[x.kind] || '')}${x.pinned ? ' · pinned' : ''}</small><b>${esc(head(x))}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</span>${live(x)}</button>
+        <span class="rc-acts"><button type="button" class="ib" data-hubrc="pin|${k}" aria-pressed="${!!x.pinned}" aria-label="${x.pinned ? 'Unpin' : 'Pin'} ${esc(x.label)}" title="${x.pinned ? 'Unpin' : 'Pin to the top'}">${ico('star', 16)}</button>${window.flBoards ? `<button type="button" class="ib" data-hubrc="board|${k}" aria-label="Save ${esc(x.label)} to a board" title="Save to a board">${ico('save', 16)}</button>` : ''}<button type="button" class="ib" data-hubrc="drop|${k}" aria-label="Remove ${esc(x.label)} from history" title="Remove from history">${ico('x', 16)}</button></span></li>` };
+    return `<section class="card hm-back" aria-labelledby="hmBackH"><div class="sec-h"><h2 id="hmBackH" tabindex="-1">Continue researching</h2>
+        ${BACK.confirm ? `<span class="rc-ask" role="group" aria-label="Clear history"><span class="lb">Clear ${items.filter(x => !x.pinned).length} item${items.filter(x => !x.pinned).length === 1 ? '' : 's'}? Pinned ones stay.</span><button type="button" class="bt danger sm" data-hubrc="clear|yes">Clear history</button><button type="button" class="bt ghost sm" data-hubrc="clear|no">Keep it</button></span>`
+          : `<button type="button" class="lk" data-hubrc="clear|ask">Clear history</button>`}</div>
+      <ul class="rc-list">${shown.map(tile).join('')}</ul>
+      ${items.length > 6 ? `<button type="button" class="lk" data-hubrc="more|">${BACK.all ? 'Show fewer' : `Show ${Math.min(16, items.length) - 6} more`}</button>` : ''}</section>`;
   }
   /* Today in 60 seconds: a short briefing, read from the games on Home. Six lines at most, each opening what it names
      and saying in small type why it was chosen: the biggest game, the best edge on the market, an injury that matters,
@@ -596,6 +608,16 @@
     const d = ev.target.closest('[data-hubday]');
     if (d) { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + +d.dataset.hubday); if (+t === +H.day) return; H.day = t; H.games = []; paint(); load(true);
       return setTimeout(() => sec.querySelector('.hm-day.on')?.focus(), 0) }
+    const rc = ev.target.closest('[data-hubrc]');
+    if (rc && window.flRecent) { const i = rc.dataset.hubrc.indexOf('|'), act = rc.dataset.hubrc.slice(0, i), key = rc.dataset.hubrc.slice(i + 1), R = window.flRecent, x = R.list().find(y => y.key === key);
+      if (act === 'open' && x) return R.open(x);
+      if (act === 'pin' && x) { const on = R.pin(key); paint(); tell(on ? `Pinned ${x.label}.` : `Unpinned ${x.label}.`); return sec.querySelector(`[data-hubrc="pin|${CSS.escape(key)}"]`)?.focus() }
+      if (act === 'board' && x) return window.flBoards?.offer(x, rc);
+      if (act === 'drop' && x) { const all = R.list(), at = all.findIndex(y => y.key === key); R.drop(key); paint(); tell(`Removed ${x.label} from your history.`); const nx = R.list()[Math.min(at, R.list().length - 1)];
+        return (nx ? sec.querySelector(`[data-hubrc="drop|${CSS.escape(nx.key)}"]`) : $('hmBackH') || sec.querySelector('.pg-title'))?.focus() }
+      if (act === 'clear') { if (key === 'ask') { BACK.confirm = true; paint(); return sec.querySelector('[data-hubrc="clear|yes"]')?.focus() } BACK.confirm = false; if (key === 'yes') { R.clear(); tell('History cleared. Pinned items stay.') } paint(); return ($('hmBackH') || sec.querySelector('.pg-title'))?.focus() }
+      if (act === 'more') { BACK.all = !BACK.all; paint(); return sec.querySelector('[data-hubrc="more|"]')?.focus() }
+      return }
     const fm = ev.target.closest('[data-hubfm]');
     if (fm) { MY.fmode = fm.dataset.hubfm; store.set('fl.ftrMode', MY.fmode); H.ftrKey = ''; paint(); tell(`Featured: ${FMODES.find(m => m[0] === MY.fmode)[1]}.`); return sec.querySelector(`[data-hubfm="${MY.fmode}"]`)?.focus() }
     const up = ev.target.closest('[data-hubup]');
