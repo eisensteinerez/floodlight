@@ -850,3 +850,15 @@ html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;
 .ds-add{margin-top:12px}.ds-add summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
 .ds-form{display:grid;gap:10px;max-width:560px}
 @media (max-width:560px){.ds-subs li{flex-wrap:wrap}}
+
+/* search: next game under a result, the empty answer, "Back to results" after a result opens (2026-11-23) */
+.gs-t .gs-next{display:block;margin-top:2px;color:var(--text-2);font-size:12px}
+.gs-none{margin:6px 10px 10px;padding:12px 14px;border:1px dashed var(--border-2);border-radius:var(--radius-tile)}
+.gs-none b{display:block;color:var(--text);font-weight:600;margin-bottom:4px}
+.gs-none p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.gs-back{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:24px;display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--radius-pill);background:var(--pop,var(--surface));border:1px solid var(--border-2);box-shadow:var(--shadow-pop);max-width:calc(100vw - 32px)}
+.gs-back button{min-height:40px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-radius:var(--radius-pill);font:600 13px/1.2 var(--font-body);color:var(--text);background:transparent;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-back .gs-back-x{padding:0;width:40px;justify-content:center;color:var(--muted)}
+.gs-back button:hover,.gs-back button:focus-visible{background:var(--surface-2)}
+@media (max-width:820px){.gs-back{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
+@media (pointer:coarse){.gs-back button{min-height:44px}.gs-back .gs-back-x{width:44px}}

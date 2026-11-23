@@ -3,9 +3,12 @@
    baseball (the baseball pages use MLB ids), Floodlight's own Flashscore and tennis lookups, the leagues the site covers,
    today's games on the Live Hub, and the Lab. The sport you are on only moves its results up the list; it never hides
    another sport. Results stay open while you switch sport, Enter always opens the top result (or re-runs the search),
-   arrow keys move, Esc closes, and the clear button empties the box. With nothing typed it shows your recent picks and
-   your teams. Each row says where it goes: a player profile, a team page, a league, a game or the Lab.
-   Also used by the Cmd/Ctrl+K palette (palette.js), through window.flSearch. */
+   arrow keys move, Esc closes, and the clear button empties the box. With nothing typed it shows your recent searches,
+   recent picks and your teams. Results come in groups: Players (team, position, next game), Teams, Games, Leagues and
+   Research (Lab, current props, trends, compare). Opening one closes the results, leaves Home or a page, gives the
+   destination its own address (#/go/…, so Back and shared links work), moves focus to its heading, empties the box and
+   shows "Back to results". Typos ("Leborn"), team abbreviations ("LAL"), nicknames, prop questions, matchups and
+   markets ("NBA assists") all lead somewhere. Cmd/Ctrl+K opens it from anywhere. */
 (() => {
   const box = $('sres'), input = $('q'), label = input?.closest('label.search');
   if (!box || !input) return;
@@ -19,7 +22,20 @@
     jjettas: 'justin jefferson', ja: 'ja morant', kat: 'karl anthony towns', pg13: 'paul george', dame: 'damian lillard', bron: 'lebron james',
     epl: 'premier league', prem: 'premier league', ucl: 'champions league', uel: 'europa league', laliga: 'laliga', 'la liga': 'laliga', seriea: 'serie a',
     ncaaf: 'college fbs', cfb: 'college fbs', ncaab: 'college cbb', cbb: 'college cbb', wcbb: 'college wcbb', mls: 'mls' };
-  const G = { seq: 0, q: '', res: null, open: false, keepT: 0, recent: store.get('fl.searchRecent', []) };
+  // team abbreviations people type ("LAL", "KC", "NYR"): each names one or more real teams, searched by full name.
+  // The same letters can mean teams in two sports (BOS, KC); every one is listed and the row says which sport.
+  const ABBR = {};
+  for (const [lg, list] of Object.entries({
+    nba: 'ATL Atlanta Hawks|BOS Boston Celtics|BKN Brooklyn Nets|CHA Charlotte Hornets|CHI Chicago Bulls|CLE Cleveland Cavaliers|DAL Dallas Mavericks|DEN Denver Nuggets|DET Detroit Pistons|GSW Golden State Warriors|HOU Houston Rockets|IND Indiana Pacers|LAC LA Clippers|LAL Los Angeles Lakers|MEM Memphis Grizzlies|MIA Miami Heat|MIL Milwaukee Bucks|MIN Minnesota Timberwolves|NOP New Orleans Pelicans|NYK New York Knicks|OKC Oklahoma City Thunder|ORL Orlando Magic|PHI Philadelphia 76ers|PHX Phoenix Suns|POR Portland Trail Blazers|SAC Sacramento Kings|SAS San Antonio Spurs|TOR Toronto Raptors|UTA Utah Jazz|WAS Washington Wizards',
+    nfl: 'ARI Arizona Cardinals|ATL Atlanta Falcons|BAL Baltimore Ravens|BUF Buffalo Bills|CAR Carolina Panthers|CHI Chicago Bears|CIN Cincinnati Bengals|CLE Cleveland Browns|DAL Dallas Cowboys|DEN Denver Broncos|DET Detroit Lions|GB Green Bay Packers|HOU Houston Texans|IND Indianapolis Colts|JAX Jacksonville Jaguars|KC Kansas City Chiefs|LV Las Vegas Raiders|LAC Los Angeles Chargers|LAR Los Angeles Rams|MIA Miami Dolphins|MIN Minnesota Vikings|NE New England Patriots|NO New Orleans Saints|NYG New York Giants|NYJ New York Jets|PHI Philadelphia Eagles|PIT Pittsburgh Steelers|SF San Francisco 49ers|SEA Seattle Seahawks|TB Tampa Bay Buccaneers|TEN Tennessee Titans|WSH Washington Commanders',
+    nhl: 'ANA Anaheim Ducks|BOS Boston Bruins|BUF Buffalo Sabres|CGY Calgary Flames|CAR Carolina Hurricanes|CHI Chicago Blackhawks|COL Colorado Avalanche|CBJ Columbus Blue Jackets|DAL Dallas Stars|DET Detroit Red Wings|EDM Edmonton Oilers|FLA Florida Panthers|LAK Los Angeles Kings|MIN Minnesota Wild|MTL Montreal Canadiens|NSH Nashville Predators|NJD New Jersey Devils|NYI New York Islanders|NYR New York Rangers|OTT Ottawa Senators|PHI Philadelphia Flyers|PIT Pittsburgh Penguins|SJS San Jose Sharks|SEA Seattle Kraken|STL St. Louis Blues|TBL Tampa Bay Lightning|TOR Toronto Maple Leafs|UTA Utah Mammoth|VAN Vancouver Canucks|VGK Vegas Golden Knights|WSH Washington Capitals|WPG Winnipeg Jets',
+    mlb: 'ARI Arizona Diamondbacks|ATL Atlanta Braves|BAL Baltimore Orioles|BOS Boston Red Sox|CHC Chicago Cubs|CWS Chicago White Sox|CIN Cincinnati Reds|CLE Cleveland Guardians|COL Colorado Rockies|DET Detroit Tigers|HOU Houston Astros|KC Kansas City Royals|LAA Los Angeles Angels|LAD Los Angeles Dodgers|MIA Miami Marlins|MIL Milwaukee Brewers|MIN Minnesota Twins|NYM New York Mets|NYY New York Yankees|ATH Athletics|PHI Philadelphia Phillies|PIT Pittsburgh Pirates|SD San Diego Padres|SF San Francisco Giants|SEA Seattle Mariners|STL St. Louis Cardinals|TB Tampa Bay Rays|TEX Texas Rangers|TOR Toronto Blue Jays|WSH Washington Nationals' }))
+    for (const t of list.split('|')) { const [ab, ...n] = t.split(' '); (ABBR[ab.toLowerCase()] ||= []).push({ lg, name: n.join(' ') }) }
+  // nicknames and short names people use for players, on top of ALIAS
+  Object.assign(ALIAS, { bron: 'lebron james', 'king james': 'lebron james', steph: 'stephen curry', chef: 'stephen curry', joker: 'nikola jokic', 'greek freak': 'giannis antetokounmpo', giannis: 'giannis antetokounmpo',
+    wemby: 'victor wembanyama', 'ant man': 'anthony edwards', luka: 'luka doncic', jokic: 'nikola jokic', ovi: 'alex ovechkin', 'the great one': 'wayne gretzky', 'mcjesus': 'connor mcdavid', sid: 'sidney crosby',
+    ohtani: 'shohei ohtani', judge: 'aaron judge', cr7: 'cristiano ronaldo', messi: 'lionel messi', mbappe: 'kylian mbappe', haaland: 'erling haaland', 'the bills': 'buffalo bills', 'man u': 'manchester united', 'man utd': 'manchester united', 'man city': 'manchester city', barca: 'barcelona', psg: 'paris saint germain', bayern: 'bayern munich' });
+  const G = { seq: 0, q: '', res: null, open: false, keepT: 0, recent: store.get('fl.searchRecent', []), recentQ: store.get('fl.searchRecentQ', []), last: null, from: null };
 
   /* ---------- natural language: "lebron points over 25.5", "mahomes passing yards", "lakers v celtics" ---------- */
   const STATS = [
@@ -82,7 +98,9 @@
       if (team) return null;
       it.kind = 'fighter'; it.attrs = { ufcfighter: x.id }; it.lg = 'UFC'; it.lgKey = 'ufc'; it.img = x.headshot?.href || shot('mma', x.id); it.face = 1;
     }
-    it.sub = [it.lg || SPORT[sp], team ? '' : it.team ?? tr].filter(Boolean).join(' · ');
+    // a player row reads "team · position · league"; a team row names its sport too, so the Rangers in hockey and baseball differ
+    if (!team) { it.team = it.team ?? tr; it.pos = x.position?.abbreviation || x.position?.displayName || '' }
+    it.sub = team ? [it.lg, SPORT[sp]].filter((v, i, a) => v && a.indexOf(v) === i).join(' · ') : [it.team, it.pos, it.lg || SPORT[sp]].filter(Boolean).join(' · ');
     // the team shown is the player record's (players.js), never the search's own guess
     if (!team && window.flPlayers) { it.reg = window.flPlayers.fid(it.lgKey, x.id); it.regTeam = String(x.teamRelationships?.[0]?.id || x.teamRelationships?.[0]?.core?.id || '') }
     return it;
@@ -100,9 +118,9 @@
     const [teams, people] = await Promise.all([bsTeams, cj(`${SA}/people/search?names=${encodeURIComponent(q)}&sportIds=${BS_SPORTS}&hydrate=currentTeam`).catch(() => ({}))]);
     const lgOf = t => t && BS_LEAGUES.find(l => l.src === 'sa' && l.sport === t.sport?.id && (!l.league || l.league === t.league?.id));
     const T = (teams || []).filter(t => norm(`${t.name} ${t.abbreviation || ''} ${t.teamName || ''}`).includes(ql)).map(t => ({ t, l: lgOf(t) })).filter(x => x.l).slice(0, 6)
-      .map(({ t, l }, i) => ({ sp: 'baseball', kind: 'team', id: String(t.id), title: t.name, sub: l.name, lg: l.name, lgKey: l.key, rank: i + 4, img: bsLogo(t.id), attrs: { bsteam: t.id, bsl: l.key } }));
+      .map(({ t, l }, i) => ({ sp: 'baseball', kind: 'team', id: String(t.id), title: t.name, sub: `${l.name} · Baseball`, lg: l.name, lgKey: l.key, rank: i + 4, img: bsLogo(t.id), attrs: { bsteam: t.id, bsl: l.key } }));
     const P = (people.people || []).sort((a, b) => !!b.currentTeam - !!a.currentTeam || !!b.active - !!a.active).slice(0, 10).map((p, i) => { const t = p.currentTeam, l = lgOf(t);
-      return { sp: 'baseball', kind: 'player', id: String(p.id), title: p.fullName, sub: [l?.name, p.primaryPosition?.abbreviation, t?.name].filter(Boolean).join(' · ') || 'Free agent or retired', lg: l?.name, lgKey: l?.key || '', rank: i, active: !!p.active, retired: !p.active && !t,
+      return { sp: 'baseball', kind: 'player', id: String(p.id), title: p.fullName, team: t?.name || '', sub: [t?.name, p.primaryPosition?.abbreviation, l?.name].filter(Boolean).join(' · ') || 'Free agent or retired', lg: l?.name, lgKey: l?.key || '', rank: i, active: !!p.active, retired: !p.active && !t,
         img: bsShot(p.id, !t || t.sport?.id === 1), face: 1, attrs: { bsplayer: p.id, bsl: l?.key || 'mlb', bsfrom: 1 },
         reg: t && t.sport?.id === 1 && window.flPlayers ? window.flPlayers.fid('mlb', p.id) : '', regTeam: t ? String(t.id) : '' } });
     return [...P, ...T];
@@ -153,7 +171,15 @@
     const grams = s => { const g = new Set(); s = ` ${s} `; for (let i = 0; i < s.length - 2; i++) g.add(s.slice(i, i + 3)); return g };
     const A = grams(a); let best = 0;
     for (const part of [b, ...b.split(' ')]) { const B = grams(part); let n = 0; A.forEach(x => B.has(x) && n++); best = Math.max(best, 2 * n / (A.size + B.size)) }
+    // swapped or doubled letters ("Leborn", "Mahommes") barely share trigrams; an edit distance catches them
+    for (const qa of [a, ...a.split(' ')]) for (const part of [b, ...b.split(' ')]) if (qa.length >= 4 && part.length >= 4) best = Math.max(best, (1 - edits(qa, part) / Math.max(qa.length, part.length)) * (qa === a ? 1 : .9));
     return best;
+  }
+  function edits(a, b) {   // Damerau-Levenshtein (adjacent swaps count as one)
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]); for (let j = 0; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) { const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c); if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1) }
+    return d[a.length][b.length];
   }
 
   // names to correct a typo against: what you searched and follow, today's teams, and the best-known names in each sport
@@ -193,11 +219,18 @@
     if (local.length) merge(local);
     // "lakers v celtics": both teams, as well as the game
     const teamsOf = side => espnAll(side).then(l => l.filter(it => it.kind === 'team'));
+    // "LAL", "KC": the real teams those letters stand for, found by their full names
+    const ab = !nl.vs && ABBR[norm(q).replace(/\s/g, '')];
+    if (ab) { res.pending++; step(Promise.all(ab.map(t => espnAll(t.name).then(l => l.filter(it => it.kind === 'team' && norm(it.title) === norm(t.name)).map(it => (it.rank = -6, it))).catch(() => [])))
+      .then(a => { const got = a.flat(); res.abbr = ab; return got })) }
     await Promise.all(nl.vs ? [step(Promise.all(nl.vs.map(teamsOf)).then(a => a.flat())), step(Promise.resolve([])), step(Promise.resolve([]))] : [step(espnAll(q)), step(baseball(q)), step(own(q))]);
-    if (!res.players.length && !res.teams.length && !res.leagues.length && !res.games.length && q.length >= 4) {
+    while (res.pending > 0) await new Promise(r => setTimeout(r, 60));
+    // nothing whose name starts with what was typed: likely a typo ("Leborn"), so look for the closest known name
+    const qw = norm(q).split(' ').filter(Boolean), named = it => qw.every(w => norm(it.title).split(' ').some(h => h.startsWith(w)));
+    if (!nl.vs && ![...res.players, ...res.teams, ...res.leagues, ...res.games].some(named) && norm(q).length >= 4) {
       // ESPN only matches whole words, so a typo finds nothing: find the closest known name and search that instead
-      const best = known().map(n => [n, close(q, n)]).sort((a, b) => b[1] - a[1])[0];
-      if (best && best[1] >= .45) { const more = await espnAll(best[0]).catch(() => []); if (more.length) { res.fuzzy = best[0]; merge(more) } }
+      const best = known().map(n => [n, Math.max(close(q, n), ...n.split(' ').map(w => close(q, w) * .92))]).sort((a, b) => b[1] - a[1])[0];
+      if (best && best[1] >= .5) { const more = await espnAll(best[0]).catch(() => []); if (more.length) { res.fuzzy = best[0]; more.forEach(it => { if (norm(it.title) === norm(best[0])) it.rank = -10 }); merge(more) } }
       onUpdate?.(res);
     }
     return res;
@@ -214,38 +247,131 @@
   // the Lab: a prop question first when the query reads like one, then the top player, then the question as typed
   const LAB_SPORT = it => it.sp === 'basketball' ? ({ nba: 'nba', wnba: 'wnba' }[it.lgKey]) : it.sp === 'football' ? (it.lgKey === 'nfl' ? 'nfl' : null) : it.sp === 'hockey' ? (it.lgKey === 'nhl' ? 'nhl' : null)
     : it.sp === 'baseball' ? (it.lgKey === 'mlb' || !it.lgKey ? 'mlb' : null) : it.sp === 'soccer' ? 'soccer' : it.sp === 'ufc' ? 'ufc' : null;
+  // a league named with a stat ("NBA assists", "NFL rushing yards"): today's board for that market
+  const MARKET_LG = { nba: 'nba', wnba: 'wnba', nfl: 'nfl', nhl: 'nhl', mlb: 'mlb', 'premier league': 'soccer', epl: 'soccer', soccer: 'soccer', basketball: 'nba', football: 'nfl', hockey: 'nhl', baseball: 'mlb' };
   function labRows(res) {
     const rows = [], top = res.players.find(p => LAB_SPORT(p)), nl = res.nl;
-    if (top && (nl.stat || nl.side)) { const sp = LAB_SPORT(top), stat = nl.stat?.[sp];
-      if (stat || !nl.stat) rows.push({ sp: top.sp, kind: 'lab', id: 'labq', title: `${top.title}: ${stat ? nl.label : 'props'}${nl.side ? ` ${nl.side}` : ''}${nl.line != null ? ` ${nl.line}` : ''}`, sub: 'Game log, hit rate and projection in the Lab', lab: { sport: sp, name: top.title, kind: 'player', stat: stat || '', line: nl.line ?? undefined, side: nl.side || undefined } }) }
-    if (top) rows.push({ sp: top.sp, kind: 'lab', id: 'labp', title: `Research ${top.title} in the Lab`, sub: `${SPORT[top.sp]} · every prop, game log and split`, lab: { sport: LAB_SPORT(top), name: top.title, kind: 'player' } });
+    const mk = MARKET_LG[norm(res.q)] || MARKET_LG[norm(ALIAS[norm(res.q)] || '')];
+    if (mk && nl.stat) rows.push({ sp: '', kind: 'lab', id: 'labm', title: `Today’s ${mk.toUpperCase() === 'SOCCER' ? 'soccer' : mk.toUpperCase()} ${nl.label} props`, sub: 'Every posted line, ranked by recent hit rate', lab: { sport: mk, tab: 'board', stat: nl.stat[mk] || '' } });
+    if (top) { const sp = LAB_SPORT(top), stat = nl.stat?.[sp];
+      if ((nl.stat || nl.side) && (stat || !nl.stat)) rows.push({ sp: top.sp, kind: 'lab', id: 'labq', title: `${top.title}: ${stat ? nl.label : 'props'}${nl.side ? ` ${nl.side}` : ''}${nl.line != null ? ` ${nl.line}` : ''}`, sub: 'Game log, hit rate and projection', lab: { sport: sp, name: top.title, kind: 'player', stat: stat || '', line: nl.line ?? undefined, side: nl.side || undefined } });
+      rows.push({ sp: top.sp, kind: 'lab', id: 'labp', title: `Open ${top.title} in the Lab`, sub: 'Every stat, game log and split', lab: { sport: sp, name: top.title, kind: 'player' } });
+      rows.push({ sp: top.sp, kind: 'lab', id: 'labprops', title: `View ${top.title}’s current props`, sub: 'Today’s posted lines and how often each one cleared', lab: { sport: sp, name: top.title, kind: 'player', stat: stat || '' } });
+      rows.push({ sp: top.sp, kind: 'lab', id: 'labtrend', title: `View ${top.title}’s trends`, sub: 'Recent games as a trend line, with the average', lab: { sport: sp, name: top.title, kind: 'player', stat: stat || '', mode: 'trend' } });
+      if (window.flLab?.compare) rows.push({ sp: top.sp, kind: 'lab', id: 'labcmp', title: `Compare ${top.title} with another player`, sub: 'Two game logs side by side on one line', cmp: { sport: sp, name: top.title } });
+    }
     const team = res.teams.find(t => LAB_SPORT(t) && t.sp !== 'baseball');
-    if (team) rows.push({ sp: team.sp, kind: 'lab', id: 'labt', title: `Research ${team.title} in the Lab`, sub: 'Team markets, splits and game log', lab: { sport: LAB_SPORT(team), name: team.title, kind: 'team' } });
+    if (team) rows.push({ sp: team.sp, kind: 'lab', id: 'labt', title: `Open ${team.title} in the Lab`, sub: 'Team markets, splits and game log', lab: { sport: LAB_SPORT(team), name: team.title, kind: 'team' } });
     rows.push({ sp: '', kind: 'lab', id: 'labask', title: `Ask the Lab: “${res.raw.trim()}”`, sub: 'The Lab reads the whole question', lab: { q: res.raw.trim() } });
     return rows;
   }
 
   /* ---------- opening a result ---------- */
-  const DEST = { player: 'Player profile', fighter: 'Fighter profile', team: 'Team page', league: 'League', game: 'Game', lab: 'The Lab' };
+  const DEST = { player: 'Profile', fighter: 'Profile', team: 'Team page', league: 'League', game: 'Match centre', lab: 'Lab' };
   function remember(it) {
-    if (it.kind === 'lab' && it.id === 'labask') return;
+    if (it.kind === 'lab' && (it.id === 'labask' || it.cmp)) return;
     const r = { key: key(it), sp: it.sp, kind: it.kind, lgKey: it.lgKey || '', fs: it.fs ? 1 : 0, id: it.id, title: it.title, sub: it.sub, img: it.img || '', face: it.face ? 1 : 0, attrs: it.attrs, lab: it.lab, at: Date.now() };
     if (it.kind === 'game') return;   // today's games change; the recent list keeps the lasting things
     G.recent = [r, ...G.recent.filter(x => x.key !== r.key)].slice(0, 8); store.set('fl.searchRecent', G.recent);
   }
-  function go(it) {
-    remember(it); hide(true);
-    if (it.kind === 'lab') { window.flLab?.open ? window.flLab.open(it.lab) : document.querySelector('[data-shell="lab"]')?.click(); return }
-    if (it.kind === 'game' && it.g) { window.flHub?.open(it.g); return }
-    const a = it.attrs || {};
-    if (a.sport) return (document.querySelector(`.tbs[data-sport="${a.sport}"]`) || document.querySelector(`[data-sport="${a.sport}"]`))?.click();
-    if (it.sp && it.sp !== S.sport && typeof setSport === 'function') setSport(it.sp);
-    if (a.gsleague) { if (typeof openLeague === 'function') openLeague(a.gsleague, true); return }
-    // the sport pages listen for clicks on these data attributes; a short-lived button inside the results box reuses them as they are
-    const b = document.createElement('button'); b.type = 'button'; b.hidden = true;
-    for (const [k, v] of Object.entries(a)) b.dataset[k] = v;
-    box.appendChild(b); b.click(); b.remove();
+  /* Opening a result: close the results, leave Home or any page, open the destination, give it its own address,
+     put focus on its heading, empty the box (the query lives on only in recent searches) and offer a way back. */
+  function leave() {
+    try { window.flPages?.current?.() && window.flPages.hide() } catch (e) {}
+    try { window.flHub?.on?.() && window.flHub.hide() } catch (e) {}
   }
+  const addr = it => { const a = it.attrs || {}, q = new URLSearchParams({ k: it.kind, sp: it.sp || '', id: it.id, t: it.title || '' });
+    for (const [k, v] of Object.entries(a)) q.set('a.' + k, v);
+    if (it.kind === 'game' && it.g) q.set('g', `${it.g.sport}|${it.g.lg || ''}|${it.g.id}`);
+    return '#/go/' + q };
+  function fromAddr(h) {
+    const q = new URLSearchParams(h.replace(/^#\/go\/?/, '')), attrs = {};
+    for (const [k, v] of q) if (k.startsWith('a.')) attrs[k.slice(2)] = v;
+    const g = q.get('g'), [sport, lg, id] = (g || '').split('|');
+    return { kind: q.get('k'), sp: q.get('sp'), id: q.get('id'), title: q.get('t'), attrs, gref: g ? { sport, lg, id } : null };
+  }
+  // the destination's heading, once it has drawn: the sheet's title, a page's h1, or the match centre's title
+  function focusHeading(kind) {
+    const pick = () => {
+      const cands = kind === 'lab' ? ['#pg-lab h1', '#labWsH', '#pg-lab h2'] : kind === 'game' ? ['#gxTitle', '#sheet h1', '#sheet h2', '#sheet .pfh-name'] : ['#sheet .pfh-name', '#sheet h1', '#sheet h2', '#sheet h3'];
+      for (const c of cands) { const el = document.querySelector(c); if (el && (el.offsetParent !== null || el.classList.contains('sr-only')) && el.textContent.trim() && (!/^Loading/.test(el.textContent.trim()) || late)) return el }
+      return null;
+    };
+    let n = 0, late = false; const t = setInterval(() => { late = n > 30; const el = pick(); if (el || ++n > 40) { clearInterval(t); if (!el) return;
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: false }) } }, 150);
+  }
+  function rememberQuery(raw) { raw = String(raw || '').trim(); if (raw.length < 2) return; G.recentQ = [raw, ...G.recentQ.filter(x => norm(x) !== norm(raw))].slice(0, 6); store.set('fl.searchRecentQ', G.recentQ) }
+  function reset() {   // the box is emptied once a result opens; the count and query do not follow you to the next page
+    G.last = G.res && G.q ? { raw: G.q, res: G.res } : G.last; rememberQuery(G.q);
+    ++G.seq; G.res = null; G.q = ''; input.value = ''; S.q = ''; clear.hidden = true; box.innerHTML = ''; live.textContent = ''; rows = [];
+    document.querySelector('.top')?.classList.remove('search-open'); document.getElementById('tbSearch')?.setAttribute('aria-expanded', 'false');
+  }
+  function go(it, o = {}) {
+    if (!o.replay) { remember(it); G.from = { hub: !!window.flHub?.on?.(), page: window.flPages?.current?.() || null } }
+    hide(true); if (!o.replay) reset();
+    if (it.kind === 'lab') {
+      if (it.cmp) window.flLab?.compare?.(it.cmp); else if (window.flLab?.open) window.flLab.open(it.lab); else document.querySelector('[data-shell="lab"]')?.click();
+      backBar(); return focusHeading('lab');
+    }
+    // a game opens in the match centre over the page you are on, the same as from Home and Live
+    if (it.kind === 'game' && (it.g || it.gref) && window.flMC?.open(it.g || it.gref, document.body)) {
+      const want = addr(it); if (!o.replay && location.hash !== want) { history.pushState({ flGo: 1 }, '', want); atGo = true }
+      backBar(); return focusHeading('game');
+    }
+    leave();
+    if (it.kind === 'game' && (it.g || it.gref)) { window.flHub?.open(it.g || it.gref) }
+    else {
+      const a = it.attrs || {};
+      if (a.sport) { (document.querySelector(`.tbs[data-sport="${a.sport}"]`) || document.querySelector(`[data-sport="${a.sport}"]`))?.click(); backBar(); return }
+      if (it.sp && it.sp !== S.sport && typeof setSport === 'function') setSport(it.sp);
+      if (a.gsleague) { if (typeof openLeague === 'function') openLeague(a.gsleague, true) }
+      else {
+        // the sport pages listen for clicks on these data attributes; a short-lived button outside the results reuses them as they are
+        const b = document.createElement('button'); b.type = 'button'; b.hidden = true;
+        for (const [k, v] of Object.entries(a)) b.dataset[k] = v;
+        document.body.appendChild(b); b.click(); b.remove();
+      }
+    }
+    const want = addr(it);
+    if (!o.replay && location.hash !== want) { history.pushState({ flGo: 1 }, '', want); atGo = true }
+    backBar(); focusHeading(it.kind);
+  }
+  // "Back to results": a small bar under the header after a result opens, until you move on
+  function backBar() {
+    document.getElementById('gsBack')?.remove();
+    if (!G.last) return;
+    const b = document.createElement('div'); b.id = 'gsBack'; b.className = 'gs-back';
+    b.innerHTML = `<button type="button" class="gs-back-go"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Back to results for “${esc(G.last.raw)}”</button><button type="button" class="gs-back-x" aria-label="Dismiss back to results">${'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>'}</button>`;
+    document.body.appendChild(b);
+    b.querySelector('.gs-back-go').addEventListener('click', () => { const l = G.last; b.remove(); if (!l) return;
+      if (matchMedia('(max-width:820px)').matches) { document.querySelector('.top')?.classList.add('search-open'); document.getElementById('tbSearch')?.setAttribute('aria-expanded', 'true') }
+      input.value = l.raw; G.q = l.raw; G.res = l.res; clear.hidden = false; input.focus(); draw(l.res) });
+    b.querySelector('.gs-back-x').addEventListener('click', () => { b.remove(); G.last = null });
+    clearTimeout(G.backT); G.backT = setTimeout(() => document.getElementById('gsBack')?.remove(), 120000);
+  }
+  // moving on somewhere else retires the bar
+  document.addEventListener('click', ev => { if (!ev.target.closest?.('[data-shell],[data-page],button[data-sport],.rail button') || box.contains(ev.target)) return;
+    document.getElementById('gsBack')?.remove(); if (atGo) { history.replaceState(null, '', location.pathname + location.search); atGo = false } }, true);
+  // the address a result gave: Back closes what it opened and returns to where you were; a shared link opens it again
+  let atGo = location.hash.startsWith('#/go/');
+  addEventListener('popstate', () => {
+    const was = atGo; atGo = location.hash.startsWith('#/go/');
+    if (atGo) return replay();
+    if (!was) return;
+    try { if (S.stack?.length && typeof closeSheet === 'function') closeSheet(true) } catch (e) {}
+    try { if (document.documentElement.classList.contains('gx-on')) window.flMC?.close() } catch (e) {}
+    const f = G.from; G.from = null;
+    if (!location.hash && (f?.hub || !f) && window.flHub && !window.flPages?.current?.()) window.flHub.show();
+  });
+  function replay() { const it = fromAddr(location.hash); if (it.kind) go(it, { replay: true }) }
+  if (location.hash.startsWith('#/go/')) { let n = 0; const t = setInterval(() => { if (++n > 50 || (it => it.kind !== 'game' || window.flHub?.at?.())(fromAddr(location.hash))) { clearInterval(t); replay() } }, 200) }
+  // closing what a result opened goes back a step in history, so the address matches the screen again
+  if (typeof closeSheet === 'function') { const _close = closeSheet; window.closeSheet = closeSheet = function (quiet) { const r = _close.apply(this, arguments); if (!quiet && location.hash.startsWith('#/go/') && history.state?.flGo) history.back(); else if (!quiet && location.hash.startsWith('#/go/')) { history.replaceState(null, '', location.pathname + location.search); atGo = false } return r } }
+  // the match centre closed (its X, Esc or the backdrop) after a result opened it: step back, and land on "Back to results"
+  new MutationObserver(() => { const on = document.documentElement.classList.contains('gx-on');
+    if (!on && G.gx && atGo) { G.gx = false; if (history.state?.flGo) history.back(); else { history.replaceState(null, '', location.pathname + location.search); atGo = false } setTimeout(() => document.querySelector('#gsBack .gs-back-go')?.focus(), 0) }
+    G.gx = on && location.hash.startsWith('#/go/') }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  if (typeof goBack === 'function') { const _back = goBack; window.goBack = goBack = function () { const r = _back.apply(this, arguments); if (!S.stack.length && location.hash.startsWith('#/go/')) { if (history.state?.flGo) history.back(); else { history.replaceState(null, '', location.pathname + location.search); atGo = false } } return r } }
   function follow(it, btn) {
     const sp = it.sp, a = it.attrs || {};
     const entry = sp === 'soccer' ? { id: it.id, name: it.title, logo: it.img, lg: a.lg || '' }
@@ -265,31 +391,44 @@
   function row(it, first) {
     const i = rows.push(it) - 1, canLab = (it.kind === 'player' || it.kind === 'fighter') && LAB_SPORT(it) && !it.fs, canFollow = it.kind === 'team' && it.sp !== 'tennis';
     return `<li class="gs-row${it.live ? ' live' : ''}"><button type="button" class="sr gs-go" data-gs="${i}" id="gs${i}">${ph(it)}
-      <span class="gs-t"><strong>${esc(it.title)}</strong><small>${it.reg ? `<span data-flreg="${esc(it.reg)}" data-flreg-show="sub" data-flreg-shown="${esc(it.regTeam || '')}" data-flreg-where="search">${esc(it.sub || '')}</span>` : esc(it.sub || '')}</small></span>
+      <span class="gs-t"><strong>${esc(it.title)}</strong><small>${it.reg ? `<span data-flreg="${esc(it.reg)}" data-flreg-show="sub" data-flreg-shown="${esc(it.regTeam || '')}" data-flreg-where="search">${esc(it.sub || '')}</span>` : esc(it.sub || '')}</small>${it.next ? `<small class="gs-next">${esc(it.next)}</small>` : ''}</span>
       <span class="gs-dest">${it.live ? '<i class="gs-dot" aria-hidden="true"></i>Live' : esc(DEST[it.kind] || '')}${first ? '<kbd aria-hidden="true">↵</kbd>' : ''}</span></button>
       ${canLab || canFollow ? `<span class="gs-acts">${canLab ? `<button type="button" class="gs-act" data-gsact="lab" data-gs="${i}" aria-label="Open ${esc(it.title)} in the Lab">Lab</button>` : ''}${canLab && window.flLab?.compare ? `<button type="button" class="gs-act" data-gsact="compare" data-gs="${i}" aria-label="Compare ${esc(it.title)} with another player">Compare</button>` : ''}${canFollow ? `<button type="button" class="gs-act" data-gsact="follow" data-gs="${i}" aria-pressed="${followed(it)}" aria-label="Follow ${esc(it.title)}">${followed(it) ? 'Following' : 'Follow'}</button>` : ''}</span>` : ''}</li>`;
   }
   const group = (title, list, firstSet) => list.length ? `<div class="gs-g" role="group" aria-label="${esc(title)}"><div class="sr-h">${esc(title)}</div><ul>${list.map((it, j) => row(it, firstSet && j === 0)).join('')}</ul></div>` : '';
+  // the next game for a player's or team's side, from today's Live Hub list
+  function nextGame(it) {
+    const name = norm(it.kind === 'team' ? it.title : it.team || ''); if (!name) return '';
+    const g = (window.flHub?.games?.() || []).filter(g => g.state !== 'post' && g.sport === it.sp && [g.a, g.b].some(t => norm(t.full || t.name) === name)).sort((a, b) => a.date - b.date)[0];
+    if (!g) return '';
+    const opp = norm(g.a.full || g.a.name) === name ? g.b : g.a;
+    return g.state === 'in' ? `Live now v ${opp.name}` : `Next: v ${opp.name}, ${g.date.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
+  }
   function draw(res) {
     rows = [];
     if (!res) return drawEmpty();
+    for (const it of [...res.players, ...res.teams]) if (it.next == null) it.next = nextGame(it);
     const labFirst = res.lab.length > 1 && (res.nl.stat || res.nl.side);
+    // the order Erez asked for: players, teams, games, then leagues and research; a prop question puts research first, a matchup its games
     const order = labFirst ? ['lab', 'players', 'teams', 'games', 'leagues'] : res.games.length && res.nl.vs ? ['games', 'teams', 'players', 'leagues', 'lab']
-      : (res.teams[0]?.s || 0) > (res.players[0]?.s || 0) + 8 ? ['teams', 'players', 'leagues', 'games', 'lab'] : ['players', 'teams', 'leagues', 'games', 'lab'];
-    const caps = { players: 8, teams: 6, leagues: 4, games: 5, lab: 4 }, names = { players: 'Players', teams: 'Teams', leagues: 'Leagues', games: 'Games today', lab: 'The Lab' };
+      : (res.teams[0]?.s || 0) > (res.players[0]?.s || 0) + 8 ? ['teams', 'players', 'games', 'leagues', 'lab'] : (res.leagues[0]?.s || 0) > Math.max(res.players[0]?.s || 0, res.teams[0]?.s || 0) ? ['leagues', 'teams', 'players', 'games', 'lab'] : ['players', 'teams', 'games', 'leagues', 'lab'];
+    const caps = { players: 6, teams: 6, leagues: 4, games: 5, lab: 6 }, names = { players: 'Players', teams: 'Teams', leagues: 'Leagues', games: 'Games', lab: 'Research' };
     const nothing = !res.players.length && !res.teams.length && !res.leagues.length && !res.games.length;
+    const n = res.players.length + res.teams.length + res.leagues.length + res.games.length;
     let h = '', first = true;
-    if (res.fuzzy) h += `<p class="gs-note">No exact match for “${esc(res.raw.trim())}”. Showing results for “${esc(res.fuzzy)}”.</p>`;
+    if (res.fuzzy) h += `<p class="gs-note" role="note">No exact match for “${esc(res.raw.trim())}”. Showing results for <b>${esc(res.fuzzy)}</b>.</p>`;
+    if (res.abbr && !res.teams.length && !res.pending) h += `<p class="gs-note">${esc(res.raw.trim().toUpperCase())} can mean ${res.abbr.map(t => `${esc(t.name)} (${t.lg.toUpperCase()})`).join(', ')}. Their pages did not load; try the full name.</p>`;
     for (const k of order) { const list = res[k].slice(0, caps[k]); if (k === 'lab' && nothing && res.pending) continue; h += group(names[k], list, first && list.length); if (list.length) first = false }
-    if (nothing && !res.pending && !res.fuzzy) h = `<p class="gs-note"><b>No player, team, league or game matches “${esc(res.raw.trim())}”.</b> Check the spelling, or try a last name or a team’s city.</p>` + h;
+    if (nothing && !res.pending && !res.fuzzy) h = `<div class="gs-none"><b>Nothing matches “${esc(res.raw.trim())}”</b><p>Check the spelling, try a last name (“Mahomes”), a team’s city or short name (“LAL”), or a league (“Premier League”). The Lab can also read the whole question.</p></div>` + h;
     if (res.pending) h += `<p class="gs-note gs-wait" aria-hidden="true">Searching every sport…</p>`;
     box.innerHTML = h; show();
-    if (!res.pending) say(nothing ? 'No results' : `${res.players.length + res.teams.length + res.leagues.length + res.games.length} results`);
+    if (!res.pending) say(nothing ? `No results for ${res.raw.trim()}` : `${n} result${n === 1 ? '' : 's'}. Use the arrow keys to move through them.`);
   }
   function drawEmpty() {
     rows = [];
     const rec = G.recent.slice(0, 6), mine = (S.fav || []).slice(0, 6).map(f => favItem(f)).filter(Boolean);
     let h = '';
+    if (G.recentQ.length) h += `<div class="gs-g" role="group" aria-label="Recent searches"><div class="sr-h gs-hrow">Recent searches<button type="button" class="gs-link" data-gsclear="q">Clear</button></div><div class="gs-chips">${G.recentQ.map(t => `<button type="button" class="chip gs-chip" data-gstry="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`;
     if (rec.length) h += `<div class="gs-g" role="group" aria-label="Recent"><div class="sr-h gs-hrow">Recent<button type="button" class="gs-link" data-gsclear="recent">Clear</button></div><ul>${rec.map(it => row(it)).join('')}</ul></div>`;
     if (mine.length) h += group('Your teams', mine);
     h += `<div class="gs-g gs-try"><div class="sr-h">Try</div><div class="gs-chips">${['LeBron James', 'Chiefs', 'Premier League', 'Mahomes passing yards', 'Lakers v Celtics', 'McDavid'].map(t => `<button type="button" class="chip gs-chip" data-gstry="${esc(t)}">${esc(t)}</button>`).join('')}</div>
@@ -352,12 +491,13 @@
     const t = ev.target.closest('[data-gs],[data-gstry],[data-gsclear]'); if (!t) return;
     ev.preventDefault(); ev.stopPropagation();
     if (t.dataset.gstry != null) { input.value = t.dataset.gstry; input.focus(); return run(input.value, true) }
-    if (t.dataset.gsclear) { G.recent = []; store.set('fl.searchRecent', []); return drawEmpty() }
+    if (t.dataset.gsclear === 'q') { G.recentQ = []; store.set('fl.searchRecentQ', []); drawEmpty(); return input.focus() }
+    if (t.dataset.gsclear) { G.recent = []; store.set('fl.searchRecent', []); drawEmpty(); return input.focus() }
     const it = rows[+t.dataset.gs]; if (!it) return;
     const a = t.dataset.gsact;
     if (a === 'follow') return follow(it, t);
     if (a === 'lab') return go({ ...it, kind: 'lab', id: 'lab:' + it.id, lab: { sport: LAB_SPORT(it), name: it.title, kind: 'player' } });
-    if (a === 'compare') { remember(it); hide(); return window.flLab.compare({ sport: LAB_SPORT(it), name: it.title }) }
+    if (a === 'compare') return go({ ...it, kind: 'lab', id: 'cmp:' + it.id, cmp: { sport: LAB_SPORT(it), name: it.title } });
     go(it);
   });
   // switching sport keeps the results open (and re-ranks them for the new sport)
@@ -368,5 +508,16 @@
   // Home's game list feeds the "Games today" section; make sure it is loading
   input.addEventListener('focus', () => { try { window.flHub?.games?.().length || window.flHub?.load?.() } catch (e) {} }, { once: true });
 
-  window.flSearch = { query, go, parse, recent: () => G.recent, open: () => { input.focus(); run(input.value, true) } };
+  // Cmd/Ctrl + K opens this search from anywhere (on phones it fills the screen); pressed again it closes
+  function openSearch() {
+    try { window.flShell?.closeMenu?.() } catch (e) {}
+    const top = document.querySelector('.top'); if (matchMedia('(max-width:1100px)').matches) { top?.classList.add('search-open'); document.getElementById('tbSearch')?.setAttribute('aria-expanded', 'true') }
+    input.focus(); input.select(); if (input.value.trim()) run(input.value, true); else drawEmpty();
+  }
+  document.addEventListener('keydown', ev => {
+    if (!((ev.metaKey || ev.ctrlKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k')) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    if (document.activeElement === input && !box.hidden) { hide(); input.blur(); document.querySelector('.top')?.classList.remove('search-open') } else openSearch();
+  }, true);
+  window.flSearch = { query, go, parse, recent: () => G.recent, open: openSearch };
 })();

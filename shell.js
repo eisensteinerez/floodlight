@@ -130,6 +130,7 @@
 
   /* ---------- Cmd/Ctrl+K: the Lab from anywhere, cursor in its command bar ---------- */
   document.addEventListener('keydown', ev => {
+    if (window.flSearch) return;   // search.js owns Cmd/Ctrl+K: it opens the search
     if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ev.stopImmediatePropagation(); closeSheetUI(); openLab(true) }
   }, true);
   function openLab(focus) { if (!pages()?.show('lab')) return document.querySelector('[data-rs="open"]')?.click(); if (focus) setTimeout(() => document.getElementById('labAsk')?.focus(), 60) }
