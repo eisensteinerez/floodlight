@@ -1584,6 +1584,34 @@ button.hm-bi:hover{background:var(--surface-2)}button.hm-bi:focus-visible{outlin
 .obd-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 28px;border-top:1px solid var(--border)}
 .obd-nav{display:flex;gap:8px}
 .obd-skip{min-height:44px}
+/* first-visit setup: your teams with a follow level, finding a team or player, the settings step */
+.obd-mine{display:grid;gap:8px}
+.obd-fl{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.obd-fl li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:8px 8px 8px 12px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface-2)}
+.obd-fn{min-width:0;display:inline-flex;align-items:center;gap:8px}
+.obd-fn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 15px/1.3 var(--font-body)}
+.obd-fn img{width:20px;height:20px;object-fit:contain;flex:none}
+:root[data-theme] .obd-lv button{min-height:36px;padding:0 12px;font-size:13px}
+.obd-find{display:grid;gap:6px}
+.obd-q{position:relative;display:flex;align-items:center}
+.obd-q > svg{position:absolute;left:14px;color:var(--muted);pointer-events:none}
+.obd-q .inp{padding-left:42px}
+.obd-pl{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.obd-pb{width:100%;display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 12px;border-radius:var(--radius-tile);border:1px solid var(--border);background:var(--surface);color:var(--text);text-align:left}
+.obd-pb:hover{border-color:var(--border-2)}
+.obd-pb[aria-pressed="true"]{border-color:var(--accent)}
+.obd-pb .rw-t{flex:1;min-width:0;display:grid;gap:2px}
+.obd-pb small{color:var(--muted);font:500 13px/1.3 var(--font-body)}
+.obd-set{display:grid;gap:12px}
+.obd-fs{margin:0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-tile);display:grid;gap:8px;min-width:0}
+.obd-fs legend{padding:0 6px;margin-left:-6px;font:700 15px/1.3 var(--font-body);color:var(--text)}
+.obd-fs p{margin:0}
+.obd-fs select.inp{max-width:420px}
+.obd-sw{display:flex;align-items:center;gap:12px;cursor:pointer}
+.obd-sw > span{display:grid;gap:2px;font:500 15px/1.35 var(--font-body)}
+.obd-sw.sub{padding-left:16px}
+@media (max-width:560px){.obd-fl li{grid-template-columns:minmax(0,1fr) auto}.obd-fl li .ib{grid-column:2;grid-row:1}.obd-fl li .obd-lv{grid-column:1/-1}}
+.obd-sw:has(input:disabled){opacity:.6;cursor:default}
 @media (max-width:560px){.obd{padding:0;place-items:end stretch}.obd-card{width:100%;max-height:92dvh;border-radius:var(--radius-card) var(--radius-card) 0 0}.obd-head,.obd-body{padding-left:18px;padding-right:18px}.obd-foot{padding:12px 18px calc(12px + env(safe-area-inset-bottom))}.obd-themes{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* ---------- Member photos: the picture sits over the initials, which show when there is none ---------- */

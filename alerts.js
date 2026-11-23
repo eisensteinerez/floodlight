@@ -17,7 +17,7 @@
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(A)) } catch {} };
   const can = () => 'Notification' in window;
   const perm = () => can() ? Notification.permission : 'unsupported';   // 'granted' | 'denied' | 'default' | 'unsupported'
-  const mine = g => !!(window.flHome?.isMine?.(g) || window.flHome?.watching?.(g.key));
+  const mine = g => !!(window.flHome?.loud ? window.flHome.loud(g) : (window.flHome?.isMine?.(g) || window.flHome?.watching?.(g.key)));   // quiet follows never ring
 
   /* ---------- deciding what to say ---------- */
   const seen = new Map();   // game key -> what we last saw: state, the two scores, who led
@@ -110,5 +110,6 @@
 
   function reset() { A = { ...DEF }; save() }
   document.addEventListener('change', ev => { const q = ev.target.dataset?.alq; if (!q) return; A[q] = +ev.target.value; save(); repaint(ev.target.id) });
-  window.flAlerts = { on: () => A.on, card, reset };
+  const set = patch => { A = { ...A, ...patch }; save() };   // the first-visit setup's switches
+  window.flAlerts = { on: () => A.on, card, reset, set };
 })();
