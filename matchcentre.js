@@ -489,6 +489,7 @@
     const g = o.key ? o : find(o);
     if (!g || !CAN.has(g.sport) || !g.path) return false;
     M.seq++; M.g = g; M.d = null; M.at = 0; M.err = ''; M.gone = false; M.miss = 0; M.odds = null; M.oddsAt = 0; M.oddsErr = ''; M.oddsBusy = false; M.loading = false; M.sel = null; M.every = false; M.mode = 'lead'; M.from = from || document.activeElement;
+    M.fromSel = ['data-hub', 'data-live', 'data-hubcmd', 'data-hubtab'].filter(k => M.from?.hasAttribute?.(k)).map(k => `[${k}="${CSS.escape(M.from.getAttribute(k))}"]`).join('') || (M.from?.id ? '#' + CSS.escape(M.from.id) : '');
     window.flHome?.seen(g); sheet.innerHTML = ''; sheet.classList.remove('gx-tight'); loadFc();
     host.hidden = false; root.classList.add('gx-on'); paint(); window.flOverlay?.open(host, { from: M.from });
     const t = sheet.querySelector('#gxTitle'); if (t) { t.setAttribute('tabindex', '-1'); t.focus({ preventScroll: true }) } else sheet.focus({ preventScroll: true });
@@ -499,7 +500,9 @@
   }
   function close() {
     if (host.hidden) return; host.hidden = true; root.classList.remove('gx-on'); clearInterval(M.timer); clearInterval(M.tick); M.seq++; window.flOverlay?.close(host, { focus: false });
-    const f = M.from; M.g = null; M.d = null; if (f && document.contains(f)) f.focus({ preventScroll: true });
+    // the opener may have been redrawn while the game was open (Home and Live refresh): find its new copy by what it opens
+    let f = M.from; if (f && !document.contains(f) && M.fromSel) f = document.querySelector(M.fromSel);
+    M.g = null; M.d = null; if (f && document.contains(f)) f.focus({ preventScroll: true });
   }
   // the scoreboard keeps the score in the header current between feed reads
   /* A game that ends stays open and turns to Final. Only a game the provider takes away is called unavailable: it has to

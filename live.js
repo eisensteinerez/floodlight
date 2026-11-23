@@ -155,7 +155,9 @@
   const just = g => { const t = scored.get(g.key); return t && Date.now() - t < 5 * 60000 && g.state === 'in' && !window.flMC?.spoil(g.key) ? `<span class="pl lv-just">Scored ${ago(t)}</span>` : '' };
   // the same card Home draws
   const TINT = 'var(--muted)';
-  const cardFacts = g => ({ id: 'lv' + g.key, hc: g.a.color || TINT, ac: g.b.color || TINT, label: `${g.a.full || g.a.name} ${g.state === 'pre' ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}${g.tv ? `, on ${g.tv}` : ''}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
+  // a card's spoken name never carries a score that spoiler-free is hiding
+  const hid = g => g.state !== 'pre' && !!window.flMC?.spoil(g.key);
+  const cardFacts = g => ({ id: 'lv' + g.key, hc: g.a.color || TINT, ac: g.b.color || TINT, label: `${g.a.full || g.a.name} ${g.state === 'pre' || hid(g) ? 'v' : g.a.score + ' to ' + g.b.score} ${g.b.full || g.b.name}, ${g.short}${hid(g) ? ', score hidden by spoiler-free mode' : ''}${g.tv ? `, on ${g.tv}` : ''}`, state: g.state, lg: g.lgName || g.short, tv: g.tv,
     a: { name: g.a.name, ab: g.a.ab, logo: g.a.logo, score: g.a.score, rank: g.a.rank, lose: g.state === 'post' && g.b.winner, win: g.a.winner }, b: { name: g.b.name, ab: g.b.ab, logo: g.b.logo, score: g.b.score, rank: g.b.rank, lose: g.state === 'post' && g.a.winner, win: g.b.winner },
     clock: g.clock, final: g.final, note: g.note, date: g.date, ...(g.state !== 'pre' && window.flMC?.spoil(g.key) ? { spoil: true } : {}) });
   // the compact view: one line a game, for scanning a long night

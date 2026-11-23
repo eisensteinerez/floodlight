@@ -2596,3 +2596,5 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 /* the match centre's body is one column; as a flex column every block keeps its full height (a grid row here could
    collapse to zero in Chrome and let the "Updated" line run under the Follow buttons) */
 .gx-body{display:flex;flex-direction:column}.gx-body>*{flex:none;min-width:0}
+/* long tool links on Predictions wrap instead of running past a 320px card */
+.pd-more .cx{white-space:normal;text-align:left;max-width:100%;height:auto;min-height:44px;padding-block:8px}
