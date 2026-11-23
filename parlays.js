@@ -118,9 +118,9 @@
   function render(el) {
     el.innerHTML = `<div class="vst py">
       <header class="pg-head"><div><h1 class="pg-title" tabindex="-1">Parlays</h1><p class="pg-sub">Lock in your picks before the games start, then follow every one live.</p></div>
-        <button type="button" class="bt py-new" data-py="new" data-fk="new">${ic('plus', 18)}New parlay</button></header>
-      <p class="sr-only" id="pySay" role="status"></p><div id="pyBuild"></div>
-      <div class="g2 py-cols"><div class="vst py-main" id="pyMain"></div><aside class="vst py-side" id="pySide" aria-label="Your record and how the live read works"></aside></div>
+        <div class="pg-acts"><button type="button" class="bt py-new" data-py="new" data-fk="new">${ic('plus', 18)}New parlay</button><span id="pyQ"></span></div></header>
+      <div id="pyHelp"></div><p class="sr-only" id="pySay" role="status"></p><div id="pyBuild"></div>
+      <div class="g2 py-cols"><div class="vst py-main" id="pyMain"></div><aside class="vst py-side" id="pySide" aria-label="Your record"></aside></div>
     </div>`;
     draw();
   }
@@ -247,22 +247,33 @@
   /* An example for the empty page, so it is clear what a parlay looks like here. It is made from real picks on tonight's
      board (three from different games, strongest first), it is labelled as an example, and it is never saved. With no
      lines posted it is left out: there is nothing real to show. */
-  const EX = { picks: null, asked: false };
+  // The picks are the ones where our number and the apps' prices are closest (but ours is still higher), so the
+  // example shows an ordinary gap and says why it widens once picks are multiplied, rather than a 76% against 34%.
+  const EX = { picks: null, asked: false, open: { ex: false, how: false } };
   function example() {
     if (!window.flEdge) return '';
-    if (!EX.asked) { EX.asked = true; window.flEdge.props(['nba', 'nfl', 'nhl']).then(r => { const now = Date.now(), seen = new Set(), out = [];
+    if (!EX.asked) { EX.asked = true; window.flEdge.props(['nba', 'nfl', 'nhl']).then(r => { const now = Date.now();
         const fresh = r.picks.filter(p => p.start && +p.start > now); EX.late = fresh.length < 3;   // late at night every game may have started: the board's picks are still real ones
-        for (const p of [...(EX.late ? r.picks : fresh)].sort((a, b) => b.ours - a.ours)) { if (seen.has(p.gameKey)) continue; seen.add(p.gameKey); out.push(p); if (out.length === 3) break }
-        EX.picks = out; if (window.flPages.current() === 'parlays') drawMain() }).catch(() => { EX.picks = [] }) }
-    if (!EX.picks) return `<div class="card py-ex" aria-hidden="true"><div class="skl" style="height:150px"></div></div>`;
-    if (EX.picks.length < 2) return '';
-    const all = EX.picks.reduce((a, p) => a * p.ours, 1), mk = EX.picks.every(p => p.market != null) ? EX.picks.reduce((a, p) => a * p.market, 1) : null;
-    return `<section class="card py-ex" aria-label="An example parlay"><div class="sec-h"><h2>What one looks like</h2><span class="pl">Example, not saved</span></div>
-      <p class="lb">${EX.picks.length === 3 ? 'Three' : 'Two'} real picks from ${EX.late ? 'the latest board (these games have started, so they could not be added now)' : 'tonight’s board'}, each from a different game. Nothing here is locked in.</p>
-      <ul class="py-exl">${EX.picks.map(p => `<li><span class="rw-t"><b>${esc(p.name)}</b><small>${esc(p.text)}${p.game ? ' · ' + esc(p.game) : ''}</small></span><b class="num">${pct(p.ours)}%</b></li>`).join('')}</ul>
-      <dl class="py-exf"><div><dt>Our number: chance all ${EX.picks.length} hit</dt><dd class="num">${pct(all)}%</dd></div><div><dt>The same from the apps’ prices</dt><dd class="num">${mk == null ? '–' : pct(mk) + '%'}</dd></div></dl>
-      <p class="lb">The picks are from different games, so their chances are multiplied. Once the games start, a saved parlay shows each pick’s progress and a live read here. This is research, not betting advice.</p></section>`;
+        const pool = EX.late ? r.picks : fresh, gap = p => p.ours - p.market;
+        const take = list => { const seen = new Set(), out = []; for (const p of list) { if (seen.has(p.gameKey)) continue; seen.add(p.gameKey); out.push(p); if (out.length === 3) break } return out };
+        const calm = take(pool.filter(p => p.market != null && gap(p) > 0.005 && p.ours >= 0.5 && p.ours <= 0.8).sort((a, b) => gap(a) - gap(b)));
+        EX.picks = calm.length >= 2 ? calm : take([...pool].sort((a, b) => b.ours - a.ours));
+        if (window.flPages.current() === 'parlays') drawMain() }).catch(() => { EX.picks = [] }) }
+    if (!EX.picks) return '<div class="skl" style="height:150px" aria-hidden="true"></div>';
+    if (EX.picks.length < 2) return '<p class="lb">No lines are posted right now, so there is no real example to show. Check back when tonight’s board is up.</p>';
+    const n = EX.picks.length, all = EX.picks.reduce((a, p) => a * p.ours, 1), mk = EX.picks.every(p => p.market != null) ? EX.picks.reduce((a, p) => a * p.market, 1) : null;
+    const avg = mk == null ? null : EX.picks.reduce((a, p) => a + (p.ours - p.market), 0) / n * 100;
+    return `<p class="lb">${n === 3 ? 'Three' : 'Two'} real picks from ${EX.late ? 'the latest board (these games have started, so they could not be added now)' : 'tonight’s board'}, each from a different game. Example only, nothing is saved.</p>
+      <ul class="py-exl">${EX.picks.map(p => `<li><span class="rw-t"><b>${esc(p.name)}</b><small>${esc(p.text)}${p.game ? ' · ' + esc(p.game) : ''}</small></span><span class="py-exp num"><b>${pct(p.ours)}%</b>${p.market != null ? `<small class="lb">apps ${pct(p.market)}%</small>` : ''}</span></li>`).join('')}</ul>
+      <dl class="py-exf"><div><dt>Our number: chance all ${n} hit</dt><dd class="num">${pct(all)}%</dd></div><div><dt>The same from the apps’ prices</dt><dd class="num">${mk == null ? '–' : pct(mk) + '%'}</dd></div></dl>
+      ${avg == null ? '' : `<p class="lb">On each pick our number is about ${Math.max(1, Math.round(avg))} points above the apps’. Across ${n} picks the gap grows to ${Math.round((all - mk) * 100)} points, because the chances are multiplied and each pick’s gap is multiplied with them.</p>`}`;
   }
+  const HOWP = `<ul><li><b>One pick.</b> Our number is our estimate of how often it hits. The apps’ number comes from their price, with their margin taken out.</li>
+      <li><b>Picks from different games.</b> They don’t affect each other, so the chances are multiplied: two picks at 60% hit together 36% of the time.</li>
+      <li><b>Picks from one game.</b> They move together, so a single number would mislead. Those parlays show a range instead.</li>
+      <li><b>Small gaps grow.</b> If each pick is a few points better by our number, multiplying them widens the gap on the whole parlay. That is why a parlay’s gap is bigger than any one pick’s.</li></ul>
+    <p class="lb">These are estimates for research, not a promise and not betting advice.</p>`;
+  document.addEventListener('toggle', ev => { const k = ev.target.dataset?.pyfold; if (k) EX.open[k] = ev.target.open }, true);
 
   function drawMain() {
     const el = $('pyMain'), list = C.list(), st = C.state;
@@ -276,8 +287,10 @@
     if (st.error) h += `<p class="card py-err" role="alert">Your saved parlays did not load: ${esc(st.error)} <button type="button" class="bt sm ghost" data-py="reload" data-fk="reload">Try again</button></p>`;
     if (live.length) h += `<section aria-label="Live parlays"><div class="sec-h"><h2>Live now</h2><span class="lb">${V.at ? `Updated ${clock(V.at)}` : 'Checking the games'}</span></div><div class="vst py-list">${live.map(card).join('')}</div></section>`;
     if (wait.length) h += `<section aria-label="Parlays still to start"><div class="sec-h"><h2>${live.length ? 'Still to start' : 'Locked in'}</h2><span class="lb">${plural(wait.length, 'parlay')}</span></div><div class="vst py-list">${wait.map(card).join('')}</div></section>`;
-    if (!list.length && !V.open) h += `<div class="card emp py-none">${ic('ticket', 30)}<b>No parlays yet</b><p>Build one from tonight's games or from the player lines on the board. Once the games start, this page shows how each pick is doing, our live read on the whole parlay and what the books are pricing it at.</p>
-      <button type="button" class="bt" data-py="new" data-fk="new2">${ic('plus', 18)}Build your first parlay</button></div>${example()}`;
+    if (!list.length && !V.open) h += `<div class="card emp py-none">${ic('ticket', 30)}<b>No tracked parlays</b><p>Build one from Predictions or create one here.</p>
+      <div class="py-none-b"><button type="button" class="bt" data-py="new" data-fk="new2">${ic('plus', 18)}Create parlay</button><button type="button" class="bt ghost" data-page="predictions" data-fk="topred">Browse predictions</button></div></div>
+      <details class="card drw py-ex" data-pyfold="ex"${EX.open.ex ? ' open' : ''}><summary>See an example <span class="lb">Real picks from tonight’s board</span></summary><div class="drw-b">${example()}</div></details>
+      <details class="card drw py-how" data-pyfold="how"${EX.open.how ? ' open' : ''}><summary>How probabilities work</summary><div class="drw-b">${HOWP}</div></details>`;
     else if (!open.length && !V.open) h += `<div class="card emp py-none">${ic('ticket', 30)}<b>Nothing in play right now</b><p>Every parlay you saved has finished. Build another when you like.</p><button type="button" class="bt" data-py="new" data-fk="new2">${ic('plus', 18)}New parlay</button></div>`;
     if (done.length) h += `<section aria-label="Finished parlays"><div class="sec-h"><h2>Finished</h2><span class="lb">${plural(done.length, 'parlay')}</span></div><div class="vst py-list">${(V.all ? done : done.slice(0, CAP)).map(card).join('')}</div>
       ${done.length > CAP ? `<button type="button" class="bt ghost wide" data-py="all" data-fk="all">${V.all ? `Show the last ${CAP}` : `Show all ${done.length}`}</button>` : ''}</section>`;
@@ -298,13 +311,20 @@
       <div><span class="lb">Last ${S.last.length}</span>${strip(S.last)}</div>
       <p class="lb">${S.legN ? `Single picks: ${S.legHit} of ${S.legN} hit (${pct(S.legRate)}%).` : ''}${S.clvN ? ` Beat the closing price on ${S.clvBeat} of ${plural(S.clvN, 'pick')}.` : ''}</p></section>`;
   }
-  const HOW = `<section class="card py-how" aria-label="How the live read works"><div class="sec-h"><h2>How the live read works</h2></div>
+  const HOW = `
       <p>It is our own estimate, not a promise. Whatever has happened so far is fixed. The rest of the game is expected to go the way the whole game was expected to go before it started, scaled to the time left.</p>
       <ul><li><b>Players and totals.</b> The count so far, plus what is still expected, against the line.</li><li><b>Winners and spreads.</b> The score now, plus the edge the books gave before the start, over the time left.</li>
         <li><b>Books right now.</b> Live prices from Kalshi, FanDuel, DraftKings and Polymarket for the same pick, with their margin taken out. When a book has moved the line, the card says so and gives no number.</li>
         <li><b>The whole parlay.</b> Picks from different games are multiplied. Picks from one game move together, so those show a range.</li></ul>
-      <p class="lb">Scores and box scores come from ESPN and can run a little behind the broadcast. This page checks again every 20 seconds while a game is on, and a parlay settles when the final score is in.</p></section>`;
-  function drawSide() { $('pySide').innerHTML = recordCard() + HOW }
+      <p class="lb">Scores and box scores come from ESPN and can run a little behind the broadcast. This page checks again every 20 seconds while a game is on, and a parlay settles when the final score is in.</p>`;
+  function drawSide() {
+    const any = C.list().length > 0 || !C.state.loaded, side = $('pySide');
+    side.hidden = !any; side.parentElement.classList.toggle('one', !any);
+    side.innerHTML = any ? recordCard() : '';
+    // the live read explained: open the first time someone has a parlay, then behind the ? in the heading
+    const q = $('pyQ'), help = $('pyHelp'), want = any && C.state.loaded && window.flHelp;
+    if (q && help) { if (want && !help.firstChild) { q.innerHTML = flHelp.button('parlays', 'How the live read works'); help.innerHTML = flHelp.panel('parlays', 'How the live read works', HOW) } else if (!want && help.firstChild) { q.innerHTML = ''; help.innerHTML = '' } }
+  }
 
   /* ---------- the builder ---------- */
   const inDraft = id => V.draft.legs.some(l => l.id === id);

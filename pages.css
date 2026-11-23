@@ -1525,6 +1525,12 @@ button.hm-bi:hover{background:var(--surface-2)}button.hm-bi:focus-visible{outlin
 .py-exf dt{font:500 13px/1.3 var(--font-body);color:var(--text-2)}.py-exf dd{margin:0;font:var(--display-weight) clamp(26px,3vw,38px)/1 var(--font-display)}
 .py-new[hidden]{display:none}
 @media (max-width:560px){.py-exf{grid-template-columns:minmax(0,1fr)}}
+.py-cols.one{grid-template-columns:minmax(0,1fr)}
+#pyHelp:empty,#pyBuild:empty{display:none}
+.py-none-b{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.py-exp{margin-left:auto;display:grid;justify-items:end;gap:4px;text-align:right}
+.py-exp b{font:700 16px/1 var(--font-body)}
+.py-ex.drw,.py-how.drw{gap:0}
 
 /* ---------- evidence: move the line on the game log ---------- */
 .ev-log.drag{cursor:ns-resize;touch-action:none;user-select:none}
