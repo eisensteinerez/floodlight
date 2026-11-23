@@ -3714,6 +3714,10 @@ const STAGE = new Set(['team', 'fmteam', 'player', 'tc', 'match']);
 // Team, player and transfer-centre pages take the whole stage; matches and a league beside its fixtures stay as a side panel.
 function syncStage(){
   const v = S.stack[S.stack.length - 1], sh = document.querySelector('.shell'), auto = !!v && STAGE.has(v.type) && matchMedia('(min-width:821px)').matches;
+  // a game opened from a long schedule takes over the page; closing it puts the reader back where they were in the list
+  const was = sh.classList.contains('stage'), will = (!!S.big || auto) && !!v;
+  if (!was && will) S.listY = window.scrollY;
+  if (was && !will && S.listY != null) { const y = S.listY; S.listY = null; requestAnimationFrame(() => window.scrollTo({ top: y })) }
   sh.classList.toggle('sheet-wide', !!S.big || auto); sh.classList.toggle('stage', (!!S.big || auto) && !!v); sh.classList.toggle('stage-match', auto && v.type === 'match'); sh.classList.toggle('stage-auto', auto);
 }
 function setBig(on){
@@ -4964,6 +4968,7 @@ setInterval(() => { if (!document.hidden) checkVersion() }, 30000);
 })();
 </script>
 <script src="predfilter.js"></script>
+<script src="slate.js"></script>
 <script src="football.js"></script>
 <script src="basketball.js"></script>
 <script src="baseball.js"></script>
