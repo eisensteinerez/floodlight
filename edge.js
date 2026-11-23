@@ -14,7 +14,7 @@
   const fmt = v => Number.isInteger(v) ? String(v) : (+v).toFixed(1);
 
   function propPick(r, sport) {
-    const games = (r.games || []).map(g => ({ v: g[0], home: g[1] == null ? null : !!g[1], min: g[2], opp: g[3] || '', oppAbbr: g[4] || '' }));
+    const games = (r.games || []).map(g => ({ v: g[0], home: g[1] == null ? null : !!g[1], min: g[2], opp: g[3] || '', oppAbbr: g[4] || '', date: g[5] ? Date.parse(g[5].length === 10 ? g[5] + 'T12:00:00Z' : g[5]) || null : null }));
     const yes = YES.has(r.k), pct = x => Math.round(x * 100);
     const read = side => window.flMeter?.judge(games, { line: r.line, side, yes, stat: r.k, opp: r.opp });
     // the market: a two-sided price at this exact line, averaged when more than one book posts it
