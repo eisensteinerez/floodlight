@@ -69,10 +69,26 @@ def prizepicks(sport):
         who = people.get(str(rel.get("id"))) or {}
         if not who.get("name") or a.get("line_score") is None or a.get("status") not in (None, "pre_game"):
             continue
+        if _started(a.get("start_time")):   # a line still posted after its game began is not a market anyone can take
+            continue
         out.append({"book": "prizepicks", "player": who["name"], "team": who.get("team"), "pos": who.get("pos"), "stat": a.get("stat_type") or "",
                     "line": float(a["line_score"]), "kind": a.get("odds_type") or "standard", "start": a.get("start_time"),
-                    "opp": a.get("description"), "img": who.get("img")})
+                    "opp": a.get("description"), "img": who.get("img"), "mid": f"prizepicks:{p.get('id')}" if p.get("id") else "", "status": a.get("status") or "pre_game"})
     return out
+
+
+def _started(start):
+    """True when an ISO start time is in the past (the line's game has begun)."""
+    if not start:
+        return False
+    try:
+        import datetime as dt
+        t = dt.datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=dt.timezone.utc)
+        return t.timestamp() <= time.time()
+    except ValueError:
+        return False
 
 
 def _sleeper_players(sport):
@@ -111,8 +127,10 @@ def sleeper(sport):
         for line, s in sides.items():
             if line is None or "over" not in s and "under" not in s:
                 continue
+            # Sleeper posts no start time or opponent: the page finds the game on the league schedule, or leaves the line off the board
             row = {"book": "sleeper", "player": name, "team": p.get("team"), "pos": p.get("position"), "stat": x.get("wager_type") or x.get("market_type") or "",
-                   "line": float(line), "overMult": s.get("over"), "underMult": s.get("under")}
+                   "line": float(line), "overMult": s.get("over"), "underMult": s.get("under"),
+                   "mid": f"sleeper:{x.get('line_id') or x.get('id')}" if (x.get("line_id") or x.get("id")) else "", "status": x.get("status") or "active", "game": x.get("game_id") or ""}
             if s.get("over") and s.get("under"):
                 io, iu = 1 / s["over"], 1 / s["under"]
                 row["pOver"] = round(io / (io + iu), 3)
