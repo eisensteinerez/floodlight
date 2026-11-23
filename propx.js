@@ -40,7 +40,7 @@
     if (window.flMarkets?.list) return window.flMarkets.list({ force });
     // until the verified feed is on this page: the board's own upcoming lines, marked so nothing claims to be verified
     const r = await window.flEdge.props(null, force), ats = Object.values(r.by || {}).map(b => b.at || 0), now = Date.now();
-    const markets = r.picks.map(p => { const x = MK.supported(p, { now }); return { ...p, sedge: x.edge, factor: x.factor, reasons: x.reasons } });
+    const markets = r.picks.map(p => { const x = MK.supported(p, { now }); return { ...p, sedge: x.edge, support: x.factor, cut: x.reasons } });
     return { markets, removed: [], at: ats.length ? Math.max(...ats) : 0, interim: true, denied: r.denied };
   }
   async function load(force) {
@@ -264,8 +264,11 @@
   }
   function edgeBox(p) {
     if (p.edge == null) return '';
-    const cuts = p.cuts || (p.reasons && p.factor != null ? p.reasons.map((w, i) => [i ? 1 : p.factor, w]) : null);
-    const b = K.breakdown(p.edge, cuts || []); if (!b) return '';
+    const b = Array.isArray(p.cuts) ? K.breakdown(p.edge, p.cuts) : null, why = p.cut || [];
+    // without each reason's own factor (the verified feed's cuts) the steps can't be split honestly: the reasons are listed instead
+    if (!b) return `<section class="rp-sec"><h3>How the supported edge is worked out</h3><p class="lb">${esc(K.EXPLAIN)}</p>
+      <table class="rp-eb"><tbody><tr><th scope="row">Raw edge</th><td class="r num">${K.signed(p.edge)}</td></tr><tr class="tot"><th scope="row">Supported edge${why.length ? `<small>Reduced because: ${esc(why.join('. '))}</small>` : ''}</th><td class="r num">${K.signed(p.sedge)}</td></tr></tbody></table>
+      <p class="lb">Raw edge is our chance minus the market’s, in points (${pct(p.ours)} against ${pct(p.market)}).</p></section>`;
     const ok = b.edge === (p.sedge ?? b.edge);
     return `<section class="rp-sec"><h3>How the supported edge is worked out</h3><p class="lb">${esc(K.EXPLAIN)}</p>
       <table class="rp-eb"><caption class="sr-only">From the raw edge to the supported edge</caption><tbody>

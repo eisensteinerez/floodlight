@@ -2716,3 +2716,16 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .rp-lh li,.rp-sim li{display:flex;align-items:center;gap:12px}.rp-lh time{min-width:120px;color:var(--text-2)}.rp-sim small{color:var(--muted);margin-right:auto}
 .rp-foot{margin:4px 0 0}
 @media (max-width:640px){.rp-sheet{width:100vw;border-radius:0}.rp-nums{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-h{padding:14px 16px}.rp-b0{padding:16px 16px 40px}.rp-acts .bt{flex:1 1 calc(50% - 8px)}.rp-acts .lk{margin:0}.rp-av li{grid-template-columns:1fr}}
+
+/* ---------- Predictions: evidence grade and the supported-edge breakdown (predictions.js, labcore.js) ---------- */
+.pd-eg dd{display:flex;align-items:center;gap:8px}
+.pd-gl{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;border:1px solid var(--border-2);font:800 14px/1 var(--font-body)}
+.pd-gl.g-A{background:color-mix(in oklab,var(--good) 22%,transparent);border-color:color-mix(in oklab,var(--good) 55%,transparent)}
+.pd-gl.g-B{background:color-mix(in oklab,var(--good) 10%,transparent)}
+.pd-gl.g-D{border-style:dashed}
+.pd-eb{width:100%;max-width:520px;border-collapse:collapse;font:500 14px/1.3 var(--font-body);margin:6px 0}
+.pd-eb th{text-align:left;font-weight:600;padding:8px 0;border-bottom:1px solid var(--border)}
+.pd-eb th small{display:block;font-weight:500;color:var(--muted);margin-top:2px}
+.pd-eb td{text-align:right;padding:8px 0;border-bottom:1px solid var(--border);font-weight:700;vertical-align:top}
+.pd-eb tr.tot>*{border-bottom:0;border-top:2px solid var(--border-2)}
+.pd-egd>summary{cursor:pointer;font:600 14px/1.3 var(--font-body);color:var(--accent);min-height:44px;display:flex;align-items:center}

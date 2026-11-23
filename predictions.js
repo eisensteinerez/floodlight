@@ -435,7 +435,7 @@
         <div class="pd-edge" title="${p.edge == null ? 'No market price' : `Raw edge ${edgeTxt(p.edge)}, supported edge ${sedgeTxt}`}"><span class="lb">Edge</span><b class="num">${sedgeTxt}</b>${p.edge == null ? '<span class="sr-only">no market price</span>' : `<span class="sr-only">supported; raw edge ${edgeTxt(p.edge)}</span>`}</div>
         <button type="button" class="ib solid pd-add" data-pdadd="${esc(p.id)}" data-fk="add-${esc(p.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove' : 'Add'} ${esc(p.name)}, ${esc(p.text)}, ${on ? 'from' : 'to'} your slip">${ic(on ? 'check' : 'plus', 20)}</button></div>
       <dl class="pd-bars">${bar('Floodlight’s chance', p.ours, 'ours')}${bar('Market’s chance', p.market, 'mkt')}
-        ${p.type === 'prop' && p.smp?.n ? `<div class="pd-hr"><dt>Hit rate, ${esc(p.smp.label)}</dt><dd><b class="num">${p.smp.hits} of ${p.smp.n}</b></dd></div>` : ''}</dl>
+        ${p.type === 'prop' && p.smp?.n ? `<div class="pd-hr"><dt>Hit rate, ${esc(p.smp.label)}</dt><dd><b class="num">${p.smp.hits} of ${p.smp.n}</b></dd></div>` : ''}${gradeRow(p)}</dl>
       ${(p.av && p.av.tag == null && p.av.avail !== 'Not checked') || W.length || lk ? `<p class="pd-ctx pd-warn1">${p.av && p.av.tag == null && p.av.avail !== 'Not checked' ? `<span class="pd-av ok">${esc(p.av.avail)}</span>` : ''}${W.length ? `<span class="pd-w1" title="${esc(W[0][1])}">${WARN_IC}<span>${esc(W[0][0])}</span><span class="sr-only">: ${esc(W[0][1])}</span></span>${W.length > 1 ? `<span class="pd-wmore">+${W.length - 1} additional ${W.length === 2 ? 'risk' : 'risks'}</span>` : ''}` : ''}${lk ? lockTag(lk) : ''}</p>` : ''}
       ${mv || fol || multi ? `<div class="pd-meta">${mvTag}${fol ? `<span class="pl pd-fol">${ic('star', 14)}Following${fol.alert != null ? ` · alert at ${edgeTxt(fol.alert)}` : ''}</span>` : ''}${multi ? `<p class="pd-lines"><span class="lb">Lines posted</span>${lines.map(o => `<span class="pd-ln${o.line === p.line ? ' on' : ''}">${esc(BOOK[o.book] || o.book)} <b class="num">${fmtL(o.line)}</b></span>`).join('')}</p>` : ''}</div>` : ''}
       ${why.length ? `<ul class="cx-row pd-why" aria-label="Why">${why.map(r => `<li class="pl">${esc(r)}</li>`).join('')}</ul>` : ''}
@@ -456,13 +456,27 @@
   // the skeleton is the pick card's own layout: photo, three lines of text, the edge number, the two bars
   /* the evidence panel: closed by default, opened per pick; a match's saved forecasts are fetched the first time */
   function rangeOf(p) { const E = window.flEvidence; if (!E) return null; if (p.type === 'prop') return E.propRange(p); const v = P.ev.get(p.id); return v && !v.error ? E.matchRange(p, (v.snaps || []).filter(s => s.pick && s.final).slice(-1)[0]) : null }
+  /* the evidence grade, A to D, apart from the edge and the chance (labcore.js): how much stands behind the number */
+  const gradeOf = p => p.grade?.grade ? p.grade : window.flLabCore?.grade(p) || null;
+  function gradeRow(p) { const g = gradeOf(p); return g ? `<div class="pd-hr pd-eg"><dt>Evidence quality</dt><dd><b class="pd-gl g-${g.grade}">${g.grade}</b> <span>${esc(g.word)}</span></dd></div>` : '' }
+  /* the supported edge, step by step: raw edge, what sample size, availability, data quality and a moving line took off */
+  function breakdownTable(p) {
+    const K = window.flLabCore; if (!K || p.edge == null) return '';
+    // only with each reason's own factor (the verified feed's cuts); without them the reasons are listed instead
+    if (!Array.isArray(p.cuts)) return ''; const b = K.breakdown(p.edge, p.cuts); if (!b) return '';
+    return `<table class="pd-eb"><caption class="sr-only">From the raw edge to the supported edge</caption><tbody><tr><th scope="row">Raw edge</th><td class="num">${edgeTxt(b.raw)}</td></tr>
+      ${b.rows.map(r => `<tr><th scope="row">${esc(r.label)}${r.reasons.length ? `<small>${esc(r.reasons.join('. '))}</small>` : ''}</th><td class="num">${r.pts ? edgeTxt(r.pts) : '0'}</td></tr>`).join('')}
+      <tr class="tot"><th scope="row">Supported edge</th><td class="num">${edgeTxt(p.sedge ?? b.edge)}</td></tr></tbody></table><p class="lb">${esc(K.EXPLAIN)}</p>`;
+  }
   /* the top of the evidence: raw and supported edge with the reasons, the game and market it was checked against,
      availability in three separate lines, and every uncertainty in plain words */
   function support(p) {
     const W = warnsOf(p), e = p.v?.event, cut = p.cut || [];
     const edges = p.edge == null ? `<p class="lb">No provider posts both sides of this line, so there is no market price and no edge. The pick is listed for our number only.</p>`
-      : `<dl class="pd-se"><div><dt>Raw edge</dt><dd class="num">${edgeTxt(p.edge)}</dd></div><div class="on"><dt>Supported edge</dt><dd class="num">${edgeTxt(p.sedge)}</dd></div><div><dt>Evidence</dt><dd>${esc({ strong: 'Strong', moderate: 'Moderate', limited: 'Limited' }[p.strength] || '–')}</dd></div></dl>
-        ${cut.length ? `<p class="pd-se-h">${p.sedge === p.edge ? 'Checked, with little effect:' : 'Reduced because:'}</p><ul class="ev-list pd-se-l">${cut.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : '<p class="lb">Nothing reduced it: a full, recent game log, a confirmed matchup and a fresh price from more than one provider.</p>'}`;
+      : `<dl class="pd-se"><div><dt>Floodlight chance</dt><dd class="num">${pct(p.ours)}%</dd></div><div class="on"><dt>Supported edge</dt><dd class="num">${edgeTxt(p.sedge)}</dd></div><div><dt>Evidence quality</dt><dd>${esc(gradeOf(p)?.grade || '–')}</dd></div>${p.type === 'prop' ? `<div><dt>Sample</dt><dd class="num">${(p.games || []).filter(g => g.v != null).length} games</dd></div>` : ''}</dl>
+        ${breakdownTable(p) || (cut.length ? `<p class="pd-se-h">${p.sedge === p.edge ? 'Checked, with little effect:' : 'Reduced because:'}</p><ul class="ev-list pd-se-l">${cut.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : '')}
+        ${cut.length ? '' : '<p class="lb">Nothing reduced it: a full, recent game log, a confirmed matchup and a fresh price from more than one provider.</p>'}
+        ${(() => { const g = gradeOf(p); return g ? `<details class="pd-egd"><summary>Why evidence quality is ${g.grade}</summary><ul class="ev-list">${g.points.map(x => `<li>${x.ok ? '' : '<span class="sr-only">Weakness: </span>'}${esc(x.text)}</li>`).join('')}</ul></details>` : '' })()}`;
     const game = `<dl class="pd-facts">${[
       ['Game', `${matchup(p)} · ${esc(time(p.start))}`],
       ['League', esc(SPORT_NAME[p.sport] || p.sport)],

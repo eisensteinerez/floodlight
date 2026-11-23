@@ -100,7 +100,7 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
       const d = await p.evaluate(() => { const s = document.querySelector('.rp-sheet'); return [s.getAttribute('role'), s.getAttribute('aria-modal'), document.getElementById('rpT').textContent] });
       assert.deepStrictEqual(d, ['dialog', 'true', 'Anthony Edwards']);
       const txt = await p.textContent('.rp-sheet');
-      for (const s of ['Floodlight chance', 'Supported edge', 'Evidence quality', 'Sample', 'Raw edge', 'Sample-size adjustment', 'Availability adjustment', 'Data-quality adjustment', 'Last 5', 'Last 20', 'This season', 'Home', 'Away', 'Average', 'Median', 'Every provider', 'Line history', 'Add to Prediction Card', 'Follow', 'Save to board', 'Share'])
+      for (const s of ['Floodlight chance', 'Supported edge', 'Evidence quality', 'Sample', 'Raw edge', ...(await p.evaluate(() => !!window.flMarkets) ? ['Sample-size adjustment', 'Availability adjustment', 'Data-quality adjustment'] : []), 'Last 5', 'Last 20', 'This season', 'Home', 'Away', 'Average', 'Median', 'Every provider', 'Line history', 'Add to Prediction Card', 'Follow', 'Save to board', 'Share'])
         assert.ok(txt.includes(s), `panel at ${w} is missing “${s}”`);
       assert.match(await p.textContent('#rpChT'), /^Over 25\.5 in \d+ of \d+/);
       // the breakdown adds up to the supported edge shown
