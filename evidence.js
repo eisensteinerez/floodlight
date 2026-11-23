@@ -90,33 +90,37 @@
   function flags(p) {
     if (p.type === 'match') {
       const out = [], gap = p.market == null ? null : Math.abs(p.ours - p.market);
-      if (gap != null && gap >= .15) out.push(['Model and market disagree', `We say ${pct(p.ours)}%, the price says ${pct(p.market)}%`]);
+      if (gap != null && gap >= .15) out.push(['Model and market differ', `We say ${pct(p.ours)}%, the price says ${pct(p.market)}%`]);
       if (p.market == null) out.push(['No market price', 'No book posts a price for this result yet']);
       return out;
     }
     const gs = (p.games || []).filter(g => g.v != null), oppGs = p.opp ? gs.filter(g => [g.opp, g.oppAbbr].some(o => sameTeam(o, p.opp))) : [];
     const out = list(p, gs, oppGs);
-    if (!p.opp) out.push(['Opponent data unavailable', 'The books did not say who he plays']);
+    if (!p.opp && !p.v?.event?.opp) out.push(['Opponent unknown', 'Neither the provider nor the schedule named the opponent']);
     const pv = p.prev;
     if (pv && (pv.teamName || pv.teamAbbr)) out.unshift(['Recently transferred', `Joined ${p.teamName || p.team || 'a new team'} from ${pv.teamName || pv.teamAbbr}${pv.until ? ` on ${new Date(pv.until * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}. Earlier games in the log were with ${pv.teamName || pv.teamAbbr}`]);
     const lines = [...new Set((p.offers || []).map(o => o.line).filter(v => typeof v === 'number'))], priced = (p.offers || []).filter(o => o.pOver != null && o.line === p.line).map(o => o.pOver);
-    if (lines.length > 1 && Math.max(...lines) - Math.min(...lines) >= 1) out.push(['Providers disagree', `Lines from ${fmt(Math.min(...lines))} to ${fmt(Math.max(...lines))} across the apps`]);
-    else if (priced.length > 1 && Math.max(...priced) - Math.min(...priced) >= .08) out.push(['Providers disagree', `The apps’ prices for this line are ${pct(Math.max(...priced) - Math.min(...priced))} points apart`]);
+    if (lines.length > 1 && Math.max(...lines) - Math.min(...lines) >= 1) out.push(['Providers differ', `Lines from ${fmt(Math.min(...lines))} to ${fmt(Math.max(...lines))} across the apps`]);
+    else if (priced.length > 1 && Math.max(...priced) - Math.min(...priced) >= .08) out.push(['Providers differ', `The apps’ prices for this line are ${pct(Math.max(...priced) - Math.min(...priced))} points apart`]);
     return out;
   }
   function list(p, gs, oppGs) {
     const out = [], mins = n => gs.slice(0, n).map(g => g.min).filter(m => m != null), m5 = avg(mins(5)), m20 = avg(mins(20));
-    if (gs.length < 15) out.push(['Small sample', `Only ${gs.length} games behind it`]);
-    if (m5 && m20 && mins(20).length >= 10 && Math.abs(m5 - m20) / m20 >= .15) out.push(['Role recently changed', `${fmt(Math.round(m5))} minutes over the last 5 against ${fmt(Math.round(m20))} over 20`]);
-    const ms = mins(5); if (ms.length >= 4 && m5) { const sd = Math.sqrt(avg(ms.map(m => (m - m5) ** 2))); if (sd / m5 > .25) out.push(['Expected minutes uncertain', `Minutes swung from ${fmt(Math.round(Math.min(...ms)))} to ${fmt(Math.round(Math.max(...ms)))} in the last 5`]) }
-    const ds = gs.slice(0, 4).map(g => g.date).filter(Boolean), gap = DAILY.has(p.sport) ? 14 : 21;
-    for (let i = 0; i + 1 < ds.length; i++) if ((ds[i] - ds[i + 1]) / 864e5 >= gap) { out.push(['Returning from injury or a long absence', `A ${Math.round((ds[i] - ds[i + 1]) / 864e5)}-day gap between games ${i ? 'recently' : 'before his last game'}`]); break }
+    // one sample size for the card and this panel (market.js): the number of games on record
+    const n = gs.length;
+    if (n < 15) out.push([`Small sample · ${n} ${n === 1 ? 'game' : 'games'}`, n ? `${n} ${n === 1 ? 'game is' : 'games are'} on record. A reading gets full weight from 15.` : 'No games on record for this stat.']);
+    if (m5 && m20 && mins(20).length >= 10 && Math.abs(m5 - m20) / m20 >= .15) out.push(['Role changed recently', `${fmt(Math.round(m5))} minutes over the last 5 against ${fmt(Math.round(m20))} over the last ${Math.min(20, mins(20).length)}`]);
+    const ms = mins(5); if (ms.length >= 4 && m5) { const sd = Math.sqrt(avg(ms.map(m => (m - m5) ** 2))); if (sd / m5 > .25) out.push(['Minutes vary', `Between ${fmt(Math.round(Math.min(...ms)))} and ${fmt(Math.round(Math.max(...ms)))} minutes in the last ${ms.length}`]) }
+    const ds = gs.slice(0, 4).map(g => g.date).filter(Boolean), gap = DAILY.has(p.sport) ? 14 : 21, since = ds[0] ? Math.floor((Date.now() - ds[0]) / 864e5) : null;
+    if (since != null && since >= gap) out.push([`Long break · ${since} days`, `${since} days since his last game on record`]);
+    else for (let i = 0; i + 1 < ds.length; i++) if ((ds[i] - ds[i + 1]) / 864e5 >= gap) { out.push([`Long break · ${Math.round((ds[i] - ds[i + 1]) / 864e5)} days`, `A ${Math.round((ds[i] - ds[i + 1]) / 864e5)}-day gap between games ${i ? 'recently' : 'before his last game'}`]); break }
     if (p.start && ds[0] && DAILY.has(p.sport) && p.sport !== 'mlb' && (+p.start - ds[0]) / 36e5 < 36) out.push(['Back-to-back', 'He played yesterday']);
-    if (p.opp && oppGs.length < 2) out.push(['Opponent data limited', oppGs.length ? `One game against ${p.opp} in the log` : `No games against ${p.opp} in the log`]);
+    if (p.opp && oppGs.length < 2) out.push([`Few games against ${p.opp}`, oppGs.length ? `One game against ${p.opp} in the log` : `No games against ${p.opp} in the log`]);
     const rec = (MOVES.get(movesKey(p))?.props || [])[0], f = rec?.readings?.[0];
-    if (f && Math.abs(f.line - p.line) >= 1) out.push([`Market moved ${fmt(Math.abs(p.line - f.line))} ${Math.abs(p.line - f.line) === 1 ? 'point' : 'points'}`, `From ${fmt(f.line)} to ${fmt(p.line)} since we first published it`]);
-    const I = window.flInjuries, st = I?.status(p.sport, p.name);
-    if (st) out.push([st.lv === 'out' ? 'Listed out' : 'Lineup not confirmed', `${st.status || I.LEVEL_NAME[st.lv]} on the injury report${st.what ? ` (${st.what})` : ''}`]);
+    if (f && Math.abs(f.line - p.line) >= 1) out.push([`Line moved ${fmt(Math.abs(p.line - f.line))}`, `From ${fmt(f.line)} to ${fmt(p.line)} since we first published it`]);
+    // the injury report and the lineup are separate: Active or not listed is no warning; only a real doubt is
+    const I = window.flInjuries, st = I?.status(p.sport, p.name), av = window.flMarket?.availability(st, !!I?.ready?.(p.sport));
+    if (av?.tag) out.push([av.tag, `${av.report}. Starting status: ${av.start === 'Lineup not announced' ? 'not confirmed yet' : av.start.toLowerCase()}.`]);
     if (p.teamNote) out.push(['Possible data mismatch', p.teamNote]);
     return out;
   }
@@ -131,7 +135,8 @@
     const v = I.ready(p.sport); if (!v) { I.load(p.sport); return sec('Injuries and lineup', '<p class="lb">Loading the injury report…</p>') }
     const me = I.status(p.sport, p.name), tm = p.team ? I.team(p.sport, p.team) : null, mates = (tm?.players || []).filter(x => I.norm(x.name) !== I.norm(p.name) && ['out', 'doubtful'].includes(x.lv));
     const opp = p.opp ? I.team(p.sport, p.opp) : null, oppOut = (opp?.players || []).filter(x => x.lv === 'out');
-    const li = [me ? `<b>${esc(p.name)}: ${esc(me.status || I.LEVEL_NAME[me.lv])}</b>${me.what ? ` (${esc(me.what)})` : ''}${me.note ? `. ${esc(me.note)}` : ''}` : `${esc(p.name)} is not on the injury report. That is not the same as a confirmed start: Floodlight doesn’t read confirmed lineups yet.`,
+    const av = window.flMarket?.availability(me, true);
+    const li = [av ? `<b>Availability: ${esc(av.avail)}</b>. Injury report: ${esc(av.report)}${me?.note ? ` (${esc(me.note)})` : ''}. Starting status: ${av.start === 'Lineup not announced' ? 'not confirmed; Floodlight doesn’t read announced lineups yet' : esc(av.start.toLowerCase())}.` : '',
       mates.length ? `Teammates out or doubtful: ${mates.slice(0, 6).map(x => `${esc(x.name)}${x.pos ? ` (${esc(x.pos)})` : ''}, ${esc(x.status || I.LEVEL_NAME[x.lv])}`).join('; ')}. A missing teammate can raise his minutes and usage; the game log doesn’t know that yet.` : tm ? 'No teammates are listed out or doubtful.' : '',
       oppOut.length ? `${esc(opp.name)} are without ${oppOut.slice(0, 5).map(x => esc(x.name)).join(', ')}.` : ''].filter(Boolean);
     return sec('Injuries and lineup', `<ul class="ev-list">${li.map(x => `<li>${x}</li>`).join('')}</ul><p class="lb">From the league injury report, read ${ago(v.at)}. <a class="lk" href="#/injuries/${esc(p.sport)}" data-page="injuries" data-arg="${esc(p.sport)}">See the full report</a></p>`);
@@ -146,7 +151,7 @@
       ['Model probability', `${pct(p.ours)}%`, `The chance this exact line hits: our projection and his spread of results set against ${fmt(p.line)}.`],
       ['Confidence range', `${pct(R.lo)}–${pct(R.hi)}%`, `How sure we are of that chance: one standard error either side, from ${R.n || 'the'} games. Fewer or more uneven games make it wider.`]].filter(Boolean);
     return `<dl class="ev-three">${rows.map(([k, v, d]) => `<div><dt>${k} <b class="num">${v}</b></dt><dd>${d}</dd></div>`).join('')}</dl>
-      ${h10 && h10.n >= 8 && h10.h / h10.n >= .8 ? `<p class="lb">${h10.h} of the last ${h10.n} does not mean a ${pct(h10.h / h10.n)}% chance tonight. A short run overstates what comes next, so the model probability pulls it back toward his projection and spread.</p>` : ''}`;
+      ${h10 && h10.n >= 8 && h10.h / h10.n >= .8 ? `<p class="lb">${h10.h} of ${h10.n} does not mean a ${pct(h10.h / h10.n)}% chance tonight. A short run overstates what comes next, so the model probability pulls it back toward his projection and spread.</p>` : ''}`;
   }
 
   /* ---------- what was read, when, and what is not read at all ---------- */
@@ -176,15 +181,16 @@
       <div class="pd-leg" aria-hidden="true"><span><i class="hit"></i>${word}</span><span><i class="said"></i>${p.yes ? (over ? 'No' : 'Yes') : over ? 'Under' : 'Over'}</span><span class="lb">Oldest on the left, newest on the right</span></div>
       ${canTry ? `<div class="ev-try"><label><span>Try another line</span><input type="range" min="0.5" max="${vmax + 0.5}" step="0.5" value="${p.line}" data-evline aria-describedby="evTryOut"></label>
         <output class="ev-tryout" id="evTryOut" aria-live="polite">${tryText(log, p.line, p.line)}</output><button type="button" class="lk" data-evreset hidden>Back to the posted line</button></div>
-        <p class="lb">Drag the dashed line on the chart, or use the slider, to see how the last ${log.length} games fall against any line. This only recounts the games shown; our number above stays tied to the posted line.</p>` : ''}`;
+        <p class="lb">Drag the dashed line on the chart, or use the slider, to see how ${log.length < gs.length ? `the last ${log.length}` : `all ${log.length}`} games fall against any line. This only recounts the games shown; our number above stays tied to the posted line.</p>` : ''}`;
     // counts for the side picked
     const count = (xs, label) => { const d = xs.filter(g => !push(g)), h = d.filter(hit).length, ps = xs.length - d.length; return d.length ? { label, h, n: d.length, ps, rate: h / d.length } : null };
-    const rows = [count(gs.slice(0, 5), 'Last 5'), count(gs.slice(0, 10), 'Last 10'), count(gs.slice(0, 20), 'Last 20'), gs.length > 20 ? count(gs, `All ${gs.length}`) : null,
+    // windows only where that many games exist, then every game: a 7-game log reads "Last 5" and "All 7", never "Last 10"
+    const rows = [...[5, 10, 20].filter(w => w < gs.length).map(w => count(gs.slice(0, w), `Last ${w}`)), count(gs, gs.length === 1 ? 'The only game' : `All ${gs.length}`),
       gs.some(g => g.home === true) ? count(gs.filter(g => g.home === true), 'Home') : null, gs.some(g => g.home === false) ? count(gs.filter(g => g.home === false), 'Away') : null].filter(Boolean);
     const oppGs = p.opp ? gs.filter(g => [g.opp, g.oppAbbr].some(o => o && (String(o).toLowerCase() === String(p.opp).toLowerCase()))) : [];
     if (oppGs.length) rows.push(count(oppGs, `Against ${p.opp}`));
     const table = `<div class="tbx-wrap"><table class="tbx ev-tbl"><thead><tr><th scope="col">Games</th><th scope="col" class="r">${word}</th><th scope="col" class="r">Rate</th><th scope="col" class="r">Average</th>${rows.some(r => r && r.ps) ? '<th scope="col" class="r">Pushes</th>' : ''}</tr></thead>
-      <tbody>${rows.filter(Boolean).map(r => { const src = r.label === 'Home' ? gs.filter(g => g.home === true) : r.label === 'Away' ? gs.filter(g => g.home === false) : r.label.startsWith('Against') ? oppGs : r.label.startsWith('All') ? gs : gs.slice(0, +r.label.split(' ')[1]);
+      <tbody>${rows.filter(Boolean).map(r => { const src = r.label === 'Home' ? gs.filter(g => g.home === true) : r.label === 'Away' ? gs.filter(g => g.home === false) : r.label.startsWith('Against') ? oppGs : r.label.startsWith('All') || r.label === 'The only game' ? gs : gs.slice(0, +r.label.split(' ')[1]);
         return `<tr><th scope="row">${esc(r.label)}</th><td class="r num">${r.h} of ${r.n}</td><td class="r num">${pct(r.rate)}%</td><td class="r num">${p.yes ? '–' : fmt(Math.round(avg(src.map(g => g.v)) * 10) / 10)}</td>${rows.some(x => x && x.ps) ? `<td class="r num">${r.ps || '–'}</td>` : ''}</tr>` }).join('')}</tbody></table></div>`;
     // the spread of results
     let dist = '';
@@ -192,7 +198,7 @@
       const edge = Math.floor(p.line) + 1, from = edge - Math.ceil((edge - lo) / step) * step;   // a bin edge sits on the line, so no bin straddles it
       for (let a = from; a <= hi; a += step) bins.push({ a, b: a + step, n: vs.filter(v => v >= a && v < a + step).length });
       const mx = Math.max(1, ...bins.map(b => b.n));
-      dist = `<div class="ev-dist" role="img" aria-label="How the last ${vs.length} results spread: ${esc(bins.filter(b => b.n).map(b => `${b.n} at ${step === 1 ? b.a : `${b.a} to ${b.b - 1}`}`).join(', '))}.">${bins.map(b => { const side = b.b <= p.line ? 'lo' : b.a > p.line ? 'hi' : 'mid', good = side === 'mid' ? 'push' : (side === 'hi') === over ? 'hit' : 'miss';
+      dist = `<div class="ev-dist" role="img" aria-label="How ${vs.length < gs.length ? `the last ${vs.length}` : `all ${vs.length}`} results spread: ${esc(bins.filter(b => b.n).map(b => `${b.n} at ${step === 1 ? b.a : `${b.a} to ${b.b - 1}`}`).join(', '))}.">${bins.map(b => { const side = b.b <= p.line ? 'lo' : b.a > p.line ? 'hi' : 'mid', good = side === 'mid' ? 'push' : (side === 'hi') === over ? 'hit' : 'miss';
         return `<span class="ev-bin ${good}"><i style="height:${(b.n / mx * 100).toFixed(0)}%">${b.n ? `<b class="num">${b.n}</b>` : ''}</i><small class="num">${step === 1 ? b.a : `${b.a}–${b.b - 1}`}</small></span>` }).join('')}</div>` }
     // our projection beside the line, and each posted price
     const offers = (p.offers || []).filter(o => o.line != null);
@@ -205,17 +211,19 @@
       m5 && mAll && mins.length >= 10 ? `It assumes about ${fmt(Math.round(m5))} minutes, the last-5 average (${fmt(Math.round(mAll))} over the whole log). A cut in minutes lowers every counting stat.` : '',
       p.market != null ? `The edge is ${p.edge > 0 ? '+' : ''}${p.edge} against a price read ${p.at ? ago(p.at) : 'earlier'}. If the app moves the line or the price, the edge moves with it.` : 'No app posts both sides of this line, so there is no market number to compare with.',
     ].filter(Boolean);
-    const h10 = rows.find(r => r.label === 'Last 10') || rows[0];
+    // the headline hit rate is the card's own sample (market.js): the last 10, or every game when there are fewer
+    const S = window.flMarket ? window.flMarket.sample(gs, p.line, p.side, p.yes) : null;
+    const h10 = S && S.n ? { h: S.hits, n: S.n - S.pushes, label: S.full ? 'Last 10' : S.n === 1 ? 'Only available game' : `${S.n} available games` } : rows[0];
     const lastDate = gs.find(g => g.date)?.date, rest = p.start && lastDate ? Math.max(0, Math.floor((+p.start - lastDate) / 864e5)) : null;
     const expMin = m5 && mins.length >= 5 ? tile('Expected minutes', fmt(Math.round(m5)), `Last-5 average${mAll ? ` · ${fmt(Math.round(mAll))} over the log` : ''}`) : '';
     const restT = rest != null ? tile('Rest', rest === 0 ? 'Same day' : `${rest} ${rest === 1 ? 'day' : 'days'}`, `Since his last game${rest <= 1 && DAILY.has(p.sport) && p.sport !== 'mlb' ? ' · back-to-back' : ''}`) : '';
-    return `${warnings(p, gs, oppGs)}${warn}<div class="ev-tiles">${tile('Floodlight’s chance', `${pct(p.ours)}%`, `Our projection · likely ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market’s chance', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'From the price, margin taken out')}${h10 ? tile('Hit rate', `${h10.h} of ${h10.n}`, `${esc(h10.label.toLowerCase())}, what happened`) : ''}
+    return `${warn}<div class="ev-tiles">${tile('Floodlight’s chance', `${pct(p.ours)}%`, `Our projection · likely ${pct(R.lo)}–${pct(R.hi)}%`)}${tile('Market’s chance', p.market == null ? '–' : `${pct(p.market)}%`, p.market == null ? 'No two-sided price' : 'From the price, margin taken out')}${h10 ? tile('Hit rate', `${h10.h} of ${h10.n}`, `${esc(h10.label.toLowerCase())}, what happened`) : ''}
         ${p.yes ? '' : tile('We project', fmt(Math.round(p.mu * 10) / 10), `Line ${fmt(p.line)}${p.sd ? ` · usually ${fmt(Math.max(0, Math.round((p.mu - p.sd) * 10) / 10))} to ${fmt(Math.round((p.mu + p.sd) * 10) / 10)}` : ''}`)}</div>
       ${sec('What these numbers mean', three(p, R, h10))}
       ${expMin || restT ? `<div class="ev-tiles">${expMin}${restT}</div>` : ''}
       ${sec('Game log against the line', bars)}
-      ${sec(`How often ${word.toLowerCase()} hit`, table, 'Last 5, 10 and 20 games, home and away, and head to head against tonight’s opponent.')}
-      ${sec('Spread of results', dist, dist ? `The last ${Math.min(40, gs.length)} games, grouped by result. The line is ${fmt(p.line)}.` : '')}
+      ${sec(`How often ${word.toLowerCase()} hit`, table, gs.length > 5 ? `Recent windows up to all ${gs.length} games on record, home and away, and head to head against this opponent.` : `All ${gs.length} games on record, home and away, and head to head against this opponent.`)}
+      ${sec('Spread of results', dist, dist ? `${gs.length > 40 ? 'The last 40' : `All ${gs.length}`} games, grouped by result. The line is ${fmt(p.line)}.` : '')}
       ${sec('Posted prices', market, market ? `Read ${p.at ? ago(p.at) : 'earlier'}. A chance is shown only where the app posts both sides, with its margin taken out.` : '')}
       ${lineHistory(p)}
       ${injuries(p)}
@@ -234,7 +242,7 @@
       const lo = pct(R.lo) - pct(p.market), hi = pct(R.hi) - pct(p.market), sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
       out.push(`Edge and confidence measure different things. The edge (${sg(p.edge)}) is the gap between our chance and the market’s. Confidence${p.conf ? ` (${p.conf})` : ''} is how much stands behind our chance. Across our likely range the edge runs from ${sg(lo)} to ${sg(hi)}${lo <= 0 && hi > 0 ? ', so it could be nothing at all' : ''}.`);
     }
-    if (gs && gs.length < 15) out.push(`Only ${gs.length} games are behind it. A few unusual nights move a short log a long way.`);
+    if (gs && gs.length < 15) out.push(`${gs.length} ${gs.length === 1 ? 'game is' : 'games are'} on record. A few unusual nights move a short log a long way.`);
     if (p.edge != null && Math.abs(p.edge) >= 10) out.push('Big gaps with the market are rare for good reason. The books hear about injuries, rest and role changes before a game log shows them, so a large edge sometimes means the market knows something we don’t.');
     if (gs) { const m5 = avg(gs.slice(0, 5).map(g => g.min).filter(m => m != null)), m20 = avg(gs.slice(0, 20).map(g => g.min).filter(m => m != null)); if (m5 && m20 && m5 < m20 * .85) out.push(`Minutes are falling: ${fmt(Math.round(m5))} over the last 5 against ${fmt(Math.round(m20))} over the last 20. If the role has shrunk, older games overstate it.`) }
     if (p.teamNote) out.push(p.teamNote);

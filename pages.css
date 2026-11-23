@@ -2262,7 +2262,7 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .twd-imp{margin:0;font:600 16px/1.45 var(--font-body);color:var(--text)}
 /* ---------- evidence: warnings, three numbers told apart ---------- */
 .ev-warns{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-wrap:wrap;gap:8px}
-.ev-warns li{display:grid;gap:2px;padding:8px 12px;border:1px solid var(--border-2);border-left:3px solid var(--bad);border-radius:var(--radius-tile);background:var(--surface-2);max-width:100%}
+.ev-warns li{display:grid;gap:2px;padding:8px 12px;border:1px solid var(--border-2);border-left:3px solid var(--warning,var(--border-2));border-radius:var(--radius-tile);background:var(--surface-2);max-width:100%}
 .ev-warns b{font:700 13px/1.25 var(--font-body);color:var(--text)}.ev-warns small{font:500 12px/1.35 var(--font-body);color:var(--text-2)}
 .ev-three{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 .ev-three div{padding:10px 0;border-top:1px solid var(--border);display:grid;gap:4px;align-content:start}
@@ -2469,7 +2469,7 @@ html:root[data-theme] .pf-sort{display:inline-flex;align-items:center;gap:4px;mi
 .pd-track{display:flex;gap:10px;align-items:flex-start;padding:12px 4px;font:500 14px/1.5 var(--font-body);color:var(--text-2)}
 .pd-track > svg{flex:none;margin-top:3px;color:var(--muted)}.pd-track p{margin:0}.pd-track .lk{margin-left:4px}
 @media (max-width:700px){
-  .pd-fbar{gap:8px}.pd-fs{flex:1 1 calc(50% - 8px);min-width:0}.pd-fs select.inp{flex:1;min-width:0}
+  .pd-fbar{gap:8px}.pd-fs{flex:1 1 calc(50% - 8px);min-width:0}.pd-fs select.inp{flex:1;min-width:0;text-overflow:ellipsis}
   .pd-morebtn{flex:none}.pd-fbar-end{margin-left:auto;min-width:0}.pd-stat{font-size:12px}
   .pd-delay-x{display:none}.pd-delay{padding:8px 10px 8px 12px;font-size:13px}
   .pd-srcp{padding:16px}.pd-srcp-h{flex-wrap:wrap}
@@ -2479,3 +2479,39 @@ html:root[data-theme] .pf-sort{display:inline-flex;align-items:center;gap:4px;mi
 html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-ctx,.pd-warns){margin:0;padding:10px 26px 2px;background:rgba(0,0,0,.3)}
 html:root[data-theme="stadium-gold"] .pd-pk .pd-warns{padding-top:6px;padding-bottom:6px}
 @media (max-width:560px){html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-ctx,.pd-warns){padding-inline:16px}}
+/* verified markets: the provider line under the matchup, one warning on the card, a player's other markets folded in */
+.pd-open .pd-pv{font:500 13px/1.3 var(--font-body);color:var(--text-2)}
+.pd-open .pd-stale{color:var(--warning,var(--text))}
+.pd-pk.stale .pd-edge b{opacity:.78}
+.pd-warn1{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin:8px 0 0;font:500 13px/1.35 var(--font-body);color:var(--text-2)}
+.pd-w1{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--text);cursor:help}
+.pd-warn1 .pd-wic{flex:none;color:var(--warning,var(--text-2))}
+.pd-warn1 .pd-wmore{font-weight:500;color:var(--text-2)}
+.pd-grpf{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:12px 0 0;padding:10px 0 0;border-top:1px solid var(--border)}
+.pd-grpf .lb{margin:0}.pd-grpf .bt.sm{min-height:44px}
+.pd-grpl{list-style:none;margin:8px 0 0;padding:0;display:grid}
+.pd-mini{border-top:1px solid var(--border);padding:8px 0}
+.pd-mini-r{display:flex;align-items:center;gap:12px}
+.pd-mini-o{flex:1 1 0;min-width:0}.pd-mini-o span{font-size:15px}.pd-mini-o small{font-size:13px}
+.pd-mini-e{display:grid;justify-items:end;gap:0}.pd-mini-e .lb{margin:0;font-size:11px}.pd-mini-e b{font:700 20px/1 var(--font-body);color:var(--text)}
+.pd-mini .pd-add{width:44px;height:44px;flex:none}
+.pd-chk-n{display:flex;align-items:center;gap:8px;margin:0;padding:8px 4px}
+.pd-gst{margin-left:6px;font:600 12px/1.2 var(--font-body);color:var(--text-2);border-color:var(--border-2)}
+.pd-s-use{display:block;margin-top:2px;color:var(--warning,var(--text-2));font:500 12px/1.4 var(--font-body)}
+/* evidence: raw against supported edge, the reasons, and the game and market it was checked against */
+.pd-se{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+.pd-se > div{display:grid;gap:2px;min-width:112px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-tile)}
+.pd-se dt{font:500 13px/1.2 var(--font-body);color:var(--text-2)}.pd-se dd{margin:0;font:700 22px/1.1 var(--font-body);color:var(--text)}
+.pd-se > div.on{border-color:color-mix(in oklab,var(--accent) 60%,transparent)}.pd-se > div.on dd{color:var(--accent-text,var(--accent))}
+.pd-se-h{margin:10px 0 2px;font:600 14px/1.4 var(--font-body);color:var(--text)}
+.pd-facts{display:grid;gap:6px;margin:0}
+.pd-facts > div{display:grid;grid-template-columns:132px minmax(0,1fr);gap:10px;align-items:baseline}
+.pd-facts dt{font:500 13px/1.4 var(--font-body);color:var(--text-2)}.pd-facts dd{margin:0;font:500 14px/1.45 var(--font-body);color:var(--text);overflow-wrap:anywhere}
+@media (max-width:560px){.pd-facts > div{grid-template-columns:1fr;gap:0}.pd-se > div{flex:1 1 calc(50% - 8px);min-width:0}}
+html:root[data-theme="stadium-gold"] .pd-open .pd-pv{font-size:14px}
+html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-grpf,.pd-grpl){padding-inline:26px}html:root[data-theme="stadium-gold"] .pd-pk .pd-grpl{padding-bottom:10px}
+html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[data-theme="stadium-gold"] .pd-mini-e b{font:italic 800 24px/1 var(--font-poster)}
+@media (max-width:560px){html:root[data-theme="stadium-gold"] .pd-pk :is(.pd-grpf,.pd-grpl){padding-inline:16px}}
+/* a long table or row inside an opened pick scrolls inside it, never widens the card on a phone */
+.pd-list > .pd-pk,.pd-pk .pd-ev,.pd-pk .ev-sec,.pd-grpl,.pd-mini{min-width:0}
+.pd-pk .pd-ev{grid-template-columns:minmax(0,1fr)}.pd-pk .pd-ev .tbx-wrap{max-width:100%;overflow-x:auto}
