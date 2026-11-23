@@ -124,7 +124,7 @@
       <div class="g2 pd-cols"><div class="vst pd-board" id="pdBoard" aria-live="polite"></div><aside class="vst pd-side" id="pdSide" aria-label="Your slip and our results"></aside></div>
       <p class="lb pd-note">These are estimates from past games and posted prices, not guarantees. <a class="lk" href="#/guide/predictions" data-page="guide" data-arg="predictions">How we work out an edge</a></p>
       <section class="card pd-more" aria-label="More prediction tools"><div class="sec-h"><h2>More prediction tools</h2></div>
-        <div class="cx-row"><button type="button" class="cx" data-pd="soccer">${ic('soccer', 18)}Soccer picks, match by match</button><button type="button" class="cx" data-pd="record">${ic('trophy', 18)}Full record of match picks</button><button type="button" class="cx" data-shell="lab">${ic('lab', 18)}Open the Lab</button></div></section>
+        <div class="cx-row"><button type="button" class="cx" data-pd="soccer">${ic('soccer', 18)}Soccer picks, match by match</button><button type="button" class="cx" data-page="history">${ic('trophy', 18)}Pick history: every hit and miss</button><button type="button" class="cx" data-shell="lab">${ic('lab', 18)}Open the Lab</button></div></section>
     </div>`;
     draw();
   }
@@ -280,7 +280,8 @@
         <tbody>${R.buckets.map(b => `<tr><th scope="row">${esc(b.label)}</th><td class="r num">${b.n ? pct(b.said) + '%' : '–'}</td><td class="r num">${b.n ? pct(b.hit) + '%' : '–'}</td><td class="r num">${b.n}</td></tr>`).join('')}</tbody></table></div></details>
       <div class="pd-tiles"><div class="tile inset"><span class="lb">Picks</span><b class="fig num">${R.n}</b></div><div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${pct(R.rate)}%</b></div>
         <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${vsTxt}</b><small class="lb">${R.vs == null ? 'no prices saved' : `points ${R.vs >= 0 ? 'ahead' : 'behind'}, over ${R.priced} priced ${R.priced === 1 ? 'pick' : 'picks'}`}</small></div></div>
-      <p class="lb">“Against the market” is our hit rate minus the chance the book's prices gave the same picks. Player props are not graded yet, so they are not counted.</p></section>`;
+      <p class="lb">“Against the market” is our hit rate minus the chance the book's prices gave the same picks. Player props are not graded yet, so they are not counted.</p>
+      <button type="button" class="bt ghost wide" data-page="history" data-fk="hist">See every pick, hits and misses</button></section>`;
   }
   function fadeCard(L) {
     const now = new Date(), cold = window.flEdge ? window.flEdge.cold((P.props?.picks || []).filter(p => stateOf(p, now) !== 'gone'), 3) : [];
