@@ -60,6 +60,10 @@ import accounts
 import billing
 import corrections
 import gradebook
+import analytics
+import support
+import referrals
+import ownerstats
 import markets
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -95,7 +99,7 @@ def signup_allowed(addr):
     return True
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
-PUBLIC_FILES = {"index.html", "status.js", "recent.js", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
+PUBLIC_FILES = {"index.html", "analytics.js", "landing.js", "support.js", "referrals.js", "owner.js", "status.js", "recent.js", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "markets.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
@@ -1307,6 +1311,7 @@ def touch(u):
         with _acct_lock:
             u["seen"] = now
             _save_accounts()
+        analytics.active(u["username"], now)
 
 
 def _start_off():
@@ -1834,7 +1839,82 @@ def add_feedback(body, user):
                                        "text": text, "page": str(body.get("page") or "")[:120], "theme": str(body.get("theme") or "")[:30]})
         del _mstate["feedback"][300:]
         _save_members()
+    # the same note becomes a support ticket, so it gets a number, an answer and a place in the owners' inbox
+    page = str(body.get("page") or "")[:120]
+    support.create({"kind": "data" if page.startswith("transfers:") else "question", "text": text,
+                    "context": {"page": page, "theme": str(body.get("theme") or "")[:30]}},
+                   user=user["username"] if user else None, display=(user or {}).get("prefs", {}).get("display", ""))
     return 200, {"ok": True}
+
+
+# ---------- growth: usage numbers, support tickets, referrals and the owner dashboard ----------
+# analytics.py, support.py, referrals.py and ownerstats.py hold the logic; these wrap them for the handler.
+
+def client_addr(handler):
+    return (handler.headers.get("X-Forwarded-For") or handler.client_address[0] or "").split(",")[0].strip()
+
+
+def is_owner(u):
+    return rank_of(u) == "owner" or (not GATED and u is None)
+
+
+def growth_setup():
+    analytics.init(CACHE_DIR / "analytics.json")
+    support.init(CACHE_DIR / "support.json")
+    referrals.init(CACHE_DIR / "referrals.json")
+    import atexit
+    atexit.register(lambda: analytics.save(force=True))
+
+    def upkeep():
+        n = 0
+        while True:
+            time.sleep(60)
+            n += 1
+            try:
+                analytics.save()
+                if n % 10 == 0:
+                    with _acct_lock:
+                        if referrals.evaluate(_users, analytics.member):
+                            _save_accounts()
+            except Exception as e:
+                print(f"growth upkeep: {e}")
+    threading.Thread(target=upkeep, daemon=True, name="growth-upkeep").start()
+
+
+def referral_view(user, addr):
+    code = referrals.code_for(user["username"], addr)
+    with _acct_lock:
+        if referrals.evaluate(_users, analytics.member):
+            _save_accounts()
+    out = referrals.summary(user["username"], _users, analytics.member)
+    out["code"] = code
+    return out
+
+
+def referral_claim(user, body, addr):
+    code = str(body.get("code") or "")
+    by = referrals.owner_of(code)
+    ok, msg = referrals.claim(user["username"], code, int(user.get("created") or 0), addr=addr,
+                              friend_vids=analytics.member(user["username"])["vids"] + [analytics.hash_id(body.get("vid"))],
+                              referrer_vids=analytics.member(by)["vids"] if by else [])
+    return (200 if ok else 400), ({"ok": True} if ok else {"error": msg})
+
+
+def recap(user):
+    """The member's own week, for the weekly recap card on the Invite and share page."""
+    m = analytics.member(user["username"])
+    wk = m["week"].get(analytics.week_key(), {})
+    last = m["week"].get(analytics.week_key(time.time() - 7 * 86400), {})
+    return {"week": analytics.week_key(), "thisWeek": wk, "lastWeek": last, "activeDays": sum(1 for d in m["days"] if d > analytics.day_num() - 7)}
+
+
+def owner_dashboard(days):
+    days = days if days in (7, 30, 90) else 30
+    with _acct_lock:
+        users = dict(_users)
+    return {"at": int(time.time()), "days": days, "business": ownerstats.business(users), "product": ownerstats.product(users, _parlays, days),
+            "growth": ownerstats.growth(users, days), "support": {k: v for k, v in support.staff_list().items() if k != "tickets"},
+            "referrals": referrals.stats(), "privacy": {"gpcRespected": True, "cookies": False, "ipStored": False}}
 
 
 def _hash(password, salt):
@@ -1928,6 +2008,7 @@ def signup(body):
             _save_members()
         token = new_session(key)
         _save_accounts()
+    analytics.event("signup", {}, user=key)   # the journey step; the browser links what it did before (analytics.py)
     sent = accounts.send_verify(_users[key])[1]
     return 200, {"user": public_user(_users[key]), "_token": token, "verify": {k: v for k, v in sent.items() if k in ("sent", "to", "devLink")}}
 
@@ -2361,6 +2442,8 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path.startswith("/api/admin/"):
             if role_of(user) != "admin":
                 return self.send_auth(403, {"error": "Only the admin can manage members."})
+            if u.path == "/api/admin/support":   # answer a ticket or change its status (support.py)
+                return self.send_auth(*support.staff_action(body, (user or {}).get("prefs", {}).get("display") or (user or {}).get("username") or "Floodlight"))
             if u.path == "/api/admin/awards":
                 return self.send_auth(*awards_action(body, user))
             if u.path == "/api/admin/transfers/dates":
@@ -2384,6 +2467,18 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path == "/api/admin/grade":   # correct a wrong grade: kept in the pick's history and the public correction log
                 return self.send_auth(*grade_correction(body, user))
             return self.send_auth(*admin_action(u.path, body, user))
+        if u.path == "/api/t":   # usage events from analytics.js: counts only, see analytics.py for what is kept
+            if user and GATED and not can_view(user):
+                return self.send_auth(200, {"ok": True})
+            n = analytics.batch(body.get("events"), user=user["username"] if user else None, vid=str(body.get("vid") or ""))
+            return self.send_auth(200, {"ok": True, "n": n})
+        if u.path == "/api/support/tickets":   # a new ticket from the Help center or a "Report incorrect data" button
+            if not user and not support.signed_out_allowed(referrals.net_hash(client_addr(self))):
+                return self.send_auth(429, {"error": "Too many messages from here. Try again in an hour."})
+            status, out = support.create(body, user=user["username"] if user else None, display=(user or {}).get("prefs", {}).get("display", ""))
+            if status == 200:
+                analytics.event("ticket_create", {"kind": body.get("kind")}, user=user["username"] if user else None, vid=str(body.get("vid") or ""))
+            return self.send_auth(status, out)
         if u.path == "/api/data-report":   # "Report incorrect data" on a card: private, for the administrators (corrections.py)
             if GATED and not user:
                 return self.send_auth(401, {"error": "Log in to report a problem."})
@@ -2424,6 +2519,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(200, {"ok": True}, cookie=self.session_cookie("", clear=True))
         if not user:
             return self.send_auth(401, {"error": "Log in first."})
+        if u.path == "/api/support/reply":   # the member answers on their own ticket
+            return self.send_auth(*support.member_reply(user["username"], body, user.get("prefs", {}).get("display", "")))
+        if u.path == "/api/referrals/claim":   # a new account names the invite link that brought it (referrals.py)
+            return self.send_auth(*referral_claim(user, body, client_addr(self)))
         if u.path == "/api/picks/vote":
             if not can_view(user):
                 return self.send_auth(403, {"error": "Your account is paused or waiting for an admin to switch it on."})
@@ -2617,6 +2716,23 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path == "/api/me":
                 _, user = session_user(self.headers.get("Cookie"))
                 return self.send_auth(200, {"user": public_user(user) if user else None, "gated": GATED, "terms": accounts.TERMS_VERSION})
+            if u.path in ("/api/support/tickets", "/api/referrals", "/api/me/recap", "/api/admin/owner", "/api/admin/support"):
+                _, user = session_user(self.headers.get("Cookie"))
+                if not user and (GATED or u.path != "/api/admin/owner"):
+                    return self.send_json({"error": "Log in first."}, 401)
+                if u.path == "/api/support/tickets":   # the member's own tickets, newest first
+                    return self.send_auth(200, {"tickets": support.mine(user["username"]), "kinds": support.KINDS, "replyDays": support.REPLY_DAYS})
+                if u.path == "/api/referrals":   # the member's invite code, who joined with it and the reward
+                    return self.send_auth(200, referral_view(user, client_addr(self)))
+                if u.path == "/api/me/recap":
+                    return self.send_auth(200, recap(user))
+                if u.path == "/api/admin/support":
+                    if role_of(user) != "admin":
+                        return self.send_json({"error": "Only owners and admins can read support tickets."}, 403)
+                    return self.send_auth(200, support.staff_list(q.get("status") or None))
+                if not is_owner(user):
+                    return self.send_json({"error": "Only the owner can see the business numbers."}, 403)
+                return self.send_auth(200, owner_dashboard(int(q.get("days") or 30)))
             if u.path == "/api/parlays":   # the member's own tracked parlays
                 _, user = session_user(self.headers.get("Cookie"))
                 return self.send_auth(200, {"parlays": parlays_of(user) if user else [], "signedIn": bool(user)})
@@ -3026,6 +3142,7 @@ if __name__ == "__main__":
     roster.setup(fetch=fetch, file=CACHE_DIR / "players.json", health=health)
     atexit.register(roster.flush)
     corrections.setup(file=CACHE_DIR / "corrections.json")
+    growth_setup()   # usage numbers, support tickets and referrals
     # the verified market service: every page's lines are checked against the league schedule and injury report here
     markets.setup(file=CACHE_DIR / "markets.json",
                   schedule=markets.espn_schedule(discord_bot.get_json, discord_bot.ESPN, discord_bot.ESPN_PATH),
