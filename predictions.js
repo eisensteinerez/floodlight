@@ -5,8 +5,9 @@
    - a match forecast the server has made (forecaster.py): "ours" is the forecast's chance for its pick, "market" is the
      book's chance for the same outcome with the margin taken out.
    Edge is always our number minus the market's, in whole points. A pick with no market price has no edge and is listed
-   apart. Results come from the graded record of match forecasts (record.py); prop picks are not graded yet, and the page
-   says so. Nothing here changes how a number is worked out. */
+   apart. Results come from two graded records: match forecasts (record.py) and player props (propbook.py). The props
+   this page shows before their start are sent to the server once per load, which locks the first reading of each and
+   grades it when the game is over. Nothing here changes how a number is worked out. */
 (() => {
   const root = document.documentElement;
   const $ = id => document.getElementById(id);
@@ -55,12 +56,28 @@
     const [props] = await Promise.all([
       window.flEdge ? window.flEdge.props(null, force, r => done(r.sport)) : Promise.resolve({ denied: false }),
       get('/api/forecast/list').then(d => { P.matches = (d.matches || []).map(matchPick); P.fcError = ''; P.fcStatus = 0; P.fcAt = Date.now() }, e => { P.matches = P.matches || []; P.fcError = e.message || 'It did not load.'; P.fcStatus = e.status || 0 }).then(() => done('fc')),
-      get('/api/record').then(d => { P.record = d.entries || []; P.recError = ''; P.recAt = Date.now() }, e => { P.record = P.record || []; P.recError = e.message || 'It did not load.' }).then(() => done('rec')),
+      Promise.all([get('/api/record'), get('/api/props/record').catch(() => null)]).then(([d, pr]) => { P.record = d.entries || []; if (pr) P.propRec = pr.entries || []; P.recError = ''; P.recAt = Date.now() }, e => { P.record = P.record || []; P.recError = e.message || 'It did not load.' }).then(() => done('rec')),
     ]);
+    publish();
     P.denied = !!props.denied && (P.fcStatus === 401 || P.fcStatus === 403);
     P.loading = false; P.pending.clear(); P.at = Date.now(); draw();
     // something did not answer: try again by itself, twice, then leave it to the Retry button
     if (failed().length && !P.denied && P.retries < 2) { P.retries++; P.retryT = setTimeout(() => { if (window.flPages.current() === 'predictions' && !document.hidden) load(true) }, 20000 * P.retries) } else if (!failed().length) P.retries = 0;
+  }
+  /* Every prop shown before its start goes to the server's record (propbook.py), which keeps the first reading of each
+     and the last one before the start. Only what changed since the last send goes again. */
+  const sent = new Map();
+  function publish() {
+    const now = Date.now(), out = [];
+    for (const p of P.props?.picks || []) {
+      if (!p.start || p.start <= now) continue;
+      const sig = `${p.side}:${p.line}:${Math.round(p.ours * 100)}:${p.market == null ? '' : Math.round(p.market * 100)}`;
+      if (sent.get(p.id) === sig) continue; sent.set(p.id, sig);
+      out.push({ sport: p.sport, player: p.name, team: p.team, opp: p.opp, k: p.k, label: p.label, line: p.line, side: p.side, yes: p.yes, ours: +p.ours.toFixed(3),
+        market: p.market == null ? null : +p.market.toFixed(3), conf: p.conf, start: Math.round(p.start / 1000), books: p.books });
+    }
+    for (let i = 0; i < out.length; i += 120)
+      fetch('/api/props/seen', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ props: out.slice(i, i + 120) }) }).catch(() => {});
   }
   /* ---------- freshness: what was read, when, and what did not answer ---------- */
   const BOOK = { prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' };
@@ -74,7 +91,7 @@
       return { key: k, name: `${SPORT_NAME[k] || k} player lines`, from: books.join(', ') || (down.length ? '' : 'PrizePicks, Sleeper'), at: r?.at || 0, state, n: r?.picks?.length || 0, checked: r?.checked || 0,
         note: [r?.error && !off ? `Did not answer${r.at ? ', so this is the last reading' : ''}: ${r.error}` : '', down.length ? `${down.join(' and ')} did not answer` : '', r && !r.error && !r.picks.length && !down.length ? 'No lines posted today' : ''].filter(Boolean).join('. ') } });
     rows.push({ key: 'fc', name: 'Match forecasts', from: 'Floodlight forecast model, with book prices', at: P.fcAt, state: P.fcError ? (P.fcAt ? 'stale' : 'failed') : P.pending.has('fc') && !P.fcAt ? 'loading' : 'ok', n: (P.matches || []).length, note: P.fcError ? `Did not answer: ${P.fcError}` : '' });
-    rows.push({ key: 'rec', name: 'Graded results', from: 'Floodlight record of finished matches', at: P.recAt, state: P.recError ? (P.recAt ? 'stale' : 'failed') : P.pending.has('rec') && !P.recAt ? 'loading' : 'ok', n: (P.record || []).length, note: P.recError ? `Did not answer: ${P.recError}` : '' });
+    rows.push({ key: 'rec', name: 'Graded results', from: 'Floodlight record of finished matches and props', at: P.recAt, state: P.recError ? (P.recAt ? 'stale' : 'failed') : P.pending.has('rec') && !P.recAt ? 'loading' : 'ok', n: (P.record || []).length + (P.propRec || []).length, note: P.recError ? `Did not answer: ${P.recError}` : '' });
     return rows;
   }
   const failed = () => sources().filter(x => x.state === 'failed' || (x.state === 'stale' && x.note));
@@ -278,31 +295,36 @@
 
   /* ---------- how we have done ---------- */
   const BUCKETS = [[0, 45, 'Under 45%'], [45, 55, '45–54%'], [55, 65, '55–64%'], [65, 75, '65–74%'], [75, 101, '75%+']];
+  // match forecasts and props in one shape (history.js), last 90 days
   function results() {
-    const since = Date.now() / 1000 - 90 * 86400, rows = (P.record || []).filter(e => ['won', 'lost'].includes(e.result) && e.ko >= since && e.top);
-    const buckets = BUCKETS.map(([lo, hi, label]) => { const xs = rows.filter(e => e.top * 100 >= lo && e.top * 100 < hi), n = xs.length;
-      return { label, n, said: n ? xs.reduce((a, e) => a + e.top, 0) / n : null, hit: n ? xs.filter(e => e.result === 'won').length / n : null } });
-    const won = rows.filter(e => e.result === 'won').length, priced = rows.filter(e => e.market && typeof e.market[e.pick] === 'number');
-    const vs = priced.length ? (priced.filter(e => e.result === 'won').length / priced.length - priced.reduce((a, e) => a + e.market[e.pick], 0) / priced.length) * 100 : null;
-    return { n: rows.length, rate: rows.length ? won / rows.length : null, buckets, vs, priced: priced.length };
+    const H = window.flHistory, since = Date.now() / 1000 - 90 * 86400;
+    const every = H ? H.all(P.record, P.propRec).filter(e => e.t >= since && (P.sport === 'all' || sportKey(e) === P.sport)) : [];
+    const rows = every.filter(e => H.graded(e) && e.ours), S = H ? H.stats(every) : {};
+    const buckets = BUCKETS.map(([lo, hi, label]) => { const xs = rows.filter(e => e.ours * 100 >= lo && e.ours * 100 < hi), n = xs.length;
+      return { label, n, said: n ? xs.reduce((a, e) => a + e.ours, 0) / n : null, hit: n ? xs.filter(e => e.result === 'won').length / n : null } });
+    return { n: rows.length, rate: S.rate ?? null, buckets, vs: S.vs ?? null, priced: S.priced || 0, clv: S.clv ?? null, clvN: S.clvN || 0, props: rows.filter(e => e.kind === 'prop').length,
+      waiting: every.filter(e => e.kind === 'prop' && !e.result).length };
   }
+  const SPORT_KEY = { NBA: 'nba', WNBA: 'wnba', NFL: 'nfl', NHL: 'nhl', MLB: 'mlb', Soccer: 'soccer' };
+  const sportKey = e => SPORT_KEY[e.sport] || 'cfb';
   function resultsCard() {
     const R = results(), H = 120, col = v => v == null ? 0 : Math.max(3, Math.round(v * H));
     if (!R.n) return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
-      <div class="emp">${ic('bars', 26)}<b>${P.recError ? 'The record did not load' : 'No graded picks in the last 90 days'}</b><p>${P.recError ? 'Press Retry at the top of the page to ask again. ' : ''}A match forecast is graded when the match ends, and its result is counted here, good or bad. Player props are not graded yet.</p></div></section>`;
+      <div class="emp">${ic('bars', 26)}<b>${P.recError ? 'The record did not load' : 'No graded picks in the last 90 days'}</b><p>${P.recError ? 'Press Retry at the top of the page to ask again. ' : ''}Every pick shown here is locked before its start and graded when the result is in, good or bad.${R.waiting ? ` ${R.waiting} ${R.waiting === 1 ? 'prop is' : 'props are'} waiting for a result.` : ''}</p></div></section>`;
     const vsTxt = R.vs == null ? '–' : (R.vs > 0 ? '+' : R.vs < 0 ? '−' : '') + Math.abs(R.vs).toFixed(1);
     return `<section class="card pd-res-card" aria-label="How we have done"><div class="sec-h"><h2>How we have done</h2></div>
-      <p class="lb">When we said a pick would hit X% of the time, how often did it? Match forecasts, last 90 days.</p>
+      <p class="lb">When we said a pick would hit X% of the time, how often did it? ${R.props ? `Match forecasts and ${R.props} graded ${R.props === 1 ? 'prop' : 'props'}` : 'Match forecasts so far'}, last 90 days.</p>
       <div class="pd-cal" role="img" aria-label="${esc(R.buckets.filter(b => b.n).map(b => `${b.label}: we said ${pct(b.said)}%, it hit ${pct(b.hit)}%, ${b.n} picks`).join('. '))}">${R.buckets.map(b => `<div class="pd-col${b.n ? '' : ' none'}" title="${esc(b.n ? `${b.label}: we said ${pct(b.said)}% on average, ${pct(b.hit)}% hit, ${b.n} ${b.n === 1 ? 'pick' : 'picks'}` : `${b.label}: no picks`)}">
           <div class="pd-pair" style="height:${H + 22}px"><span class="said" style="height:${col(b.said)}px"><i class="num">${b.n ? pct(b.said) : ''}</i></span><span class="hit" style="height:${col(b.hit)}px"><i class="num">${b.n ? pct(b.hit) : ''}</i></span></div>
           <b>${esc(b.label)}</b><small class="num">${b.n ? `${b.n} ${b.n === 1 ? 'pick' : 'picks'}` : 'none'}</small></div>`).join('')}</div>
       <div class="pd-leg" aria-hidden="true"><span><i class="said"></i>We said</span><span><i class="hit"></i>It hit</span></div>
       <details class="pd-tbl"><summary>See the numbers</summary><div class="tbx-wrap"><table class="tbx"><thead><tr><th scope="col">We said</th><th scope="col" class="r">Average</th><th scope="col" class="r">It hit</th><th scope="col" class="r">Picks</th></tr></thead>
         <tbody>${R.buckets.map(b => `<tr><th scope="row">${esc(b.label)}</th><td class="r num">${b.n ? pct(b.said) + '%' : '–'}</td><td class="r num">${b.n ? pct(b.hit) + '%' : '–'}</td><td class="r num">${b.n}</td></tr>`).join('')}</tbody></table></div></details>
-      <div class="pd-tiles"><div class="tile inset"><span class="lb">Picks</span><b class="fig num">${R.n}</b></div><div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${pct(R.rate)}%</b></div>
-        <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${vsTxt}</b><small class="lb">${R.vs == null ? 'no prices saved' : `points ${R.vs >= 0 ? 'ahead' : 'behind'}, over ${R.priced} priced ${R.priced === 1 ? 'pick' : 'picks'}`}</small></div></div>
-      <p class="lb">“Against the market” is our hit rate minus the chance the book's prices gave the same picks. Player props are not graded yet, so they are not counted.</p>
-      <button type="button" class="bt ghost wide" data-page="history" data-fk="hist">See every pick, hits and misses</button></section>`;
+      <div class="pd-tiles"><div class="tile inset"><span class="lb">Graded picks</span><b class="fig num">${R.n}</b></div><div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${pct(R.rate)}%</b></div>
+        <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${vsTxt}</b><small class="lb">${R.vs == null ? 'no prices saved' : `points ${R.vs >= 0 ? 'ahead' : 'behind'}, over ${R.priced} priced ${R.priced === 1 ? 'pick' : 'picks'}`}</small></div>
+        <div class="tile inset"><span class="lb">Beat the closing line</span><b class="fig num">${R.clvN ? pct(R.clv) + '%' : '–'}</b><small class="lb">${R.clvN ? `of ${R.clvN} props where it moved` : 'once a prop line moves'}</small></div></div>
+      <p class="lb">“Against the market” is our hit rate minus the chance the prices gave the same picks. “Beat the closing line” counts props whose line or price moved our way before the start.${R.waiting ? ` ${R.waiting} ${R.waiting === 1 ? 'prop is' : 'props are'} still waiting for a result.` : ''}</p>
+      <button type="button" class="bt ghost wide" data-page="history" data-fk="hist">By sport, provider, market, edge and confidence</button></section>`;
   }
   function fadeCard(L) {
     const now = new Date(), cold = window.flEdge ? window.flEdge.cold((P.props?.picks || []).filter(p => stateOf(p, now) !== 'gone'), 3) : [];

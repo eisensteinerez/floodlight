@@ -1580,3 +1580,13 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-ev{padding:4px 26px 22px;border-
 .tw-team[aria-pressed="true"]{color:var(--accent)}
 .tw-team[aria-pressed="true"] span:last-child{text-decoration:underline;text-underline-offset:3px}
 .tw-team:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Results with props: four tiles in two rows, and the closing-line column in Pick history */
+.pd-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pd-tiles .tile:last-child,html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:auto}
+.hs-clv{white-space:nowrap}.hs-clv span{display:block;font:600 14px/1.3 var(--font-body)}.hs-clv small{display:block;font:500 12px/1.3 var(--font-body);color:var(--muted)}
+.hs-up{color:var(--good,var(--text))}.hs-dn{color:var(--text-2)}
+.hs-list th[scope="row"] small.hs-why{margin-top:4px;color:var(--text-2);max-width:56ch;white-space:normal}
+.hs-card .sec-h [role="tablist"]{gap:6px}
+.hs-tbl td small{font-size:12px}
+@media (max-width:1100px){.hs-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
