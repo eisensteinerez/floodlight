@@ -298,3 +298,21 @@ def test_lab_player_carries_the_record(reg, monkeypatch):
     assert d["registry"]["teamName"] == "Philadelphia 76ers" and d["registry"]["status"] == "verified" and d["fid"] == "nba:1966"
     import urllib.parse
     assert "/nba/500/phi.png" in urllib.parse.unquote(d["crest"])   # the record's team crest, not the player page's
+
+
+def test_load_player_runs_for_the_roster_sports(reg, monkeypatch):
+    """The real loader, not a stand-in: a team hint must reach find_player (it once raised UnboundLocalError for every
+    NBA, NFL, NHL and MLB player, which left the Lab's player pages and the research command empty)."""
+    import discord_bot as B
+    P.read_rosters("nba")
+    seen = {}
+    real_find = B.find_player
+    monkeypatch.setattr(B, "find_player", lambda s, n, t=None: seen.setdefault("hint", t) and None or real_find(s, n, t))
+    monkeypatch.setattr(B, "espn_season", lambda path, pid, y: [{"id": f"g{y}", "date": B.parse_date(f"{y - 1}-12-01T00:00:00Z"), "opp": "Boston Celtics", "home": True, "raw": {"PTS": 30}}])
+    monkeypatch.setattr(B, "get_json", lambda url, ttl: {"athlete": {"team": {"displayName": "Philadelphia 76ers", "abbreviation": "PHI"}}})
+    B._cache.clear()
+    p = B.load_player("nba", "LeBron James", "PHI")
+    assert seen["hint"] == "PHI"
+    assert p["fid"] == "nba:1966" and p["team"] == "Philadelphia 76ers" and len(p["games"]) == 2
+    B._cache.clear()
+    assert B.load_player("nba", "LeBron James")["name"] == "LeBron James"

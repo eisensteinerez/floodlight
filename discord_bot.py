@@ -473,10 +473,11 @@ def soccer_deep(p, n=10):
 def load_player(sport, name, team=None):
     """A player's games, newest first: {sport, id, fid, name, team, teamAbbr, photo, games: [{date, opp, home, raw...}]}.
     The team is the player record's (players.py) when there is one; team is a hint for two players with one name."""
+    hint = team   # go() sets its own `team` further down, which makes every `team` inside it local: read the hint under another name
     def go():
         if sport == "soccer":
             return soccer_player(name)
-        o = find_player(sport, name, team)
+        o = find_player(sport, name, hint)
         if not o:
             raise LookupError(f"Couldn't find a {SPORTS[sport]} player called {name}.")
         if sport == "mlb":
