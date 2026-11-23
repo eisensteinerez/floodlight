@@ -591,6 +591,7 @@
 
   function shareParlay(p) {
     const mk = window.flPredictions?.cardCanvas; if (!p || !mk) return;
+    if (!(window.flPlan?.can?.('share_cards') ?? true)) return window.toast?.('Shareable cards are part of Plus. See Plans to upgrade.');
     const n = p.legs.length, res = { hit: 'Hit', miss: 'Missed', push: 'Push', void: 'Void' };
     const title = p.status === 'open' ? `${nameOf(p)}${p.ours0 != null ? ` · ${pct(p.ours0)}% at the start` : ''}` : `${nameOf(p)} · ${p.status === 'won' ? 'Won' : p.status === 'lost' ? 'Lost' : 'Push'}`;
     const cv = mk({ kicker: 'Floodlight · Parlay', title, rows: p.legs.map(l => [l.short || l.text, l.res ? res[l.res] || '' : `${pct(C.start0(l))}%`, l.game || '']),

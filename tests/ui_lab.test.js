@@ -130,8 +130,8 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
       const s = JSON.parse(localStorage.getItem('fl.slip')); s[0].line0 = s[0].line - 1; localStorage.setItem('fl.slip', JSON.stringify(s)) });
     await p.evaluate(() => window.flPages.show('predictions')); await p.waitForSelector('.pd-slip.has', { timeout: 20000 }); await p.waitForTimeout(500);
     const txt = await p.textContent('.pd-slip');
-    for (const s of ['Your Prediction Card', 'Average evidence quality', 'Weakest pick', 'Locks in', 'Share', 'Save card', 'don’t guarantee']) assert.ok(txt.includes(s), `the card is missing “${s}”`);
-    await shot(p, 'prediction-card-1440');
+    for (const s of ['Your Prediction Card', 'Average evidence quality', 'Weakest pick', 'Closes in', 'Share', 'Save card', 'don’t guarantee']) assert.ok(txt.includes(s), `the card is missing “${s}”`);
+    await p.evaluate(() => document.querySelector('.pd-slip').scrollIntoView()); await p.waitForTimeout(200); await shot(p, 'prediction-card-1440');
     assert.deepStrictEqual(p.errors, []);
   });
 

@@ -25,7 +25,7 @@
   const book = b => BOOK[b] || b;
   const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago` };
   const can = f => { try { return window.flPlan?.can?.(f) ?? true } catch (e) { return true } };
-  const upsell = (f, what) => `<p class="px-plus" data-pxplus="${esc(f)}">${ic('lock', 14)}<span>${esc(what)} ${window.flPlan?.upsell ? '' : ''}<a href="#/pricing">See Plus</a></span></p>`;
+  const upsell = (f, what) => { try { if (window.flPlan?.upsell) return window.flPlan.upsell(f) } catch (e) {} return `<p class="px-plus" data-pxplus="${esc(f)}">${ic('lock', 14)}<span>${esc(what)} <a href="#/pricing">See Plus</a></span></p>` };
   const track = (ev, o) => { try { window.flTrack?.(ev, o) } catch (e) {} };
   const tz = () => MK.localTz();
   const keyOf = p => `${p.sport}|${p.name}|${p.k}`;
@@ -211,8 +211,9 @@
     const p = typeof id === 'string' ? find(id) : id; if (!p) return;
     // one Lab search on the free plan is opening a player's research; a filter is never one
     if (window.flPlan?.use && !(window.flPlan.can?.('lab_unlimited') ?? true)) {
-      const u = await window.flPlan.use('lab_search').catch(() => ({ ok: true }));
-      if (u && u.ok === false) { const box = X.host?.querySelector('#pxBody') || X.host; if (window.flPlan.upsell) window.flPlan.upsell('lab_unlimited', box); return }
+      const u = await window.flPlan.use('lab_search', `${p.sport}:${p.name}`).catch(() => ({ ok: true }));   // the same player twice in a day counts once
+      if (u && u.ok === false) { let box = X.host?.querySelector('#pxPlan'); if (!box && X.host) { box = document.createElement('div'); box.id = 'pxPlan'; box.tabIndex = -1; X.host.prepend(box) }
+        if (box) { box.innerHTML = upsell('lab_unlimited', 'Unlimited Lab searches are part of Plus.'); box.focus() } return }
     }
     R.p = p; R.from = from || document.activeElement; R.moves = null; R.prior = null; R.key = keyOf(p);
     track('player_open', { sport: p.sport, player: p.name }); count(p, 'research');
