@@ -568,8 +568,9 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
    graphic), and italic condensed capitals for titles and names. A leaning shape is always drawn on a ::before layer,
    never by clipping the element, so focus rings and pop-ups are not cut. */
 
-/* the backdrop: the picture sits at the top of the page and scrolls away with it; the fades keep the type readable */
-html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;height:920px;
+/* the backdrop: the picture sits at the top of the page and scrolls away with it; the fades keep the type readable.
+   The photo is warmed and dimmed a little so its cool floodlight green sits under the gold */
+html[data-theme="stadium-gold"] body::before{position:absolute;inset:0 0 auto 0;height:920px;filter:sepia(.32) saturate(.82) brightness(.84);
   background:linear-gradient(180deg,rgba(7,8,10,.66) 0,rgba(7,8,10,.12) 20%,rgba(7,8,10,.2) 52%,var(--bg) 100%),
     linear-gradient(90deg,var(--bg) 0,rgba(7,8,10,.84) 24%,rgba(7,8,10,.3) 58%,rgba(7,8,10,.04) 100%),
     var(--stadium-wide) right top/cover no-repeat,var(--bg)}
