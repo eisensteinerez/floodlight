@@ -308,7 +308,7 @@
       <tbody>${[a, b].map(t => `<tr><th scope="row">${esc(t.abbr || t.name)}</th>${Array.from({ length: d.periods }, (_, i) => `<td class="num">${esc(t.lines[i] ?? '–')}</td>`).join('')}<td class="num"><b>${esc(t.score)}</b></td></tr>`).join('')}</tbody></table>` : '';
     return `<header class="gx-head" style="${window.flTeamColours ? window.flTeamColours({ hc: a.color, ac: b.color }) : ''}">
       <div class="gx-bar"><span class="gx-lg">${live ? '<span class="pl live"><i></i>Live</span>' : state === 'post' ? '<span class="pl">Final</span>' : '<span class="pl">Upcoming</span>'}<span class="lb">${esc(g.lgName || g.short || '')}</span></span>
-        <span class="gx-tools">${window.flHome && state !== 'post' ? `<button type="button" class="bt ghost sm" data-gx="watch" aria-pressed="${window.flHome.watching(g.key)}">${window.flHome.watching(g.key) ? 'Watching' : 'Watch'}</button>` : ''}<button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}" aria-pressed="${hide}">${hide ? 'Reveal the score' : 'Hide the score'}</button><button type="button" class="ib" data-gx="close" aria-label="Close the match centre">${ic('x', 18) || '×'}</button></span></div>
+        <span class="gx-tools">${window.flShare ? `<button type="button" class="bt ghost sm" data-gx="share">${window.flShare.ICON}Share</button>` : ''}${window.flHome && state !== 'post' ? `<button type="button" class="bt ghost sm" data-gx="watch" aria-pressed="${window.flHome.watching(g.key)}">${window.flHome.watching(g.key) ? 'Watching' : 'Watch'}</button>` : ''}<button type="button" class="bt ghost sm" data-gx="${hide ? 'reveal' : 'hide'}" aria-pressed="${hide}">${hide ? 'Reveal the score' : 'Hide the score'}</button><button type="button" class="ib" data-gx="close" aria-label="Close the match centre">${ic('x', 18) || '×'}</button></span></div>
       <h2 class="gx-title" id="gxTitle"><span class="gx-team">${crest(a)}<span><span class="gx-full">${esc(a.full || a.name)}</span><span class="gx-short">${esc(a.name || a.full)}</span></span>${a.record ? `<small class="lb">${esc(a.record)}</small>` : ''}</span>
         <span class="gx-mid">${state === 'pre' ? `<b class="gx-vs">v</b>` : `${sc(a)}<i aria-hidden="true">:</i><span class="sr-only"> to </span>${sc(b)}`}<small class="${live ? 'on' : ''}">${esc(status)}</small></span>
         <span class="gx-team">${crest(b)}<span><span class="gx-full">${esc(b.full || b.name)}</span><span class="gx-short">${esc(b.name || b.full)}</span></span>${b.record ? `<small class="lb">${esc(b.record)}</small>` : ''}</span></h2>
@@ -388,6 +388,13 @@
     if (k === 'odds') { M.oddsAt = 0; M.oddsErr = ''; loadOdds(); return paint() }
     if (k === 'every') { M.every = !M.every; return paint() }
     if (k === 'watch') { window.flHome?.watch(M.g); return paint() }
+    if (k === 'share') { const g = M.g, d = M.d, hide = spoil(g.key), st = d?.state || g.state, a = d?.a || g.a, b = d?.b || g.b;
+      const when = (d?.date || g.date)?.toLocaleString?.([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) || '';
+      const rc = d && !hide ? recap(d).slice(0, 2) : [];
+      return window.flShare?.share({ file: `${a.name} v ${b.name}`, title: '', kicker: [g.lgName || g.short, when].filter(Boolean).join(' · '),
+        score: { a: a.full || a.name, b: b.full || b.name, sa: st === 'pre' || hide ? null : a.score, sb: st === 'pre' || hide ? null : b.score, live: st === 'in' && !hide,
+          status: st === 'pre' ? `Starts ${(d?.date || g.date)?.toLocaleTimeString?.([], { hour: 'numeric', minute: '2-digit' }) || ''}` : hide ? 'Score hidden' : st === 'in' ? (d?.detail || g.clock || 'Live') : (d?.detail || g.final || 'Final') },
+        notes: rc, foot: hide ? 'Shared with the score hidden.' : 'Scores from the ESPN game feed.' }, ev.target.closest('button')) }
     if (k === 'hide') { setSpoil(M.g.key, true); return paint() }
     if (k === 'reveal') { setSpoil(M.g.key, false); return paint() }
     if (k === 'full') { const g = M.g; close(); window.flPages?.current?.() && window.flPages.hide(); return window.flHub?.open(g) }

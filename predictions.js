@@ -169,8 +169,28 @@
     if (!window.flEvidence) return '';
     const on = P.open.has(p.id), R = rangeOf(p);
     return `<div class="pd-evbar"><button type="button" class="lk pd-evb" data-pdev="${esc(p.id)}" data-fk="ev-${esc(p.id)}" aria-expanded="${on}" aria-controls="ev-${esc(p.id)}">${on ? 'Hide the evidence' : 'See the evidence'}<svg class="pd-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+        ${window.flShare ? `<button type="button" class="lk pd-share" data-pdshare="${esc(p.id)}" data-fk="sh-${esc(p.id)}">${window.flShare.ICON}Share<span class="sr-only"> ${esc(p.name)}, ${esc(p.text)} as a picture</span></button>` : ''}
         ${R ? `<span class="lb num pd-rng" title="${p.type === 'prop' ? 'One standard error either side, from the games behind the reading' : 'The span between our model alone and the market'}">Likely ${pct(R.lo)}–${pct(R.hi)}%</span>` : ''}</div>
-      ${on ? `<div class="pd-ev" id="ev-${esc(p.id)}" role="region" aria-label="Evidence for ${esc(p.name)}, ${esc(p.text)}">${p.type === 'prop' ? window.flEvidence.prop(p) : window.flEvidence.match(p, P.ev.get(p.id))}</div>` : ''}`;
+      ${on ? `<div class="pd-ev" id="ev-${esc(p.id)}" role="region" aria-label="Evidence for ${esc(p.name)}, ${esc(p.text)}">${p.type === 'prop' ? window.flEvidence.prop(p) : window.flEvidence.match(p, P.ev.get(p.id))}${window.flShare ? `<div class="pd-evfoot"><button type="button" class="bt ghost sm" data-pdshareev="${esc(p.id)}" data-fk="shev-${esc(p.id)}">${window.flShare.ICON}Share this evidence</button></div>` : ''}</div>` : ''}`;
+  }
+  /* a pick, or a pick with its evidence, as a picture to share (share.js draws it in the current theme) */
+  function shareOpts(p, withEvidence) {
+    const R = rangeOf(p), day = p.start ? p.start.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+    const o = { file: p.short || p.name, kicker: [SPORT_NAME[p.sport], day].filter(Boolean).join(' · '), title: p.type === 'prop' ? `${p.name}: ${p.text}` : p.short || `${p.name} ${p.text}`,
+      sub: p.game || '', stats: [['Our number', pct(p.ours) + '%', 'accent'], ['Market', p.market == null ? 'No price' : pct(p.market) + '%'], ['Edge', edgeTxt(p.edge), p.edge > 0 ? 'good' : p.edge < 0 ? 'bad' : ''], R ? ['Likely range', `${pct(R.lo)}–${pct(R.hi)}%`] : null],
+      foot: 'Floodlight research, not a guarantee. The market price has the book’s margin taken out.' };
+    if (!withEvidence) return o;
+    if (p.type === 'prop') {
+      const gs = (p.games || []).filter(g => g.v != null), over = p.side !== 'under', d = gs.filter(g => g.v !== p.line), h = d.filter(g => over ? g.v > p.line : g.v < p.line).length;
+      const avg = gs.length ? gs.reduce((a, g) => a + g.v, 0) / gs.length : null;
+      o.stats = [['Our number', pct(p.ours) + '%', 'accent'], d.length ? [`Hit, last ${gs.length}`, `${h} of ${d.length}`] : null, avg != null ? ['Average', (Math.round(avg * 10) / 10).toString()] : null, p.line != null ? ['Line', String(p.line)] : null];
+      o.sub = `${p.game || ''}${gs.length ? ` · the evidence: ${gs.length} games on the log` : ''}`;
+    } else {
+      const v = P.ev.get(p.id), snaps = v && !v.error ? (v.snaps || []).filter(s => s.pick && s.final) : [];
+      o.stats = [['Our number', pct(p.ours) + '%', 'accent'], ['Market', p.market == null ? 'No price' : pct(p.market) + '%'], R ? ['Likely range', `${pct(R.lo)}–${pct(R.hi)}%`] : null, snaps.length ? ['Forecasts saved', String(snaps.length)] : null];
+      o.sub = `${p.game || ''}${snaps.length ? ` · ${(snaps[snaps.length - 1].reasons || []).filter(r => typeof r === 'string')[0] || ''}` : ''}`;
+    }
+    return o;
   }
   function loadEvidence(p, force) {
     if (p.type !== 'match' || (P.ev.has(p.id) && !force)) return;
@@ -313,6 +333,7 @@
     if (d.pdwhen) { P.when = d.pdwhen; P.all = false; return draw() }
     if (d.pdmin != null) { P.min = +d.pdmin; P.all = false; return draw() }
     if (d.pdev) return toggleEvidence(d.pdev);
+    if (d.pdshare || d.pdshareev) { const p = allPicks().find(x => x.id === (d.pdshare || d.pdshareev)); return p && window.flShare?.share(shareOpts(p, !!d.pdshareev), t) }
     if (d.pdevretry) { const p = allPicks().find(x => x.id === d.pdevretry); if (p) { loadEvidence(p, true); draw() } return }
     if (d.pdadd) return toggle(d.pdadd);
     if (d.pdopen) return openPick(d.pdopen);
