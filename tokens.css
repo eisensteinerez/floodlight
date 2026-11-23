@@ -203,3 +203,9 @@
 
 /* the two sample team colours on the Team Colors card in the theme picker */
 :root{--thp-a:#1F5A20;--thp-b:#A80F3A}
+
+/* ---------- tennis: tour levels and court surfaces, from each theme's own colours (tennis.js, arena.css) ---------- */
+:root[data-theme],[data-theme-preview]{
+  --tn-hard:var(--heat-ice); --tn-clay:var(--heat-warm); --tn-grass:var(--good); --tn-carpet:var(--text-2);
+  --tn-slam:var(--accent-fill); --tn-on-slam:var(--on-accent); --tn-men:var(--heat-ice); --tn-women:var(--heat-warm);
+}

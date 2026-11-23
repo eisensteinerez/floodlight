@@ -722,17 +722,17 @@ function openBbFsPlayer(id, slug, lgKey){
   getJSON(`/api/bb/player?id=${id}&slug=${encodeURIComponent(slug)}`).then(d => { v.p = d; if (d.photo) (S.bb.faces ||= {})[id] = d.photo; S.stack.includes(v) && renderSheet(); bbFsPlayerLeagues(v) }).catch(() => { v.err = true; S.stack.includes(v) && renderSheet() });
 }
 function bbFsPlayerHero(v, back){
+  // the shared profile header (profile.js), as the ESPN player pages use: face, team, position, bio chips, four stat tiles
   const p = v.p, col = '#' + fmColor(p?.teamName || v.slug); v.color = col;
   const cur = p?.career?.find(c => c.type === 'league');
   const d = v.rk && S.bb.leaders?.[v.rk], me = d?.players.find(x => x.id === v.id);
-  const rkTiles = me ? `<div class="tiles">${[['PTS', 'Points a game'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['EFF', 'Efficiency']].map(([k, l]) => { const r = bbFsRank(d, v.id, k);
-    return `<div class="tile"><b class="num">${bbFix(me.avg[k])}</b><span>${l}</span>${r ? `<em class="bb-rk">${bbOrd(r.rank)} of ${r.n}</em>` : ''}</div>` }).join('')}</div>
-    <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(bbName(v.rk))} ${esc(d.season || '')} · ${me.gp} games · ranked among the league's regulars</p>` : '';
-  return `<div class="hero solo" style="--tc:${col}">${topBar(back)}<div class="thead"><img class="face espn-shot" src="${esc(p?.photo || SIL)}" alt="" onerror="this.onerror=null;this.src=SIL"><div><h3>${esc(p?.name || 'Loading…')}</h3>
-    ${p ? `<p>${p.position ? `<span>${esc(p.position)}</span>` : ''}${p.teamId ? `<span><button class="linkbtn" data-bbteam="${esc(p.teamId)}" data-bbslug="${esc(p.teamSlug)}" data-bbl="${esc(v.lg)}">${esc(p.teamName || p.teamSlug)}</button></span>` : ''}</p>
-      <p class="bb-bio">${[p.age ? p.age + ' yrs' : '', p.born ? 'Born ' + p.born : '', p.height, p.weight, p.flag ? p.flag.toUpperCase() : ''].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div></div>
-    ${rkTiles || (cur ? `<div class="tiles"><div class="tile"><b class="num">${esc(cur.pts ?? '–')}</b><span>Points a game</span></div><div class="tile"><b class="num">${esc(cur.reb ?? '–')}</b><span>Rebounds</span></div><div class="tile"><b class="num">${esc(cur.ast ?? '–')}</b><span>Assists</span></div><div class="tile"><b class="num">${esc(cur.gp ?? '–')}</b><span>Games</span></div></div>
-      <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">${esc(cur.comp)} ${esc(cur.season)} · ${esc(cur.team)}</p>` : '')}</div>`;
+  const stats = me ? [['PTS', 'Points a game'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['EFF', 'Efficiency']].map(([k, l]) => { const r = bbFsRank(d, v.id, k); return { label: l, value: bbFix(me.avg[k]), rank: r ? `${bbOrd(r.rank)} of ${r.n}` : '' } })
+    : cur ? [['Points a game', cur.pts], ['Rebounds', cur.reb], ['Assists', cur.ast], ['Games', cur.gp]].map(([label, value]) => ({ label, value: value ?? '–' })) : [];
+  return flProfile.hero({ back, sport: '', heatSport: 'none', id: v.id, name: p?.name, color: col,
+    face: `<img class="face espn-shot" src="${esc(p?.photo || SIL)}" alt="" onerror="this.onerror=null;this.src=SIL">`,
+    team: p?.teamId ? `<span class="pfh-team"><button class="linkbtn" data-bbteam="${esc(p.teamId)}" data-bbslug="${esc(p.teamSlug)}" data-bbl="${esc(v.lg)}">${esc(p.teamName || p.teamSlug)}</button></span>` : '',
+    position: p?.position, chips: p ? [p.age ? 'Age ' + p.age : '', p.born ? 'Born ' + p.born : '', p.height, p.weight, p.flag ? p.flag.toUpperCase() : ''] : [],
+    stats, caption: me ? `${esc(bbName(v.rk))} ${esc(d.season || '')} · ${me.gp} games · ranked among the league's regulars` : cur ? `${esc(cur.comp)} ${esc(cur.season)} · ${esc(cur.team)}` : '' });
 }
 function bbFsPlayerPane(v){
   if (v.err) return `<div class="note">Couldn't load this player.</div>`;

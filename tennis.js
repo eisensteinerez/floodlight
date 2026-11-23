@@ -659,11 +659,16 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .tn-gh .tn-tname{font:inherit;color:inherit;text-align:left}
 .tn-gh .tn-gn{margin-left:auto;color:var(--muted);font:600 12px/1 var(--f-mono)}
 .tn-lvl{display:inline-block;font:700 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.04em;padding:3px 6px;border-radius:var(--r-ctl);background:var(--surface-2);color:var(--fg);white-space:nowrap}
-.tn-l-slam{background:#1f6f43;color:#fff}.tn-l-atp{background:#1a4b8c;color:#fff}.tn-l-wta{background:#9C2F55;color:#fff}.tn-l-chm{background:#2f6fa8;color:#fff}.tn-l-chw{background:#B8456E;color:#fff}
+/* tour levels in theme colours (tokens.css: --tn-*): Grand Slams solid in the accent, tour events tinted, Challengers outlined; text stays the theme's text colour */
+.tn-l-slam{background:var(--tn-slam);color:var(--tn-on-slam)}
+.tn-l-atp,.tn-l-wta{background:color-mix(in oklab,var(--tn-tour) 24%,var(--surface));color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--tn-tour) 55%,transparent)}.tn-l-atp{--tn-tour:var(--tn-men)}.tn-l-wta{--tn-tour:var(--tn-women)}
+.tn-l-chm,.tn-l-chw{background:transparent;color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--tn-tour) 70%,var(--text))}.tn-l-chm{--tn-tour:var(--tn-men)}.tn-l-chw{--tn-tour:var(--tn-women)}
 .tn-dot.tn-l-slam,.tn-dot.tn-l-atp,.tn-dot.tn-l-wta,.tn-dot.tn-l-chm,.tn-dot.tn-l-chw,.tn-dot.tn-l-itfm,.tn-dot.tn-l-itfw,.tn-dot.tn-l-other,.tn-dot.tn-l-junior{background:none;padding:0}
-.tn-dot.tn-l-slam{color:#1f6f43}.tn-dot.tn-l-atp{color:#1a4b8c}.tn-dot.tn-l-wta{color:#9C2F55}.tn-dot.tn-l-chm{color:#2f6fa8}.tn-dot.tn-l-chw{color:#B8456E}
+.tn-dot.tn-l-slam{color:color-mix(in oklab,var(--tn-slam) 75%,var(--text))}.tn-dot:is(.tn-l-atp,.tn-l-chm){color:color-mix(in oklab,var(--tn-men) 70%,var(--text))}.tn-dot:is(.tn-l-wta,.tn-l-chw){color:color-mix(in oklab,var(--tn-women) 70%,var(--text))}
 .tn-surf{display:inline-block;font:600 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.04em;padding:3px 6px;border-radius:var(--r-pill);background:var(--surface-2);color:var(--muted)}
-.tn-surf.tn-clay{background:#c8643b22;color:#b5552d}.tn-surf.tn-grass{background:#3c9a4a22;color:#2d8a3b}.tn-surf.tn-hard{background:#2f6fa822;color:#2f6fa8}
+/* court surfaces in theme colours: a tint behind, the surface colour mixed with the text colour in front, so it reads in light and dark themes */
+.tn-surf:is(.tn-clay,.tn-grass,.tn-hard,.tn-carpet){background:color-mix(in oklab,var(--tn-sf) 18%,transparent);color:color-mix(in oklab,var(--tn-sf) 50%,var(--text))}
+.tn-surf.tn-clay{--tn-sf:var(--tn-clay)}.tn-surf.tn-grass{--tn-sf:var(--tn-grass)}.tn-surf.tn-hard{--tn-sf:var(--tn-hard)}.tn-surf.tn-carpet{--tn-sf:var(--tn-carpet)}
 .m.tn-m{grid-template-columns:56px minmax(0,1fr)}
 .tn-m .tms{gap:4px}
 .tn-row{display:grid!important;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center}
