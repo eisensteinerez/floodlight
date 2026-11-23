@@ -38,8 +38,10 @@
     MODS.forEach((m, i) => { if (o.includes(m.k)) return; const before = MODS.slice(0, i).reverse().find(x => o.includes(x.k)); o.splice(before ? o.indexOf(before.k) + 1 : 0, 0, m.k) });
     return o;
   }
+  const FM_KEYS = ['top', 'soon', 'mine', 'edge', 'tv'], UP_KEYS = ['you', 'major', 'tv', 'all'];
   const customOrder = () => order().join() !== MODS.map(m => m.k).join();
-  const MY = { sports: store.get('fl.favSports', []), off: store.get('fl.homeOff', []), order: store.get('fl.homeOrder', []), watch: store.get('fl.watch', []), recent: store.get('fl.recentGames', []), edit: false, skip: store.get('fl.homeSkip', false) };
+  const MY = { sports: store.get('fl.favSports', []), off: store.get('fl.homeOff', []), order: store.get('fl.homeOrder', []), watch: store.get('fl.watch', []), recent: store.get('fl.recentGames', []), edit: false, skip: store.get('fl.homeSkip', false),
+    fmode: (m => FM_KEYS.includes(m) ? m : 'top')(store.get('fl.ftrMode', 'top')), up: store.get('fl.upTab', '') };
   let myT = 0;
   function saveMine() {
     MY.watch = MY.watch.filter(w => Date.now() - (w.at || 0) < 4 * 864e5).slice(-40);   // a watched game drops off a few days after it was added
@@ -103,8 +105,23 @@
         lgName: sport === 'soccer' ? (c.competitionType?.text || '') : short, id: String(sport === 'tennis' ? c.id : ev.id), date: new Date(c.date || ev.date), state: st.state || 'pre',
         clock: st.shortDetail || st.detail || '', detail: st.shortDetail || st.detail || '', final: st.shortDetail || 'Final', a, b, weight, leaders,
         sit: c.situation ? { text: c.situation.downDistanceText || c.situation.shortDownDistanceText || '', poss: String(c.situation.possession || ''), red: !!c.situation.isRedZone, last: c.situation.lastPlay?.text || '' } : null,
-        tv: c.broadcasts?.[0]?.names?.[0] || c.geoBroadcasts?.[0]?.media?.shortName || '', venue: c.venue?.fullName || ev.venue?.displayName || '', draw, goals, note: /postpon|cancel|delay/i.test(st.description || '') ? st.description : '' };
+        tv: c.broadcasts?.[0]?.names?.[0] || c.geoBroadcasts?.[0]?.media?.shortName || '', ...tvOf(c), ...stageOf(ev, c, sport, a, b), venue: c.venue?.fullName || ev.venue?.displayName || '', draw, goals, note: /postpon|cancel|delay/i.test(st.description || '') ? st.description : '' };
     });
+  }
+  // every channel the feed names, and the first national one (ESPN marks those with market type "National")
+  function tvOf(c) {
+    const geo = (c.geoBroadcasts || []).map(b => ({ n: b.media?.shortName || '', nat: /national/i.test(b.market?.type || '') && !/radio/i.test(b.type?.shortName || '') }));
+    const tvs = [...new Set([...(c.broadcasts || []).flatMap(b => b.names || []), ...geo.map(b => b.n)].filter(Boolean))];
+    const nat = geo.find(b => b.nat && b.n)?.n || tvs.find(n => NAT_TV.test(n.trim())) || '';
+    return { tvs, tvNat: nat };
+  }
+  // what kind of game it is: playoffs or a knockout round, youth or reserve teams, and (soccer) which competition
+  function stageOf(ev, c, sport, a, b) {
+    const note = c.notes?.[0]?.headline || '', slug = String(ev.season?.slug || ''), post = ev.season?.type === 3 || /\bplayoffs?\b|post-?season/i.test(slug);
+    const ko = /final|semifinal|quarterfinal|playoff|round of \d+|knockout|bowl|championship|title game|wild ?card|divisional|conference finals?/i.test(note) && !/group|league phase|matchday|regular/i.test(note);
+    const youth = YOUTH.test(slug) || [a, b].some(t => YOUTH.test(t.full || t.name || ''));
+    const comp = sport === 'soccer' ? (typeof prettySeason === 'function' ? prettySeason(slug) : '') : '';
+    return { slug, big: (post || ko) && !youth, stage: ko ? note : post ? 'Playoffs' : '', youth, comp: comp === 'Other competitions' ? '' : comp };
   }
   function ufcNorm(ev) {
     const bouts = (ev.competitions || []).map(c => { const cs = c.competitors || []; const f = x => ({ name: x?.athlete?.displayName || '', photo: x?.athlete?.headshot?.href || '', rec: x?.records?.[0]?.summary || '', win: !!x?.winner });
@@ -161,19 +178,83 @@
     return `<div class="hm-cd" data-hubcd="${+ts}" aria-label="Starts ${new Date(ts).toLocaleString()}">${p.map(([n, l]) => `<span class="tile inset"><b class="fig num">${String(n).padStart(2, '0')}</b><small class="lb">${l}</small></span>`).join('')}</div>`;
   }
 
-  /* the featured game: one of your teams first, then the biggest game in play, then the next big one to start */
-  function featured(list) {
-    const mine = g => isMine(g);
-    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 4 : 0) + (likes(g) ? 40 : 0) + (watching(g.key) ? 60 : 0);
-    const open = list.filter(g => g.state !== 'post'), live = open.filter(g => g.state === 'in'), pre = open.filter(g => g.state === 'pre');
-    const soon = xs => [...xs].sort((a, b) => (size(b) - (b.date - Date.now()) / 36e5 * 3) - (size(a) - (a.date - Date.now()) / 36e5 * 3))[0];
-    return live.filter(mine).sort((a, b) => size(b) - size(a))[0] || soon(pre.filter(mine)) || [...live].sort((a, b) => size(b) - size(a))[0] || soon(pre)
-      || [...list].sort((a, b) => b.date - a.date || size(b) - size(a))[0] || null;
+  /* ---------- how much a game matters ----------
+     One points table ranks every game on Home: the featured game, "Up next" and the briefing all use it, and each
+     reason keeps its points so Home can say why a game was picked. The soonest game is not the biggest one. */
+  const NAT_TV = /^(ABC|CBS|NBC|FOX|FS1|FS2|ESPN|ESPN2|ESPNU|ESPNEWS|TNT|TBS|truTV|NBA TV|NFL Network|NFL Net|NHL Network|MLB Network|Prime Video|Amazon Prime Video|Peacock|Apple TV\+?|Netflix|USA Network|USA Net|CBSSN|CBS Sports Network|BTN|Big Ten Network|SEC Network|ACC Network|Telemundo|Universo|Univision|UniMás|TUDN|TNT Sports|Max)$/i;
+  const TOP_LG = { nfl: 'NFL', nba: 'NBA', mlb: 'MLB', nhl: 'NHL' };
+  const TOP_SOCCER = /premier-league|laliga|la-liga|serie-a|bundesliga|ligue-1|champions-league|europa-league|conference-league|world-cup|major-league-soccer|\bmls\b|european-championship|copa-america|nations-league|fa-cup|copa-del-rey/i;
+  const YOUTH = /\bu-?(1[5-9]|2[0-3])\b|\byouth\b|\breserves?\b/i;
+  const POINTS = [['fav', 130, 'A favorite team'], ['team', 100, 'A team you follow'], ['watch', 100, 'On your watchlist'], ['league', 50, 'A league you follow'], ['sport', 35, 'One of your sports'], ['tv', 25, 'National TV'],
+    ['top', 25, 'Top league'], ['rank', 20, 'Ranked teams'], ['stage', 20, 'Playoffs or a knockout round'], ['close', 15, 'Close on the market'], ['edge', 10, 'Strong prediction edge'], ['soon', 15, 'Starting soon (5 to 15)'], ['youth', -20, 'Youth or reserve teams']];
+  const PTS = Object.fromEntries(POINTS.map(([k, n]) => [k, n]));
+  const favLeagues = () => { try { return S.favLeagues || [] } catch (e) { return [] } };
+  const flat = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const lgKey = g => g.sport === 'tennis' ? String(g.short).toLowerCase() : g.sport === 'soccer' ? 'soccer' : String(g.lg || '');
+  const lgLabel = g => g.sport === 'soccer' ? (g.comp || 'Soccer') : g.short;
+  // a followed league: US leagues by key (nba, nfl, fbs…), soccer by the competition's name inside the game's season
+  function followsLeague(g) {
+    const F = favLeagues(); if (!F.length) return false;
+    if (g.sport !== 'soccer') return F.includes(lgKey(g));
+    const where = flat(g.slug) + '|' + flat(g.comp);
+    return F.some(sl => { const n = typeof LG === 'object' && LG?.[sl]?.name; return n && n.length > 3 && where.includes(flat(n)) });
+  }
+  const topLeague = g => !g.youth && (!!TOP_LG[g.lg] || (g.sport === 'soccer' && TOP_SOCCER.test(g.slug)));
+  // the favourite's chance on the market, when both prices are posted. Close: 60% or less (two-way), 45% or less with a draw
+  function market(g) { const pa = g.a.ml, pb = g.b.ml, pd = g.sport === 'soccer' ? g.draw : 0; if (!pa || !pb || (g.sport === 'soccer' && !pd)) return null; const t = pa + pb + (pd || 0); return { a: pa / t, b: pb / t, d: (pd || 0) / t } }
+  function closeness(g) { const m = market(g); if (!m) return null; const top = Math.max(m.a, m.b, m.d), fav = m.a >= m.b ? g.a : g.b; return top <= (g.sport === 'soccer' ? .45 : .6) ? { fav, pct: Math.round(Math.max(m.a, m.b) * 100) } : null }
+  // the biggest edge among today's priced player lines in this game (the Predictions board's own numbers)
+  const LG_OF = { nba: 'basketball', nfl: 'football', nhl: 'hockey', mlb: 'baseball', soccer: 'soccer' };
+  function edgeOf(g) {
+    if (!HEAT.picks?.length || !LG_OF[g.sport === 'soccer' ? 'soccer' : g.lg]) return null;
+    const names = [g.a, g.b].flatMap(t => [t.ab, t.name, t.full]).filter(Boolean).map(flat);
+    const mine = HEAT.picks.filter(p => p.edge != null && p.edge >= 10 && (!p.start || p.start > Date.now() - 6 * 36e5) && (p.sport === 'soccer' ? g.sport === 'soccer' : p.sport === g.lg) && [p.team, p.opp].some(x => x && names.includes(flat(x))));
+    return mine.sort((x, y) => y.edge - x.edge)[0] || null;
+  }
+  const level = (g, t) => { const F = favList(), id = favId(g, t), f = F.find(x => x.id === id || (x.tid && String(x.tid) === t.id && x.sport === g.sport) || (!PRE[g.sport] && (x.name || '').toLowerCase() === (t.full || t.name || '').toLowerCase())); return f ? (f.level || 'follow') : null };
+  let RATE = new WeakMap();
+  function rate(g) {
+    if (RATE.has(g)) return RATE.get(g);
+    const why = [], add = (k, t, n = PTS[k]) => why.push({ k, n, t });
+    const lv = [g.a, g.b].map(t => ({ t, l: level(g, t) })).filter(x => x.l), fav = lv.find(x => x.l === 'fav');
+    if (fav) add('fav', `${fav.t.name} is one of your favorite teams`); else if (lv.length) add('team', `${lv[0].t.name} is a team you follow`); else if (watching(g.key)) add('watch', 'You are watching this game');
+    if (followsLeague(g)) add('league', `${lgLabel(g)} is a league you follow`);
+    if (likes(g)) add('sport', `${(SPORTS.find(x => x[0] === g.sport) || [, g.sport])[1]} is one of your sports`);
+    if (g.tvNat) add('tv', `On national TV: ${g.tvNat}`);
+    if (topLeague(g)) add('top', `${lgLabel(g)} is a top league`);
+    const rk = [g.a, g.b].filter(t => t.rank); if (rk.length) add('rank', rk.length === 2 ? `Both teams are ranked (#${g.a.rank} and #${g.b.rank})` : `#${rk[0].rank} ${rk[0].name} is ranked`);
+    if (g.big) add('stage', g.stage || 'Playoffs or a knockout round');
+    const cl = closeness(g); if (cl) add('close', `Close on the market: ${cl.fav.name} is only ${cl.pct}% to win`);
+    const e = edgeOf(g); if (e) add('edge', `Strong prediction edge: ${e.name}, +${e.edge} on the market`);
+    if (g.state === 'in') add('soon', 'On now', 15);
+    else if (g.state === 'pre') { const m = (g.date - Date.now()) / 60000; if (m <= 60 && m > -15) add('soon', m < 2 ? 'Starting now' : `Starts in ${Math.round(m)} min`, 15); else if (m <= 180) add('soon', `Starts at ${hm(g.date)}`, 10); else if (m <= 360) add('soon', `Starts at ${hm(g.date)}`, 5) }
+    if (g.youth) add('youth', 'Youth or reserve teams');
+    const r = { pts: why.reduce((s, x) => s + x.n, 0), why: why.sort((x, y) => y.n - x.n) };
+    RATE.set(g, r); return r;
+  }
+  const pts = g => rate(g).pts;
+  const major = g => !g.youth && (topLeague(g) || !!g.tvNat || g.big || [g.a, g.b].some(t => t.rank));
+  const mineG = g => isMine(g) || watching(g.key);
+  const forYou = g => mineG(g) || likes(g) || followsLeague(g);
+  // the one-line reason, for a card or the briefing: the two biggest reasons, without the clock
+  const reason = (g, skip = '') => rate(g).why.filter(x => x.n > 0 && x.k !== 'soon' && x.k !== skip).slice(0, 2).map(x => x.t).join('. ');
+
+  /* the featured game. "Most important" ranks by the points above; the member can ask for the soonest, their own teams,
+     the best prediction or a game on national TV instead. With every game over, the last to finish. */
+  const FMODES = [['top', 'Most important'], ['soon', 'Starting soon'], ['mine', 'My teams'], ['edge', 'Best prediction'], ['tv', 'On TV']];
+  function featured(list, mode = 'top') {
+    const open = list.filter(g => g.state !== 'post'), best = xs => [...xs].sort((a, b) => pts(b) - pts(a) || a.date - b.date)[0] || null;
+    if (mode === 'soon') return [...open.filter(g => g.state === 'pre')].sort((a, b) => a.date - b.date || pts(b) - pts(a))[0] || best(open);
+    if (mode === 'mine') return best(open.filter(mineG)) || best(list.filter(mineG));
+    if (mode === 'edge') return [...open].filter(edgeOf).sort((a, b) => edgeOf(b).edge - edgeOf(a).edge || pts(b) - pts(a))[0] || null;
+    if (mode === 'tv') return best(open.filter(g => g.tvNat));
+    return best(open) || [...list].sort((a, b) => b.date - a.date || pts(b) - pts(a))[0] || null;
   }
   /* The featured game doesn't jump away when it reaches half time or ends: a live game stays featured until it is
      over, and a finished one stays for 20 minutes with its final score and the next game to watch. A game of your
      own team starting still takes the spot. */
   function stickyFeature(list) {
+    if (MY.fmode !== 'top') return featured(list, MY.fmode);
     const pick = featured(list), prev = H.ftrKey && isToday() ? list.find(g => g.key === H.ftrKey) : null, mineNow = pick && (isMine(pick) || watching(pick.key));
     if (prev && pick && prev !== pick && !(mineNow && !isMine(prev) && !watching(prev.key))) {
       if (prev.state === 'in') return prev;
@@ -203,8 +284,14 @@
     const acts = `<button type="button" class="ftr-foot" ${hubAttr(g)} data-hubtab="centre">${soccer ? 'Open match centre' : 'Open game'}${ico('arrow', 16)}</button>
       ${soccer && !pre ? `<button type="button" class="bt ghost ftr-alt" ${hubAttr(g)} data-hubtab="pitch">Pitch view</button>` : ''}
       <span class="hm-count num">${liveN ? `${liveN} live · ` : ''}${list.length} game${list.length === 1 ? '' : 's'} ${isToday() ? 'today' : 'this day'}</span>`;
+    // why this game: every reason with its points, so the choice can be checked
+    const R = rate(g), mode = FMODES.find(m => m[0] === MY.fmode)?.[1] || 'Most important';
+    const why = `<details class="hm-why"><summary>Why this game${R.why.length ? `: ${esc(R.why.filter(x => x.n > 0)[0]?.t || mode)}` : ''}</summary>
+      <p class="lb">${MY.fmode === 'top' ? `Every game gets points, and the most points wins. This one has ${R.pts}.` : `You chose “${esc(mode)}”. Its points: ${R.pts}.`}</p>
+      ${R.why.length ? `<ul class="hm-why-l">${R.why.map(x => `<li><span>${esc(x.t)}</span><b class="num">${x.n > 0 ? '+' : '−'}${Math.abs(x.n)}</b></li>`).join('')}</ul>` : '<p class="lb">No reason stands out: it is simply the next game.</p>'}
+      <p class="lb">${POINTS.filter(([k]) => k !== 'youth').map(([, n, t]) => `${t} +${n}`).join(' · ')}. Youth or reserve teams −20.</p></details>`;
     return window.flFeature({ ...f, as: 'article', cls: 'hm-ftr', label: (live ? 'Featured game, live. ' : 'Featured game. ') + f.label, venue: g.venue,
-      below: (pre && g.date - Date.now() < 3 * 864e5 && g.date > Date.now() ? countdown(+g.date) : '') + prob + after, acts });
+      below: (pre && g.date - Date.now() < 3 * 864e5 && g.date > Date.now() ? countdown(+g.date) : '') + prob + after + why, acts });
   }
 
   /* hot and cold: the Lab's heat reading for the players with lines posted today */
@@ -344,31 +431,57 @@
       <div class="hm-back-g">${games.length ? `<div><h3 class="lb">Games</h3><ul class="hm-bl">${games.map(g => `<li><button type="button" class="hm-bi" ${hubAttr(g)}><span>${esc(g.a.name)} v ${esc(g.b.name)}</span>${st(g)}</button></li>`).join('')}</ul></div>` : ''}
         ${lab.length ? `<div><h3 class="lb">In the Lab</h3><ul class="hm-bl">${lab.map(r => `<li><button type="button" class="hm-bi" data-hublab="${esc(JSON.stringify(r.args || { q: r.q }))}">${ico('lab', 16)}<span>${esc(r.label || r.q)}</span></button></li>`).join('')}</ul></div>` : ''}</div></section>`;
   }
-  /* Tonight in 60 seconds: the board in four lines. Each line is read from the games on Home and opens what it names.
-     A game whose score you have hidden is never described by its score. */
+  /* Today in 60 seconds: a short briefing, read from the games on Home. Six lines at most, each opening what it names
+     and saying in small type why it was chosen: the biggest game, the best edge on the market, an injury that matters,
+     the best game on now, a transfer, and where to watch. A game whose score you have hidden is never described by it. */
+  const INJ = { key: '', rows: null, at: 0, loading: false };
+  function loadInjuries(g) {
+    if (!g || !['basketball', 'football', 'hockey', 'baseball'].includes(g.sport) || g.lg === 'cbb' || INJ.loading) return;
+    if (INJ.key === g.key && Date.now() - INJ.at < 10 * 60000) return;
+    INJ.loading = true; INJ.key = g.key;
+    j(`${ESPN}${g.path}/summary?event=${encodeURIComponent(g.id)}`).then(d => {
+      INJ.rows = (d.injuries || []).flatMap(t => (t.injuries || []).map(i => ({ who: i.athlete?.displayName || '', team: t.team?.displayName || t.team?.shortDisplayName || '', tid: String(t.team?.id || ''),
+        status: i.status || i.type?.description || '', what: i.details?.type || i.details?.detail || '', pos: i.athlete?.position?.abbreviation || '' })).filter(x => x.who && /^(out|doubtful)$/i.test(x.status)));
+    }).catch(() => { INJ.rows = [] }).finally(() => { INJ.loading = false; INJ.at = Date.now(); if (root.classList.contains('hub-on')) paint() });
+  }
   function brief(list, ftr) {
     if (MY.off.includes('brief') || !list.length) return '';
-    const F = favList(), hid = g => g.state !== 'pre' && window.flMC?.spoil?.(g.key), out = [];
+    const hid = g => g.state !== 'pre' && window.flMC?.spoil?.(g.key), out = [];
     const nm = g => `${g.a.name} v ${g.b.name}`, gap = g => Math.abs((+g.a.score || 0) - (+g.b.score || 0));
     const live = list.filter(g => g.state === 'in'), pre = list.filter(g => g.state === 'pre'), post = list.filter(g => g.state === 'post');
-    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (g.tv ? 4 : 0) + (likes(g) ? 40 : 0);
-    if (live.length) {
-      const close = live.filter(g => !hid(g) && g.a.score !== '' && g.sport !== 'tennis').sort((x, y) => gap(x) - gap(y) || size(y) - size(x))[0];
-      out.push({ i: 'live', g: close || live[0], t: `<b>${live.length} live.</b> ${close ? `Closest: ${esc(nm(close))}, ${gap(close) ? `${gap(close)} in it` : 'level'}${close.clock ? `, ${esc(close.clock)}` : ''}.` : `Biggest: ${esc(nm(live.sort((x, y) => size(y) - size(x))[0]))}.`}` });
-    }
-    const mine = list.filter(g => isMine(g, F) || watching(g.key)).sort((x, y) => (x.state === 'in' ? 0 : x.state === 'pre' ? 1 : 2) - (y.state === 'in' ? 0 : y.state === 'pre' ? 1 : 2) || x.date - y.date);
-    if (mine.length) { const g = mine[0]; out.push({ i: 'star', g, t: `<b>Your teams:</b> ${esc(nm(g))} ${g.state === 'in' ? 'is on now' : g.state === 'pre' ? `at ${esc(hm(g.date))}` : 'has finished'}${mine.length > 1 ? `, and ${mine.length - 1} more` : ''}.` }) }
-    const next = pre.filter(g => g !== mine[0]).sort((x, y) => size(y) - size(x) || x.date - y.date)[0];
-    if (next) out.push({ i: 'clock', g: next, t: `<b>Biggest still to come:</b> ${esc(nm(next))}, ${esc(hm(next.date))}${next.tv ? ` on ${esc(next.tv)}` : ''}.` });
+    // 1 the biggest game still to be decided
+    const big = featured(list, 'top');
+    if (big && big.state !== 'post') out.push({ i: 'star', g: big, t: `<b>Biggest game:</b> ${esc(nm(big))}, ${big.state === 'in' ? 'on now' : esc(hm(big.date))}${big.tvNat ? ` on ${esc(big.tvNat)}` : ''}.`, why: reason(big) || 'The highest-ranked game on the board' });
+    // 2 the best edge on today's open lines
     const E = window.flEdge, top = HEAT.picks && E ? E.ranked(HEAT.picks.filter(p => !p.start || p.start > Date.now()))[0] : null;
-    if (top && !MY.off.includes('three')) out.push({ i: 'pred', lab: E.labArgs(top), t: `<b>Best edge:</b> ${esc(top.name)}, ${esc(top.text)}, ${top.edge > 0 ? '+' : top.edge < 0 ? '−' : ''}${Math.abs(top.edge)} on the market.` });
-    const upset = post.filter(g => !hid(g)).map(g => { const w = g.a.winner ? g.a : g.b.winner ? g.b : null, l = w === g.a ? g.b : g.a; return w && l.rank && (!w.rank || w.rank > l.rank) ? { g, w, l } : null }).filter(Boolean).sort((x, y) => x.l.rank - y.l.rank)[0];
-    if (upset && out.length < 4) out.push({ i: 'bolt', g: upset.g, t: `<b>Upset:</b> #${upset.l.rank} ${esc(upset.l.name)} lost to ${esc(upset.w.name)}.` });
-    if (!live.length && !pre.length && out.length < 4) out.push({ i: 'clock', g: null, t: `<b>Everything ${isToday() ? 'today' : 'on this day'} is over.</b> ${post.length} final${post.length === 1 ? '' : 's'}.` });
+    if (top && top.edge > 0 && !MY.off.includes('three')) out.push({ i: 'pred', lab: E.labArgs(top), t: `<b>Best edge:</b> ${esc(top.name)}, ${esc(top.text)}.`, why: `Floodlight says ${Math.round(top.ours * 100)}%, the market ${Math.round(top.market * 100)}%: the widest gap on today’s open lines` });
+    // 3 an injury in the biggest game: a player ruled out (or doubtful), first one with a line posted today
+    const ig = [big, ...pre].find(g => g && g.state === 'pre' && ['basketball', 'football', 'hockey', 'baseball'].includes(g.sport) && g.lg !== 'cbb');
+    if (ig) { loadInjuries(ig);
+      if (INJ.key === ig.key && INJ.rows?.length) { const lined = new Set((HEAT.picks || []).map(p => flat(p.name))), x = INJ.rows.find(r => lined.has(flat(r.who))) || INJ.rows[0];
+        out.push({ i: 'help', g: ig, t: `<b>${esc(x.status)}:</b> ${esc(x.who)}${x.pos ? ` (${esc(x.pos)})` : ''}${x.what ? `, ${esc(x.what.toLowerCase())}` : ''}, ${esc(x.team)}.`, why: `From ESPN’s injury report for ${nm(ig)}${lined.has(flat(x.who)) ? '. A player line is posted for this player today' : ''}` }) } }
+    // 4 the best game on now: the closest score among the live games (hidden scores are left out)
+    if (live.length) {
+      const close = live.filter(g => !hid(g) && g.a.score !== '' && g.sport !== 'tennis').sort((x, y) => gap(x) - gap(y) || pts(y) - pts(x))[0];
+      const g = close || [...live].sort((x, y) => pts(y) - pts(x))[0];
+      if (g !== big || close) out.push({ i: 'live', g, t: close ? `<b>Best game on now:</b> ${esc(nm(close))}, ${gap(close) ? `${gap(close)} in it` : 'level'}${close.clock ? `, ${esc(close.clock)}` : ''}.` : `<b>On now:</b> ${esc(nm(g))}.`,
+        why: close ? `The closest score of the ${live.length} game${live.length === 1 ? '' : 's'} in play` : `The biggest of the ${live.length} game${live.length === 1 ? '' : 's'} in play (scores hidden)` });
+    }
+    // 5 a transfer: one involving a team you follow, else the latest trade, else the latest signing
+    const F = favList(), yours = t => [t.from, t.to, t.lead].some(x => x && F.some(f => (f.name || '').toLowerCase() === String(x.name || '').toLowerCase()));
+    const mv = (WIRE.rows || []).find(yours) || (WIRE.rows || []).find(t => t.type === 'trade' || t.type === 'transfer') || (WIRE.rows || [])[0];
+    if (mv && Date.now() - mv.when < 4 * 864e5) out.push({ i: 'transfers', shell: 'transfers', t: `<b>${esc(mv.label)}:</b> ${esc(mv.player?.name || mv.lead?.name || '')}${mv.to?.name ? `, to ${esc(mv.to.short || mv.to.name)}` : mv.from?.name ? `, from ${esc(mv.from.short || mv.from.name)}` : ''}.`,
+      why: yours(mv) ? 'Involves a team you follow' : mv.type === 'trade' || mv.type === 'transfer' ? `The latest ${mv.type} in ${mv.league || 'your leagues'}` : `The latest move in ${mv.league || 'your leagues'}` });
+    // 6 where to watch: national TV games still to start
+    const tv = pre.filter(g => g.tvNat).sort((x, y) => pts(y) - pts(x) || x.date - y.date).slice(0, 2).sort((x, y) => x.date - y.date);
+    if (tv.length) out.push({ i: 'tv', up: 'tv', t: `<b>On TV:</b> ${tv.map(g => `${esc(nm(g))}, ${esc(g.tvNat)} ${esc(hm(g.date))}`).join('; ')}.`, why: `${pre.filter(g => g.tvNat).length} game${pre.filter(g => g.tvNat).length === 1 ? '' : 's'} on national TV still to start. Opens the On TV list below` });
+    if (!live.length && !pre.length) out.unshift({ i: 'clock', t: `<b>Everything ${isToday() ? 'today' : 'on this day'} is over.</b> ${post.length} final${post.length === 1 ? '' : 's'}.`, why: 'Pick another day above to see what is coming' });
     if (!out.length) return '';
     const head = isToday() ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
+    const attr = x => x.g ? hubAttr(x.g) : x.lab ? `data-hublab="${esc(JSON.stringify(x.lab))}"` : x.shell ? `data-shell="${x.shell}"` : x.up ? `data-hubup="${x.up}" data-hubjump="1"` : '';
     return `<section class="card hm-brief" aria-labelledby="hmBriefH"><h2 id="hmBriefH">${head} in 60 seconds</h2>
-      <ul class="hm-bl">${out.slice(0, 4).map(x => `<li>${x.g || x.lab ? `<button type="button" class="hm-bi" ${x.g ? hubAttr(x.g) : `data-hublab="${esc(JSON.stringify(x.lab))}"`}>` : '<p class="hm-bi">'}${ico(x.i, 18)}<span>${x.t}</span>${x.g || x.lab ? '</button>' : '</p>'}</li>`).join('')}</ul></section>`;
+      <ul class="hm-bl hm-brief-l">${out.slice(0, 6).map(x => { const a = attr(x), tag = a ? 'button' : 'p';
+        return `<li><${tag}${a ? ' type="button"' : ''} class="hm-bi" ${a}>${ico(x.i, 18)}<span class="hm-bt"><span>${x.t}</span>${x.why ? `<small class="lb">${esc(x.why)}.</small>` : ''}</span></${tag}></li>` }).join('')}</ul></section>`;
   }
   function editor(list) {
     const F = favList(), pool = [], seenT = new Set();
@@ -396,35 +509,43 @@
   }
 
   function paint() {
+    RATE = new WeakMap();
     const list = H.games, live = list.filter(g => g.state === 'in'), today = isToday(), ready = H.at && H.shown === ymd(H.day);
     const ftr = ready ? stickyFeature(list) : null;
-    // the row of four: games in play, or the next to start when nothing is live; never the featured one twice
-    const size = g => g.weight * 10 + (g.a.rank ? 8 : 0) + (g.b.rank ? 8 : 0) + (likes(g) ? 40 : 0);   // your favorite sports come first
-    const rest = list.filter(g => g !== ftr);
-    const liveRow = rest.filter(g => g.state === 'in').sort((a, b) => size(b) - size(a));
-    const nextRow = rest.filter(g => g.state === 'pre').sort((a, b) => likes(b) - likes(a) || a.date - b.date || size(b) - size(a));
-    const doneRow = rest.filter(g => g.state === 'post').sort((a, b) => size(b) - size(a));
-    const four = (liveRow.length ? liveRow : nextRow.length ? nextRow : doneRow).slice(0, 4);
-    const rowTitle = liveRow.length ? 'Live now' : nextRow.length ? 'Up next' : 'Finished';
+    // Up next: four games, live ones first, from the tab the member picked. Never the featured game twice.
+    const rest = list.filter(g => g !== ftr), has = favList().length || MY.sports.length || MY.watch.length || favLeagues().length;
+    const tab = UP_KEYS.includes(MY.up) ? MY.up : has ? 'you' : 'major';
+    const pick = (fn, byTime) => { const xs = rest.filter(fn), lv = xs.filter(g => g.state === 'in').sort((a, b) => pts(b) - pts(a)),
+      nx = xs.filter(g => g.state === 'pre').sort(byTime ? (a, b) => a.date - b.date || pts(b) - pts(a) : (a, b) => pts(b) - pts(a) || a.date - b.date), dn = xs.filter(g => g.state === 'post').sort((a, b) => pts(b) - pts(a));
+      return { lv, nx, dn, four: [...lv, ...nx].slice(0, 4).concat(lv.length + nx.length ? [] : dn.slice(0, 4)) } };
+    let row = pick(tab === 'you' ? forYou : tab === 'major' ? major : tab === 'tv' ? g => !!g.tvNat : () => true, tab === 'tv' || tab === 'all'), fell = '';
+    if (tab === 'you' && !row.four.length) { row = pick(major); fell = has ? 'Nothing from your teams, leagues or sports is left today, so these are the major games.' : 'Follow a team, league or sport to fill this tab. Until then, these are the major games.' }
+    const four = row.four, rowTitle = row.lv.length ? 'Live now and up next' : row.nx.length ? 'Up next' : four.length ? 'Finished' : 'Up next';
     const title = today ? (isNight() ? 'Tonight' : 'Today') : H.day.toLocaleDateString([], { weekday: 'long' });
     // a redraw every 30 seconds must not take the keyboard's place away
     const act = sec.contains(document.activeElement) ? document.activeElement : null, keepAsk = act?.id === 'hmAsk' ? act.value : null;
-    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-hubmy', 'data-hubsport', 'data-hubsec', 'data-hubmove', 'data-hubfav', 'data-hubunfav', 'data-shell'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
+    const keep = act && !keepAsk ? ['data-hubday', 'data-hub', 'data-hublab', 'data-hubgo', 'data-hubmy', 'data-hubsport', 'data-hubsec', 'data-hubmove', 'data-hubfav', 'data-hubunfav', 'data-shell', 'data-hubup', 'data-hubfm', 'data-hubrc', 'data-hubpin'].map(a => act.hasAttribute(a) ? `[${a}="${CSS.escape(act.getAttribute(a))}"]${act.dataset.hubtab ? `[data-hubtab="${act.dataset.hubtab}"]` : ''}` : '').find(Boolean) : null;
     // each section is drawn on its own, then laid out in the member's order
     const part = {
       brief: () => ready ? brief(list, ftr) : '',
       mine: () => mine(list),
       back: () => back(list),
-      top: () => `<div class="g2 hm-top${MY.off.includes('hot') ? ' solo' : ''}">
+      top: () => `${!noLive() && ready && list.length ? `<div class="hm-fmode"><span class="lb" id="hmFmL">Feature</span><div class="cx-row scroll" role="radiogroup" aria-labelledby="hmFmL">${FMODES.map(([k, l]) => `<button type="button" class="cx sm" role="radio" aria-checked="${MY.fmode === k}" tabindex="${MY.fmode === k ? 0 : -1}" data-hubfm="${k}">${l}</button>`).join('')}</div></div>` : ''}
+      <div class="g2 hm-top${MY.off.includes('hot') ? ' solo' : ''}">
         ${noLive() ? `<div class="card feature emp hm-empty">${ico('members', 30)}<b>Live scores are switched off for you</b><p>Ask your admin for access to see games, scores and lineups here.</p></div>`
           : !ready ? '<div class="skl hm-ftr-skl"></div>' : ftr ? featureHTML(ftr, list)
+          : list.length && MY.fmode !== 'top' ? `<div class="card feature emp hm-empty">${ico(MY.fmode === 'mine' ? 'star' : MY.fmode === 'edge' ? 'pred' : MY.fmode === 'tv' ? 'tv' : 'clock', 30)}<b>${MY.fmode === 'mine' ? `None of your teams play ${today ? 'today' : 'on this day'}` : MY.fmode === 'edge' ? 'No game has a strong prediction edge yet' : MY.fmode === 'tv' ? `No game on national TV ${today ? 'today' : 'on this day'}` : 'No game left to start'}</b>
+              <p>${MY.fmode === 'mine' ? (favList().length ? 'Pick another day above, or follow more teams.' : 'Follow a team and its games will be featured here.') : MY.fmode === 'edge' ? 'An edge needs a priced player line 10 points or more away from the market. Lines usually go up in the morning.' : 'Try another day, or go back to the most important game.'}</p>
+              <div class="hm-inv-acts"><button type="button" class="bt sm" data-hubfm="top">Show the most important game</button>${MY.fmode === 'mine' ? '<button type="button" class="bt ghost sm" data-hubmy="edit">Follow teams</button>' : ''}</div></div>`
           : H.down && !list.length ? `<div class="card feature emp hm-empty">${ico('live', 30)}<b>The scoreboards didn’t load</b><p>This page tries again every 30 seconds.</p><button type="button" class="bt ghost sm" data-hubretry="games">Try now</button></div>`
           : `<div class="card feature emp hm-empty">${ico('live', 30)}<b>No games ${today ? 'today' : 'on this day'}</b><p>Pick another day above, or choose a sport to see its schedule.</p></div>`}
         ${MY.off.includes('hot') ? '' : heatCard()}
       </div>`,
-      live: () => MY.off.includes('live') ? '' : `<section class="hm-live" aria-label="${rowTitle}"${noLive() || (ready && !list.length) ? ' hidden' : ''}><div class="sec-h"><h2>${liveRow.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
-        ${!ready ? `<div class="g4 hm-cards">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>` : four.length ? `<div class="g4 hm-cards">${four.map(card).join('')}</div>`
-          : `<p class="hm-none"><b>Nothing else ${today ? 'today' : 'on this day'}</b><span>The featured game is the only one on the board.</span></p>`}</section>`,
+      live: () => MY.off.includes('live') ? '' : `<section class="hm-live" id="hmUp" aria-labelledby="hmUpH"${noLive() || (ready && !list.length) ? ' hidden' : ''}><div class="sec-h"><h2 id="hmUpH" tabindex="-1">${row.lv.length ? '<span class="dot-live" aria-hidden="true"></span> ' : ''}${rowTitle}</h2><button type="button" class="lk" data-shell="live">See all live${live.length ? ` (${live.length})` : ''}</button></div>
+        <div class="seg hm-uptabs" role="radiogroup" aria-label="Which games">${[['you', 'For you'], ['major', 'Major games'], ['tv', 'On TV'], ['all', 'All sports']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${tab === k}" class="${tab === k ? 'on' : ''}" tabindex="${tab === k ? 0 : -1}" data-hubup="${k}">${l}</button>`).join('')}</div>
+        ${fell ? `<p class="lb hm-fell">${esc(fell)}</p>` : ''}
+        ${!ready ? `<div class="g4 hm-cards">${'<div class="skl hm-card-skl"></div>'.repeat(4)}</div>` : four.length ? `<div class="g4 hm-cards">${four.map(g => window.flCard({ ...noSpoil(facts(g)), attrs: hubAttr(g), extra: tab !== 'all' && reason(g, tab === 'tv' ? 'tv' : '') ? `<span class="lb hm-why1">${esc(reason(g, tab === 'tv' ? 'tv' : '').split('. ')[0])}</span>` : '' })).join('')}</div>`
+          : `<p class="hm-none"><b>${tab === 'tv' ? `No other games on national TV ${today ? 'today' : 'on this day'}` : tab === 'major' ? `No other major games ${today ? 'today' : 'on this day'}` : `Nothing else ${today ? 'today' : 'on this day'}`}</b><span>${tab === 'all' ? 'The featured game is the only one on the board.' : 'Choose All sports to see every game.'}</span></p>`}</section>`,
       three: () => `${MY.off.includes('three') ? '' : `<div class="g3 hm-three">${edgeCard()}${wireCard()}${labCard()}</div>`}`,
       low: () => `${((f, st) => f && st ? `<div class="g2 hm-low">${st}<div class="vst">${f}</div></div>` : f ? `<div class="g3 hm-fights">${f}</div>` : st)(today && !MY.off.includes('fights') ? fightTiles() : '', MY.off.includes('standouts') ? '' : standouts(list))}`,
     };
@@ -436,7 +557,7 @@
     if (keepAsk != null) { const a = $('hmAsk'); if (a) { a.value = keepAsk; a.focus() } } else if (keep) sec.querySelector(keep)?.focus({ preventScroll: true });
     { const dy = sec.querySelector('.hm-days'), on = dy?.querySelector('.on'); if (dy && on) dy.scrollLeft = on.offsetLeft - dy.offsetLeft - (dy.clientWidth - on.offsetWidth) / 2 }
     if (!sec.dataset.shown) { sec.dataset.shown = 1; sec.classList.add('hub-in'); setTimeout(() => sec.classList.remove('hub-in'), 900) }
-    if (ready) { if (!MY.off.includes('hot') || !MY.off.includes('three')) loadHeat(); if (!MY.off.includes('three')) loadWire() }
+    if (ready) { loadHeat(); if (!MY.off.includes('three') || !MY.off.includes('brief')) loadWire() }   // the briefing and featured points read today's lines too
   }
 
   /* ---------- showing and leaving the hub ---------- */
@@ -475,6 +596,11 @@
     const d = ev.target.closest('[data-hubday]');
     if (d) { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + +d.dataset.hubday); if (+t === +H.day) return; H.day = t; H.games = []; paint(); load(true);
       return setTimeout(() => sec.querySelector('.hm-day.on')?.focus(), 0) }
+    const fm = ev.target.closest('[data-hubfm]');
+    if (fm) { MY.fmode = fm.dataset.hubfm; store.set('fl.ftrMode', MY.fmode); H.ftrKey = ''; paint(); tell(`Featured: ${FMODES.find(m => m[0] === MY.fmode)[1]}.`); return sec.querySelector(`[data-hubfm="${MY.fmode}"]`)?.focus() }
+    const up = ev.target.closest('[data-hubup]');
+    if (up) { MY.up = up.dataset.hubup; store.set('fl.upTab', MY.up); paint(); const sel = sec.querySelector(`.hm-uptabs [data-hubup="${MY.up}"]`);
+      if (up.dataset.hubjump) { const h = $('hmUpH'); h?.scrollIntoView({ block: 'start', behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth' }); h?.focus({ preventScroll: true }) } else sel?.focus(); return }
     const rt = ev.target.closest('[data-hubretry]');
     if (rt) { const k = rt.dataset.hubretry; if (k === 'heat') { HEAT.at = 0; HEAT.picks = null; HEAT.failed = false; loadHeat() } else if (k === 'wire') { WIRE.at = 0; WIRE.rows = null; WIRE.failed = false; loadWire() } else { H.err = 0; load(true) } return paint() }
     const my = ev.target.closest('[data-hubmy],[data-hubsport],[data-hubfav],[data-hubunfav],[data-hubunwatch]');
