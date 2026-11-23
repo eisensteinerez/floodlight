@@ -98,7 +98,7 @@ PUBLIC_FILES = {"index.html", "status.js", "recent.js", "linemove.js", "alerts.j
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
                 "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "market.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
-                "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js", "plan.js", "auth.js", "account.js", "pricing.js", "legal.js", "accounts.css"}
+                "players.js", "schedule.js", "morph.js", "broadcast.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp", "fmt.js", "admin.js", "overlay.js", "plan.js", "auth.js", "account.js", "pricing.js", "legal.js"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -1006,7 +1006,7 @@ _acct_lock = threading.Lock()
 SESSION_DAYS = 30
 PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": list, "color": str, "bio": str, "display": str, "theme": str,
              "boards": list, "slips": list, "favSports": list, "tz": str, "follows": list, "favThemes": list,
-             "homeOff": list, "homeOrder": list, "watch": list, "books": list}   # Home: the sections a member has hidden, and the games on their watchlist   # saved Lab boards, saved prediction slips, favorite sports, time zone
+             "homeOff": list, "homeOrder": list, "watch": list, "books": list, "interests": list}   # Home: the sections a member has hidden, and the games on their watchlist   # saved Lab boards, saved prediction slips, favorite sports, time zone
 
 
 _users = storage.load(USERS_FILE, {})
@@ -1884,7 +1884,7 @@ def clean_prefs(raw, old):
         if k in raw and isinstance(raw[k], typ):
             v = raw[k]
             if typ is list:
-                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes", "homeOff", "homeOrder", "favLeagues", "books") and isinstance(x, str) and len(x) <= 24)][:200]
+                v = [x for x in v if (isinstance(x, dict) and k != "favThemes") or (k in ("favSports", "favThemes", "homeOff", "homeOrder", "favLeagues", "books", "interests") and isinstance(x, str) and len(x) <= 24)][:200]
             else:
                 v = v.strip()[:280 if k == "bio" else 40]
                 if k == "color":
@@ -2602,7 +2602,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"v": int((ROOT / "index.html").stat().st_mtime)})
             if u.path == "/api/me":
                 _, user = session_user(self.headers.get("Cookie"))
-                return self.send_auth(200, {"user": public_user(user) if user else None, "gated": GATED})
+                return self.send_auth(200, {"user": public_user(user) if user else None, "gated": GATED, "terms": accounts.TERMS_VERSION})
             if u.path == "/api/parlays":   # the member's own tracked parlays
                 _, user = session_user(self.headers.get("Cookie"))
                 return self.send_auth(200, {"parlays": parlays_of(user) if user else [], "signedIn": bool(user)})
