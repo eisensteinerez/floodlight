@@ -3257,7 +3257,7 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .pd-cx li{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface-2)}
 .pd-cx li>svg,.pd-cx li>.pd-gl{flex:none;margin-top:1px;color:var(--text-2)}
 .pd-cx li>.pd-gl{width:24px;height:24px;font-size:13px;color:var(--text)}
-.pd-cx span{display:grid;gap:2px;min-width:0}
+.pd-cx li>span{display:grid;gap:2px;min-width:0}
 .pd-cx b{font:600 14px/1.3 var(--font-body);color:var(--text);overflow-wrap:anywhere}
 .pd-cx small{font:500 13px/1.35 var(--font-body);color:var(--text-2)}
 .pd-cx .pd-cx-out,.pd-cx .pd-cx-moved{border-left:3px solid var(--warning,var(--bad))}
@@ -3444,3 +3444,12 @@ h3.hm-brief-h{margin:0;font:700 17px/1.25 var(--font-body);color:var(--text)}
 @media (max-width:420px){.al-t thead th{font-size:11px;letter-spacing:0;padding-inline:0}.al-t td{padding:0}.al-t th[scope="row"]{padding-left:0;font-size:13px;overflow-wrap:anywhere}}
 /* the setup and sign-in headings take focus so screen readers hear each step; the ring is only for keyboard targets */
 :is(#obTitle,#faH,.ac-dlg h2)[tabindex="-1"]:focus{outline:none}
+/* on the filled (accent) Prediction Card the read follows the card's own ink, like the correlation note */
+.pd-slip.has .pd-cx li{background:color-mix(in oklab,var(--on-accent) 9%,transparent);border-color:color-mix(in oklab,var(--on-accent) 30%,transparent)}
+.pd-slip.has .pd-cx li>svg,.pd-slip.has .pd-cx b,.pd-slip.has .pd-cx small,.pd-slip.has .pd-nog{color:var(--on-accent)}
+.pd-slip.has .pd-cx small,.pd-slip.has .pd-nog{opacity:.85}
+.pd-slip.has .pd-cx .pd-cx-out,.pd-slip.has .pd-cx .pd-cx-moved{border-left-color:var(--on-accent)}
+.pd-slip.has .pd-cx .pd-gl{color:var(--on-accent);border-color:color-mix(in oklab,var(--on-accent) 55%,transparent);background:transparent}
+/* the secondary buttons on the filled card: dark ink on the card itself, never on a dark glass fill (contrast) */
+html:root[data-theme] .pd-slip.has .bt.pd-clear{background:transparent;color:var(--on-accent);border-color:color-mix(in oklab,var(--on-accent) 55%,transparent)}
+html:root[data-theme] .pd-slip.has .bt.pd-clear:hover{background:color-mix(in oklab,var(--on-accent) 10%,transparent)}
