@@ -250,7 +250,7 @@
           <label class="fl-f"><span>Odds you got</span><input class="inp num" name="odds" inputmode="text" placeholder="+450" value="${p.odds != null ? esc(C.amTxt(p.odds).replace('−', '-')) : ''}" data-fk="eo-${p.id}" autocomplete="off"></label>
           <label class="fl-f"><span>Stake, in units</span><input class="inp num" name="stake" inputmode="decimal" placeholder="1" value="${p.stake != null ? fmt(p.stake) : ''}" data-fk="es-${p.id}" autocomplete="off"></label>
           <button type="submit" class="bt sm" data-fk="esave-${p.id}">Save</button><button type="button" class="bt sm ghost" data-py="keep" data-fk="ecancel-${p.id}">Cancel</button>${V.err ? `<p class="py-err" role="alert">${esc(V.err)}</p>` : ''}</form>`
-      : `<div class="py-tools"><button type="button" class="bt sm ghost" data-pyedit="${p.id}" data-fk="edit-${p.id}">${ic('edit', 16)}${p.odds != null ? 'Name and price' : 'Add your price'}</button><button type="button" class="bt sm ghost" data-pydel="${p.id}" data-fk="del-${p.id}">${ic('trash', 16)}Delete</button>
+      : `<div class="py-tools"><button type="button" class="bt sm ghost" data-pyedit="${p.id}" data-fk="edit-${p.id}">${ic('edit', 16)}${p.odds != null ? 'Name and price' : 'Add your price'}</button><button type="button" class="bt sm ghost" data-pyshare="${p.id}" data-fk="share-${p.id}">${ic('share', 16)}Share</button><button type="button" class="bt sm ghost" data-pydel="${p.id}" data-fk="del-${p.id}">${ic('trash', 16)}Delete</button>
           ${p.local ? `<span class="lb">Kept in this browser only. Log in to keep it with your account.</span>` : ''}</div>`;
     return `<article class="card py-card ${p.status}${R.anyLive ? ' on' : ''}" data-py-card="${p.id}" aria-label="${esc(nameOf(p))}">
       <header class="py-h"><div class="py-name"><h3>${esc(nameOf(p))}</h3><small>${plural(n, 'pick')} · ${ic('lock', 12)}Picks locked ${esc(dayOf(p.at))}, ${esc(clock(p.at))}${open ? ' · name, price and stake can still be edited' : ''}</small></div>${status}</header>
@@ -314,6 +314,19 @@
   /* ---------- the record, beside the cards ---------- */
   const mark = s => s === 'won' ? ['W', 'Won'] : s === 'lost' ? ['L', 'Lost'] : ['P', 'Push'];
   const strip = last => `<ol class="py-strip" aria-label="Last ${last.length}, oldest first">${last.map(p => { const [c, w] = mark(p.status); return `<li class="${p.status}" title="${esc(`${nameOf(p)}: ${w}`)}"><span aria-hidden="true">${c}</span><span class="sr-only">${w}</span></li>` }).join('')}</ol>`;
+  /* the parlay history read as a whole: in play and finished, the current streak, the best card, the usual size, and
+     results by sport and by size. Past results describe past parlays; the card says so. */
+  function histRead() {
+    const K = window.flLabCore; if (!K) return '';
+    const H = K.history(C.list().map(p => ({ ...p, legs: p.legs.map(l => ({ ...l, lg: C.LG[l.lg]?.name || (l.lg ? String(l.lg).toUpperCase() : '') })) })));
+    const wl = t => `${t.won}–${t.lost}${t.won + t.lost ? ` <small>${pct(t.won / (t.won + t.lost))}%</small>` : ''}`;
+    const tbl = (cap, rows) => rows.length ? `<table class="py-hxt"><caption>${cap}</caption><tbody>${rows.slice(0, 6).map(([k, t]) => `<tr><th scope="row">${esc(k)}</th><td class="num">${wl(t)}</td></tr>`).join('')}</tbody></table>` : '';
+    const streak = H.streak.kind ? `${H.streak.n} ${H.streak.kind}` : '–';
+    return `<dl class="py-hx"><div><dt>In play</dt><dd class="num">${H.active}</dd></div><div><dt>Finished</dt><dd class="num">${H.done}</dd></div><div><dt>Current streak</dt><dd class="num">${streak}</dd></div><div><dt>Average size</dt><dd class="num">${H.avgSize == null ? '–' : `${fmt(H.avgSize)} picks`}</dd></div></dl>
+      ${H.best ? `<p class="lb py-best">Best card: <b>${esc(nameOf(H.best))}</b>, won${H.best.ours0 != null ? ` when our number gave it ${pct(H.best.ours0)}%` : ''}.</p>` : ''}
+      ${H.bySport.length || H.bySize.length ? `<div class="py-hxs">${tbl('By sport', H.bySport)}${tbl('By size', H.bySize)}</div>` : ''}
+      <p class="lb py-nog">Hit rates describe past parlays. They don’t guarantee future results.</p>`;
+  }
   function recordCard() {
     const S = C.stats();
     if (!S.n) return `<section class="card py-rec" aria-label="Your record"><div class="sec-h"><h2>Your record</h2></div><p class="lb">${S.open ? `${plural(S.open, 'parlay')} in play. Your record starts when the first one finishes.` : 'Your wins, losses and hit rate build up here as your parlays finish.'}</p></section>`;
@@ -323,6 +336,7 @@
         <div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${S.rate == null ? '–' : pct(S.rate) + '%'}</b></div>
         <div class="tile inset"><span class="lb">Units</span><b class="fig num">${u == null ? '–' : (u > 0 ? '+' : u < 0 ? '−' : '') + fmt(Math.round(Math.abs(u) * 100) / 100)}</b><small class="lb">${u == null ? 'add your odds to count these' : S.est ? 'some at a fair price' : `over ${plural(S.priced, 'parlay')}`}</small></div></div>
       <div><span class="lb">Last ${S.last.length}</span>${strip(S.last)}</div>
+      ${histRead()}
       <p class="lb">${S.legN ? `Single picks: ${S.legHit} of ${S.legN} hit (${pct(S.legRate)}%).` : ''}${S.clvN ? ` Beat the closing price on ${S.clvBeat} of ${plural(S.clvN, 'pick')}.` : ''}</p></section>`;
   }
   const HOW = `
@@ -500,6 +514,14 @@
         <div><dt>Difference</dt><dd class="num">${d == null ? '–' : pts(d)}</dd><small>${d == null ? (e.conflict ? 'Fix the conflict first' : 'Needs a book price for every pick') : `${d > 0 ? 'Ours is above the books' : d < 0 ? 'Ours is below the books' : 'Level with the books'}${dr && dr[0] !== dr[1] ? `. With the range: ${pts(dr[0]).replace(/ points?$/, '')} to ${pts(dr[1])}` : ''}`}</small></div></dl>
       ${chanceNote(legs)}${e.conflict ? '' : rangeBar(e, book)}${HOWCALC}</div>`;
   }
+  function ticketRead(legs) {
+    const K = window.flLabCore; if (!K) return '';
+    const c = K.card(legs.map(l => ({ ...l, short: l.text, ours: C.start0(l), grade: l.grade || null })));
+    const rows = [];
+    if (c.avgGrade) rows.push(`<li>${ic('check', 14)}<span>Average evidence quality <b>${c.avgGrade}</b>, ${esc(K.GRADE_WORD[c.avgGrade].toLowerCase())}.</span></li>`);
+    if (c.weakest) rows.push(`<li>${ic('help', 14)}<span>Weakest pick: <b>${esc(c.weakest.text)}</b>${c.weakest.ours != null ? `, ${pct(c.weakest.ours)}% on its own` : ''}. Every pick has to hit, so this one matters most.</span></li>`);
+    return rows.length ? `<ul class="py-tread">${rows.join('')}</ul>` : '';
+  }
   function ticket() {
     const legs = V.draft.legs, n = legs.length, c = n ? C.combine(legs, C.start0) : null, mk = n ? C.combine(legs, l => l.market0) : null;
     // where "the books" number comes from, and how old it is
@@ -520,7 +542,8 @@
       ${n === 1 ? '<p class="py-hint">One pick is tracked on its own. Add a second to make it a parlay.</p>' : ''}
       ${n ? `<ul class="py-dl">${legs.map(legLi).join('')}</ul>
         ${bad.length ? `<p class="py-bad" role="note">${ic('x', 16)}<span>${bad.length === 1 ? 'One pick can’t go in.' : `${bad.length} picks can’t go in.`} The reason is under ${bad.length === 1 ? 'it' : 'each one'}.</span><button type="button" class="bt sm ghost" data-py="dropbad" data-fk="dropbad">Take out ${bad.length === 1 ? 'that pick' : `those ${bad.length}`}</button></p>` : ''}
-        ${closes ? `<p class="py-hint py-closes">${ic('clock', 14)}Lock in before ${esc(when(closes))}, when the first game starts and its market closes.</p>` : ''}
+        ${closes ? `<p class="py-hint py-closes">${ic('clock', 14)}Lock in before ${esc(when(closes))}, in <span data-pdcd="${closes}">${esc(window.flLabCore?.countdown(closes - Date.now()) || '')}</span>, when the first game starts and its market closes.</p>` : ''}
+        ${n > 1 ? ticketRead(legs) : ''}
         ${sum ? `<p class="py-relsum ${sum.level}" role="note">${ic(sum.level === 'independent' ? 'check' : 'help', 16)}<span>${sum.label === 'Low' || sum.label === 'Conflicting' ? `<b>${esc(sum.label === 'Conflicting' ? 'Conflicting' : 'Low correlation')}.</b> ` : ''}${esc(sum.text)}</span></p>` : ''}
         ${n === 1 ? `<div class="py-tt"><div><span class="py-k">Chance it hits</span><b class="num py-tbig">${c ? pct(c.p) + '%' : '–'}</b></div>
           <div class="py-tm"><span class="py-k">Books say</span><b class="num">${mk ? pct(mk.p) + '%' : '–'}</b><small class="py-src">${esc(srcTxt)}</small></div></div>` : chances(legs, srcTxt)}
@@ -560,10 +583,22 @@
   function openBuilder(tab) { V.open = true; V.said = ''; if (tab) V.tab = tab; if (V.tab === 'games') loadGames(); else loadProps(); draw() }
   // picks handed over from the Predictions slip
   function build(picks) {
-    const legs = (picks || []).map(p => C.fromPick(p)).filter(l => l && l.start > Date.now()), lost = (picks || []).length - legs.length;
+    const legs = (picks || []).map(p => { const l = C.fromPick(p), g = l && (p.grade?.grade || window.flLabCore?.grade?.(p)?.grade); if (g) l.grade = g; return l }).filter(l => l && l.start > Date.now()), lost = (picks || []).length - legs.length;
     for (const l of legs) if (!inDraft(l.id) && V.draft.legs.length < MAX) V.draft.legs.push(l);
     saveDraft(); window.flPages.show('parlays'); openBuilder(legs.some(l => l.type === 'prop') ? 'props' : 'games');
     if (lost) window.toast?.(`${plural(lost, 'pick')} left out: the game has started or is off the board`);
+  }
+
+  function shareParlay(p) {
+    const mk = window.flPredictions?.cardCanvas; if (!p || !mk) return;
+    const n = p.legs.length, res = { hit: 'Hit', miss: 'Missed', push: 'Push', void: 'Void' };
+    const title = p.status === 'open' ? `${nameOf(p)}${p.ours0 != null ? ` · ${pct(p.ours0)}% at the start` : ''}` : `${nameOf(p)} · ${p.status === 'won' ? 'Won' : p.status === 'lost' ? 'Lost' : 'Push'}`;
+    const cv = mk({ kicker: 'Floodlight · Parlay', title, rows: p.legs.map(l => [l.short || l.text, l.res ? res[l.res] || '' : `${pct(C.start0(l))}%`, l.game || '']),
+      foot: [`${plural(n, 'pick')}, locked ${dayOf(p.at)}`, 'Chances are estimates, not a promise of what happens next.'] });
+    try { window.flTrack?.('card_create', { n, kind: 'parlay' }) } catch (e) {}
+    cv.toBlob(async b => { if (!b) return; const file = new File([b], 'parlay.png', { type: 'image/png' });
+      try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: nameOf(p) }); return } } catch (e) { if (e?.name === 'AbortError') return }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'parlay.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); say('Saved the parlay as a picture.') }, 'image/png');
   }
 
   /* ---------- actions ---------- */
@@ -588,6 +623,7 @@
     if (d.py === 'reprops') return loadProps(true);
     if (d.py === 'reload') return C.load().then(() => refresh(true));
     if (d.py === 'all') { V.all = !V.all; return draw() }
+    if (d.pyshare) return shareParlay(C.list().find(p => p.id === d.pyshare));
     if (d.pydel) { V.confirm = d.pydel; V.edit = ''; return draw() }
     if (d.pyedit) { V.edit = d.pyedit; V.confirm = ''; V.err = ''; return draw() }
     if (d.py === 'keep') { V.confirm = ''; V.edit = ''; V.err = ''; return draw() }

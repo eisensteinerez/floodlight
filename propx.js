@@ -32,23 +32,24 @@
   const guest = () => { let g = store.get('fl.guest', ''); if (!g) { g = Math.random().toString(36).slice(2, 12); store.set('fl.guest', g) } return g };
 
   const X = { host: null, api: null, f: { ...K.defaults(), ...store.get('fl.px', {}) }, sort: store.get('fl.pxSort', 'edge'), rows: null, removed: [], at: 0, err: '', loading: false,
-    interim: false, panelOpen: false, shown: 40, pop: null, popAt: 0, grades: new Map(), panel: null };
+    panelOpen: false, shown: 40, pop: null, popAt: 0, grades: new Map(), panel: null };
   if (!K.SORTS.some(s => s[0] === X.sort)) X.sort = 'edge';
 
   /* ---------- the feed ---------- */
-  async function feed(force) {
-    if (window.flMarkets?.list) return window.flMarkets.list({ force });
-    // until the verified feed is on this page: the board's own upcoming lines, marked so nothing claims to be verified
-    const r = await window.flEdge.props(null, force), ats = Object.values(r.by || {}).map(b => b.at || 0), now = Date.now();
-    const markets = r.picks.map(p => { const x = MK.supported(p, { now }); return { ...p, sedge: x.edge, support: x.factor, cut: x.reasons } });
-    return { markets, removed: [], at: ats.length ? Math.max(...ats) : 0, interim: true, denied: r.denied };
+  // one source for every line: the verified market service (markets.js). No second feed, no copies of its checks.
+  function feed(force) {
+    if (!window.flMarkets?.list) return Promise.reject(new Error('The verified lines did not load. Reload the page to try again.'));
+    return window.flMarkets.list({ force });
+  }
+  function setRows(ms) {
+    X.rows = ms.map(p => ({ p, g: p.grade?.grade ? p.grade : K.grade(p), s: K.splits(p.games, { line: p.line, side: p.side, yes: p.yes, opp: p.v?.event?.opp || p.opp, oppAbbr: p.v?.event?.oppAbbr }) }));
+    X.grades = new Map(X.rows.map(r => [r.p.id, r.g]));
   }
   async function load(force) {
     if (X.loading) return; X.loading = true; if (!X.rows) draw();
     try {
-      const r = await feed(force); X.err = ''; X.interim = !!r.interim; X.at = r.at || Date.now(); X.removed = r.removed || []; X.denied = !!r.denied;
-      X.rows = (r.markets || []).map(p => ({ p, g: p.grade?.grade ? p.grade : K.grade(p), s: K.splits(p.games, { line: p.line, side: p.side, yes: p.yes, opp: p.v?.event?.opp || p.opp, oppAbbr: p.v?.event?.oppAbbr }) }));
-      X.grades = new Map(X.rows.map(r => [r.p.id, r.g]));
+      const r = await feed(force); X.err = ''; X.at = r.at || Date.now(); X.removed = r.removed || []; X.denied = !!r.denied; X.by = r.by || {};
+      setRows(r.markets || []);
     } catch (e) { X.err = e.message || 'The lines did not load.'; X.rows = X.rows || [] }
     finally { X.loading = false; draw() }
     loadPop();
@@ -58,7 +59,10 @@
     fetch('/api/popular', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(d => { if (!d) return; X.pop = { followed: new Map(Object.entries(d.followed || {})), researched: new Map(Object.entries(d.researched || {})) }; if (['followed', 'researched'].includes(X.sort)) draw() }).catch(() => {});
   }
   const count = (p, kind) => fetch('/api/popular', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: keyOf(p), kind, guest: guest() }) }).catch(() => {});
-  document.addEventListener('fl:markets', () => { if (X.host?.isConnected) load(); if (X.panel?.isConnected) redrawPanel() });
+  // the feed changed (a game started, a line moved, a player was ruled out): take what is open now from it, without asking
+  // the server again, and never in answer to its own 'load' notice (list() sends one each time, so that would loop)
+  document.addEventListener('fl:markets', ev => { if (ev.detail?.reason === 'load' || !X.rows || !window.flMarkets?.open) return;
+    if (X.host?.isConnected) { X.removed = window.flMarkets.removed(); setRows(window.flMarkets.open()); draw() } if (X.panel?.isConnected) redrawPanel() });
 
   /* ---------- the explorer ---------- */
   const save = () => { store.set('fl.px', X.f); store.set('fl.pxSort', X.sort) };
@@ -159,7 +163,7 @@
     const list = K.sort(K.filter(all, X.f, { now: Date.now(), tz: tz(), dayDiff: MK.dayDiff, grades: X.grades }), X.sort, { grades: X.grades, pop: X.pop, key: keyOf });
     const shown = list.slice(0, X.shown), sports = new Set(list.map(p => p.sport)).size;
     const status = X.err ? `<p class="px-err" role="alert">${ic('help', 16)}The lines did not refresh: ${esc(X.err)} <button type="button" class="bt ghost sm" data-px="reload">Try again</button></p>` : '';
-    const note = X.interim ? `<p class="lb px-interim">Lines whose game is still ahead. Checks against the league schedule run on Predictions.</p>` : '';
+    const note = '';
     const sum = `<p class="px-sum" role="status"><b class="num">${list.length}</b> ${list.length === 1 ? 'open line' : 'open lines'}${X.f.sport === 'all' && sports > 1 ? ` across ${sports} sports` : ''}${X.at ? ` · checked <time datetime="${new Date(X.at).toISOString()}">${ago(X.at)}</time>` : ''}${X.loading ? ' · checking…' : ''}${list.length !== all.length ? ` <span class="lb">(${all.length - list.length} hidden by filters)</span>` : ''}</p>`;
     const table = !all.length ? `<div class="card emp">${ic('bars', 28)}<b>No open lines right now</b><p>${X.err ? 'The providers did not answer. Try again in a minute.' : 'Every listed game has started or no provider has posted player lines yet. New lines appear here as soon as they are verified.'}</p></div>`
       : !list.length ? `<div class="card emp">${ic('filter', 28)}<b>No lines match these filters</b><p>${all.length} open ${all.length === 1 ? 'line is' : 'lines are'} hidden by them.</p><button type="button" class="bt" data-px="clear">Clear filters</button></div>`
@@ -294,7 +298,7 @@
   function lineHist(p, s) {
     if (!can('line_history')) return `<section class="rp-sec"><h3>Line history</h3>${upsell('line_history', 'Line history is part of Plus.')}</section>`;
     const m = R.moves, rec0 = (m || []).find(x => x.side === p.side || x.line === p.line) || (m || [])[0], reads = rec0?.readings || [];
-    const first = reads[0], open = p.openLine ?? first?.line ?? null;
+    const first = reads[0], open = p.lineFrom ?? p.openLine ?? first?.line ?? null;
     const body = m == null ? '<p class="lb">Loading the saved readings…</p>'
       : `<dl class="rp-mini"><div><dt>Opening line</dt><dd class="num">${fmt(open)}</dd></div><div><dt>Now</dt><dd class="num">${fmt(p.line)}</dd></div><div><dt>Readings</dt><dd class="num">${reads.length || '–'}</dd></div></dl>
         ${reads.length > 1 ? `<ol class="rp-lh">${reads.slice(-8).map(r => `<li><time>${esc(new Date(r.at * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</time><b class="num">${fmt(r.line)}</b>${r.market != null ? `<small>market ${pct(r.market)}</small>` : ''}</li>`).join('')}</ol>` : `<p class="lb">${open != null && open !== p.line ? `Opened at ${fmt(open)}.` : 'The line has not moved since we first saw it.'}</p>`}`;

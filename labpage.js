@@ -373,7 +373,8 @@
   addEventListener('scroll', () => { if (!scrollF) scrollF = requestAnimationFrame(tellScroll) }, { passive: true });
   addEventListener('resize', () => { if (!scrollF) scrollF = requestAnimationFrame(tellScroll) });
   document.addEventListener('fl:theme', () => { const f = frame(); if (L.ready && f?.contentWindow) f.contentWindow.postMessage({ flTheme: root.dataset.theme, flMotion: root.dataset.motion || '' }, location.origin) });
-  document.addEventListener('fl:markets', () => { if (L.loaded && window.flPages.current() === 'lab') { L.picks = null; loadPicks() } });
+  // the feed changed: read what is open now from it (no new request, and never on its own 'load' notice, which list() sends)
+  document.addEventListener('fl:markets', ev => { if (ev.detail?.reason === 'load' || !window.flMarkets?.open || L.picks == null) return; L.picks = window.flMarkets.open(); if (L.loaded && window.flPages.current() === 'lab') { drawTry(); drawCast(); drawStart() } drawBoards(); quietRedraw() });
   document.addEventListener('fl:hub', () => { if (L.loaded && window.flPages.current() === 'lab') { drawTry(); if (L.picks == null) loadPicks() } });
 
   /* ---------- clicks ---------- */

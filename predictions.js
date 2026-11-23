@@ -599,12 +599,16 @@
   const range = c => !c ? '–' : c.kind === 'conflict' ? '0%' : pct(c.lo) === pct(c.hi) ? `${pct(c.lo)}%` : `${pct(c.lo)}–${pct(c.hi)}%`;
   function syncSlip() {   // legs keep the numbers they were added at, until the same pick is on the board again
     const live = new Map(allPicks().map(p => [p.id, p]));
-    P.slip = P.slip.map(l => { const p = live.get(l.id); return p ? leg(p) : l }); store.set('fl.slip', P.slip);
+    // a pick no longer on the board keeps its numbers and says why it left (ruled out, closed, started)
+    P.slip = P.slip.map(l => { const p = live.get(l.id); if (p) return { ...leg(p), line0: l.line0 ?? l.line ?? p.line ?? null };
+      const g = l.mid && window.flMarkets?.get?.(l.mid); return g && g.status && g.status !== 'open' ? { ...l, gone: g.statusLabel || g.status, out: l.out || g.status === 'player_out' } : l });
+    store.set('fl.slip', P.slip);
   }
-  const leg = p => ({ id: p.id, name: p.name, text: p.text, short: p.short || `${p.name} ${p.text}`, ours: p.ours, market: p.market, gameKey: p.gameKey, game: p.game, sport: p.sport, pl: plOf(p) });
+  const leg = p => ({ id: p.id, mid: p.mid || '', name: p.name, text: p.text, short: p.short || `${p.name} ${p.text}`, ours: p.ours, market: p.market, gameKey: p.gameKey, game: p.game, sport: p.sport, pl: plOf(p),
+    grade: gradeOf(p)?.grade || null, start: p.start ? +new Date(p.start) || null : null, line: p.line ?? null, line0: p.line ?? null, side: p.side || null, out: p.av?.lv === 'out' });
   function toggle(id) {
     const i = P.slip.findIndex(l => l.id === id);
-    if (i >= 0) P.slip.splice(i, 1); else { const p = allPicks().find(x => x.id === id); if (!p) return; if (P.slip.length >= 12) return window.toast?.('A slip holds up to 12 picks'); P.slip.push(leg(p)) }
+    if (i >= 0) P.slip.splice(i, 1); else { const p = allPicks().find(x => x.id === id); if (!p) return; if (P.slip.length >= 12) return window.toast?.('A Prediction Card holds up to 12 picks'); P.slip.push(leg(p)) }
     store.set('fl.slip', P.slip); P.saved = 0; draw();
   }
   function saveSlips() {
@@ -624,21 +628,67 @@
     return `<div class="pd-corr ${k.label.toLowerCase()}" role="note" aria-label="${esc(k.head)}"><p class="pd-corr-h">${ic(CORR_ICON[k.label], 16)}<b>${esc(k.head)}</b>${k.label === 'Conflicting' ? `<span class="pl pd-corr-l">${esc(k.label)}</span>` : ''}</p><p>${esc(k.text)}</p>
       ${pairs.length ? `<ul class="pd-corr-p">${pairs.map(x => `<li><span>${esc(nm(x.a))} + ${esc(nm(x.b))}</span><small>${esc(x.label)}: ${esc(x.why)}</small></li>`).join('')}</ul>` : ''}</div>`;
   }
+
+  /* the Prediction Card read as a whole (labcore.card): evidence, the weakest pick, when it locks, and what changed */
+  function cardRead(legs) {
+    const K = window.flLabCore; if (!K || !legs.length) return '';
+    const c = K.card(legs), rows = [];
+    if (c.avgGrade) rows.push(['grade', `<span class="pd-gl g-${c.avgGrade}">${c.avgGrade}</span>`, `Average evidence quality: ${K.GRADE_WORD[c.avgGrade].toLowerCase()}`, 'Graded apart from the chance. One weak pick can sink a strong card.']);
+    if (c.weakest) rows.push(['weak', ic('help', 16), `Weakest pick: ${esc(c.weakest.short)}`, `${c.weakest.grade ? `Evidence ${c.weakest.grade}, ` : ''}${pct(c.weakest.ours)}% on its own. Taking it out raises the chance the rest hit.`]);
+    if (c.expires) rows.push(['clock', ic('clock', 16), `Locks in <span data-pdcd="${+c.expires.leg.start}">${esc(K.countdown(c.expires.in))}</span>`, `${esc(c.expires.leg.game || c.expires.leg.short)} starts first. A pick can’t be added or changed once its game starts.`]);
+    if (c.started.length) rows.push(['start', ic('clock', 16), `${c.started.length === 1 ? 'One pick has' : `${c.started.length} picks have`} started`, `${esc(c.started.map(l => l.short).join(', '))}. Its chance is the one from before the start.`]);
+    for (const m of c.moved) rows.push(['moved', ic('trend', 16), `Line moved: ${esc(m.name || m.short)} ${fmtL(m.from)} → ${fmtL(m.to)}`, `The ${esc(m.side || 'pick')} is now ${m.worse ? 'harder' : 'easier'} to hit than when you added it.`]);
+    for (const l of legs.filter(l => l.out || l.gone)) rows.push(['out', ic('x', 16), `${esc(l.short)}: ${esc(l.out ? 'ruled out' : String(l.gone).toLowerCase())}`, 'This pick is off the board. Take it out, or the card can’t hit.']);
+    return rows.length ? `<ul class="pd-cx">${rows.map(([k, i, h, d]) => `<li class="pd-cx-${k}">${i}<span><b>${h}</b><small>${d}</small></span></li>`).join('')}</ul>` : '';
+  }
+  // the countdowns tick once a minute while the card is on screen
+  setInterval(() => { const K = window.flLabCore; if (!K) return; document.querySelectorAll('[data-pdcd]').forEach(e => { e.textContent = K.countdown(+e.dataset.pdcd - Date.now()) }) }, 30000);
+  /* Share: the card as a picture, through the phone's share sheet where there is one, else downloaded */
+  function shareCard() {
+    const legs = P.slip; if (!legs.length) return;
+    const ours = combine(legs, 'ours'), big = !ours ? '–' : ours.kind === 'limits' ? `${pct(ours.lo)}–${pct(ours.hi)}%` : range(ours), c = window.flLabCore?.card(legs);
+    const cv = cardCanvas({ kicker: 'Floodlight · Prediction Card', title: `${legs.length} ${legs.length === 1 ? 'pick' : 'picks'} · chance all hit ${big}`, rows: legs.map(l => [l.short, `${pct(l.ours)}%`, l.game || '']),
+      foot: [c?.avgGrade ? `Average evidence quality ${c.avgGrade}` : '', 'Chances are estimates, not a promise of what happens next.'].filter(Boolean) });
+    try { window.flTrack?.('card_create', { n: legs.length }) } catch (e) {}
+    cv.toBlob(async b => { if (!b) return announce('The picture could not be made in this browser.'); const file = new File([b], 'prediction-card.png', { type: 'image/png' });
+      try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'My Prediction Card' }); return } } catch (e) { if (e?.name === 'AbortError') return }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'prediction-card.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); announce('Saved the card as a picture.') }, 'image/png');
+  }
+  const announce = t => { const a = document.getElementById('announce'); if (a) { a.textContent = ''; setTimeout(() => { a.textContent = t }, 30) } };
+  /* a card drawn in the current theme: kicker, title, rows of [left, right, under] and a footer. Parlays uses it too. */
+  function cardCanvas({ kicker, title, rows, foot }) {
+    const cs = getComputedStyle(document.body), c = (n, d) => cs.getPropertyValue(n).trim() || d, fam = c('--font-body', 'system-ui, sans-serif'), disp = c('--font-display', fam);
+    const W = 1080, PAD = 64, RH = 88, list = rows.slice(0, 12), H = PAD + 170 + list.length * RH + (foot || []).length * 36 + 70;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d');
+    const fit = (t, w) => { t = String(t || ''); if (x.measureText(t).width <= w) return t; while (t && x.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…' };
+    x.fillStyle = c('--surface', '#111'); x.fillRect(0, 0, W, H); x.fillStyle = c('--accent', '#e8b64c'); x.fillRect(0, 0, W, 10);
+    x.fillStyle = c('--muted', '#999'); x.font = `600 24px ${fam}`; x.fillText(fit(`${kicker} · ${new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`, W - 2 * PAD), PAD, PAD + 18);
+    x.fillStyle = c('--text', '#fff'); x.font = `800 48px ${disp}`; x.fillText(fit(title, W - 2 * PAD), PAD, PAD + 96);
+    let y = PAD + 160;
+    for (const [l, r, u] of list) { x.strokeStyle = c('--border', '#333'); x.lineWidth = 2; x.beginPath(); x.moveTo(PAD, y - 6); x.lineTo(W - PAD, y - 6); x.stroke();
+      x.fillStyle = c('--text', '#fff'); x.font = `700 32px ${fam}`; x.fillText(fit(l, W - 2 * PAD - 200), PAD, y + 36);
+      if (u) { x.fillStyle = c('--muted', '#999'); x.font = `500 24px ${fam}`; x.fillText(fit(u, W - 2 * PAD - 200), PAD, y + 68) }
+      x.textAlign = 'right'; x.fillStyle = c('--text', '#fff'); x.font = `800 36px ${fam}`; x.fillText(r || '', W - PAD, y + 48); x.textAlign = 'left'; y += RH }
+    x.fillStyle = c('--muted', '#999'); x.font = `500 22px ${fam}`; for (const t of foot || []) { y += 36; x.fillText(fit(t, W - 2 * PAD), PAD, y) }
+    return cv;
+  }
   function slipCard() {
     const n = P.slip.length, ours = n ? combine(P.slip, 'ours') : null, mk = n ? combine(P.slip, 'market') : null, noMk = P.slip.filter(l => l.market == null).length;
     const kind = ours?.kind, big = !ours ? '–' : kind === 'limits' ? `${pct(ours.lo)}–${pct(ours.hi)}%` : range(ours);
     const sub = kind === 'limits' ? 'Limits only: the link is too strong to model' : kind === 'adjusted' ? `A rough range. Multiplied: ${pct(ours.p)}%` : kind === 'conflict' ? 'These picks can’t all hit' : n > 1 ? 'Different games, so multiplied' : '';
-    return `<section class="card pd-slip${n ? ' has' : ' none'}" aria-label="Your slip"><div class="sec-h"><h2>${n ? 'Your slip' : 'Your slip is empty'}</h2>${n ? `<span class="pl">${n} ${n === 1 ? 'pick' : 'picks'}</span>` : ''}</div>
-      ${n ? `<ul class="pd-legs">${P.slip.map(l => `<li><span class="rw-t"><b>${esc(l.short)}</b><small>${esc(l.game || '')}</small></span><b class="num">${pct(l.ours)}%</b><button type="button" class="ib pd-rm" data-pdadd="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Remove ${esc(l.short)} from your slip">${ic('x', 16)}</button></li>`).join('')}</ul>
+    return `<section class="card pd-slip${n ? ' has' : ' none'}" aria-label="Your Prediction Card"><div class="sec-h"><h2>${n ? 'Your Prediction Card' : 'Your Prediction Card is empty'}</h2>${n ? `<span class="pl">${n} ${n === 1 ? 'pick' : 'picks'}</span>` : ''}</div>
+      ${n ? `<ul class="pd-legs">${P.slip.map(l => `<li><span class="rw-t"><b>${esc(l.short)}</b><small>${esc(l.game || '')}</small></span><b class="num">${pct(l.ours)}%</b><button type="button" class="ib pd-rm" data-pdadd="${esc(l.id)}" data-fk="rm-${esc(l.id)}" aria-label="Remove ${esc(l.short)} from your Prediction Card">${ic('x', 16)}</button></li>`).join('')}</ul>
         <div class="pd-total"><div><span class="pd-k">${n === 1 ? 'Chance it hits' : `Chance all ${n} hit`}</span><b class="num pd-big">${big}</b>${sub ? `<small class="lb">${esc(sub)}</small>` : ''}</div><div class="pd-mk"><span class="pd-k">Market says</span><b class="num">${mk && !noMk ? (mk.kind === 'limits' ? `${pct(mk.lo)}–${pct(mk.hi)}%` : range(mk)) : '–'}</b></div></div>
         ${n > 1 ? corrNote(ours, P.slip) : ''}
+        ${cardRead(P.slip)}
         ${(() => { const w = `${n === 1 ? '<span>Add another pick to see the chance they all hit.</span>' : !ours?.corr?.label ? '<span>No two picks come from the same game, so the chances are multiplied together.</span>' : ''}${noMk ? `<span> ${noMk === n ? 'None of these picks has' : `${noMk} of these picks ${noMk === 1 ? 'has' : 'have'}`} no market price, so there is no market number for the slip.</span>` : ''}`; return w ? `<p class="pd-warn">${w}</p>` : '' })()}
-        <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="track" data-fk="track">${ic('ticket', 18)}Track it live</button><button type="button" class="bt ghost pd-clear" data-pd="save" data-fk="save">Save slip</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
+        <div class="pd-acts"><button type="button" class="bt wide pd-save" data-pd="track" data-fk="track">${ic('ticket', 18)}Track it live</button><button type="button" class="bt ghost pd-clear" data-pd="save" data-fk="save">Save card</button><button type="button" class="bt ghost pd-clear" data-pd="sharecard" data-fk="sharecard">${ic('share', 16)}Share</button><button type="button" class="bt ghost pd-clear" data-pd="empty" data-fk="empty">Clear</button></div>
+        <p class="lb pd-nog">Chances are estimates. Past hit rates describe past games and don’t guarantee what happens next.</p>
         <p class="pd-said" role="status">${P.saved ? `Saved. ${window.S?.me ? 'It is kept with your account.' : 'It is kept in this browser; log in to keep it with your account.'}` : ''}</p>`
-        : `<p class="pd-empty">Add two or more picks to compare their combined chance.</p>`}
-      ${P.slips.length ? `<div class="pd-saved"><span class="pd-k">Saved slips</span>${P.slips.slice(0, 3).map(s => { const c = combine(s.legs, 'ours');
-        return P.confirm === s.id ? `<div class="pd-sv"><span class="rw-t"><b>Delete “${esc(s.name)}”?</b></span><button type="button" class="bt sm danger" data-pdyes="${s.id}" data-fk="yes-${s.id}">Delete slip</button><button type="button" class="bt sm ghost" data-pd="keep" data-fk="keepit">Keep it</button></div>`
-          : `<div class="pd-sv"><button type="button" class="pd-load" data-pdload="${s.id}" data-fk="load-${s.id}"><b>${esc(s.name)}</b><small>${c ? range(c) + ' at the time' : ''}</small></button><button type="button" class="ib pd-rm" data-pddel="${s.id}" data-fk="del-${s.id}" aria-label="Delete the saved slip ${esc(s.name)}">${ic('x', 16)}</button></div>` }).join('')}</div>` : ''}</section>`;
+        : `<p class="pd-empty">Add two or more picks to see the chance they all hit, the weakest one and how good the evidence is.</p>`}
+      ${P.slips.length ? `<div class="pd-saved"><span class="pd-k">Saved cards</span>${P.slips.slice(0, 3).map(s => { const c = combine(s.legs, 'ours');
+        return P.confirm === s.id ? `<div class="pd-sv"><span class="rw-t"><b>Delete “${esc(s.name)}”?</b></span><button type="button" class="bt sm danger" data-pdyes="${s.id}" data-fk="yes-${s.id}">Delete card</button><button type="button" class="bt sm ghost" data-pd="keep" data-fk="keepit">Keep it</button></div>`
+          : `<div class="pd-sv"><button type="button" class="pd-load" data-pdload="${s.id}" data-fk="load-${s.id}"><b>${esc(s.name)}</b><small>${c ? range(c) + ' at the time' : ''}</small></button><button type="button" class="ib pd-rm" data-pddel="${s.id}" data-fk="del-${s.id}" aria-label="Delete the saved card ${esc(s.name)}">${ic('x', 16)}</button></div>` }).join('')}</div>` : ''}</section>`;
   }
 
   /* ---------- how we have done ----------
@@ -707,6 +757,7 @@
     if (d.pd === 'keep') { P.confirm = null; return draw() }
     if (d.pd === 'save') return saveSlip();
     if (d.pd === 'track') { const live = new Map(allPicks().map(p => [p.id, p])); return window.flParlays?.build(P.slip.map(l => live.get(l.id) || { gone: true })) }   // the slip becomes a parlay to lock in and follow
+    if (d.pd === 'sharecard') return shareCard();
     if (d.pd === 'empty') { P.slip = []; store.set('fl.slip', P.slip); P.saved = 0; return draw() }
     if (d.pd === 'all') { P.all = !P.all; return draw() }
     if (d.pd === 'clear') { Object.assign(P, { sport: 'all', when: 'tonight', min: 0, kind: 'all', group: 'player', priced: false, clean: false, mine: false, all: false }); return draw() }
@@ -741,6 +792,7 @@
     onHide() { clearInterval(P.timer); clearTimeout(P.retryT) } });
   window.flPredictions = { combine, state: P, picks: allPicks, sources, load };   // not flPred: that is the match prediction card in predict.js
   // the Lab's research panel adds to the Prediction Card (the slip) and follows picks with the same lists this page keeps
+  window.flPredictions.cardCanvas = cardCanvas;
   window.flPredictions.slip = { has: inSlip, toggle(p) { if (inSlip(p.id) || allPicks().some(x => x.id === p.id)) return toggle(p.id); if (P.slip.length >= 12) return window.toast?.('A Prediction Card holds up to 12 picks'); P.slip.push(leg(p)); store.set('fl.slip', P.slip); P.saved = 0; draw() } };
   window.flPredictions.follow = { has: p => !!following(p), toggle: follow };
 })();

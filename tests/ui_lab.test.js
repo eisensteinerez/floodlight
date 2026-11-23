@@ -124,6 +124,17 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     assert.ok(await p.evaluate(() => JSON.parse(localStorage.getItem('fl.slip') || '[]').some(l => l.name === 'Rudy Gobert')));
   });
 
+  await t('Prediction Card: average evidence, the weakest pick, a countdown to the first start, a moved line, and no promise', async () => {
+    const p = await page(); await explorer(p);
+    await p.evaluate(() => { for (const r of window.flPropX.rows().slice(0, 2)) window.flPredictions.slip.toggle(r.p);
+      const s = JSON.parse(localStorage.getItem('fl.slip')); s[0].line0 = s[0].line - 1; localStorage.setItem('fl.slip', JSON.stringify(s)) });
+    await p.evaluate(() => window.flPages.show('predictions')); await p.waitForSelector('.pd-slip.has', { timeout: 20000 }); await p.waitForTimeout(500);
+    const txt = await p.textContent('.pd-slip');
+    for (const s of ['Your Prediction Card', 'Average evidence quality', 'Weakest pick', 'Locks in', 'Share', 'Save card', 'don’t guarantee']) assert.ok(txt.includes(s), `the card is missing “${s}”`);
+    await shot(p, 'prediction-card-1440');
+    assert.deepStrictEqual(p.errors, []);
+  });
+
   await t('saved boards: a line flags its move, boards reorder, duplicate, archive, share a read-only link and save as an image', async () => {
     const p = await page(); const shared = {};
     await p.context().route(/\/api\/boards\/(share|unshare)$/, r => { const b = JSON.parse(r.request().postData() || '{}'); if (r.request().url().endsWith('/unshare')) { delete shared[b.id]; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }) }

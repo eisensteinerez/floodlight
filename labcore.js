@@ -25,7 +25,7 @@
   // which kind of doubt a reason from market.js supported() is. Anything not recognised counts as data quality.
   const KIND_RX = [
     ['sample', /available games?|no games on record|gap since the last appearance|days since the last appearance|gap in appearances|more than two months old/i],
-    ['avail', /injury report|role changed|minutes vary|lineup|ruled out|listed out|forecast confidence/i],
+    ['avail', /injury report|role changed|minutes vary|lineup|ruled out|listed out/i],
     ['move', /line moved/i],
   ];
   const kindOf = why => (KIND_RX.find(([, rx]) => rx.test(why)) || ['data'])[0];
@@ -121,7 +121,7 @@
   const defaults = () => ({ sport: 'all', league: 'all', game: 'all', team: 'all', q: '', stat: 'all', provider: 'all', side: 'all', l5: 0, l10: 0, l20: 0, edge: null, grade: 'all', when: 'all', injury: 'all', moved: 'all', games: 0, mins: 0 });
   // the line a market opened at, and how far it has moved since, in the direction that matters (+ = easier for the pick)
   function movement(p) {
-    const open = p.openLine ?? p.firstLine ?? null; if (open == null || p.line == null) return null;
+    const open = p.lineFrom ?? p.openLine ?? p.firstLine ?? null; if (open == null || p.line == null) return null;
     const d = p.line - open; return { from: open, to: p.line, d, easier: d === 0 ? 0 : (p.side === 'under' ? d > 0 : d < 0) ? 1 : -1 };
   }
   const injuryOf = p => p.av?.lv && !['ok', 'active', 'probable'].includes(p.av.lv) ? p.av.lv : null;

@@ -3029,3 +3029,30 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .ds-dlgb{display:flex;justify-content:flex-end;gap:8px}
 @media (max-width:820px){.ds-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.ds-rep{margin-left:0}.ds-foot{gap:4px 16px}}
+
+/* ---------- Prediction Card read as a whole (predictions.js) and the parlay history (parlays.js) ---------- */
+.pd-cx{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:6px}
+.pd-cx li{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface-2)}
+.pd-cx li>svg,.pd-cx li>.pd-gl{flex:none;margin-top:1px;color:var(--text-2)}
+.pd-cx li>.pd-gl{width:24px;height:24px;font-size:13px;color:var(--text)}
+.pd-cx span{display:grid;gap:2px;min-width:0}
+.pd-cx b{font:600 14px/1.3 var(--font-body);color:var(--text);overflow-wrap:anywhere}
+.pd-cx small{font:500 13px/1.35 var(--font-body);color:var(--text-2)}
+.pd-cx .pd-cx-out,.pd-cx .pd-cx-moved{border-left:3px solid var(--warning,var(--bad))}
+.pd-cx .pd-cx-out>svg{color:var(--bad)}
+.pd-nog,.py-nog{margin:8px 0 0;font:500 12px/1.4 var(--font-body);color:var(--muted)}
+.py-tread{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.py-tread li{display:flex;align-items:flex-start;gap:8px;font:500 14px/1.35 var(--font-body);color:var(--text-2)}
+.py-tread li>svg{flex:none;margin-top:3px}
+.py-tread b{color:var(--text)}
+.py-hx{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0 0}
+.py-hx>div{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface-2)}
+.py-hx dt{font:500 12px/1.3 var(--font-body);color:var(--muted)}
+.py-hx dd{margin:2px 0 0;font:700 18px/1.2 var(--font-body);color:var(--text);text-transform:capitalize}
+.py-best{margin:10px 0 0}
+.py-hxs{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:10px}
+.py-hxt{width:100%;border-collapse:collapse;font:500 13px/1.3 var(--font-body)}
+.py-hxt caption{text-align:left;font:600 12px/1.3 var(--font-body);color:var(--muted);padding-bottom:4px}
+.py-hxt th{text-align:left;font-weight:500;color:var(--text-2);padding:5px 0;border-top:1px solid var(--border);background:none}
+.py-hxt td{text-align:right;font-weight:700;color:var(--text);padding:5px 0;border-top:1px solid var(--border)}
+.py-hxt td small{font-weight:500;color:var(--muted);margin-left:4px}
