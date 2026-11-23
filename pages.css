@@ -615,7 +615,7 @@ html:root[data-theme] .tw-busy th[scope="row"]{padding:6px 12px 6px 0;border-bot
 .mb-menu{position:fixed;z-index:95;min-width:230px;display:grid;padding:6px;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--surface);box-shadow:var(--shadow-pop)}
 .mb-menu button{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:calc(var(--radius-tile) - 4px);font:600 14px/1.2 var(--font-body);color:var(--text);text-align:left}
 .mb-menu button:hover,.mb-menu button:focus-visible{background:var(--surface-2);outline-offset:-2px}
-:root[data-theme] .mb-detail{position:sticky;top:96px;display:grid;gap:14px;align-content:start}
+:root[data-theme] .mb-detail{position:sticky;top:calc(var(--top-h,0px) + 16px);display:grid;gap:14px;align-content:start}
 .mb-detail:focus{outline:none}
 .mb-d-top{display:flex;align-items:flex-start;gap:14px}
 .mb-d-top > div{flex:1 1 0;min-width:0;display:grid;gap:3px;justify-items:start}
@@ -784,7 +784,7 @@ html.fl-no-live #tbLive,html.fl-no-live #flBarLive{display:none}
 .py-find{margin:0}
 :root[data-theme] .py-jump{display:none}.py-jump svg{flex:none}
 
-:root[data-theme] .py-ticket{background:var(--accent);color:var(--on-accent);border-color:transparent;padding:26px 26px 22px;backdrop-filter:none;position:sticky;top:132px}
+:root[data-theme] .py-ticket{background:var(--accent);color:var(--on-accent);border-color:transparent;padding:26px 26px 22px;backdrop-filter:none;position:sticky;top:calc(var(--top-h,0px) + 16px)}
 :root[data-theme] .py-ticket h2,.py-ticket .rw-t b,.py-ticket .rw-t small,.py-ticket .py-k,.py-ticket .fl-f,.py-ticket .py-hint,.py-ticket .py-err{color:var(--on-accent)}
 .py-ticket .pl{background:transparent;border-color:color-mix(in oklab,var(--on-accent) 45%,transparent);color:var(--on-accent)}
 .py-dl{list-style:none;margin:0;padding:0;display:grid}
@@ -1397,7 +1397,7 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
 .pv-wait progress::-webkit-progress-value{background:var(--accent);border-radius:99px;transition:width .3s}
 .pv-wait progress::-moz-progress-bar{background:var(--accent);border-radius:99px}
 /* the controls stay in reach while the preview scrolls past */
-.pv-bar{position:sticky;top:12px;z-index:3;display:grid;gap:12px;padding:12px;margin:-12px;border-radius:var(--radius-tile);background:var(--surface)}
+.pv-bar{position:sticky;top:calc(var(--top-h,0px) + 12px);z-index:3;display:grid;gap:12px;padding:12px;margin:-12px;border-radius:var(--radius-tile);background:var(--surface)}
 :root[data-theme="aurora-glass"] .pv-bar{background:color-mix(in oklab,var(--bg) 82%,transparent);backdrop-filter:blur(14px)}
 .pv-cmp{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-2)}.pv-cmp select{max-width:180px}
 .pv-acts{display:flex;flex-wrap:wrap;gap:10px;margin-left:auto}.pv-acts .bt{display:inline-flex;align-items:center;gap:8px}

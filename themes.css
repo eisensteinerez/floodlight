@@ -58,6 +58,21 @@ html[data-theme] body::after{display:none}
 .tb-dots svg{fill:currentColor}
 .tb-search{display:none}
 .tb-row2{display:flex;align-items:center;gap:14px;max-width:calc(var(--wrap) + 2*var(--pad));margin:0 auto;padding:14px var(--pad) 0}
+/* the bar sticks to the top on wide screens: only the bar (about 70px), never the sport row under it */
+@media (min-width:821px){
+  :root[data-theme] body{height:auto;min-height:100%}   /* the bar's parent must be as tall as the page for it to stick */
+  :root[data-theme] .top{position:sticky;top:0;z-index:40;transition:background-color var(--t-fast),box-shadow var(--t-fast)}
+  :root[data-theme] .top.stuck{background:color-mix(in oklab,var(--bg) 94%,transparent);box-shadow:0 1px 0 var(--border)}
+}
+:root[data-chrome="bare"] .tb-row2,:root[data-chrome="menu"] .tb-row2{display:none}
+.tb-sp-w{position:relative;display:none}
+:root[data-chrome="menu"] .tb-sp-w{display:inline-flex}
+.tb-spbtn svg{transition:transform var(--t-fast)}
+.tb-spbtn[aria-expanded="true"] svg{transform:rotate(180deg)}
+.tb-sppop{position:absolute;z-index:60;left:0;top:calc(100% + 8px);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;width:min(380px,calc(100vw - 2*var(--pad)));padding:10px;border-radius:var(--radius-tile);background:var(--surface);border:1px solid var(--border-2);box-shadow:var(--shadow-pop)}
+.tb-sppop[hidden]{display:none}
+.tb-sppop .tbs{display:flex;align-items:center;gap:8px;justify-content:flex-start;height:44px}
+.tb-sppop .tbs svg{flex:none;color:var(--muted)}
 .tb-sports{flex:1 1 0;min-width:0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px}
 .tb-sports::-webkit-scrollbar{display:none}
 .tbs{flex:none;height:40px;padding:0 16px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-2);font:500 14px/1 var(--font-body);color:var(--text-2);white-space:nowrap;transition:border-color var(--t-fast),color var(--t-fast)}
@@ -89,7 +104,7 @@ html[data-theme] body::after{display:none}
   :root[data-theme] .top .search{display:none}
   .tb-search{display:grid;margin-left:auto}
   .top.search-open .search{display:block!important;position:absolute;left:var(--pad);right:var(--pad);top:calc(100% + 8px);z-index:5;margin:0}
-  .top.search-open .tb-row2{margin-top:62px}
+  .top.search-open + .tb-row2{margin-top:62px}
   .tb-row2{padding-top:10px}
   :root[data-theme] .sync{display:none}
   :root[data-theme] .shell{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
@@ -282,7 +297,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 @media (max-width:620px){.st-themes{grid-template-columns:repeat(2,minmax(0,1fr))}.st-h h2{font-size:28px}}
 
 /* ---------- sport pages: the competitions list, the date strip, the day's matches ---------- */
-:root[data-theme] .rail{top:16px;max-height:calc(100vh - 32px);padding:14px 10px;border-radius:var(--radius-tile);border:1px solid var(--border);background:var(--panel)}
+:root[data-theme] .rail{top:calc(var(--top-h,0px) + 16px);max-height:calc(100vh - var(--top-h,0px) - 32px);padding:14px 10px;border-radius:var(--radius-tile);border:1px solid var(--border);background:var(--panel)}
 :root[data-theme] .rail h4{margin:16px 10px 8px;font:600 13px/1 var(--font-body);color:var(--muted)}
 :root[data-theme] .rail h4:first-child{margin-top:2px}
 :root[data-theme] .lg{min-height:40px;padding:0 10px;border-radius:14px;font:500 14px/1.2 var(--font-body);color:var(--text-2);transform:none}
@@ -383,7 +398,7 @@ button.rw:hover .rw-t b,a.rw:hover .rw-t b{color:var(--accent)}
 :root[data-theme] .cards{gap:10px}
 
 /* ---------- the match centre and every page that opens beside or over the list ---------- */
-:root[data-theme] .sheet{top:16px;max-height:calc(100vh - 32px);border-radius:var(--radius-card);border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow-card)}
+:root[data-theme] .sheet{top:calc(var(--top-h,0px) + 16px);max-height:calc(100vh - var(--top-h,0px) - 32px);border-radius:var(--radius-card);border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow-card)}
 :root[data-theme] .tabs,:root[data-theme] .shell.stage .tabs{gap:6px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
 :root[data-theme] .tab,:root[data-theme] .shell.stage .tab,:root[data-theme] .shell:not(.sheet-wide) .tab{min-height:44px;padding:0 16px;border:1px solid transparent;border-radius:var(--radius-pill);font:600 14px/1 var(--font-body);color:var(--text-2);display:inline-flex;align-items:center;gap:8px}
 :root[data-theme] .tab:hover{color:var(--text);background:var(--surface-2)}
