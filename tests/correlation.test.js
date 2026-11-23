@@ -53,4 +53,26 @@ t('different games: no warning, the chances multiply', () => {
   assert.equal(C.correlation(legs).label, null);
   const s = C.slipChance(legs, get); assert.equal(s.kind, 'independent'); assert.ok(Math.abs(s.p - .3) < 1e-9);
 });
+
+// Parlays additions (item 18): invalid legs, market expiration, a player ruled out, and why the chance changed
+t('a started pick, a clashing pick and a ruled-out player each say why they can’t go in; a game starting soon warns', () => {
+  const now = Date.now(), a = prop('Joe Milton', 'DAL', 'LV', 'pyd', 'over', 205.5), b = { ...a, id: 'u', side: 'under' };
+  const started = { ...prop('Jalen Brunson', 'NY', 'BOS', 'pts', 'over', 25.5, .6, 'nba'), start: now - 60000 };
+  const soon = { ...prop('Jayson Tatum', 'BOS', 'NY', 'reb', 'over', 8.5, .6, 'nba'), start: now + 12 * 60000 };
+  const hurt = prop('CeeDee Lamb', 'DAL', 'LV', 'reyd', 'over', 70.5);
+  const m = C.legIssues([a, b, started, soon, hurt], now, l => l.player === 'CeeDee Lamb' ? { status: 'Out', what: 'Ankle' } : null);
+  assert.deepStrictEqual(m.get(a.id), []);
+  assert.equal(m.get('u')[0].kind, 'conflict'); assert.ok(m.get('u')[0].blocks);
+  assert.equal(m.get(started.id)[0].kind, 'started'); assert.match(m.get(started.id)[0].why, /market is closed/);
+  assert.equal(m.get(soon.id)[0].kind, 'soon'); assert.equal(m.get(soon.id)[0].blocks, false); assert.match(m.get(soon.id)[0].why, /Starts in 12 min/);
+  assert.equal(m.get(hurt.id)[0].kind, 'out'); assert.match(m.get(hurt.id)[0].why, /listed Out \(Ankle\)/);
+});
+t('the combined chance explains itself when it changes', () => {
+  const before = { p: .3, legs: [{ id: 'a', name: 'Milton under', v: .6 }, { id: 'b', name: 'Lamb over', v: .5 }] };
+  assert.equal(C.explainChange(before, { p: .3, legs: before.legs }), '');
+  assert.equal(C.explainChange(before, { p: .6, legs: [{ id: 'a', name: 'Milton under', v: .6 }, { id: 'b', name: 'Lamb over', v: 1, why: 'was ruled out, so it will be void and drops out' }] }),
+    'Up from 30% to 60%: Lamb over was ruled out, so it will be void and drops out.');
+  assert.equal(C.explainChange(before, { p: .27, legs: [{ id: 'a', name: 'Milton under', v: .54 }, { id: 'b', name: 'Lamb over', v: .5 }] }), 'Down from 30% to 27%: Milton under went from 60% to 54%.');
+  assert.match(C.explainChange(before, { p: .6, legs: [before.legs[0]] }), /Lamb over was taken out/);
+});
 console.log(`${n} passed`);

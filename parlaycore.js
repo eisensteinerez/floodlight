@@ -516,6 +516,41 @@
     return { kind: 'independent', p: e.p, lo: e.p, hi: e.p, corr: c };
   }
 
+  /* ---------- what is wrong with each pick in a draft, and when its market closes ----------
+     legIssues(legs, now, outOf) -> Map(id -> [{ kind, why, blocks }])
+       started   the game has begun: the market is closed and the pick can't go in (blocks)
+       conflict  it can't hit alongside an earlier pick: the later one is the one to take out (blocks)
+       out       outOf(leg) found the player listed Out: if he doesn't play the pick is void, so it can't go in (blocks)
+       soon      the game starts within 30 minutes: lock in before then (a warning only) */
+  const SOON_MIN = 30;
+  function legIssues(legs, now = Date.now(), outOf = () => null) {
+    const m = new Map(legs.map(l => [l.id, []])), mins = t => Math.max(1, Math.round((t - now) / 60000));
+    for (const l of legs) {
+      if (l.start <= now) m.get(l.id).push({ kind: 'started', blocks: true, why: 'Already started, so its market is closed. Take it out to lock in the rest.' });
+      else if (l.start - now <= SOON_MIN * 60000) m.get(l.id).push({ kind: 'soon', blocks: false, why: `Starts in ${mins(l.start)} min. Lock in before then or it can’t go in.` });
+      const o = l.start > now ? outOf(l) : null;
+      if (o) m.get(l.id).push({ kind: 'out', blocks: true, why: `${l.player || 'The player'} is listed ${o.status || 'Out'}${o.what ? ` (${o.what})` : ''}. If he doesn’t play the pick is void, so it can’t go in.` });
+    }
+    for (let j = 1; j < legs.length; j++) for (let i = 0; i < j; i++) { const r = relate(legs[i], legs[j]); if (r.level === 'conflict') { m.get(legs[j].id).push({ kind: 'conflict', blocks: true, why: `Can’t hit alongside ${legs[i].short || legs[i].text}. ${r.why}` }); break } }
+    return m;
+  }
+  /* Why a combined chance changed, in one sentence. before / after: { p, legs: [{ id, name, v }] }, v the pick's own
+     chance (or 1 once it has hit or will be void, 0 once it has missed). Names the picks that came or went and the ones
+     whose own chance moved most, biggest first. Returns '' when the whole-number percentage did not change. */
+  function explainChange(before, after) {
+    if (!before || !after || before.p == null || after.p == null) return '';
+    const a = Math.round(before.p * 100), b = Math.round(after.p * 100); if (a === b) return '';
+    const was = new Map(before.legs.map(l => [l.id, l])), now = new Map(after.legs.map(l => [l.id, l])), bits = [];
+    const added = after.legs.filter(l => !was.has(l.id)), gone = before.legs.filter(l => !now.has(l.id));
+    if (added.length) bits.push(`${added.map(l => l.name).join(' and ')} ${added.length === 1 ? 'was' : 'were'} added`);
+    if (gone.length) bits.push(`${gone.map(l => l.name).join(' and ')} ${gone.length === 1 ? 'was' : 'were'} taken out`);
+    const moved = after.legs.filter(l => was.has(l.id) && l.v != null && was.get(l.id).v != null && Math.round(l.v * 100) !== Math.round(was.get(l.id).v * 100))
+      .sort((x, y) => Math.abs(y.v - was.get(y.id).v) - Math.abs(x.v - was.get(x.id).v)).slice(0, 2);
+    for (const l of moved) { const v0 = was.get(l.id).v;
+      bits.push(l.why ? `${l.name} ${l.why}` : `${l.name} went from ${Math.round(v0 * 100)}% to ${Math.round(l.v * 100)}%`) }
+    return `${b > a ? 'Up' : 'Down'} from ${a}% to ${b}%${bits.length ? ': ' + bits.join('; ') : ''}.`;
+  }
+
   /* ---------- what stops a parlay being locked in ----------
      -> [{ kind: 'conflict' | 'started' | 'stale', ids, why }]. Every rule says what it found and what to do. */
   const priceAge = l => l.rAt ?? l.mAt ?? null;
@@ -700,7 +735,7 @@
       units: priced ? units : null, staked, roi: staked ? units / staked : null, priced, est: series.some(s => s.est && s.u != null), series, last: all.slice(-10), clvN: clvLegs.length, clvBeat };
   }
 
-  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, relate, strongest, sameGame, linkKeys, estimate, correlation, slipChance, blockers, STALE_MIN, closeOf, closeOpen, closeLegs, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
+  window.flParlay = { LG, list: () => P.list, state: P, load, add, remove, edit, settle, stats, relate, strongest, sameGame, linkKeys, estimate, correlation, slipChance, legIssues, explainChange, blockers, STALE_MIN, closeOf, closeOpen, closeLegs, priceOf, statusOf, scoreboard, gameFor, summary, boxValue, hasLive, read, start0, left, combine, oddsBoard, marketNow, fromPick, fromGame, fromLog,
     etDay, fmt, dec, amFromP, amTxt, marginFrom, norm };
   document.addEventListener('fl:me', () => { load() });
 })();
