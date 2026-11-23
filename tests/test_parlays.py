@@ -10,7 +10,14 @@ _argv, sys.argv = sys.argv, [sys.argv[0]]   # server.py reads a port from the co
 import server as S   # noqa: E402
 sys.argv = _argv
 
-S.storage.save = lambda *a, **k: None   # nothing is written to the real cache folder
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def no_disk(monkeypatch):
+    monkeypatch.setattr(S.storage, "save", lambda *a, **k: None)   # nothing is written to the real cache folder, only while these tests run
+
+
 USER = {"username": "tester"}
 H = 3600 * 1000
 
