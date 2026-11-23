@@ -1803,3 +1803,16 @@ html:root[data-theme="stadium-gold"] .pd-hr dt{font-size:16px;color:var(--text)}
 .st-confirm{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:12px 14px;border:1px solid var(--border-2);border-radius:var(--radius-tile);background:var(--surface-2)}
 .st-confirm b{flex-basis:100%;font:700 15px/1.3 var(--font-body)}
 .al-q{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.al-q select{width:auto;min-height:40px}
+
+/* ---------- Members: roles explained, a small account kept small, a preview before access changes (members.js) ---------- */
+.mb-guide{padding:0 20px}.mb-guide summary{min-height:48px;display:flex;align-items:center;font:600 15px/1.3 var(--font-body);cursor:pointer}
+.mb-gd{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 24px;margin:0 0 12px}
+.mb-gd dt{font:700 15px/1.3 var(--font-body)}.mb-gd dd{margin:4px 0 0;font:500 14px/1.5 var(--font-body);color:var(--text-2)}
+.mb-guide>p{margin:0 0 18px;max-width:80ch}
+.mb-sum{margin:0;font:500 15px/1.5 var(--font-body);color:var(--text-2)}
+.mb-tbl.no-pick .mb-ck{display:none}
+.mb-prev{display:grid;gap:8px;padding:14px 16px;border:1px solid var(--border-2);border-left:4px solid var(--accent);border-radius:var(--radius-tile);background:var(--surface-2)}
+.mb-prev h4{margin:0;font:700 15px/1.3 var(--font-body);letter-spacing:0;text-transform:none}.mb-prev p{margin:0;font:500 14px/1.5 var(--font-body);color:var(--text-2)}.mb-prev b{color:var(--text)}
+.mb-prev .mb-lose{color:var(--text)}
+.card.mb-guide{padding:2px 22px}.mb-guide[open]{padding-bottom:6px}
+.mb-main.solo{grid-template-columns:minmax(0,1fr)}
