@@ -74,7 +74,8 @@
       const sig = `${p.side}:${p.line}:${Math.round(p.ours * 100)}:${p.market == null ? '' : Math.round(p.market * 100)}`;
       if (sent.get(p.id) === sig) continue; sent.set(p.id, sig);
       out.push({ sport: p.sport, player: p.name, team: p.team, opp: p.opp, k: p.k, label: p.label, line: p.line, side: p.side, yes: p.yes, ours: +p.ours.toFixed(3),
-        market: p.market == null ? null : +p.market.toFixed(3), conf: p.conf, start: Math.round(p.start / 1000), books: p.books });
+        market: p.market == null ? null : +p.market.toFixed(3), conf: p.conf, start: Math.round(p.start / 1000), books: p.books,
+        proj: p.mu == null ? null : +(+p.mu).toFixed(2), hit: p.l10 == null ? null : +p.l10.toFixed(3), n: p.n || null });
     }
     for (let i = 0; i < out.length; i += 120)
       fetch('/api/props/seen', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ props: out.slice(i, i + 120) }) }).catch(() => {});
@@ -146,7 +147,7 @@
       <div class="g2 pd-cols"><div class="vst pd-board" id="pdBoard" aria-live="polite"></div><aside class="vst pd-side" id="pdSide" aria-label="Your slip and our results"></aside></div>
       <p class="lb pd-note">These are estimates from past games and posted prices, not guarantees. <a class="lk" href="#/guide/predictions" data-page="guide" data-arg="predictions">How we work out an edge</a></p>
       <section class="card pd-more" aria-label="More prediction tools"><div class="sec-h"><h2>More prediction tools</h2></div>
-        <div class="cx-row"><button type="button" class="cx" data-pd="soccer">${ic('soccer', 18)}Soccer picks, match by match</button><button type="button" class="cx" data-page="history">${ic('trophy', 18)}Pick history: every hit and miss</button><button type="button" class="cx" data-shell="lab">${ic('lab', 18)}Open the Lab</button></div></section>
+        <div class="cx-row"><button type="button" class="cx" data-pd="soccer">${ic('soccer', 18)}Soccer picks, match by match</button><button type="button" class="cx" data-page="history">${ic('trophy', 18)}Pick history: every hit and miss</button><button type="button" class="cx" data-page="injuries">${ic('help', 18)}Injuries and lineups</button><button type="button" class="cx" data-shell="lab">${ic('lab', 18)}Open the Lab</button></div></section>
     </div>`;
     draw();
   }
@@ -198,20 +199,58 @@
   function checkAlerts() {
     if (!P.follow.length) return; const live = new Map(allPicks().map(p => [keyOf(p), p])); let ch = false;
     for (const f of P.follow) {
-      const p = live.get(f.k); if (!p || p.edge == null) continue;
+      const p = live.get(f.k); if (!p) continue;
+      if (f.line === undefined) { f.line = p.line ?? null; ch = true }
       if (f.alert != null && p.edge >= f.alert && (f.edge == null || f.edge < f.alert)) say(`${p.name}: the edge reached ${edgeTxt(p.edge)}`, `${p.text}. You asked to hear at ${edgeTxt(f.alert)}.`, p);
-      if (f.edge !== p.edge || f.id !== p.id || f.text !== p.text) { f.edge = p.edge; f.id = p.id; f.text = p.text; ch = true }
+      if (f.line != null && p.line != null && p.line !== f.line && pickAlert('line')) say(`${p.name}: the line moved ${fmtL(f.line)} to ${fmtL(p.line)}`, `${p.text}. Edge now ${edgeTxt(p.edge)}.`, p, 'line');
+      if (f.line !== p.line) { f.line = p.line; ch = true }
+      if (p.edge != null && (f.edge !== p.edge || f.id !== p.id || f.text !== p.text)) { f.edge = p.edge; f.id = p.id; f.text = p.text; ch = true }
     }
     if (ch) saveFollow();
   }
-  function say(title, body, p) {
-    try { if ('Notification' in window && Notification.permission === 'granted') { const n = new Notification(title, { body, tag: 'fl-edge-' + keyOf(p), icon: '/icons/icon-192.png' }); n.onclick = () => { window.focus(); window.flPages?.show?.('predictions'); n.close() }; return } } catch (e) {}
+  function say(title, body, p, kind = 'edge') {
+    if (window.flAlerts?.quiet?.()) return toastOnly(title, body);
+    try { if ('Notification' in window && Notification.permission === 'granted') { const n = new Notification(title, { body, tag: `fl-${kind}-` + (p.id || p.name), icon: '/icons/icon-192.png' }); n.onclick = () => { window.focus(); window.flPages?.show?.('predictions'); n.close() }; return } } catch (e) {}
+    toastOnly(title, body);
+  }
+  function toastOnly(title, body) {
     const host = $('toasts'); if (!host) return;
     const t = document.createElement('button'); t.type = 'button'; t.className = 'toast fl-toast al-toast';
     t.innerHTML = `<span><b>${esc(title)}</b><small>${esc(body)}</small></span>`; t.addEventListener('click', () => t.remove());
     host.appendChild(t); setTimeout(() => t.classList.add('out'), 9500); setTimeout(() => t.remove(), 10000);
   }
   document.addEventListener('fl:board', () => { gather(); sight(P.props?.picks || []); checkAlerts() });
+  // an open evidence panel fills in its line history and injury report once they arrive (evidence.js, injuries.js)
+  let evT = 0;
+  const evRedraw = () => { if (!P.open.size || !$('pdBoard')) return; clearTimeout(evT); evT = setTimeout(draw, 60) };
+  document.addEventListener('fl:evidence', evRedraw);
+  document.addEventListener('fl:injuries', () => { evRedraw(); checkInjuries() });
+  /* alerts for the picks you follow: injury news on the player, a line move, and the result once it is graded */
+  const pickAlert = kind => window.flAlerts?.pick?.(kind);
+  function checkInjuries() {
+    const I = window.flInjuries; if (!I || !P.follow.length || !pickAlert('injury')) return; let ch = false;
+    for (const f of P.follow) {
+      if (!f.sport || !I.ready(f.sport) || (f.start && Date.now() > f.start)) continue;
+      const st = I.status(f.sport, f.name), now = st ? (st.status || I.LEVEL_NAME[st.lv]) : '';
+      if (f.inj === undefined) { f.inj = now; ch = true; continue }   // the first look only sets the baseline
+      if (now !== f.inj) { say(`${f.name}: ${now ? `now ${now}` : 'off the injury report'}`, `${f.text}. ${st?.what ? st.what + '. ' : ''}From the league injury report.`, { id: f.id, name: f.name, text: f.text }, 'inj'); f.inj = now; ch = true }
+    }
+    if (ch) saveFollow();
+  }
+  async function checkResults() {
+    if (!P.follow.length || !pickAlert('result')) return;
+    const due = P.follow.filter(f => f.start && Date.now() - f.start > 3 * 3600e3 && Date.now() - f.start < 4 * 86400e3 && !f.told); if (!due.length) return;
+    let d; try { d = await fetch('/api/props/record', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null) } catch { return } if (!d) return;
+    const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); let ch = false;
+    for (const f of due) {
+      const e = (d.entries || []).find(e => norm(e.player) === norm(f.name) && Math.abs(e.start * 1000 - f.start) < 6 * 3600e3 && ['won', 'lost', 'push', 'void'].includes(e.result)); if (!e) continue;
+      say(`${f.name}: ${{ won: 'hit', lost: 'missed', push: 'push', void: 'void' }[e.result]}${e.actual ? ` (${e.actual})` : ''}`, `${f.text}. Graded from the game log; the receipt is in Pick history.`, { id: f.id, name: f.name, text: f.text }, 'res');
+      f.told = true; ch = true;
+    }
+    if (ch) saveFollow();
+  }
+  setInterval(() => { if (!P.follow.length) return; [...new Set(P.follow.map(f => f.sport))].forEach(sp => window.flInjuries?.load(sp)); checkResults() }, 10 * 60000);
+  setTimeout(() => { [...new Set(P.follow.map(f => f.sport))].forEach(sp => window.flInjuries?.load(sp)); checkResults() }, 8000);
   // a prop's team is the player record's (players.js), filled in place; a match names its two teams
   const who = p => p.type === 'prop' && p.fid ? `<span data-flreg="${esc(p.fid)}" data-flreg-show="team">${esc(p.teamName || p.team)}</span>${p.opp ? ' v ' + esc(p.opp) : ''}`
     : esc(p.type === 'prop' ? p.game : p.text === 'Draw' ? '' : p.game);
@@ -386,7 +425,7 @@
       <div class="pd-leg" aria-hidden="true"><span><i class="said"></i>We said</span><span><i class="hit"></i>It hit</span></div>
       <details class="pd-tbl"><summary>See the numbers</summary><div class="tbx-wrap"><table class="tbx"><thead><tr><th scope="col">We said</th><th scope="col" class="r">Average</th><th scope="col" class="r">It hit</th><th scope="col" class="r">Picks</th></tr></thead>
         <tbody>${R.buckets.map(b => `<tr><th scope="row">${esc(b.label)}</th><td class="r num">${b.n ? pct(b.said) + '%' : '–'}</td><td class="r num">${b.n ? pct(b.hit) + '%' : '–'}</td><td class="r num">${b.n}</td></tr>`).join('')}</tbody></table></div></details>
-      <div class="pd-tiles"><div class="tile inset"><span class="lb">Graded picks</span><b class="fig num">${R.n}</b></div><div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${pct(R.rate)}%</b></div>
+      <div class="pd-tiles"><div class="tile inset"><span class="lb">Graded picks</span><b class="fig num">${R.n}</b></div><div class="tile inset"><span class="lb">Hit rate</span><b class="fig num">${R.n >= (window.flHistory?.MIN_RATE || 20) ? pct(R.rate) + '%' : '–'}</b>${R.n < (window.flHistory?.MIN_RATE || 20) ? `<small class="lb">shown from ${window.flHistory?.MIN_RATE || 20} graded</small>` : R.n < 50 ? '<small class="lb">small sample</small>' : ''}</div>
         <div class="tile inset"><span class="lb">Against the market</span><b class="fig num">${vsTxt}</b><small class="lb">${R.vs == null ? 'no prices saved' : `points ${R.vs >= 0 ? 'ahead' : 'behind'}, over ${R.priced} priced ${R.priced === 1 ? 'pick' : 'picks'}`}</small></div>
         <div class="tile inset"><span class="lb">Beat the closing line</span><b class="fig num">${R.clvN ? pct(R.clv) + '%' : '–'}</b><small class="lb">${R.clvN ? `of ${R.clvN} props where it moved` : 'once a prop line moves'}</small></div></div>
       <p class="lb">“Against the market” is our hit rate minus the chance the prices gave the same picks. “Beat the closing line” counts props whose line or price moved our way before the start.${R.waiting ? ` ${R.waiting} ${R.waiting === 1 ? 'prop is' : 'props are'} still waiting for a result.` : ''}</p>

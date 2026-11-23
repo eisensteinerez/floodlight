@@ -8,7 +8,7 @@
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'fl.notify';
-  const DEF = { on: false, start: true, score: true, final: true, quiet: false, qFrom: 23, qTo: 8 };
+  const DEF = { on: false, start: true, score: true, final: true, quiet: false, qFrom: 23, qTo: 8, pkInjury: true, pkLine: true, pkResult: true };
   const read = () => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || '{}') } } catch { return { ...DEF } } };
   // quiet hours: no browser notifications between these hours (an open page still shows its quiet note)
   const quietNow = () => { if (!A.quiet) return false; const h = new Date().getHours(); return A.qFrom > A.qTo ? h >= A.qFrom || h < A.qTo : h >= A.qFrom && h < A.qTo };
@@ -66,6 +66,7 @@
   }, 60000);
 
   /* ---------- Settings › Alerts ---------- */
+  const pkRow = (k, label, sub) => `<div class="st-row"><div class="st-l"><label for="al-${k}">${label}</label><small>${sub}</small></div><div class="st-c"><input class="sw" type="checkbox" role="switch" id="al-${k}" data-al="${k}" ${A[k] ? 'checked' : ''}></div></div>`;
   function card() {
     const p = perm(), F = (() => { try { return (window.S?.fav || []).length } catch { return 0 } })(), W = window.flHome?.mine?.().watch?.length || 0;
     const who = F || W ? `You follow ${F} ${F === 1 ? 'team' : 'teams'} and have ${W} ${W === 1 ? 'game' : 'games'} on your watchlist.` : 'You don’t follow any teams or watch any games yet, so there is nothing to alert you about.';
@@ -84,6 +85,11 @@
         ${row('start', 'Game starting', 'When one of your games kicks off or tips off.')}
         ${row('score', 'Score changes', 'Every goal, run or score. In basketball, only lead changes and ties.')}
         ${row('final', 'Final score', 'When one of your games ends.')}
+        <h3 class="st-sub">Picks you follow</h3>
+        <p class="lb">Follow a pick on Predictions to hear about it. These work whether or not game alerts are on.</p>
+        ${pkRow('pkInjury', 'Injury news', 'When a player you follow joins, leaves or changes status on the injury report.')}
+        ${pkRow('pkLine', 'Line moves', 'When the line on a pick you follow moves.')}
+        ${pkRow('pkResult', 'Result', 'When a pick you follow is graded: hit, miss, push or void.')}
         <div class="st-row"><div class="st-l"><label for="al-quiet">Quiet hours</label><small>No browser notifications ${hr(A.qFrom)} to ${hr(A.qTo)}. An open Floodlight page still shows a quiet note.</small></div>
           <div class="st-c al-q"><input class="sw" type="checkbox" role="switch" id="al-quiet" data-al="quiet" ${A.quiet ? 'checked' : ''} ${A.on ? '' : 'disabled'}>
             ${A.quiet ? `<label class="sr-only" for="al-qf">From</label><select class="inp sm" id="al-qf" data-alq="qFrom">${[...Array(24).keys()].map(h => `<option value="${h}"${h === A.qFrom ? ' selected' : ''}>${hr(h)}</option>`).join('')}</select><span aria-hidden="true">to</span><label class="sr-only" for="al-qt">To</label><select class="inp sm" id="al-qt" data-alq="qTo">${[...Array(24).keys()].map(h => `<option value="${h}"${h === A.qTo ? ' selected' : ''}>${hr(h)}</option>`).join('')}</select>` : ''}</div></div>
@@ -110,5 +116,5 @@
 
   function reset() { A = { ...DEF }; save() }
   document.addEventListener('change', ev => { const q = ev.target.dataset?.alq; if (!q) return; A[q] = +ev.target.value; save(); repaint(ev.target.id) });
-  window.flAlerts = { on: () => A.on, card, reset };
+  window.flAlerts = { on: () => A.on, card, reset, pick: kind => A[{ injury: 'pkInjury', line: 'pkLine', result: 'pkResult' }[kind]] !== false, quiet: quietNow };
 })();

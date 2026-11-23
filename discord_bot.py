@@ -760,7 +760,8 @@ def props_board(sport, stat=None, count=10, deepen=None):
             side, best = ("over", o10) if (o10["pct"] or 0) >= (u10["pct"] or 0) else ("under", u10)
             r.update(side=side, l10=best, l5=o5 if side == "over" else rate(gs[:5], sd["get"], r["line"], "under"),
                      l20=o20 if side == "over" else rate(gs[:20], sd["get"], r["line"], "under"), avg=o10["avg"], label=sd["l"],
-                     recent=[(sd["get"](g), g.get("home"), g.get("min"), g.get("opp") or "", g.get("oppAbbr") or "") for g in gs[:60]], photo=p.get("photo"),
+                     recent=[(sd["get"](g), g.get("home"), g.get("min"), g.get("opp") or "", g.get("oppAbbr") or "",
+                             g["date"].isoformat() if hasattr(g.get("date"), "isoformat") else "") for g in gs[:60]], photo=p.get("photo"),
                      # does the book's team match the team of the player whose games these are?
                      found_team=p.get("team") or "", found_abbr=p.get("teamAbbr") or "", team_ok=teamcheck.same(sport, r.get("team"), p.get("teamAbbr")),
                      fid=p.get("fid"))

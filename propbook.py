@@ -14,7 +14,12 @@ Grading uses pick_grade.py (the Discord pick grader): the player's ESPN game log
 own game log for baseball. Results: won, lost, push (landed on the line), void (didn't play, or postponed) and unknown
 (the game couldn't be found for certain), with the number he put up. Soccer props aren't graded yet and say so.
 
-Saved in propbook.json through storage.py.
+Every later reading is also kept in "readings" (the prop's line-movement history). Readings stop five minutes before
+the start (gradebook.LOCK_BEFORE), and the pick is always graded on the first reading's line and side.
+
+Saved in propbook.json through storage.py, and copied to GitHub by site_grader.py, which also grades from there when
+the server can't reach ESPN (gradebook.py). A lookup that failed ("no game log from ESPN") is tried again until the
+five days are up instead of being marked "not graded" on the first miss.
 """
 import datetime as dt
 import re
@@ -22,6 +27,7 @@ import threading
 import time
 from pathlib import Path
 
+import gradebook
 import storage
 
 try:
@@ -103,12 +109,15 @@ def _clean(p, now):
     line, ours, market = _num(p.get("line"), -1000, 100000), _num(p.get("ours"), 0, 1), _num(p.get("market"), 0, 1)
     start = _num(p.get("start"), now - 86400, now + 10 * 86400)
     side = p.get("side") if p.get("side") in ("over", "under") else None
-    if not name or not re.fullmatch(r"[a-z0-9_]{1,16}", k) or line is None or ours is None or side is None or not start or start <= now:
+    if not name or not re.fullmatch(r"[a-z0-9_]{1,16}", k) or line is None or ours is None or side is None or not start \
+            or start - gradebook.LOCK_BEFORE <= now:
         return None
     books = sorted({b for b in p.get("books") or [] if b in BOOKS})
     return {"sport": p["sport"], "player": name, "team": str(p.get("team") or "")[:40], "opp": str(p.get("opp") or "")[:40], "k": k,
             "label": label or k, "line": line, "side": side, "yes": bool(p.get("yes")), "ours": round(ours, 3),
-            "market": None if market is None else round(market, 3), "conf": str(p.get("conf") or "")[:12], "start": int(start), "books": books}
+            "market": None if market is None else round(market, 3), "conf": str(p.get("conf") or "")[:12], "start": int(start), "books": books,
+            "price": int(p["price"]) if isinstance(p.get("price"), int) and not isinstance(p.get("price"), bool) and 100 <= abs(p["price"]) <= 5000 else None,
+            "proj": _num(p.get("proj"), -1000, 100000), "hit": _num(p.get("hit"), 0, 1), "n": int(p["n"]) if isinstance(p.get("n"), int) and 0 < p["n"] < 400 else None}
 
 
 def seen(picks, now=None):
@@ -129,15 +138,23 @@ def seen(picks, now=None):
             continue
         key = f"{p['sport']}:{game_day(p['start'])}:{norm(p['player'])}:{p['k']}"
         edge = None if p["market"] is None else round((p["ours"] - p["market"]) * 100)
-        read = {"line": p["line"], "side": p["side"], "ours": p["ours"], "market": p["market"], "edge": edge, "at": int(now), "books": p["books"]}
+        read = {"line": p["line"], "side": p["side"], "ours": p["ours"], "market": p["market"], "edge": edge, "at": int(now), "books": p["books"],
+                "price": p["price"], "proj": p["proj"], "hit": p["hit"], "n": p["n"]}
+        read = {a: b for a, b in read.items() if b is not None or a in ("market", "edge")}
         with _lock:
             e = BOOK.get(key)
             if not e:
                 BOOK[key] = {"key": key, **{x: p[x] for x in ("sport", "player", "team", "opp", "k", "label", "line", "side", "yes", "conf", "start")},
-                             "first": read, "close": read}
+                             "first": read, "close": read, "readings": [read]}
                 new += 1
-            elif not e.get("result") and now < e["start"]:
+            elif not e.get("result") and now < e["start"] - gradebook.LOCK_BEFORE:
                 e["close"] = read
+                rs = e.setdefault("readings", [e["first"]])
+                last = rs[-1] if rs else {}
+                moved = any(last.get(x) != read.get(x) for x in ("line", "side", "market"))
+                if moved or now - last.get("at", 0) >= 900:   # a reading is kept when something moved, or every 15 minutes
+                    rs.append(read)
+                    del rs[:-24]
             else:
                 continue
             _state["dirty"] = True
@@ -168,36 +185,70 @@ def clv(e):
 
 # ---------- grading ----------
 
-def grade_one(e, now=None):
+RETRY = ("no game log", "player not found", "didn't answer", "did not answer", "timed out")   # a lookup failed: try again later
+SOURCE = {"mlb": "MLB Stats API game log"}
+
+
+def _calc(e, res, shown):
+    over = e["side"] == "over"
+    if res in ("won", "lost", "push") and shown:
+        what = f"{e['player']} had {shown} {str(e.get('label') or e['k']).lower()}"
+        if e.get("yes"):
+            return f"{what}. The pick was {'Yes' if over else 'No'}, so it is a {'hit' if res == 'won' else 'miss'}."
+        rel = "landed on" if res == "push" else ("beat" if (res == "won") == over else "fell short of") if over else ("stayed under" if res == "won" else "went over")
+        return f"{what} against a line of {e['line']:g} ({'over' if over else 'under'}): {rel} the line, so it is a {'push' if res == 'push' else 'hit' if res == 'won' else 'miss'}."
+    if res == "void":
+        return "He did not play in that game, so the pick is void and not counted."
+    return ""
+
+
+def grade_one(e, now=None, by="server", give_up=True):
     now = now or time.time()
     if e["sport"] == "soccer":
-        e.update({"result": "unknown", "actual": "", "why": "Soccer player props aren't graded yet", "graded": now})
-        return
+        gradebook.set_result(e, "unknown", "", "Soccer player props aren't graded yet", by=by, now=now)
+        return True
     slate = dt.date.fromisoformat(game_day(e["start"]))
     g = {"t": "prop", "sport": e["sport"], "player": e["player"], "stat": e["k"], "line": e["line"], "side": e["side"], "slate": slate.isoformat()}
     try:
         res, shown = (D["mlb"] if e["sport"] == "mlb" else D["grade"])(g, slate)
     except Exception as ex:
         print("propbook grade:", e["key"], type(ex).__name__, ex)
+        gradebook.note_error("propbook", ex)
         res, shown = None, ""
-    if res:
-        e.update({"result": res, "actual": shown, "graded": now})
-        if g.get("why"):
-            e["why"] = g["why"][:300]
-    elif now - e["start"] > GIVE_UP:
-        e.update({"result": "unknown", "actual": "", "why": "No result found within five days", "graded": now})
-    else:
-        e["tried"] = now
+    failed = res == "unknown" and any(w in str(shown).lower() for w in RETRY)
+    src = SOURCE.get(e["sport"], "ESPN game log and box score")
+    if res and not failed:
+        return gradebook.set_result(e, res, shown if res != "unknown" else "", (g.get("why") or (shown if res == "unknown" else ""))[:300],
+                                    by=by, source=src, calc=_calc(e, res, shown), now=now)
+    if give_up and now - e["start"] > GIVE_UP and not e.get("result"):
+        return gradebook.set_result(e, "unknown", "", f"No result found within five days{f' ({shown})' if shown else ''}", by=by, now=now)
+    e["tried"] = now
+    return False
 
 
-def grade_pending(now=None, limit=30):
+def grade_pending(now=None, limit=30, by="server", give_up=True):
     now = now or time.time()
     with _lock:
         todo = sorted([e for e in BOOK.values() if not e.get("result") and now - e["start"] > GRADE_AFTER.get(e["sport"], 3.5 * 3600)
-                       and now - e.get("tried", 0) > 1800], key=lambda e: e["start"])[:limit]
+                       and now - e.get("tried", 0) > 1800 and not e.get("test")], key=lambda e: e["start"])[:limit]
+    n = 0
     for e in todo:
-        grade_one(e, now)
+        n += bool(grade_one(e, now, by=by, give_up=give_up))
         with _lock:
+            _state["dirty"] = True
+    return n
+
+
+def recheck(now=None, limit=30, by="server"):
+    """A day after grading, grade once more in case the box score was corrected; a change goes in the correction history."""
+    now = now or time.time()
+    with _lock:
+        todo = [e for e in BOOK.values() if e.get("result") in ("won", "lost", "push") and not e.get("rechecked") and not e.get("test")
+                and 20 * 3600 < now - (e.get("graded") or now) < 4 * 86400][:limit]
+    for e in todo:
+        grade_one(e, now, by=by, give_up=False)
+        with _lock:
+            e["rechecked"] = int(now)
             _state["dirty"] = True
 
 
@@ -205,7 +256,9 @@ def _loop():
     time.sleep(90)
     while True:
         try:
-            grade_pending()
+            if grade_pending():
+                gradebook.STATUS.update({"by": "server", "at": int(time.time())})
+            recheck()
             if _state["dirty"]:
                 _save()
         except Exception as ex:
@@ -220,17 +273,70 @@ def flush():
 
 # ---------- what the page reads ----------
 
-def entries(limit=2000, since=None):
+def entries(limit=2000, since=None, receipts=False, tests=False, now=None):
+    now = now or time.time()
     with _lock:
-        rows = sorted((e for e in BOOK.values() if not since or e["start"] >= since), key=lambda e: e["start"], reverse=True)[:limit]
+        rows = sorted((e for e in BOOK.values() if (not since or e["start"] >= since) and (tests or not e.get("test"))),
+                      key=lambda e: e["start"], reverse=True)[:limit]
         out = []
         for e in rows:
             f = e.get("first") or {}
-            out.append({"key": e["key"], "sport": e["sport"], "player": e["player"], "team": e.get("team"), "opp": e.get("opp"), "k": e["k"],
+            r = {"state": gradebook.state(e["start"], e.get("result"), GRADE_AFTER.get(e["sport"], 3.5 * 3600), e.get("corrections"), now),
+                 "made": f.get("at"), "graded": e.get("graded"), "by": e.get("by"), "corrected": bool(e.get("corrections"))}
+            if receipts:
+                r.update({"first": f, "close": e.get("close"), "readings": e.get("readings") or [f], "source": e.get("source"), "calc": e.get("calc"),
+                          "corrections": e.get("corrections") or []})
+            if e.get("test"):
+                r["test"] = True
+            out.append({**r, "key": e["key"], "sport": e["sport"], "player": e["player"], "team": e.get("team"), "opp": e.get("opp"), "k": e["k"],
                         "label": e["label"], "line": e["line"], "side": e["side"], "yes": e.get("yes"), "conf": e.get("conf"), "start": e["start"],
                         "ours": f.get("ours"), "market": f.get("market"), "edge": f.get("edge"), "books": f.get("books") or [],
                         "result": e.get("result"), "actual": e.get("actual"), "why": e.get("why"), "clv": clv(e)})
         return out
+
+
+def counts(now=None):
+    now = now or time.time()
+    out = {}
+    with _lock:
+        for e in BOOK.values():
+            if e.get("test"):
+                continue
+            st = gradebook.state(e["start"], e.get("result"), GRADE_AFTER.get(e["sport"], 3.5 * 3600), e.get("corrections"), now)
+            out[st] = out.get(st, 0) + 1
+    return out
+
+
+def moves(sport, player, k, start=None):
+    """Every reading kept for one player's stat, newest prop first: the prop's line-movement history."""
+    p, out = norm(player), []
+    with _lock:
+        for e in BOOK.values():
+            if e["sport"] == sport and norm(e["player"]) == p and e["k"] == k and not e.get("test") and (not start or abs(e["start"] - start) < 86400):
+                out.append({"start": e["start"], "line": e["line"], "side": e["side"], "label": e["label"], "result": e.get("result"),
+                            "readings": [{x: r.get(x) for x in ("at", "line", "side", "ours", "market", "edge", "books")} for r in (e.get("readings") or [e.get("first") or {}])]})
+    return sorted(out, key=lambda x: x["start"], reverse=True)[:10]
+
+
+# ---------- the copy GitHub keeps (gradebook.py) ----------
+
+def snapshot():
+    with _lock:
+        return {k: dict(v) for k, v in BOOK.items()}
+
+
+def absorb(other):
+    if not isinstance(other, dict):
+        return 0
+    with _lock:
+        before = {k: (v.get("result"), len(v.get("readings") or [])) for k, v in BOOK.items()}
+        merged = gradebook.merge(BOOK, {k: v for k, v in other.items() if isinstance(v, dict) and v.get("start")})
+        BOOK.clear()
+        BOOK.update(merged)
+        changed = sum(1 for k, v in BOOK.items() if before.get(k) != (v.get("result"), len(v.get("readings") or [])))
+        if changed:
+            _state["dirty"] = True
+        return changed
 
 
 # ---------- MLB: the league's own game log (the ESPN grader would look up the wrong player id) ----------

@@ -57,6 +57,7 @@ import propbook
 import players as roster
 import health
 import corrections
+import gradebook
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 LAN = "--lan" in sys.argv          # --lan: also accept connections from phones on the same Wi-Fi
@@ -94,7 +95,7 @@ def signup_allowed(addr):
 PUBLIC_FILES = {"index.html", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
                 "forecast.js", "hockey.js", "predfilter.js", "research.js", "tennis.js", "access.js", "record.js", "theme.css", "fx.js",
                 "arena.css", "shell.js", "dates.js", "cards.js", "predict.js", "sportfx.js", "boxing.js", "home.js", "statfx.js", "ufc.js", "palette.js", "whatif.js",
-                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "history.js", "search.js",
+                "tokens.css", "themes.css", "pages.js", "settings.js", "heat.js", "heat.css", "labskin.css", "pages.css", "guide.js", "meter.js", "edge.js", "live.js", "labpage.js", "labtools.js", "slate.js", "predictions.js", "profile.js", "fighter.js", "transfers.js", "members.js", "parlaycore.js", "parlays.js", "me.js", "matchcentre.js", "evidence.js", "injuries.js", "history.js", "search.js",
                 "players.js", "schedule.js", "datastatus.js", "stadium-wide.webp", "stadium-pitch.webp"}
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
@@ -1598,6 +1599,28 @@ def set_avatar(user, body):
     return 200, {"user": public_user(user)}
 
 
+# ---------- the site record's copy on GitHub (gradebook.py, site_grader.py) ----------
+
+def grading_absorb(got, by):
+    n = gradebook.absorb(got, record, propbook)
+    gradebook.STATUS["mirror_at"] = int(time.time())
+    if isinstance(got, dict) and got.get("by") == "github" and got.get("gradedAt"):
+        gradebook.STATUS.update({"by": "github", "at": int(got["gradedAt"])})
+    if n:
+        record._save()
+        propbook._save()
+    return n
+
+
+def grading_restore():
+    """After a deploy or restart, take GitHub's copy back in, so picks locked before the restart are never lost."""
+    time.sleep(20)
+    got = gradebook.mirror()
+    if got:
+        n = grading_absorb(got, "github")
+        print(f"grading: took GitHub's copy of the record ({n} picks changed)")
+
+
 # ---------- parlays: what a member is tracking, and their record ----------
 PARLAYS_FILE = CACHE_DIR / "parlays.json"
 _parlays = storage.load(PARLAYS_FILE, {})   # {username: [parlay, ...]} newest first
@@ -1909,6 +1932,16 @@ class Handler(SimpleHTTPRequestHandler):
             import pick_tracker
             ok = pick_tracker.accept_blob(self.rfile.read(length))
             return self.send_json({"ok": ok}, 200 if ok else 409)
+        if u.path == "/api/grading/state":   # GitHub Actions hands over the graded site record (gradebook.py, sealed with the bot token)
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > 24_000_000 or not gradebook.can_seal():
+                return self.send_json({"error": "not accepted"}, 413)
+            try:
+                got = gradebook.unseal(self.rfile.read(length))
+            except Exception:
+                return self.send_json({"ok": False}, 409)
+            n = grading_absorb(got, "github")
+            return self.send_json({"ok": True, "changed": n})
         if u.path == "/api/discord/interactions":   # Discord slash commands (discord_bot.py); signed by Discord, not a member login
             length = int(self.headers.get("Content-Length") or 0)
             if not discord_bot.enabled() or length > 64_000:
@@ -2047,6 +2080,18 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             return self.wfile.write(data)
+        if u.path == "/api/grading/state":   # the site record, sealed, for GitHub Actions to grade and keep (gradebook.py)
+            if not gradebook.can_seal():
+                return self.send_json({"error": "no key"}, 404)
+            data = gradebook.seal(gradebook.bundle(record, propbook, "server"))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
+        if u.path == "/api/grading/status":   # counts and times only, so anyone can check the grader is running
+            return self.send_json(gradebook.status(record, propbook, storage.enabled()), max_age=30)
         if u.path.startswith("/api/lab/") or u.path == "/lab" or (u.path == "/" and "frame_id" in q and "instance_id" in q):
             return self.lab(u, q)   # Floodlight Lab (lab.py): Discord members get in with a pass, not a site login
         if u.path.startswith("/api/") and u.path not in ("/api/version", "/api/me", "/api/admin/users", "/api/admin/members", "/api/invite"):
@@ -2156,10 +2201,18 @@ class Handler(SimpleHTTPRequestHandler):
                 if role_of(user) != "admin":
                     return self.send_json({"error": "Only admins can see this."}, 403)
                 return self.send_json({"alerts": health.alerts()} if u.path.endswith("alerts") else {"players": roster.flagged()})
-            if u.path == "/api/record":   # Floodlight's own graded predictions (record.py)
-                return self.send_json({"entries": record.entries(), "summary": record.summary(), "now": int(time.time())}, max_age=60)
+            if u.path == "/api/record":   # Floodlight's own graded predictions (record.py); ?receipts=1 adds each pick's readings and grading
+                rc = q.get("receipts") == "1"
+                return self.send_json({"entries": record.entries(receipts=rc), "summary": record.summary(), "upcoming": record.upcoming() if rc else [],
+                                       "now": int(time.time())}, max_age=60)
             if u.path == "/api/props/record":   # every prop the Predictions page showed, locked before the start and graded (propbook.py)
-                return self.send_json({"entries": propbook.entries(since=time.time() - 120 * 86400), "now": int(time.time())}, max_age=60)
+                return self.send_json({"entries": propbook.entries(since=time.time() - 120 * 86400, receipts=q.get("receipts") == "1"), "now": int(time.time())}, max_age=60)
+            if u.path == "/api/props/moves":   # every kept reading of one player's prop: its line-movement history
+                try:
+                    st = float(q.get("start") or 0) or None
+                except ValueError:
+                    st = None
+                return self.send_json({"props": propbook.moves(str(q.get("sport") or "")[:8], str(q.get("player") or "")[:60], str(q.get("k") or "")[:16], st)}, max_age=60)
             if u.path == "/api/forecast/get":
                 keys = [k for k in q.get("keys", "").split(",") if re.fullmatch(r"(soccer|football):[A-Za-z0-9_-]{1,24}", k)][:40]
                 return self.send_auth(200, {"forecasts": {k: forecaster.view(k) for k in keys}, "settings": forecaster.settings_view()})
@@ -2404,6 +2457,7 @@ if __name__ == "__main__":
     health.setup(fetch=fetch, file=CACHE_DIR / "health.json", players=roster, propbook=lambda: list(propbook.BOOK.values()),
                  send=health.discord_sender(lambda m, p_, pl=None: discord_bot.discord(m, p_, pl, token=os.environ.get("DISCORD_BOT_TOKEN"))))
     threading.Thread(target=_player_upkeep, daemon=True, name="player-upkeep").start()
+    threading.Thread(target=grading_restore, daemon=True, name="grading-restore").start()
     if discord_bot.enabled():
         discord_bot.setup(fetch=fetch, similar=similar, fm_player=fm_player, fm_matchstats=fm_matchstats, fm_lineup=fm_lineup,
                           odds=odds, dfs=dfs, record=record, forecaster=forecaster, fm_team=fm_team, cache_dir=CACHE_DIR)
