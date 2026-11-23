@@ -71,10 +71,26 @@ async function fbLoad(key, wk){
       const res = await Promise.allSettled(days.map(d => cj(`${TSDB}/eventsday.php?d=${isoDay(d)}&l=${l.tsdb}`)));
       res.forEach(r => r.status === 'fulfilled' && (r.value.events || []).forEach(x => evs.push(tsdbNorm(x, l))));
       meta = { label: `${days[0].toLocaleDateString([], { day: 'numeric', month: 'short' })} – ${days[6].toLocaleDateString([], { day: 'numeric', month: 'short' })}`, start: start.toISOString() };
+    } else if (window.flSched) {
+      // the one schedule request (schedule.js): the nav count, heading, week control, list and ticker all read this record
+      const spec = { path: l.path, group: l.group, league: l.key, week: wk?.week, type: wk?.type };
+      let r = await window.flSched.week(spec);
+      if (r.status === 'error') throw new Error(r.error);
+      let d = r.raw;
+      evs = r.games.map(ev => fbNorm(ev, l)).filter(Boolean);
+      // between weeks ESPN still reports the finished week as "current": move on to the next one
+      if (!wk && evs.length && evs.every(e => e.state === 'post') && d.week?.number) {
+        const n = await window.flSched.week({ ...spec, week: d.week.number + 1, type: d.season?.type });
+        const nevs = n.status === 'ready' ? n.games.map(ev => fbNorm(ev, l)).filter(Boolean) : [];
+        if (nevs.length) { r = n; d = n.raw; evs = nevs }
+      }
+      meta = { sched: r.key };
+      const lg = d.leagues?.[0]; if (lg?.logos?.[0]?.href && !l.ownLogo) l.logo = lg.logos[0].href;
+      Object.assign(meta, { week: d.week?.number, type: d.season?.type, label: d.week?.number ? `${d.season?.type === 3 ? 'Postseason · ' : ''}Week ${d.week.number}` : '', season: d.season?.year,
+        calendar: lg?.calendar, start: r.start, end: r.end, tz: r.tz });
     } else {
       let d = await getJSON(fbUrl(l, wk));
       evs = (d.events || []).map(ev => fbNorm(ev, l)).filter(Boolean);
-      // between weeks ESPN still reports the finished week as "current": move on to the next one
       if (!wk && evs.length && evs.every(e => e.state === 'post') && d.week?.number) {
         const n = await getJSON(fbUrl(l, { week: d.week.number + 1, type: d.season?.type })).catch(() => null);
         const nevs = (n?.events || []).map(ev => fbNorm(ev, l)).filter(Boolean);
@@ -86,7 +102,10 @@ async function fbLoad(key, wk){
     }
     S.fb.data[id] = { events: evs.sort((a, b) => a.date - b.date), meta, at: Date.now() };
     if (!wk) S.fb.weeks[key] = S.fb.weeks[key] || { week: meta.week, type: meta.type, start: meta.start };
-  } catch { S.fb.data[id] = { error: true, events: [], at: Date.now() } }
+  } catch (e) {   // keep what was read before (and how many games it had): the page says it couldn't load, never "no games"
+    const was = S.fb.data[id];
+    S.fb.data[id] = { error: true, events: was?.events || [], meta: was?.meta || {}, known: was?.events?.length || S.fb.counts?.[key]?.n || 0, at: Date.now() };
+  }
   return S.fb.data[id];
 }
 const fbWeekOf = key => S.fb.cur?.[key] || null;     // the week the viewer navigated to (null = this week)
@@ -140,33 +159,43 @@ async function renderFootball(){
     const q = S.q.trim().toLowerCase();
     const list = evs.filter(e => (!q || `${e.home.full} ${e.away.full}`.toLowerCase().includes(q)) && (S.fb.filter !== 'live' || e.state === 'in') && (S.fb.filter !== 'fav' || S.fav.some(f => f.sport === 'football' && (f.tid === e.home.id || f.tid === e.away.id)))
       && (S.fb.filter !== 'top25' || e.home.rank || e.away.rank));
-    S.fb.counts = {}; for (const k of keys) { const d = S.fb.data[cachedId(k)]; if (d) S.fb.counts[k] = { n: d.events.length, live: d.events.filter(e => e.state === 'in').length } }
+    for (const k of keys) { const d = S.fb.data[cachedId(k)]; if (d && !d.error) (S.fb.counts ||= {})[k] = { n: d.events.length, live: d.events.filter(e => e.state === 'in').length } }
     fbRail();
+    // one sentence, from the same record as the nav count: how many games, how many shown, and why the rest aren't
+    const total = evs.length, err = sets.some(d => d.error), filt = [q && `matching “${S.q.trim()}”`, S.fb.filter === 'live' && 'live now', S.fb.filter === 'fav' && 'from your teams',
+      S.fb.filter === 'top25' && 'with a Top 25 team'].filter(Boolean).join(', ');
+    const rec = { status: err && !total ? 'error' : 'ready', games: evs, counts: window.flSched ? window.flSched.counts(evs.map(e => ({ st: e.state === 'in' ? 'live' : e.state === 'post' ? 'final' : /postpon|delay/i.test(e.detail) ? 'postponed' : /cancel/i.test(e.detail) ? 'canceled' : 'upcoming' })))
+      : { total, live: 0, postponed: 0, canceled: 0 }, knownTotal: sets.reduce((a, d) => a + (d.known || 0), 0) || null };
+    const said = window.flSched ? window.flSched.say(rec, list.length, filt) : { tone: total ? 'ready' : 'empty', text: `${list.length} games` };
     const live = list.filter(e => e.state === 'in').length;
     const slate = window.flSlate, big = !!slate && slate.isBig(list.length) && !q && (S.fb.filter || 'all') === 'all';
     if (slate) slate.repaint.fb = paint;
     const days = new Map(); for (const e of list) { const k = e.date.toDateString(); if (!days.has(k)) days.set(k, []); days.get(k).push(e) }
     const navs = key !== 'all' ? `<div class="datebar"><button class="dnav" data-fbact="wk" data-to="-1" aria-label="Previous week">‹</button>
-        <button class="dtoggle" data-fbact="wk" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(meta.label || 'This week')}${wk ? '' : ' · this week'}</span></button>
+        <button class="dtoggle" data-fbact="wk" data-to="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(meta.label || (wk ? 'That week' : 'This week'))}${wk || !meta.label ? '' : ' · this week'}${total ? ` · ${total} game${total === 1 ? '' : 's'}` : ''}</span></button>
         <button class="dnav" data-fbact="wk" data-to="1" aria-label="Next week">›</button></div>` : '';
     const chips = `<div class="quick">${[['all', 'All'], ['live', `Live${live ? ' · ' + live : ''}`], ...(FBL[key]?.college || key === 'all' ? [['top25', 'Top 25']] : []), ['fav', '★ My teams']].map(([k, l]) => `<button class="qf" data-fbfilter="${k}" aria-pressed="${(S.fb.filter || 'all') === k}">${k === 'live' ? '<span class="dot"></span>' : ''}${l}</button>`).join('')}</div>`;
-    el.innerHTML = navs + chips + `<div class="livebar"><h2>${esc(title)}</h2><span class="count">${list.length} game${list.length === 1 ? '' : 's'}${live ? ` · <span class="pill live">${live} live</span>` : ''}</span>
+    el.innerHTML = navs + chips + `<div class="livebar"><h2>${esc(title)}</h2><span class="count" role="status">${esc(said.tone === 'filtered' || said.tone === 'none-match' ? said.text : said.head || said.text)}${live ? ` · <span class="pill live">${live} live</span>` : ''}${said.clear && list.length ? ` <button type="button" class="linkbtn" data-fbact="clearf">Show all ${total}</button>` : ''}</span>
       ${key !== 'all' && !FBL[key].tsdb ? `<button class="btn ghost lginfo" data-fbact="lginfo">Standings${FBL[key].college ? ', rankings' : ''} & odds</button>` : ''}</div>`
       // a big slate (a college Saturday): top games first, days that fold, and each day's games a dozen at a time
       + (list.length ? (big ? window.flSlate.topHTML(window.flSlate.top(list, { close: 8, p: e => S.odds.get(e.id)?.ml?.home?.p ?? null }), fbCard) : '')
         + [...days].map(([k, l]) => slate ? slate.group(`fb|${key}|${wk ? wk.type + '-' + wk.week : 'now'}|${k}`, `<strong>${esc(new Date(k).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }))}</strong>`, l, fbCard, big)
           : `<div class="group"><div class="group-h day-h"><strong>${esc(new Date(k).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }))}</strong></div><div class="cards">${l.map(fbCard).join('')}</div></div>`).join('')
-        : `<div class="empty-state"><strong>${sets.some(d => d.error) ? "Couldn't load games" : 'No games'}</strong>${sets.some(d => d.error) ? 'Check your connection and try again.' : key === 'ufl' ? 'The UFL plays in spring (March to June). Use the arrows to look back at last season.' : 'Nothing scheduled for this week. Use the arrows to change week.'}</div>`)
+        : said.tone === 'none-match' ? `<div class="empty-state"><strong>${esc(said.text)}</strong>${total} game${total === 1 ? ' is' : 's are'} scheduled this week; the filter hides ${total === 1 ? 'it' : 'them'}.<div style="margin-top:12px"><button class="btn ghost" data-fbact="clearf">Show all ${total} games</button></div></div>`
+        : said.tone === 'error' ? `<div class="empty-state" role="alert"><strong>${esc(said.text)}</strong>${rec.knownTotal ? '' : 'ESPN’s schedule didn’t answer. This is a loading problem, not an empty week.'}<div style="margin-top:12px"><button class="btn ghost" data-fbact="retry">Try again</button></div></div>`
+        : `<div class="empty-state"><strong>${esc(window.flSched?.STATES.empty || 'No games scheduled for this week')}</strong>${key === 'ufl' ? 'The UFL plays in spring (March to June). Use the arrows to look back at last season.' : 'Use the arrows to change week.'}</div>`)
       + (key === 'cfl' ? `<p class="srcnote">CFL games come from TheSportsDB's free feed, which can miss some games and has no player stats.</p>` : '');
   };
-  if (have.length === keys.length) paint(); else el.innerHTML = '<div class="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+  if (have.length === keys.length) paint(); else el.innerHTML = `<p class="count" role="status">${esc(window.flSched?.STATES.loading || 'Loading this week’s games…')}</p><div class="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>`;
   await Promise.allSettled(keys.map(k => fbLoad(k, k === key ? wk : null)));
   if (S.sport !== 'football' || S.fb.view !== 'games' || S.fb.lg !== key) return;
   paint();
   fbOddsForList(keys.flatMap(k => S.fb.data[cachedId(k)]?.events || [])).then(() => { if (S.sport === 'football' && S.fb.view === 'games') paint() }).catch(() => {});
 }
 function fbTicker(){
-  const all = Object.values(S.fb.data).flatMap(d => d.events || []); const seen = new Set();
+  // the weeks the nav counts (this week, or the week being looked at), not every week ever opened
+  const ids = new Set([...FB_LEAGUES.map(l => `${l.key}|now`), ...Object.entries(S.fb.cur || {}).map(([k, w]) => `${k}|${w.type}-${w.week}`)]);
+  const all = Object.entries(S.fb.data).filter(([k]) => ids.has(k)).flatMap(([, d]) => d.events || []); const seen = new Set();
   const live = all.filter(e => e.state === 'in' && !seen.has(e.id) && seen.add(e.id));
   const next = all.filter(e => e.state === 'pre' && e.date > Date.now() && !seen.has(e.id) && seen.add(e.id)).sort((a, b) => a.date - b.date).slice(0, 6);
   const chip = e => `<button class="tk" data-fbgame="${esc(e.id)}" data-fbl="${esc(e.lg)}"><span class="mn ${e.state === 'in' ? '' : 'pre'}">${e.state === 'in' ? esc(e.detail.split(' ')[0]) : e.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><img src="${esc(e.away.logo)}" alt="">${esc(e.away.abbr)}${e.state === 'in' ? `<span class="s num">${esc(e.away.score)}–${esc(e.home.score)}</span>` : ' @ '}${esc(e.home.abbr)}<img src="${esc(e.home.logo)}" alt=""></button>`;
@@ -883,6 +912,8 @@ document.addEventListener('click', ev => {
     else if (base?.week) { let w = base.week + n, ty = base.type || 2; if (w < 1) { ty = ty === 3 ? 2 : ty; w = 1 } S.fb.cur[key] = { week: w, type: ty } }
     return render() }
   if (a === 'lginfo') return fbStandingsSheet(S.fb.lg);
+  if (a === 'clearf') { S.fb.filter = 'all'; if (S.q) { S.q = ''; const qi = $('q'); if (qi) qi.value = '' } return render() }
+  if (a === 'retry') { for (const k in S.fb.data) if (S.fb.data[k].error) delete S.fb.data[k]; return render() }
   if (a === 'futall') { S.fb.showAll[t.dataset.to] = !S.fb.showAll[t.dataset.to]; return renderFbFutures() }
   if (a === 'fav' && v?.team) { const id = `fb-${v.lg}-${v.id}`;
     S.fav = S.fav.some(f => f.id === id) ? S.fav.filter(f => f.id !== id) : [...S.fav, { id, tid: v.id, sport: 'football', lg: v.lg, name: v.team.displayName, logo: v.team.logo || v.team.logos?.[0]?.href || '' }];

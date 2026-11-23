@@ -121,7 +121,13 @@
     if (H.loading || (!force && Date.now() - H.at < 25000 && H.shown === ymd(H.day))) return;
     H.loading = true; H.err = 0;
     const want = H.day, day = ymd(want), today = sameLocalDay(want);
-    const jobs = FEEDS.map(f => j(`${ESPN}${f[1]}/scoreboard${f[0] === 'ufc' || (f[0] === 'tennis' && today) ? '' : `?dates=${day}`}${f[1].includes('college') ? (f[0] === 'basketball' ? '&groups=50' : '') : ''}`)
+    // a dated scoreboard goes through the one schedule request (schedule.js), so Home counts a league's day exactly as
+    // its sport page does: same league id (FBS is group 80, Division I basketball group 50), same local day
+    const group = f => f[1].includes('college') ? (f[0] === 'basketball' ? 50 : 80) : null;
+    const dated = f => !(f[0] === 'ufc' || (f[0] === 'tennis' && today));
+    const read = f => dated(f) && window.flSched ? window.flSched.day({ path: f[1], group: group(f), day }, force).then(r => r.status === 'error' ? Promise.reject(new Error(r.error)) : r.raw)
+      : j(`${ESPN}${f[1]}/scoreboard${dated(f) ? `?dates=${day}` : ''}${group(f) ? `${dated(f) ? '&' : '?'}groups=${group(f)}` : ''}`);
+    const jobs = FEEDS.map(f => read(f)
       .then(d => f[0] === 'ufc' ? (today && (H.ufc = (d.events || []).map(ufcNorm)), []) : (d.events || []).flatMap(ev => norm(ev, f))).catch(() => { H.err++; return [] }));
     if (today) jobs.push(j('/api/box/cards').then(d => { H.box = d.events || []; return [] }).catch(() => []));
     const all = (await Promise.all(jobs)).flat();
