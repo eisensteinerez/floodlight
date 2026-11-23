@@ -575,7 +575,7 @@
     // while Home is being edited, the editor sits at the top where it was opened
     const ord = MY.edit ? ['mine', ...order().filter(k => k !== 'mine')] : order();
     sec.innerHTML = `
-      <header class="pg-head hm-head"><div><h1 class="pg-title" tabindex="-1">${title}</h1><p class="pg-sub">${H.day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>${days()}</header>
+      <header class="pg-head hm-head"><div class="hm-when"><h1 class="pg-title" tabindex="-1">${title}</h1><p class="pg-sub hm-date">${today ? `${H.day.toLocaleDateString([], { weekday: 'long' })} · ` : ''}${H.day.toLocaleDateString([], { month: 'long', day: 'numeric' })}</p></div>${days()}</header>
       ${ord.map(k => part[k]()).join('\n')}`;
     if (keepAsk != null) { const a = $('hmAsk'); if (a) { a.value = keepAsk; a.focus() } } else if (keep) sec.querySelector(keep)?.focus({ preventScroll: true });
     { const dy = sec.querySelector('.hm-days'), on = dy?.querySelector('.on'); if (dy && on) dy.scrollLeft = on.offsetLeft - dy.offsetLeft - (dy.clientWidth - on.offsetWidth) / 2 }

@@ -81,6 +81,11 @@
 :root[data-theme] .tour h2:focus-visible{outline:0}
 
 /* ---------- Home ---------- */
+/* the Home hero: TODAY, the date in one small line under it, the day strip beside. About a quarter shorter than the
+   other front-door titles, so the briefing and the top of the featured game fit on the first screen */
+html:root[data-theme] .hm-head{align-items:center;padding-top:0!important;margin-top:-6px;row-gap:12px}
+html:root[data-theme] .hm-head .pg-title{font-size:calc(var(--title-size) * .66)!important}
+.hm-date{margin:6px 0 0;font:500 15px/1.3 var(--font-body);color:var(--text-2)}
 :root[data-theme] .hub{display:flex;flex-direction:column;gap:var(--gap);grid-column:1/-1;min-width:0;padding:0;background:none;border:0}
 :root[data-theme] .hub[hidden]{display:none}
 .hm-days{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px;max-width:100%}
@@ -946,7 +951,9 @@ html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head){align-item
 html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) > div:first-child{display:flex;align-items:center;flex-wrap:wrap;gap:6px 30px}
 html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub{display:flex;align-items:center;gap:22px;margin:0}
 html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub::before{content:"";flex:none;width:2px;height:74px;background:linear-gradient(180deg,transparent,var(--accent),transparent);transform:skewX(-20deg)}
-html:root[data-theme="stadium-gold"] .hm-head .pg-sub{max-width:250px;text-wrap:balance;font:italic 500 17px/1.75 var(--font-body);letter-spacing:.34em!important;text-transform:uppercase!important}
+html:root[data-theme="stadium-gold"] .hm-head .pg-sub{display:block!important;margin:6px 0 0!important;max-width:none;font:italic 500 15px/1.3 var(--font-body);letter-spacing:.16em!important;text-transform:uppercase!important;color:var(--text-2)}
+html:root[data-theme="stadium-gold"] .hm-head > div.hm-when:first-child{display:block!important}
+html:root[data-theme="stadium-gold"] .hm-head .pg-sub::before{display:none}
 /* section headings that stand on the page, not in a card: bigger, with a gold rule running off to the right */
 html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h h2{flex:1;display:flex;align-items:center;gap:14px;font-size:clamp(24px,2.5vw,32px)}
 html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab-start,.lab-boards) > .sec-h h2::after{content:"";flex:1;min-width:24px;height:1px;margin-left:10px;background:linear-gradient(90deg,var(--border-2),transparent 94%)}
@@ -954,8 +961,8 @@ html:root[data-theme="stadium-gold"] :is(.hm-live,.lv-g,.pd-board > section,.lab
 
 /* ---- Home ---- */
 html:root[data-theme="stadium-gold"] .hm-days{gap:10px;padding:8px;margin:-8px}
-html:root[data-theme="stadium-gold"] .hm-day{width:72px;height:74px;gap:7px;border-radius:var(--radius-tile);background:var(--chip-bg);border-color:var(--chip-edge);font:italic 500 15px/1 var(--font-body);color:var(--text)}
-html:root[data-theme="stadium-gold"] .hm-day b{font:italic 800 23px/1 var(--font-display)}
+html:root[data-theme="stadium-gold"] .hm-day{width:64px;height:64px;gap:6px;border-radius:var(--radius-tile);background:var(--chip-bg);border-color:var(--chip-edge);font:italic 500 15px/1 var(--font-body);color:var(--text)}
+html:root[data-theme="stadium-gold"] .hm-day b{font:italic 800 21px/1 var(--font-display)}
 html:root[data-theme="stadium-gold"] .hm-day:hover{border-color:var(--chip-edge-2)}
 html:root[data-theme="stadium-gold"] .hm-day.on{background:var(--gold-grad);border-color:transparent;color:var(--on-accent);font-weight:700;box-shadow:var(--gold-glow)}
 html:root[data-theme="stadium-gold"] .hm-ftr .ftr-body{gap:18px}
@@ -1126,8 +1133,8 @@ html:root[data-theme="stadium-gold"] .pd-tiles .tile:last-child{grid-column:1 / 
   html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) > div:first-child{gap:4px 18px}
   html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub{gap:14px;font-size:16px}
   html:root[data-theme="stadium-gold"] :is(.hm-head,#pg-lab > .pg-head) .pg-sub::before{height:46px}
-  html:root[data-theme="stadium-gold"] .hm-head .pg-sub{font-size:13px;letter-spacing:.26em!important;max-width:210px}
-  html:root[data-theme="stadium-gold"] .hm-day{width:64px;height:66px}
+  html:root[data-theme="stadium-gold"] .hm-head .pg-sub{font-size:13px;letter-spacing:.12em!important}
+  html:root[data-theme="stadium-gold"] .hm-day{width:58px;height:58px}
   html:root[data-theme="stadium-gold"] .hm-heat > .sec-h,html:root[data-theme="stadium-gold"] .hm-heat > .hm-rows{padding-inline:20px}
   html:root[data-theme="stadium-gold"] .ftr-acts :is(.ftr-foot,.ftr-alt){padding:0 22px;font-size:16px}
   html:root[data-theme="stadium-gold"] .lab-bar:has(.lab-cast img){padding-top:170px}
