@@ -69,11 +69,14 @@
     const badges = [top ? `<span class="pl solid">${esc(top.short)}${top.detail ? ' · ' + esc(top.detail) : ''} ${esc(top.seasons[top.seasons.length - 1])}</span>` : '',
       top && top.seasons.length >= 2 && !many ? `<span class="pl">${top.seasons.length}× ${esc(top.short)}</span>` : '', many ? `<span class="pl">${many.seasons.length}× ${esc(many.short)}</span>` : '',
       heatBadge(o.name, o.heatSport || o.sport), o.status || ''].filter(Boolean).join('');
-    const sub = [o.team, o.number ? `<span class="num">#${esc(String(o.number).replace(/^#/, ''))}</span>` : '', o.position ? `<span>${esc(o.position)}</span>` : ''].filter(Boolean).join('<i aria-hidden="true">·</i>');
+    // the team is the player record's (players.js): the page's own team stays only while the record agrees with it
+    const reg = window.flPlayers?.fid(o.sport, o.id) || '';
+    const team = o.team && reg ? `<span data-flreg="${esc(reg)}" data-flreg-show="keep" data-flreg-shown="${esc(String(o.teamId || ''))}" data-flreg-where="profile">${o.team}</span>` : o.team;
+    const sub = [team, o.number ? `<span class="num">#${esc(String(o.number).replace(/^#/, ''))}</span>` : '', o.position ? `<span>${esc(o.position)}</span>` : ''].filter(Boolean).join('<i aria-hidden="true">·</i>');
     const stats = (o.stats || []).filter(s => s && s.value != null && s.value !== '');
     return `<div class="hero solo pfh ${o.cls || ''}" style="--tc:${esc(o.color || 'var(--accent)')}">${typeof topBar === 'function' ? topBar(o.back) : ''}
       <div class="pfh-main">${o.face || ''}<div class="pfh-id">${badges ? `<div class="pfh-badges">${badges}</div>` : ''}<h3 class="pfh-name">${esc(o.name || 'Loading…')}</h3>
-        ${sub ? `<p class="pfh-sub">${sub}</p>` : ''}${o.chips?.length ? `<ul class="pfh-chips">${o.chips.filter(Boolean).map(c => `<li class="pl">${esc(c)}</li>`).join('')}</ul>` : ''}${o.extra || ''}</div>
+        ${sub ? `<p class="pfh-sub">${sub}</p>` : ''}${reg ? `<p class="pfh-roster lb" data-flreg="${esc(reg)}" data-flreg-show="verified" aria-live="off" hidden></p>` : ''}${o.chips?.length ? `<ul class="pfh-chips">${o.chips.filter(Boolean).map(c => `<li class="pl">${esc(c)}</li>`).join('')}</ul>` : ''}${o.extra || ''}</div>
         ${stats.length ? `<div class="pfh-stats">${stats.map(s => `<div class="tile"><span class="lb">${esc(s.label)}</span><b class="num">${esc(s.value)}</b>${s.rank ? `<em>${esc(s.rank)}</em>` : ''}</div>`).join('')}</div>` : ''}</div>
       ${o.caption ? `<p class="pfh-cap">${o.caption}</p>` : ''}</div>${shelf(o)}${window.flTransfers?.movesCard(o.sport, o.name, o.id) || ''}`;
   }

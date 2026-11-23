@@ -86,7 +86,7 @@
   function slotHTML(k) {
     const s = slot(k), lab = k === 'a' ? 'First player' : 'Second player';
     if (s?.d) { const d = s.d;
-      return `<div class="card lc-slot full" data-cmpdrop="${k}"><span class="lb">${lab}</span><div class="lc-who">${face(d.photo, d.name, 'avx av-lg')}<span class="rw-t"><b>${esc(d.name)}</b><small>${esc([d.team, d.pos].filter(Boolean).join(' · '))}</small></span></div>
+      return `<div class="card lc-slot full" data-cmpdrop="${k}"><span class="lb">${lab}</span><div class="lc-who">${face(d.photo, d.name, 'avx av-lg')}<span class="rw-t"><b>${esc(d.name)}</b><small>${[d.fid && window.flPlayers ? window.flPlayers.span(d.fid, d.team) : esc(d.team || ''), esc(d.pos || '')].filter(Boolean).join(' · ')}</small></span></div>
         <div class="lc-sa"><button type="button" class="bt ghost sm" data-cmp="change" data-k="${k}">Change</button><button type="button" class="lk" data-cmp="lab" data-k="${k}">Open in the Lab</button></div></div>` }
     const hits = C.hits[k];
     return `<div class="card lc-slot" data-cmpdrop="${k}"><label class="lb" for="lc-${k}">${lab}</label>
@@ -153,7 +153,7 @@
     clearTimeout(qT); C.q[k] = q; const n = q.trim().toLowerCase();
     if (n.length < 2) { C.hits[k] = null; C.sel[k] = -1; return draw() }
     qT = setTimeout(async () => {
-      const mine = [...new Map((window.flEdge?.all() || []).filter(p => p.sport === C.sport && p.name.toLowerCase().includes(n)).map(p => [p.name, { name: p.name, sub: [p.team, 'line posted today'].filter(Boolean).join(' · '), img: p.photo }])).values()].slice(0, 4);
+      const mine = [...new Map((window.flEdge?.all() || []).filter(p => p.sport === C.sport && p.name.toLowerCase().includes(n)).map(p => [p.name, { name: p.name, sub: [p.teamStatus === 'verified' ? p.teamName || p.team : '', 'line posted today'].filter(Boolean).join(' · '), img: p.photo }])).values()].slice(0, 4);
       let es = [];
       try { const sp = SPORTS.find(s => s[0] === C.sport)[2], d = await (typeof cj === 'function' ? cj : u => fetch(u).then(r => r.json()))(`${ESPN}?query=${encodeURIComponent(q.trim())}&type=player&sport=${sp}&limit=8`);
         es = (d.items || []).filter(x => C.sport === 'soccer' || (OK_LG[C.sport] || []).includes(x.league || x.defaultLeagueSlug)).map(x => ({ name: x.displayName, sub: [x.teamRelationships?.[0]?.displayName, x.isRetired ? 'retired' : ''].filter(Boolean).join(' · '), img: x.headshot?.href || '' })) } catch (e) {}
@@ -215,7 +215,7 @@
     return `<svg class="tr-spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${o.map((v, i) => `${(i / (o.length - 1) * (W - 4) + 2).toFixed(1)},${(H - 3 - (v - min) / r * (H - 6)).toFixed(1)}`).join(' ')}"/></svg>` };
   function trendRow(p, note) {
     const args = window.flEdge.labArgs(p);
-    return `<li><button type="button" class="tr-row" data-tropen="${esc(JSON.stringify({ ...args, mode: 'trend' }))}" draggable="true" data-cmpdrag="${esc(JSON.stringify({ sport: p.sport, name: p.name, stat: p.k }))}">${face(p.photo, p.name)}<span class="tr-t"><b>${esc(p.name)}</b><small>${esc(`${p.label} · line ${fmt(p.line)}`)}</small></span>
+    return `<li><button type="button" class="tr-row" data-tropen="${esc(JSON.stringify({ ...args, mode: 'trend' }))}" draggable="true" data-cmpdrag="${esc(JSON.stringify({ sport: p.sport, name: p.name, stat: p.k }))}">${face(p.photo, p.name)}<span class="tr-t"><b>${esc(p.name)}</b><small>${p.fid || p.team ? (window.flPlayers ? window.flPlayers.span(p.fid, p.teamName || p.team) : esc(p.teamName || p.team || '')) + ' · ' : ''}${esc(`${p.label} · line ${fmt(p.line)}`)}</small></span>
       <span class="tr-r"><span class="tr-note">${note}</span>${spark((p.games || []).slice(0, 10).map(g => g.v).filter(v => v != null))}</span></button></li>`;
   }
   function trends(host, o = {}, api) {

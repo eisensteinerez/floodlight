@@ -83,6 +83,8 @@
       it.kind = 'fighter'; it.attrs = { ufcfighter: x.id }; it.lg = 'UFC'; it.lgKey = 'ufc'; it.img = x.headshot?.href || shot('mma', x.id); it.face = 1;
     }
     it.sub = [it.lg || SPORT[sp], team ? '' : it.team ?? tr].filter(Boolean).join(' · ');
+    // the team shown is the player record's (players.js), never the search's own guess
+    if (!team && window.flPlayers) { it.reg = window.flPlayers.fid(it.lgKey, x.id); it.regTeam = String(x.teamRelationships?.[0]?.id || x.teamRelationships?.[0]?.core?.id || '') }
     return it;
   }
   async function espnAll(q) {
@@ -101,7 +103,8 @@
       .map(({ t, l }, i) => ({ sp: 'baseball', kind: 'team', id: String(t.id), title: t.name, sub: l.name, lg: l.name, lgKey: l.key, rank: i + 4, img: bsLogo(t.id), attrs: { bsteam: t.id, bsl: l.key } }));
     const P = (people.people || []).sort((a, b) => !!b.currentTeam - !!a.currentTeam || !!b.active - !!a.active).slice(0, 10).map((p, i) => { const t = p.currentTeam, l = lgOf(t);
       return { sp: 'baseball', kind: 'player', id: String(p.id), title: p.fullName, sub: [l?.name, p.primaryPosition?.abbreviation, t?.name].filter(Boolean).join(' · ') || 'Free agent or retired', lg: l?.name, lgKey: l?.key || '', rank: i, active: !!p.active, retired: !p.active && !t,
-        img: bsShot(p.id, !t || t.sport?.id === 1), face: 1, attrs: { bsplayer: p.id, bsl: l?.key || 'mlb', bsfrom: 1 } } });
+        img: bsShot(p.id, !t || t.sport?.id === 1), face: 1, attrs: { bsplayer: p.id, bsl: l?.key || 'mlb', bsfrom: 1 },
+        reg: t && t.sport?.id === 1 && window.flPlayers ? window.flPlayers.fid('mlb', p.id) : '', regTeam: t ? String(t.id) : '' } });
     return [...P, ...T];
   }
   // Floodlight's own lookups: Flashscore basketball and hockey (Europe, Asia, juniors) and tennis
@@ -262,7 +265,7 @@
   function row(it, first) {
     const i = rows.push(it) - 1, canLab = (it.kind === 'player' || it.kind === 'fighter') && LAB_SPORT(it) && !it.fs, canFollow = it.kind === 'team' && it.sp !== 'tennis';
     return `<li class="gs-row${it.live ? ' live' : ''}"><button type="button" class="sr gs-go" data-gs="${i}" id="gs${i}">${ph(it)}
-      <span class="gs-t"><strong>${esc(it.title)}</strong><small>${esc(it.sub || '')}</small></span>
+      <span class="gs-t"><strong>${esc(it.title)}</strong><small>${it.reg ? `<span data-flreg="${esc(it.reg)}" data-flreg-show="sub" data-flreg-shown="${esc(it.regTeam || '')}" data-flreg-where="search">${esc(it.sub || '')}</span>` : esc(it.sub || '')}</small></span>
       <span class="gs-dest">${it.live ? '<i class="gs-dot" aria-hidden="true"></i>Live' : esc(DEST[it.kind] || '')}${first ? '<kbd aria-hidden="true">↵</kbd>' : ''}</span></button>
       ${canLab || canFollow ? `<span class="gs-acts">${canLab ? `<button type="button" class="gs-act" data-gsact="lab" data-gs="${i}" aria-label="Open ${esc(it.title)} in the Lab">Lab</button>` : ''}${canLab && window.flLab?.compare ? `<button type="button" class="gs-act" data-gsact="compare" data-gs="${i}" aria-label="Compare ${esc(it.title)} with another player">Compare</button>` : ''}${canFollow ? `<button type="button" class="gs-act" data-gsact="follow" data-gs="${i}" aria-pressed="${followed(it)}" aria-label="Follow ${esc(it.title)}">${followed(it) ? 'Following' : 'Follow'}</button>` : ''}</span>` : ''}</li>`;
   }

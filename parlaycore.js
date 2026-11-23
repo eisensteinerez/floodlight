@@ -106,7 +106,10 @@
     const L = LG[lg]; if (!L) return Promise.resolve([]);
     const k = lg + '|' + day, c = boards.get(k);
     if (c && !force && (c.promise || Date.now() - c.at < 20000)) return c.promise || Promise.resolve(c.games);
-    const promise = getJ(`${ESPN}${L.path}/scoreboard?dates=${day}${L.qs || ''}`).then(d => (d.events || []).flatMap(ev => (ev.competitions || []).slice(0, 1).map(cp => game(ev, cp, lg))))
+    // the one schedule request (schedule.js) when the league has a group id, so the builder lists the same games as the sport page
+    const grp = /groups=(\d+)/.exec(L.qs || '')?.[1] || null;
+    const promise = (window.flSched ? window.flSched.day({ path: L.path, group: grp, day }, force).then(r => r.status === 'error' ? Promise.reject(new Error(r.error)) : r.raw)
+      : getJ(`${ESPN}${L.path}/scoreboard?dates=${day}${L.qs || ''}`)).then(d => (d.events || []).flatMap(ev => (ev.competitions || []).slice(0, 1).map(cp => game(ev, cp, lg))))
       .then(games => { boards.set(k, { at: Date.now(), games }); return games })
       .catch(() => { boards.set(k, { at: c?.games ? Date.now() - 12000 : 0, games: c?.games || [], failed: true }); return c?.games || [] });
     boards.set(k, { at: c?.at || 0, games: c?.games || [], promise });
