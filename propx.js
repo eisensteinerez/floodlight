@@ -66,7 +66,7 @@
 
   /* ---------- the explorer ---------- */
   const save = () => { store.set('fl.px', X.f); store.set('fl.pxSort', X.sort) };
-  const ADV = ['league', 'game', 'team', 'provider', 'l5', 'l10', 'l20', 'edge', 'grade', 'when', 'injury', 'moved', 'games', 'mins'];
+  const ADV = ['league', 'game', 'team', 'provider', 'l5', 'l10', 'l20', 'edge', 'grade', 'when', 'injury', 'lineup', 'moved', 'games', 'mins'];
   const isAdv = k => ADV.includes(k);
   function active() {
     const d = K.defaults(), out = [];
@@ -77,6 +77,7 @@
   const EDGE = [[null, 'Any'], [0, 'Above 0'], [3, '+3 or more'], [5, '+5 or more'], [10, '+10 or more']];
   const GRADES = [['all', 'Any'], ['A', 'A only'], ['B', 'B or better'], ['C', 'C or better']];
   const WHEN = [['all', 'Any time'], ['soon', 'In the next 2 hours'], ['today', 'Today'], ['tomorrow', 'Tomorrow'], ['later', 'Later']];
+  const LINEUP = [['all', 'Any'], ['settled', 'Role settled'], ['unsure', 'Role uncertain']];
   const INJ = [['all', 'Any'], ['clear', 'Not on the injury report'], ['listed', 'On the injury report']];
   const MOVED = [['all', 'Any'], ['moved', 'Line has moved'], ['easier', 'Moved in the pick’s favour'], ['harder', 'Moved against the pick']];
   const GAMES = [[0, 'Any'], [5, '5+'], [10, '10+'], [20, '20+']];
@@ -87,7 +88,7 @@
     const opt = name => (o[name].find(x => x[0] === v) || [, v])[1];
     return { q: `Player: ${v}`, league: `League: ${SPORT[v] || v}`, game: `Game: ${opt('game')}`, team: `Team: ${opt('team')}`, stat: `Stat: ${opt('stat')}`, provider: `Provider: ${book(v)}`, side: find(SIDE, v),
       hot: 'Running hot', l5: `Last 5: ${find(RATE, v)}`, l10: `Last 10: ${find(RATE, v)}`, l20: `Last 20: ${find(RATE, v)}`, edge: `Supported edge ${find(EDGE, v)}`, grade: `Evidence ${find(GRADES, v)}`, when: find(WHEN, v),
-      injury: find(INJ, v), moved: find(MOVED, v), games: `${find(GAMES, v)} games`, mins: `Minutes ${find(MINS, v)}` }[k] || k;
+      injury: find(INJ, v), lineup: `Lineup: ${find(LINEUP, v).toLowerCase()}`, moved: find(MOVED, v), games: `${find(GAMES, v)} games`, mins: `Minutes ${find(MINS, v)}` }[k] || k;
   };
   function mount(host, o = {}, api = {}) {
     X.host = host; X.api = api; X.shown = 40;
@@ -120,7 +121,7 @@
           ${select('pxEdge', 'Supported edge', 'edge', EDGE, true)}
           ${select('pxGrade', 'Evidence quality', 'grade', GRADES, true)}
           ${select('pxWhen', 'Starting time', 'when', WHEN, true)}
-          ${select('pxInj', 'Injury status', 'injury', INJ, true)}
+          ${select('pxInj', 'Injury status', 'injury', INJ, true)}${select('pxLu', 'Lineup', 'lineup', LINEUP, true)}
           ${select('pxMove', 'Line movement', 'moved', MOVED, true)}
           ${select('pxGames', 'Games on record', 'games', GAMES, true)}
           ${select('pxMins', 'Minutes (last 5)', 'mins', MINS, true)}

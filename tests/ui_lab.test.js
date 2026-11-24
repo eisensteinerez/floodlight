@@ -187,6 +187,32 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     }
   });
 
+  await t('Predictions: Prop Explorer’s player filters narrow the same markets, a line-movement sort, and Clear brings everything back', async () => {
+    const p = await page(); await explorer(p);
+    await p.evaluate(() => window.flPages.show('predictions')); await p.waitForSelector('#pg-predictions article[data-pk]', { timeout: 20000 });
+    await p.selectOption('[data-pdsel="when"]', 'week'); await p.waitForTimeout(200);
+    const names = () => p.$$eval('#pg-predictions #pdBoard article[data-pk]', as => [...new Set(as.map(a => a.querySelector('h3, .pd-name, b')?.textContent.trim()))]);
+    assert.ok((await p.$$eval('[data-pdsel="sort"] option', os => os.map(o => o.textContent))).includes('Biggest line movement'));
+    await p.click('[data-pd="more"]'); await p.waitForSelector('[data-pdpf="stat"]');
+    const opts = await p.$$eval('[data-pdpf="stat"] option', os => os.map(o => o.textContent)); assert.ok(opts.includes('Rebounds') && opts.includes('Points'), opts.join());
+    for (const k of ['game', 'team', 'provider', 'side', 'grade', 'when', 'injury', 'lineup', 'games']) assert.ok(await p.$(`[data-pdpf="${k}"]`), `no ${k} filter`);
+    await p.selectOption('[data-pdpf="stat"]', { label: 'Rebounds' }); await p.waitForTimeout(250);
+    const only = await p.textContent('#pdBoard'); assert.ok(only.includes('Rudy Gobert') && !only.includes('Anthony Edwards') && !only.includes('Jalen Hurts'), 'only the rebounds line is left');
+    assert.strictEqual(await p.getAttribute('[data-pd="more"]', 'aria-expanded'), 'true');
+    // the same filter in Prop Explorer finds the same market
+    const lab = await p.evaluate(() => { const K = window.flLabCore; return K.filter(window.flMarkets.open(), { ...K.defaults(), stat: 'reb' }, { now: Date.now() }).map(m => m.name) });
+    assert.deepStrictEqual(lab, ['Rudy Gobert']);
+    // kept in this browser, and offered back through Continue researching
+    assert.strictEqual(JSON.parse(await p.evaluate(() => localStorage.getItem('fl.pdPf'))).stat, 'reb');
+    assert.ok(await p.evaluate(() => window.flRecent.list().some(x => x.key === 'filters:predictions' && x.open.filters.pf.stat === 'reb')));
+    await p.fill('[data-pdpf="q"]', 'zzz'); await p.waitForTimeout(450); assert.ok(!(await p.textContent('#pdBoard')).includes('Rudy Gobert'));
+    await p.click('[data-pd="clear"]'); await p.waitForTimeout(250);
+    const back = await p.textContent('#pdBoard'); assert.ok(back.includes('Rudy Gobert') && back.includes('Anthony Edwards'), 'Clear brings every pick back');
+    await p.selectOption('[data-pdsel="sort"]', 'move'); await p.waitForTimeout(150); assert.ok((await p.textContent('#pdBoard')).includes('Anthony Edwards'));
+    await p.evaluate(() => document.getElementById('pdMore')?.scrollIntoView({ block: 'center' })); await shot(p, 'predictions-filters-1440');
+    assert.deepStrictEqual(p.errors, []);
+  });
+
   await t('Add to Prediction Card puts the line on the Predictions slip', async () => {
     const p = await page(); await explorer(p);
     await p.locator('[data-pxopen]').filter({ hasText: 'Rudy Gobert' }).click(); await p.waitForSelector('#rpT');

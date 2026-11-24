@@ -22,7 +22,11 @@
   const WHEN = [['tonight', 'Tonight'], ['tomorrow', 'Tomorrow'], ['week', 'This week']];
   const MIN = [[0, 'Any'], [3, '3+'], [5, '5+'], [10, '10+']];
   // the default order is the supported edge: the raw gap with the market, cut down by what stands behind it (market.js)
-  const SORT = [['edge', 'Best supported edge'], ['prob', 'Highest model probability'], ['evidence', 'Strongest evidence'], ['fresh', 'Freshest markets'], ['soon', 'Starting soon'], ['raw', 'Raw edge']];
+  const SORT = [['edge', 'Best supported edge'], ['evidence', 'Strongest evidence'], ['prob', 'Highest model probability'], ['fresh', 'Freshest markets'], ['soon', 'Starting soon'], ['move', 'Biggest line movement'], ['raw', 'Raw edge']];
+  /* the player-prop filters are Prop Explorer's (labcore.js filter), so the two pages narrow the same markets the same way */
+  const PF_KEYS = ['league', 'game', 'team', 'q', 'stat', 'provider', 'side', 'grade', 'when', 'injury', 'lineup', 'games'];
+  const PF0 = () => Object.fromEntries(PF_KEYS.map(k => [k, window.flLabCore?.defaults()[k] ?? 'all']));
+  const pfActive = () => PF_KEYS.filter(k => JSON.stringify(P.pf[k]) !== JSON.stringify(PF0()[k]));
   const GROUP = [['player', 'Best pick per player'], ['game', 'Best pick per game'], ['all', 'Show every market']];
   const KIND = [['all', 'Props and match results'], ['prop', 'Player props only'], ['match', 'Match results only']];
   const MK = window.flMarket;
@@ -30,7 +34,8 @@
   const P = { sport: 'all', when: 'tonight', min: 0, sort: 'edge', props: null, matches: null, record: null, loading: false, at: 0, denied: false, all: false,
     open: new Set(), ev: new Map(), pending: new Set(), fcAt: 0, recAt: 0, fcError: '', recError: '', fcStatus: 0, srcOpen: false, retries: 0, retryT: 0,
     kind: 'all', priced: false, clean: false, mine: false, more: false, ctx: new Map(), ctxAsked: new Map(), group: 'player', grp: new Set(), fold: new Set(), gone: new Map(), wasOpen: new Map(), tz: MK.localTz(),
-    slip: store.get('fl.slip', []), follow: store.get('fl.pdFollow', []), seen: store.get('fl.lineSeen', {}), tried: new Map(), slips: store.get('fl.slips', []), confirm: null, saved: 0, timer: 0 };
+    slip: store.get('fl.slip', []), follow: store.get('fl.pdFollow', []), seen: store.get('fl.lineSeen', {}), tried: new Map(), slips: store.get('fl.slips', []), confirm: null, saved: 0, timer: 0, pf: null };
+  P.pf = { ...PF0(), ...(store.get('fl.pdPf', {}) || {}) };
 
   /* ---------- data ---------- */
   const get = (url, ms = 20000) => Promise.race([fetch(url, { credentials: 'same-origin' }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(d.error || String(r.status)); e.status = r.status; throw e } return d }),
@@ -222,9 +227,12 @@
     const answered = new Set(Object.values(P.props?.by || {}).filter(r => !r.error && !r.kept && r.at && r.at !== P.readAt[r.sport]).map(r => r.sport));
     if (answered.size) { for (const p of MK.withdrawn(P.wasOpen, all.filter(p => p.type === 'prop'), answered)) retire(p, 'withdrawn', MK.GONE.withdrawn, 'The provider stopped offering this line'); for (const r of Object.values(P.props?.by || {})) if (answered.has(r.sport)) P.readAt[r.sport] = r.at }
     P.wasOpen = new Map(all.filter(p => p.type === 'prop' && p.v.state === 'open').map(p => [keyOf(p), p]));
-    const by = all.filter(p => (P.sport === 'all' || p.sport === P.sport) && (P.kind === 'all' || p.type === P.kind) && (!P.mine || following(p)) && (!P.clean || !warnsOf(p).length));
+    const pfOn = pfActive().length, K = window.flLabCore;
+    // with a player-prop filter on, match results step aside (they have no player, stat or provider to match)
+    const pfOk = p => !pfOn || !K ? true : p.type === 'prop' && K.filter([p], { ...K.defaults(), ...P.pf }, { now, tz: P.tz, dayDiff: MK.dayDiff }).length === 1;
+    const by = all.filter(p => (P.sport === 'all' || p.sport === P.sport) && (P.kind === 'all' || p.type === P.kind) && (!P.mine || following(p)) && (!P.clean || !warnsOf(p).length) && pfOk(p));
     const open = by.filter(p => p.v.state === 'open'), pre = open.filter(p => inWhen(p, now));
-    const ranked = pre.filter(p => p.sedge != null && p.sedge >= P.min).sort(MK.SORTS[P.sort] || MK.SORTS.edge);
+    const ranked = pre.filter(p => p.sedge != null && p.sedge >= P.min).sort(SORTS[P.sort] || MK.SORTS[P.sort] || MK.SORTS.edge);
     const bare = P.min > 0 || P.priced ? [] : pre.filter(p => p.edge == null).sort(P.sort === 'soon' ? MK.SORTS.soon : (a, b) => b.ours - a.ours);
     // the markets the verified service took off (markets.py): never cards, listed with their status and reason
     const srv = Object.values(P.props?.by || {}).flatMap(r => (r.removed || []).map(x => ({ ...x, sport: r.sport }))).filter(x => P.sport === 'all' || x.sport === P.sport);
@@ -282,7 +290,23 @@
   document.addEventListener('fl:lm', () => { if (P.open.size && !document.getElementById('pg-predictions')?.hidden) draw() });   // a price history landed (linemove.js)
 
   /* One compact bar: Sport | Date | Edge | Sort, then More filters (what to show, how to group), then one small sources indicator. */
-  const moreCount = () => [P.kind !== 'all', P.group !== 'player', P.priced, P.clean, P.mine].filter(Boolean).length;
+  const moreCount = () => [P.kind !== 'all', P.group !== 'player', P.priced, P.clean, P.mine].filter(Boolean).length + pfActive().length;
+  const PFO = { side: [['all', 'Over and under'], ['over', 'Over only'], ['under', 'Under only']], grade: [['all', 'Any'], ['A', 'A only'], ['B', 'B or better'], ['C', 'C or better']],
+    when: [['all', 'Any time'], ['soon', 'In the next 2 hours'], ['today', 'Today'], ['tomorrow', 'Tomorrow']], injury: [['all', 'Any'], ['clear', 'Not on the injury report'], ['listed', 'On the injury report']],
+    lineup: [['all', 'Any'], ['settled', 'Role settled'], ['unsure', 'Role uncertain']], games: [[0, 'Any'], [5, '5+ games'], [10, '10+ games'], [20, '20+ games']] };
+  function propFilters(L) {
+    const K = window.flLabCore; if (!K) return '';
+    const props = L.open.filter(p => p.type === 'prop' && (P.sport === 'all' || p.sport === P.sport)), o = K.options(props), off = !(window.flPlan?.can?.('advanced_filters') ?? true);
+    const bk = b => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' })[b] || b;
+    const pf = (k, label, opts) => `<label class="pd-fs"><span class="pd-fs-l" id="pdP-${k}">${label}</span><select class="inp sm" data-pdpf="${k}" data-fk="pf-${k}" aria-labelledby="pdP-${k}"${off ? ' disabled aria-describedby="pdPfPlus"' : ''}>${opts.map(([v, l]) => `<option value="${esc(JSON.stringify(v))}"${JSON.stringify(P.pf[k]) === JSON.stringify(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
+    const any = l => [['all', 'Any'], ...l];
+    return `<fieldset class="pd-pf"><legend>Player props</legend>
+      <label class="pd-fs pd-fq"><span class="pd-fs-l" id="pdP-q">Player</span><input class="inp sm" type="search" data-pdpf="q" data-fk="pf-q" aria-labelledby="pdP-q" placeholder="Name…" autocomplete="off" spellcheck="false" value="${esc(P.pf.q || '')}"${off ? ' disabled' : ''}></label>
+      ${o.league.length > 1 ? pf('league', 'League', any(o.league.map(([k]) => [k, SPORT_NAME[k] || k]))) : ''}${pf('game', 'Game', any(o.game))}${pf('team', 'Team', any(o.team))}${pf('stat', 'Market', any(o.stat))}
+      ${pf('provider', 'Provider', any(o.provider.map(([b]) => [b, bk(b)])))}${pf('side', 'Over or under', PFO.side)}${pf('grade', 'Evidence quality', PFO.grade)}${pf('when', 'Starts', PFO.when)}
+      ${pf('injury', 'Injury report', PFO.injury)}${pf('lineup', 'Lineup', PFO.lineup)}${pf('games', 'Minimum sample', PFO.games)}
+      ${off ? `<p class="lb" id="pdPfPlus">Player-prop filters are part of Plus. <a href="#/pricing">See Plus</a></p>` : pfActive().length ? '<p class="lb">With a player filter on, match results are hidden.</p>' : ''}</fieldset>`;
+  }
   function drawFilters(L) {
     const count = sp => L.open.filter(p => sp === 'all' || p.sport === sp).length;
     const sel = (key, label, opts, cur) => `<label class="pd-fs"><span class="pd-fs-l" id="pdF-${key}">${label}</span><select class="inp sm" data-pdsel="${key}" data-fk="sel-${key}" aria-labelledby="pdF-${key}">${opts.map(([k, l]) => `<option value="${k}"${String(cur) === String(k) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
@@ -296,6 +320,7 @@
       <div class="pd-more-f" id="pdMore"${P.more ? '' : ' hidden'}>
         ${sel('kind', 'Show', KIND, P.kind)}${sel('group', 'Display', GROUP, P.group)}
         <fieldset class="pd-chks"><legend class="sr-only">Narrow the board</legend>${chk('priced', 'Only picks with a market price')}${chk('clean', 'Hide picks with an uncertainty warning')}${chk('mine', 'Only picks I follow')}</fieldset>
+        ${propFilters(L)}
         ${n ? `<button type="button" class="lk" data-pd="clear" data-fk="clear-more">Clear all filters</button>` : ''}
       </div>`;
   }
@@ -318,9 +343,20 @@
     if (f.market != null && p.market != null && f.side === p.side && Math.abs(pct(p.market) - pct(f.market)) >= 4) return { kind: 'price', from: f.market, to: p.market, at: f.at, txt: `Price ${pct(f.market)}% → ${pct(p.market)}%`, say: `The market's chance moved from ${pct(f.market)}% to ${pct(p.market)}% since you first saw it at ${time(new Date(f.at))}.` };
     return null;
   }
+  /* two orders that read more than market.js knows: the evidence grade (A to D, apart from the edge) and line movement */
+  const GR = p => window.flLabCore?.GRADE_RANK[gradeOf(p)?.grade] || 0, SE = p => p.sedge ?? -1e9;
+  const moveSize = p => { const m = moved(p); return !m ? 0 : m.kind === 'line' ? Math.abs(m.to - m.from) / Math.max(1, Math.abs(m.from)) * 100 : Math.abs(pct(m.to) - pct(m.from)) / 4 };
+  const SORTS = { evidence: (a, b) => GR(b) - GR(a) || (b.support ?? 0) - (a.support ?? 0) || SE(b) - SE(a), move: (a, b) => moveSize(b) - moveSize(a) || SE(b) - SE(a) };
   /* Following a pick, with an optional alert when its edge reaches a number. Kept in this browser. */
   const following = p => P.follow.find(f => f.k === keyOf(p));
   const saveFollow = () => store.set('fl.pdFollow', P.follow.slice(-60));
+  // the filters are kept in this browser, and the last set is offered on Home's Continue researching
+  const savePf = () => { store.set('fl.pdPf', P.pf); const a = pfActive(); if (a.length) window.flRecent?.note({ kind: 'filters', key: 'filters:predictions', label: 'Predictions, filtered', sub: `${a.length} player-prop ${a.length === 1 ? 'filter' : 'filters'}${P.sport !== 'all' ? ` · ${SPORT_NAME[P.sport] || P.sport}` : ''}`, open: { page: 'predictions', filters: { sport: P.sport, sort: P.sort, pf: { ...P.pf } } } }) };
+  let pfT = 0;
+  document.addEventListener('input', e => { const q = e.target.closest?.('#pg-predictions input[data-pdpf="q"]'); if (!q) return; P.pf.q = q.value; clearTimeout(pfT); pfT = setTimeout(() => { savePf(); draw() }, 250) });
+  // a set of filters saved on a board or in Continue researching comes back exactly
+  document.addEventListener('fl:resume', e => { const d = e.detail || {}; if (d.page !== 'predictions' || !d.filters) return; const f = d.filters;
+    if (f.sport) P.sport = f.sport; if (f.sort && SORT.some(x => x[0] === f.sort)) P.sort = f.sort; if (f.pf) P.pf = { ...PF0(), ...f.pf }; if (pfActive().length) P.more = true; P.all = false; draw() });
   function follow(p) {
     if (following(p)) P.follow = P.follow.filter(f => f.k !== keyOf(p));
     else P.follow.push({ k: keyOf(p), id: p.id, name: p.name, text: p.text, sport: p.sport, game: p.game || '', start: p.start ? +p.start : 0, edge: p.edge, at: Date.now(), alert: null });
@@ -765,7 +801,7 @@
     if (d.pd === 'sharecard') return shareCard();
     if (d.pd === 'empty') { P.slip = []; store.set('fl.slip', P.slip); P.saved = 0; return draw() }
     if (d.pd === 'all') { P.all = !P.all; return draw() }
-    if (d.pd === 'clear') { Object.assign(P, { sport: 'all', when: 'tonight', min: 0, kind: 'all', group: 'player', priced: false, clean: false, mine: false, all: false }); return draw() }
+    if (d.pd === 'clear') { Object.assign(P, { sport: 'all', when: 'tonight', min: 0, kind: 'all', group: 'player', priced: false, clean: false, mine: false, all: false, pf: PF0() }); savePf(); return draw() }
     if (d.pd === 'more') { P.more = !P.more; draw(); if (P.more) $('pdMore')?.querySelector('select, input')?.focus({ preventScroll: true }); return }
     if (d.pd === 'src') { P.srcOpen = !P.srcOpen; return draw() }
     if (d.pd === 'reload') { P.retries = 0; return load(true) }
@@ -778,6 +814,7 @@
     if (sel) { const k = sel.dataset.pdsel, v = sel.value; P[k] = k === 'min' ? +v : v; P.all = false;
       if (k === 'sport' && v !== 'all') window.flRecent?.note({ kind: 'filters', key: 'filters:predictions', label: `Predictions for ${SPORT_NAME[v] || v}`, sub: 'The last filter you chose', open: { page: 'predictions', filters: { sport: v } } });
       return draw() }
+    const pfs = e.target.closest?.('#pg-predictions select[data-pdpf]'); if (pfs) { try { P.pf[pfs.dataset.pdpf] = JSON.parse(pfs.value) } catch (x) { P.pf[pfs.dataset.pdpf] = pfs.value } P.all = false; savePf(); return draw() }
     const ck = e.target.closest?.('#pg-predictions [data-pdchk]'); if (ck) { P[ck.dataset.pdchk] = ck.checked; P.all = false; return draw() }
     const al = e.target.dataset?.pdalert; if (al != null) { const f = P.follow.find(x => x.k === al); if (f) { f.alert = e.target.value === '' ? null : +e.target.value; saveFollow(); draw() } } });
   setInterval(() => { if (window.flPages.current() !== 'predictions' || document.hidden) return; document.querySelectorAll('#pg-predictions [data-pdago]').forEach(t => { const x = ago(+t.dataset.pdago); if (t.textContent !== x) t.textContent = x }) }, 5000);
