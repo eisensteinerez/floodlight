@@ -522,6 +522,7 @@
     const c = K.card(legs.map(l => ({ ...l, short: l.text, ours: C.start0(l), grade: l.grade || null })));
     const rows = [];
     if (c.avgGrade) rows.push(`<li>${ic('check', 14)}<span>Average evidence quality <b>${c.avgGrade}</b>, ${esc(K.GRADE_WORD[c.avgGrade].toLowerCase())}.</span></li>`);
+    if (c.strongest) rows.push(`<li>${ic('check', 14)}<span>Strongest pick: <b>${esc(c.strongest.text)}</b>${c.strongest.ours != null ? `, ${pct(c.strongest.ours)}% on its own` : ''}.</span></li>`);
     if (c.weakest) rows.push(`<li>${ic('help', 14)}<span>Weakest pick: <b>${esc(c.weakest.text)}</b>${c.weakest.ours != null ? `, ${pct(c.weakest.ours)}% on its own` : ''}. Every pick has to hit, so this one matters most.</span></li>`);
     return rows.length ? `<ul class="py-tread">${rows.join('')}</ul>` : '';
   }

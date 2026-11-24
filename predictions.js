@@ -666,11 +666,12 @@
       ${pairs.length ? `<ul class="pd-corr-p">${pairs.map(x => `<li><span>${esc(nm(x.a))} + ${esc(nm(x.b))}</span><small>${esc(x.label)}: ${esc(x.why)}</small></li>`).join('')}</ul>` : ''}</div>`;
   }
 
-  /* the Prediction Card read as a whole (labcore.card): evidence, the weakest pick, when it locks, and what changed */
+  /* the Prediction Card read as a whole (labcore.card): evidence, the strongest and weakest picks, when it locks, and what changed */
   function cardRead(legs) {
     const K = window.flLabCore; if (!K || !legs.length) return '';
     const c = K.card(legs), rows = [];
     if (c.avgGrade) rows.push(['grade', `<span class="pd-gl g-${c.avgGrade}">${c.avgGrade}</span>`, `Average evidence quality: ${K.GRADE_WORD[c.avgGrade].toLowerCase()}`, 'Graded apart from the chance. One weak pick can sink a strong card.']);
+    if (c.strongest) rows.push(['strong', ic('check', 16), `Strongest pick: ${esc(c.strongest.short)}`, `${c.strongest.grade ? `Evidence ${c.strongest.grade}, ` : ''}${pct(c.strongest.ours)}% on its own. The best-supported pick on the card.`]);
     if (c.weakest) rows.push(['weak', ic('help', 16), `Weakest pick: ${esc(c.weakest.short)}`, `${c.weakest.grade ? `Evidence ${c.weakest.grade}, ` : ''}${pct(c.weakest.ours)}% on its own. Taking it out raises the chance the rest hit.`]);
     if (c.expires) rows.push(['clock', ic('clock', 16), `Closes in <span data-pdcd="${+c.expires.leg.start}">${esc(K.countdown(c.expires.in))}</span>`, `${esc(c.expires.leg.game || c.expires.leg.short)} starts first. A pick can’t be added or changed once its game starts.`]);
     if (c.started.length) rows.push(['start', ic('clock', 16), `${c.started.length === 1 ? 'One pick has' : `${c.started.length} picks have`} started`, `${esc(c.started.map(l => l.short).join(', '))}. Its chance is the one from before the start.`]);
