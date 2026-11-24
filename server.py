@@ -2209,10 +2209,17 @@ def account_post(handler, path, body, user, token):
 
 
 def delete_account(user, body):
-    """Delete for good: billing stops at once, and the account, its sessions, links, parlays, photo and votes go."""
+    """Delete for good: billing stops at once, and the account, its sessions, email links, parlays, photo, votes, shared
+    board links, competition picks, support tickets, invite code and usage journey go."""
     key = user["username"].lower()
     email = user.get("email") if user.get("email_verified") else ""
     billing.forget(user)
+    for forget in (lambda: labshare.forget_owner(key), lambda: groups.forget(key), lambda: support.forget(key),
+                   lambda: referrals.forget(key), lambda: analytics.forget(key), lambda: accounts.forget(key)):
+        try:                               # each store forgets its part; one failing doesn't stop the rest
+            forget()
+        except Exception as e:
+            print(f"delete: couldn't clear part of @{key}'s data: {type(e).__name__}: {e}")
     with _acct_lock:
         _users.pop(key, None)
         _drop_sessions(key)
@@ -2245,6 +2252,7 @@ def export_account(user, token):
             "account": acct, "two_step_sign_in": bool(user.get("twofa")), "billing": billing.export(user),
             "sessions": accounts.sessions_of(_sessions, key, token), "parlays": _parlays.get(key, []),
             "votes": {g: v[key] for g, v in _votes.items() if key in v}, "photo": key in _avatars,
+            "shared_board_links": labshare.shared_by(key), "competitions": groups.of_member(key), "support_tickets": support.mine(key),
             "note": "Card details are held by Stripe, never by Floodlight. Password and two-step secrets are left out on purpose."}
 
 
