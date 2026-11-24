@@ -368,3 +368,32 @@ def test_a_closed_market_stops_being_open_at_once_and_keeps_its_closing_line():
     v = run([row(start=NOW - 60)], now=NOW + 3 * H + 60, schedule=sched(ev("401", NOW + 3 * H, PHI, NYG, state="in")))
     m = M.get(r["mid"])
     assert m["status"] == "started" and m["closingLine"] == 225.5 and m["expiresAt"] <= NOW + 3 * H + 60 and not v["rows"]
+
+
+def test_monitor_lists_every_source_with_its_last_good_read_and_the_missing_checks():
+    fresh()
+    run([row(), row(player="X", opp="DAL")])
+    run([row(books=(("sleeper", "sl1"),), opp="")], now=NOW + 600, errors={"prizepicks": "HTTPError 403"})
+    M.refresh("soccer", [row(player="Cole Palmer", team_="CHE", opp="", books=(("sleeper", "cp"),))], fetched=NOW + 540, schedule=None, injuries=None, now=NOW + 600)
+    M.S["injuries"]["nba"] = {"ok": False, "at": None, "players": {}, "error": "Timeout"}
+    rep = M.monitor(now=NOW + 600)
+    by = {c["key"]: c for c in rep["checks"]}
+    for k in ("providers", "delayed", "schedules", "injuries", "stale", "no_event", "no_opponent", "mismatch", "timezone", "duplicates"):
+        assert k in by, k
+    assert by["injuries"]["n"] == 1 and by["no_opponent"]["n"] >= 1
+    src = {(x["kind"], x["key"]): x for x in rep["sources"]}
+    pp = next(x for (kind, key), x in src.items() if kind == "provider" and key.endswith(":prizepicks"))
+    sl = next(x for (kind, key), x in src.items() if kind == "provider" and key.endswith(":sleeper"))
+    assert pp["state"] == "failed" and pp["name"] == "PrizePicks" and pp["error"] == "HTTPError 403" and pp["lastSuccess"]
+    assert sl["state"] == "live" and sl["lastSuccess"]
+    assert rep["sources"][0]["state"] == "failed"                                     # problems first
+
+
+def test_a_source_asked_lately_whose_newest_read_is_old_is_delayed_and_one_nobody_asked_for_is_idle():
+    fresh()
+    run([row()])
+    key = next(k for k in M.S["providers"] if k.endswith(":sleeper"))
+    M.S["providers"][key].update(ok=True, at=NOW - 3 * H, checked=NOW - 60)
+    assert next(x for x in M.monitor(now=NOW)["sources"] if x["key"] == key)["state"] == "delayed"
+    M.S["providers"][key].update(checked=NOW - 3 * H)
+    assert next(x for x in M.monitor(now=NOW)["sources"] if x["key"] == key)["state"] == "idle"

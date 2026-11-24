@@ -573,6 +573,7 @@ def monitor(now=None):
         ms = list(S["markets"].values())
         provs = {k: dict(v) for k, v in S["providers"].items()}
         scheds = {k: {"ok": v.get("ok"), "at": v.get("at"), "error": v.get("error") or ""} for k, v in S["schedules"].items()}
+        injs = {k: {"ok": v.get("ok"), "at": v.get("at"), "error": v.get("error") or ""} for k, v in S["injuries"].items()}
     open_ = [m for m in ms if m.get("status") == "open" and (m.get("start") or 0) > now]
     stale = [m for m in open_ if now - (m.get("verifiedAt") or 0) > FRESH]
     no_event = [m for m in ms if m.get("status") == "missing_matchup" and now - (m.get("removedAt") or 0) < 86400]
@@ -586,14 +587,35 @@ def monitor(now=None):
         seen[k] = m
     failed = [{"key": k, "error": v.get("error") or "", "at": v.get("at")} for k, v in provs.items() if not v.get("ok")]
     sched_bad = [{"key": k, "error": v["error"], "at": v["at"]} for k, v in scheds.items() if not v.get("ok")]
+    inj_bad = [{"key": k, "error": v["error"], "at": v["at"]} for k, v in injs.items() if not v.get("ok")]
+    # a market whose opponent is unknown: one still open (which the checks should never allow) or one taken off for it today
+    no_opp = [m for m in ms if not (m.get("oppAbbr") or m.get("oppName")) and ((m in open_) or (m.get("status") == "missing_matchup" and now - (m.get("removedAt") or 0) < 86400))]
+
+    # every source with its last good read: live, failed, delayed (asked in the last 30 minutes, but the newest good
+    # read it gave is older than that) or idle (nobody has asked for that sport lately, so nothing was due)
+    def src(kind, key, v):
+        sport, _, who = key.partition(":")
+        at, checked = v.get("at"), v.get("checked")
+        state = ("failed" if not v.get("ok") else "live" if at and now - at <= FRESH
+                 else "delayed" if checked and now - checked <= FRESH else "idle")
+        return {"kind": kind, "key": key, "sport": sport, "name": PROVIDER_NAME.get(who, who) if who else ("ESPN schedule" if kind == "schedule" else "ESPN injury report"),
+                "state": state, "lastSuccess": int(at) if at else None, "checked": v.get("checked"), "error": v.get("error") or ""}
+    sources = sorted([src("provider", k, v) for k, v in provs.items()] + [src("schedule", k, v) for k, v in scheds.items()]
+                     + [src("injuries", k, v) for k, v in injs.items()], key=lambda x: ({"failed": 0, "delayed": 1, "live": 2, "idle": 3}[x["state"]], x["key"]))
+    delayed = [x for x in sources if x["state"] == "delayed"]
+    ago = lambda t: "never" if not t else f"{int((now - t) // 60)} minutes ago"
     pick = lambda xs: [{"mid": m.get("id"), "sport": m.get("sport"), "player": m.get("player"), "stat": m.get("statLabel") or m.get("stat"), "line": m.get("line"),
                         "provider": m.get("provider"), "reason": m.get("removalReason") or "", "verifiedAt": m.get("verifiedAt"), "start": m.get("start")} for m in xs[:25]]
-    return {"at": int(now), "open": len(open_),
+    return {"at": int(now), "open": len(open_), "sources": sources,
             "checks": [
                 {"key": "providers", "label": "Provider failures", "n": len(failed), "items": failed},
+                {"key": "delayed", "label": "Delayed sources (no good read in 30 minutes)", "n": len(delayed),
+                 "items": [{"key": x["key"], "reason": f"{x['name']}: last good read {ago(x['lastSuccess'])}"} for x in delayed]},
                 {"key": "schedules", "label": "Schedule failures", "n": len(sched_bad), "items": sched_bad},
+                {"key": "injuries", "label": "Injury report failures", "n": len(inj_bad), "items": inj_bad},
                 {"key": "stale", "label": "Stale markets (not re-verified in 30 minutes)", "n": len(stale), "items": pick(stale)},
                 {"key": "no_event", "label": "Markets missing an event", "n": len(no_event), "items": pick(no_event)},
+                {"key": "no_opponent", "label": "Markets missing an opponent", "n": len(no_opp), "items": pick(no_opp)},
                 {"key": "mismatch", "label": "Player/team mismatches", "n": len(mismatch), "items": pick(mismatch)},
                 {"key": "timezone", "label": "Start times that don't match the schedule", "n": len(tzbad), "items": pick(tzbad)},
                 {"key": "duplicates", "label": "Duplicate markets", "n": len(dup), "items": pick(dup)},

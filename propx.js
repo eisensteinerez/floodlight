@@ -314,6 +314,9 @@
       <li><span class="lb">Injury report</span><b>${esc(a?.report || 'Not checked yet')}</b></li><li><span class="lb">Status</span><b>${esc(a?.avail || 'Not checked yet')}</b></li>
       <li><span class="lb">Lineup</span><b>${esc(a?.start || 'Lineup not announced')}</b></li><li><span class="lb">Minutes</span><b>${esc(minsTxt)}</b></li></ul></section>`;
   }
+  // what "Report incorrect data" sends with the member's note (the dialog is datastatus.js's, the same as on Predictions)
+  const reportOf = p => ({ marketId: p.mid || p.id, eventId: p.eventId || p.v?.event?.id || '', player: p.name, provider: (p.books || []).map(book).join(', '),
+    sport: p.sport, stat: p.text, line: p.line, side: p.side, verifiedAt: p.verifiedAt ? Math.round(+p.verifiedAt > 1e11 ? +p.verifiedAt / 1000 : +p.verifiedAt) : '', page: '#/lab (Prop Explorer)' });
   const inCard = p => { try { return !!window.flPredictions?.slip?.has(p.id) } catch (e) { return false } };
   const followed = p => { try { return !!window.flPredictions?.follow?.has(p) } catch (e) { return false } };
   function redrawPanel(first) {
@@ -345,7 +348,8 @@
         <dl class="rp-mini"><div><dt>Average</dt><dd class="num">${fmt(s.avg)}</dd></div><div><dt>Median</dt><dd class="num">${fmt(s.med)}</dd></div><div><dt>Line</dt><dd class="num">${fmt(p.line)}</dd></div></dl>
         ${splitTable(s, full)}${full ? '' : upsell('splits_full', 'Last 5, last 20, season, home and away and opponent splits are part of Plus.')}</section>
       ${edgeBox(p)}${gradeBox(g)}${availability(p, s)}${providers(p)}${lineHist(p, s)}
-      <p class="lb rp-foot">Past results describe what happened, not what will happen next. This is research, not betting advice.</p></div></div>`;
+      <p class="lb rp-foot">Past results describe what happened, not what will happen next. This is research, not betting advice.
+        <button type="button" class="lk ds-rep" data-report="${esc(JSON.stringify(reportOf(p)))}">${ic('help', 16)}Report incorrect data<span class="sr-only">: ${esc(p.name)}, ${esc(p.text)}</span></button></p></div></div>`;
     window.flOverlay?.guard?.(el);
     if (!first) { const b = el.querySelector('.rp-b0'); if (b) b.scrollTop = scroll }
   }
