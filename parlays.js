@@ -40,6 +40,8 @@
   /* Player news: a pick whose player is listed Out, from the same ESPN injury reports as the Injuries page
      (injuries.js, kept ten minutes). On a draft the pick can't go in. On a locked parlay it will be void if he doesn't
      play, so it drops out of the combined chance before the game, and the card says why the number moved. */
+  // a leg whose market the verified feed took off the board (market closed, matchup not verified, postponed)
+  const offBoard = l => { const M = window.flMarkets; if (l.type !== 'prop' || l.res || !M?.standing || l.start <= Date.now()) return null; const s = M.standing({ mid: l.mid, sport: l.sport, name: l.player, k: l.k }); return s.open || s.status === 'awaiting_verification' && !s.market ? null : s };
   const outOf = l => { const I = window.flInjuries; if (l.type !== 'prop' || l.res || !I?.PATH[l.lg] || l.start <= Date.now()) return null; const s = I.status(l.lg, l.player); return s && s.lv === 'out' ? s : null };
   const askNews = legs => { const I = window.flInjuries; if (!I) return; for (const lg of new Set(legs.filter(l => l.type === 'prop' && !l.res && l.start > Date.now()).map(l => l.lg))) if (I.PATH[lg]) I.load(lg) };
   async function follow(p, l, force) {
@@ -176,8 +178,9 @@
     const g = i.g, mk = !l.res && r.state !== 'pre' || r.state === 'pre' ? i.mk : null, live = r.state === 'live';
     const mark = { hit: ['check', 'Hit'], miss: ['x', 'Missed'], push: ['minus', 'Push: on the line exactly'], void: ['minus', 'Void: it does not count'], pre: ['clock', 'Not started'], settle: ['clock', 'Waiting for the final count'], 'lost-track': ['help', 'Game not found'], wait: ['clock', 'Waiting'] }[r.state];
     const w = live && r.p != null ? (r.there ? [1, 'Already there', 'check'] : r.gone ? [0, 'Out of reach', 'x'] : word(r.p)) : null;
-    const out = r.state === 'pre' ? outOf(l) : null;
-    const verdict = out ? `<span class="pl py-word out">${ic('x', 14)}Ruled out</span>` : w ? `<span class="pl py-word ${w[2]}">${ic(w[2], 14)}${w[1]}</span>` : `<span class="pl py-word ${r.state}">${ic(mark?.[0] || 'clock', 14)}${mark?.[1] || 'Waiting'}</span>`;
+    const out = r.state === 'pre' ? outOf(l) : null, off = r.state === 'pre' && !out ? offBoard(l) : null;
+    // a saved leg whose market was taken off the board says so: the receipt stays, but the line is no longer open
+    const verdict = out ? `<span class="pl py-word out">${ic('x', 14)}Ruled out</span>` : off ? `<span class="pl py-word out" title="${esc(off.reason || '')}">${ic('x', 14)}${esc(off.message || 'Market closed')}</span>` : w ? `<span class="pl py-word ${w[2]}">${ic(w[2], 14)}${w[1]}</span>` : `<span class="pl py-word ${r.state}">${ic(mark?.[0] || 'clock', 14)}${mark?.[1] || 'Waiting'}</span>`;
     const ours = r.p != null && !['hit', 'miss'].includes(r.state) ? `<div><dt>${live ? 'Our live read' : 'Our number'}</dt><dd class="num">${pct(r.p)}%</dd></div>` : '';
     const books = l.res || ['hit', 'miss', 'push', 'void'].includes(r.state) ? '' : mk?.p != null ? `<div><dt>Books ${live ? 'right now' : 'now'}</dt><dd class="num">${pct(mk.p)}%${mk.price != null ? `<small>best ${C.amTxt(mk.price)}${mk.book ? ' on ' + esc(mk.book) : ''}</small>` : ''}</dd></div>`
       : mk?.other != null ? `<div><dt>Books now</dt><dd class="py-moved">Line moved to ${l.type === 'spread' && mk.other > 0 ? '+' : ''}${fmt(mk.other)}</dd></div>`
@@ -529,7 +532,7 @@
     const srcTxt = priced.length ? `${srcs.length ? srcs.join(', ') : 'the books'}, read ${new Date(oldest).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${priced.length < n ? ` · ${n - priced.length} ${n - priced.length === 1 ? 'pick has' : 'picks have'} no price` : ''}` : 'No book posts a price for these picks';
     const rs = ties(legs), sum = n > 1 ? relSummary(legs) : null;
     askNews(legs);
-    const issues = C.legIssues(legs, Date.now(), outOf), bad = legs.filter(l => issues.get(l.id).some(x => x.blocks));
+    const issues = C.legIssues(legs, Date.now(), outOf, offBoard), bad = legs.filter(l => issues.get(l.id).some(x => x.blocks));
     // why Lock it in is off, said beside it: every rule that fired, in words
     const outs = legs.filter(outOf), blocks = n ? [...C.blockers(legs), ...(outs.length ? [{ kind: 'out', ids: outs.map(l => l.id), why: `${outs.map(l => l.player).join(' and ')} ${outs.length === 1 ? 'is' : 'are'} listed Out. Take ${outs.length === 1 ? 'that pick' : 'those picks'} out to lock in the rest.` }] : [])] : [], stale = blocks.find(b => b.kind === 'stale'), why = V.saving ? ['Saving…'] : V.repricing ? ['Refreshing prices…'] : blocks.map(b => b.why);
     const off = V.saving || V.repricing || blocks.length > 0;
@@ -615,7 +618,7 @@
     if (d.pystep) { const [eid, kind, by] = d.pystep.split('|'), g = V.games?.find(x => x.eid === eid); if (!g) return; (V.lines[eid] || (V.lines[eid] = {}))[kind] = half(lineOf(g, kind).v + +by); if (kind === 'total' && V.lines[eid][kind] < .5) V.lines[eid][kind] = .5; return draw() }
     if (d.pyleg) { try { return addLeg(JSON.parse(d.pyleg)) } catch (x) { return } }
     if (d.pyrm) { const l = V.draft.legs.find(x => x.id === d.pyrm); V.draft.legs = V.draft.legs.filter(x => x.id !== d.pyrm); V.err = ''; V.priceNote = ''; saveDraft(); if (l) say(`Took out ${l.text}.`); draw(); return (document.querySelector('#pg-parlays [data-pyrm]') || $('pyTicket'))?.focus({ preventScroll: true }) }
-    if (d.py === 'dropbad') { const iss = C.legIssues(V.draft.legs, Date.now(), outOf), gone = V.draft.legs.filter(l => iss.get(l.id).some(x => x.blocks));
+    if (d.py === 'dropbad') { const iss = C.legIssues(V.draft.legs, Date.now(), outOf, offBoard), gone = V.draft.legs.filter(l => iss.get(l.id).some(x => x.blocks));
       V.draft.legs = V.draft.legs.filter(l => !gone.includes(l)); V.err = ''; saveDraft(); say(`Took out ${gone.map(l => l.text).join(', ')}.`); draw(); return $('pyTicket')?.focus({ preventScroll: true }) }
     if (d.py === 'empty') { V.draft = { legs: [], name: '', odds: '', stake: '' }; V.err = ''; V.priceNote = ''; saveDraft(); return draw() }
     if (d.py === 'lock') return lock();
@@ -643,6 +646,7 @@
     else if (id === 'pyQ') { V.q = e.target.value; clearTimeout(V.qt); V.qt = setTimeout(draw, 160) }
   });
   document.addEventListener('toggle', e => { const d = e.target; if (d?.dataset?.pyfold) d.open ? V.unfold.add(d.dataset.pyfold) : V.unfold.delete(d.dataset.pyfold) }, true);
+  document.addEventListener('fl:markets', ev => { if (ev.detail?.removed?.length && window.flPages.current() === 'parlays' && !V.busy) draw() });   // a leg taken off the board
   document.addEventListener('fl:injuries', () => { if (window.flPages.current() === 'parlays' && !V.busy) draw() });   // a player ruled out updates the cards and the draft
   document.addEventListener('fl:parlays', () => { if (window.flPages.current() === 'parlays' && !V.busy) draw() });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && window.flPages.current() === 'parlays' && Date.now() - V.at > 20000) refresh() });

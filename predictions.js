@@ -515,7 +515,8 @@
     const R = rangeOf(p), day = p.start ? p.start.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
     const o = { file: p.short || p.name, kicker: [SPORT_NAME[p.sport], day].filter(Boolean).join(' · '), title: p.type === 'prop' ? `${p.name}: ${p.text}` : p.short || `${p.name} ${p.text}`,
       sub: p.game || '', stats: [['Our number', pct(p.ours) + '%', 'accent'], ['Market', p.market == null ? 'No price' : pct(p.market) + '%'], ['Edge', edgeTxt(p.edge), p.edge > 0 ? 'good' : p.edge < 0 ? 'bad' : ''], R ? ['Likely range', `${pct(R.lo)}–${pct(R.hi)}%`] : null],
-      foot: 'Floodlight research, not a guarantee. The market price has the book’s margin taken out.' };
+      foot: 'Floodlight research, not a guarantee. The market price has the book’s margin taken out.',
+      markets: p.type === 'prop' ? [{ mid: p.mid, sport: p.sport, name: p.name, k: p.k }] : null };
     if (!withEvidence) return o;
     if (p.type === 'prop') {
       const S = MK.sample(p.games, p.line, p.side, p.yes);   // the same sample as the card
@@ -644,12 +645,15 @@
   // the countdowns tick once a minute while the card is on screen
   setInterval(() => { const K = window.flLabCore; if (!K) return; document.querySelectorAll('[data-pdcd]').forEach(e => { e.textContent = K.countdown(+e.dataset.pdcd - Date.now()) }) }, 30000);
   /* Share: the card as a picture, through the phone's share sheet where there is one, else downloaded */
-  function shareCard() {
+  async function shareCard() {
     const legs = P.slip; if (!legs.length) return;
     if (!(window.flPlan?.can?.('share_cards') ?? true)) return window.toast?.('Shareable cards are part of Plus. See Plans to upgrade.');
+    // every pick is checked again before the picture is made: a pick taken off the board is named on it
+    const st = window.flMarkets?.recheck ? await window.flMarkets.recheck(legs.filter(l => l.mid).map(l => ({ mid: l.mid, sport: l.sport, name: l.name }))).catch(() => []) : [];
+    const shut = st.filter(x => x && !x.open && x.status !== 'awaiting_verification');
     const ours = combine(legs, 'ours'), big = !ours ? '–' : ours.kind === 'limits' ? `${pct(ours.lo)}–${pct(ours.hi)}%` : range(ours), c = window.flLabCore?.card(legs);
     const cv = cardCanvas({ kicker: 'Floodlight · Prediction Card', title: `${legs.length} ${legs.length === 1 ? 'pick' : 'picks'} · chance all hit ${big}`, rows: legs.map(l => [l.short, `${pct(l.ours)}%`, l.game || '']),
-      foot: [c?.avgGrade ? `Average evidence quality ${c.avgGrade}` : '', 'Chances are estimates, not a promise of what happens next.'].filter(Boolean) });
+      foot: [shut.length ? `No longer open: ${shut.map(x => `${x.market?.name || 'a pick'} (${x.message || 'Market closed'})`).join(', ')}` : '', c?.avgGrade ? `Average evidence quality ${c.avgGrade}` : '', 'Chances are estimates, not a promise of what happens next.'].filter(Boolean) });
     try { window.flTrack?.('card_create', { n: legs.length }) } catch (e) {}
     cv.toBlob(async b => { if (!b) return announce('The picture could not be made in this browser.'); const file = new File([b], 'prediction-card.png', { type: 'image/png' });
       try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'My Prediction Card' }); return } } catch (e) { if (e?.name === 'AbortError') return }

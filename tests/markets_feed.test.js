@@ -148,6 +148,24 @@ let n = 0; const t = async (name, fn) => { clock = NOW0; await fn(); n++; consol
     assert.equal(MK.removalMessage('closed', 'The provider no longer offers this line'), 'Provider removed the line');
   });
 
+  await t('a saved board, a share card and a parlay check the market again before use', async () => {
+    BOARD.nfl = board([row('Jalen Hurts'), row('A.J. Brown', { k: 'rcy', line: 70.5 })]);
+    await F.list({ sport: 'nfl', force: true });
+    const saved = [{ sport: 'nfl', name: 'Jalen Hurts', k: 'py' }, { sport: 'nfl', name: 'A.J. Brown', k: 'rcy' }];
+    assert.deepEqual((await F.recheck(saved)).map(x => x.open), [true, true]);
+    // the provider drops A.J. Brown's line; the board is read again because it is over two minutes old
+    BOARD.nfl = board([row('Jalen Hurts')]); clock = NOW0 + 3 * MIN;
+    const st = await F.recheck(saved);
+    assert.deepEqual(st.map(x => x.open), [true, false]);
+    assert.equal(st[1].message, 'Market closed');
+    // a parlay leg on that line is blocked with the reason, and the ruled-out check still comes first
+    require(path.join(ROOT, 'parlaycore.js')); const C = window.flParlay;
+    const leg = { id: 'l1', type: 'prop', sport: 'nfl', lg: 'nfl', player: 'A.J. Brown', k: 'rcy', start: NOW0 + 3 * H };
+    const off = l => { const s2 = F.standing({ sport: l.sport, name: l.player, k: l.k }); return s2.open ? null : s2 };
+    const iss = C.legIssues([leg], clock, () => null, off).get('l1');
+    assert(iss.some(x => x.kind === 'removed' && x.blocks && /Taken off the board: Market closed/.test(x.why)));
+  });
+
   await t('changing time zones does not move a market onto the wrong day', async () => {
     const late = NOW0 + 11.5 * H;   // 11:30 PM Monday in New York, Tuesday morning in Tel Aviv
     BOARD.nfl = board([row('Jalen Hurts', { start: new Date(late).toISOString() })]);

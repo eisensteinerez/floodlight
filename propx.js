@@ -368,6 +368,9 @@
     const tb = ev.target.closest?.('[data-rptab]'); if (tb && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) { ev.preventDefault(); R.tab = R.tab === 'chart' ? 'log' : 'chart'; redrawPanel(); X.panel.querySelector(`[data-rptab="${R.tab}"]`)?.focus() }
   }, true);
   async function share(p) {
+    // checked again before it is shared: a line that just closed is not passed on as open
+    const st = window.flMarkets?.recheck ? (await window.flMarkets.recheck([{ mid: p.mid, sport: p.sport, name: p.name, k: p.k }]).catch(() => []))[0] : null;
+    if (st && !st.open && st.status !== 'awaiting_verification') { say(`This line is no longer open: ${st.message || 'Market closed'}.`); return redrawPanel?.() }
     const url = new URL(location.href); url.hash = '#/lab'; url.search = '';
     url.searchParams.set('px', [p.sport, p.name, p.k, p.line, p.side].join('|'));
     const link = window.flRef?.link ? window.flRef.link(url.toString()) : url.toString(), text = `${p.name}: ${p.text}, ${startTxt(p)}. Research it on Floodlight.`;

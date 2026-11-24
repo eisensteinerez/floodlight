@@ -83,11 +83,21 @@
     return new Promise(r => c.toBlob(b => r(b), 'image/png'));
   }
 
+  /* o.markets: [{ mid, sport, name, k }] the picture is about. They are checked again first (markets.js recheck), and a
+     line that is no longer open says so on the picture instead of passing for a current one. */
+  async function current(o) {
+    const M = window.flMarkets; if (!o.markets?.length || !M?.recheck) return o;
+    const st = await M.recheck(o.markets).catch(() => []), shut = st.filter(x => x && !x.open && x.status !== 'awaiting_verification');
+    if (!shut.length) return o;
+    const note = shut.map(x => `${x.market?.name || ''}${x.market?.name ? ': ' : ''}${x.message || 'Market closed'}`).join(' · ');
+    return { ...o, kicker: 'No longer open', notes: [`Taken off the board. ${note}`, ...(o.notes || [])] };
+  }
   /* draw it, then hand it to the share sheet or download it; says what happened in the page's status line */
   async function share(o, btn) {
     const say = t => { const a = document.getElementById('announce') || document.getElementById('toasts'); if (a) { a.textContent = ''; setTimeout(() => { a.textContent = t }, 30) } };
     if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true') }
     try {
+      o = await current(o);
       const blob = await draw(o); if (!blob) throw new Error('no picture');
       const name = 'floodlight-' + String(o.file || o.title || 'share').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) + '.png';
       const file = new File([blob], name, { type: 'image/png' });
@@ -100,5 +110,5 @@
     finally { if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy') } }
   }
   const ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
-  window.flShare = { draw, share, ICON };
+  window.flShare = { draw, share, current, ICON };
 })();

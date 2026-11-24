@@ -102,6 +102,11 @@
   const linkLab = m => ({ lab: window.flFeed?.labArgs ? window.flFeed.labArgs(m) : { sport: m.sport, name: m.name, kind: 'player' } });
   const lineOn = (m, prov) => { if (!prov || prov === 'any') return m.line; const o = (m.offers || []).find(x => flat(x.book || x.provider) === flat(prov)); return o ? o.line : null };
   let busy = false;
+  // checked again the moment before an alert rings (markets.js standing: the clock, the injury report, the feed), so a
+  // line that just closed never rings as a move
+  const stillOpen = m => { const M = window.flMarkets; return !M?.standing || M.standing({ mid: m.mid, sport: m.sport, name: m.name, k: m.k }).open };
+  // a market taken off the board ends its line alerts: they are switched off with the reason, never left to ring later
+  const offBoard = (sport, name, k) => { const M = window.flMarkets; if (!M?.standing) return null; const st = M.standing({ sport, name, k }); return !st.open && st.market && st.status !== 'awaiting_verification' ? st : null };
   function checkMarkets() {
     const F = window.flFeed; if (!F || busy) return; busy = true;
     try {
@@ -112,7 +117,7 @@
         const s = ST.p[f.k] || (ST.p[f.k] = {}), m = marketFor(f, list), started = f.start && Date.now() > f.start;
         if (m && m.line != null) {
           if (s.line == null) { s.line = m.line; ch = true }
-          else if (+s.line !== +m.line) { if (A.pkLine && pickPref(f, 'line')) send('line', `${f.name}: line ${fmtL(s.line)} → ${fmtL(m.line)}`, `${m.text || f.text}. A pick you follow.`, { link: linkLab(m), tag: `pl-${f.k}-${m.line}` }); window.flDaily?.log?.('moved'); s.line = m.line; ch = true }
+          else if (+s.line !== +m.line) { if (A.pkLine && pickPref(f, 'line') && !s.gone && stillOpen(m)) send('line', `${f.name}: line ${fmtL(s.line)} → ${fmtL(m.line)}`, `${m.text || f.text}. A pick you follow.`, { link: linkLab(m), tag: `pl-${f.k}-${m.line}` }); window.flDaily?.log?.('moved'); s.line = m.line; ch = true }
         }
         const gone = !started && !s.gone && removedFor(f);
         if (gone) { s.gone = 1; ch = true; if (A.pkRemoved && pickPref(f, 'removed')) send('removed', `${f.name}: taken off the board`, `${f.text}. ${gone.removalReason || gone.statusLabel || 'The market is no longer open.'}`, { link: { page: 'predictions' }, tag: 'rm-' + f.k }) }
@@ -130,7 +135,7 @@
         for (const m of F.forPlayer(p.name, list)) {
           const mk = F.key(m).replace(/:[\d.]+$/, ''), was = s.lines[mk];
           if (was == null) { s.lines[mk] = m.line; ch = true }
-          else if (+was !== +m.line) { if (A.plLine) send('line', `${p.name}: ${m.label || 'line'} ${fmtL(was)} → ${fmtL(m.line)}`, `${[m.team, m.opp].filter(Boolean).join(' v ')}. A player you follow.`, { link: linkLab(m), tag: `pp-${mk}-${m.line}` }); s.lines[mk] = m.line; ch = true }
+          else if (+was !== +m.line) { if (A.plLine && stillOpen(m)) send('line', `${p.name}: ${m.label || 'line'} ${fmtL(was)} → ${fmtL(m.line)}`, `${[m.team, m.opp].filter(Boolean).join(' v ')}. A player you follow.`, { link: linkLab(m), tag: `pp-${mk}-${m.line}` }); s.lines[mk] = m.line; ch = true }
         }
         if (I && I.PATH?.[p.lg]) { if (!I.ready(p.lg)) I.load(p.lg); else { const st = I.status(p.lg, p.name), now = st ? (st.status || I.LEVEL_NAME[st.lv]) : '';
           if (s.inj === undefined) { s.inj = now; ch = true } else if (now !== s.inj) { if (A.plInjury && (!st || sevOk(st.lv))) send('injury', `${p.name}: ${now ? `now ${now}` : 'off the injury report'}`, `${st?.what ? st.what + '. ' : ''}${st?.teamName || ''}. A player you follow.`, { link: { page: 'injuries', arg: p.lg }, tag: `ij-${pk}-${now}` }); s.inj = now; ch = true } } }
@@ -138,7 +143,8 @@
       // line alerts you set
       if (advanced()) for (const r of A.rules) {
         if (!r.on || r.fired) continue;
-        const m = list.find(x => flat(x.name) === flat(r.player) && x.sport === r.sport && x.k === r.k); if (!m) continue;
+        const ob = offBoard(r.sport, r.player, r.k); if (ob) { r.on = false; r.cancelled = { at: Date.now(), why: ob.message || 'Market closed' }; save(); continue }
+        const m = list.find(x => flat(x.name) === flat(r.player) && x.sport === r.sport && x.k === r.k); if (!m || !stillOpen(m)) continue;
         const line = lineOn(m, r.provider); if (line == null) continue;
         const hit = r.cond === 'move' ? +line !== +r.from : r.cond === 'above' ? +line >= +r.value : +line <= +r.value;
         if (hit) { r.fired = Date.now(); r.got = line; save(); send('line', `${r.player}: ${r.label || r.k} line ${fmtL(r.from)} → ${fmtL(line)}`, `${r.provider && r.provider !== 'any' ? `On ${r.provider}. ` : ''}${condText(r)}.`, { link: linkLab(m), tag: 'rule-' + r.id }) }
@@ -214,8 +220,8 @@
       <tbody>${F.map(f => `<tr><th scope="row">${esc(f.name)}${f.level === 'quiet' ? ' <small class="lb">quiet: no alerts</small>' : ''}</th>${['start', 'score', 'final', 'lineup'].map(k => `<td><label class="al-cbl"><input type="checkbox" class="al-cb" data-alteam="${esc(f.id)}|${k}" aria-label="${esc(f.name)}: ${k === 'lineup' ? 'lineup confirmed' : k}"${(A.teams[f.id] || {})[k] !== false && A[k] ? ' checked' : ''}${!A.on || !A[k] || f.level === 'quiet' ? ' disabled' : ''}></label></td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="lb">Follow a team on Home or its own page to choose alerts for it.</p>';
     const pickRows = pk.length ? `<table class="al-t"><caption class="sr-only">Alerts for each pick you follow</caption><thead><tr><th scope="col">Pick</th><th scope="col">Line</th><th scope="col">Injury</th><th scope="col">Removed</th><th scope="col">Result</th></tr></thead>
       <tbody>${pk.slice(-30).reverse().map(f => `<tr><th scope="row">${esc(f.name)} <small class="lb">${esc(f.text || '')}</small></th>${['line', 'injury', 'removed', 'result'].map(k => `<td><label class="al-cbl"><input type="checkbox" class="al-cb" data-alpick="${esc(f.k)}|${k}" aria-label="${esc(f.name)}, ${esc(f.text || '')}: ${k}"${pickPref(f, k) ? ' checked' : ''}></label></td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="lb">Follow a pick on Predictions to choose alerts for it.</p>';
-    const rules = A.rules.length ? `<ul class="al-rules">${A.rules.map(r => `<li><span class="rw-t"><b>${esc(r.player)}: ${esc(r.label || r.k)} from ${fmtL(r.from)}</b><small>${esc(condText(r))}${r.provider && r.provider !== 'any' ? ` · on ${esc(r.provider)}` : ' · any provider'}${r.fired ? ` · sent ${esc(new Date(r.fired).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))} at ${fmtL(r.got)}` : ''}</small></span>
-        ${r.fired ? `<button type="button" class="bt ghost sm" data-al-rule="rearm:${esc(r.id)}">Watch again<span class="sr-only"> ${esc(r.player)}</span></button>` : ''}<button type="button" class="ib" data-al-rule="del:${esc(r.id)}" aria-label="Delete the line alert for ${esc(r.player)}">${window.flShell?.ic?.('x', 16) || '×'}</button></li>`).join('')}</ul>` : '';
+    const rules = A.rules.length ? `<ul class="al-rules">${A.rules.map(r => `<li><span class="rw-t"><b>${esc(r.player)}: ${esc(r.label || r.k)} from ${fmtL(r.from)}</b><small>${esc(condText(r))}${r.provider && r.provider !== 'any' ? ` · on ${esc(r.provider)}` : ' · any provider'}${r.fired ? ` · sent ${esc(new Date(r.fired).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))} at ${fmtL(r.got)}` : ''}${r.cancelled ? ` · stopped: ${esc(r.cancelled.why)}` : ''}</small></span>
+        ${r.fired || r.cancelled ? `<button type="button" class="bt ghost sm" data-al-rule="rearm:${esc(r.id)}">Watch again<span class="sr-only"> ${esc(r.player)}</span></button>` : ''}<button type="button" class="ib" data-al-rule="del:${esc(r.id)}" aria-label="Delete the line alert for ${esc(r.player)}">${window.flShell?.ic?.('x', 16) || '×'}</button></li>`).join('')}</ul>` : '';
     return `<section class="card feature st-card" id="stAlerts" aria-labelledby="stAlH">
       <p class="st-crumb">Settings › Alerts</p>
       <div class="st-h"><h2 id="stAlH">Alerts</h2><button type="button" class="bt ghost sm" data-page="inbox">Open alerts inbox</button></div>
@@ -303,7 +309,7 @@
       if (a === 'new') { RULE.open = true; repaint('alRp') }
       if (a === 'cancel') { RULE.open = false; RULE.err = ''; repaint(); document.querySelector('[data-al-rule="new"]')?.focus() }
       if (a === 'del') { A.rules = A.rules.filter(x => x.id !== id); save(); repaint(); document.querySelector('[data-al-rule="new"]')?.focus() }
-      if (a === 'rearm') { const x = A.rules.find(y => y.id === id); if (x) { const F = window.flFeed, m = F?.now().find(y => flat(y.name) === flat(x.player) && y.k === x.k); x.fired = 0; if (m) x.from = lineOn(m, x.provider) ?? m.line; save(); repaint() } } }
+      if (a === 'rearm') { const x = A.rules.find(y => y.id === id); if (x) { const F = window.flFeed, m = F?.now().find(y => flat(y.name) === flat(x.player) && y.k === x.k); x.fired = 0; x.on = true; delete x.cancelled; if (m) x.from = lineOn(m, x.provider) ?? m.line; save(); repaint() } } }
   });
 
   function reset() { A = { ...DEF, teams: {}, picks: {}, rules: [] }; save() }

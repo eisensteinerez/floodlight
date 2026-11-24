@@ -517,19 +517,22 @@
   }
 
   /* ---------- what is wrong with each pick in a draft, and when its market closes ----------
-     legIssues(legs, now, outOf) -> Map(id -> [{ kind, why, blocks }])
+     legIssues(legs, now, outOf, offBoard) -> Map(id -> [{ kind, why, blocks }]); offBoard(leg) -> { message, reason } for a
+     leg the verified feed took off the board (it can't go in, and a saved parlay shows it as invalid)
        started   the game has begun: the market is closed and the pick can't go in (blocks)
        conflict  it can't hit alongside an earlier pick: the later one is the one to take out (blocks)
        out       outOf(leg) found the player listed Out: if he doesn't play the pick is void, so it can't go in (blocks)
        soon      the game starts within 30 minutes: lock in before then (a warning only) */
   const SOON_MIN = 30;
-  function legIssues(legs, now = Date.now(), outOf = () => null) {
+  function legIssues(legs, now = Date.now(), outOf = () => null, offBoard = () => null) {
     const m = new Map(legs.map(l => [l.id, []])), mins = t => Math.max(1, Math.round((t - now) / 60000));
     for (const l of legs) {
       if (l.start <= now) m.get(l.id).push({ kind: 'started', blocks: true, why: 'Already started, so its market is closed. Take it out to lock in the rest.' });
       else if (l.start - now <= SOON_MIN * 60000) m.get(l.id).push({ kind: 'soon', blocks: false, why: `Starts in ${mins(l.start)} min. Lock in before then or it can’t go in.` });
       const o = l.start > now ? outOf(l) : null;
-      if (o) m.get(l.id).push({ kind: 'out', blocks: true, why: `${l.player || 'The player'} is listed ${o.status || 'Out'}${o.what ? ` (${o.what})` : ''}. If he doesn’t play the pick is void, so it can’t go in.` });
+      if (o) m.get(l.id).push({ kind: 'out', blocks: true, why: `${l.player || 'The player'} is listed ${o.status || 'Out'}${o.what ? ` (${o.what})` : ''}. If they don’t play the pick is void, so it can’t go in.` });
+      const g = !o && l.start > now ? offBoard(l) : null;
+      if (g) m.get(l.id).push({ kind: 'removed', blocks: true, why: `Taken off the board: ${g.message || 'Market closed'}${g.reason ? `. ${g.reason}` : ''}. Take it out to lock in the rest.` });
     }
     for (let j = 1; j < legs.length; j++) for (let i = 0; i < j; i++) { const r = relate(legs[i], legs[j]); if (r.level === 'conflict') { m.get(legs[j].id).push({ kind: 'conflict', blocks: true, why: `Can’t hit alongside ${legs[i].short || legs[i].text}. ${r.why}` }); break } }
     return m;
@@ -627,7 +630,7 @@
   function fromPick(p, side) {
     if (p.type === 'prop') { const lg = lgOf(p.sport); if (!lg || !p.start) return null; const s = side || p.side, flip = s !== p.side, over = s === 'over';
       const text = p.yes ? `${p.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(p.line)} ${String(p.label).toLowerCase()}`;
-      return { id: `prop:${lg}:${p.name}:${p.k}:${p.line}:${s}`, type: 'prop', lg, sport: p.sport, player: p.name, team: p.team || '', opp: p.opp || '', photo: p.photo || '', k: p.k, label: p.label, line: p.line, side: s, ...(p.yes ? { yes: true } : {}),
+      return { id: `prop:${lg}:${p.name}:${p.k}:${p.line}:${s}`, type: 'prop', lg, sport: p.sport, mid: p.mid || '', player: p.name, team: p.team || '', opp: p.opp || '', photo: p.photo || '', k: p.k, label: p.label, line: p.line, side: s, ...(p.yes ? { yes: true } : {}),
         start: +p.start, game: p.game || '', gameKey: p.gameKey || `${lg}:${p.name}`, text: `${p.name}: ${text}`, short: `${p.name.split(' ').slice(-1)[0]} ${text.toLowerCase()}`,
         rAt: p.at || Date.now(), ours0: flip ? 1 - p.ours : p.ours, ...(p.market != null ? { market0: flip ? 1 - p.market : p.market, msrc: [...new Set((p.offers || []).filter(o => o.pOver != null && o.line === p.line).map(o => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' })[o.book] || o.book))].join(' and ') || 'the apps', mAt: p.at || Date.now() } : {}), ...(p.mu != null ? { mu: p.mu } : p.avg != null ? { mu: p.avg } : {}), ...(p.sd ? { sd: p.sd } : {}) } }
     if (p.type === 'match' && p.m) { const m = p.m, lg = m.sport === 'soccer' ? 'soccer' : m.lg === 'nfl' ? 'nfl' : 'cfb', L = LG[lg], draw = m.pick === 'draw';
