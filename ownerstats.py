@@ -37,6 +37,7 @@ def business(users, now=None):
     tried_done = [u for u in tried if u.get("plan_status") != "trial"]
     converted = [u for u in tried_done if u.get("paid_since") and int(u["paid_since"]) >= int(u["trial_started"])]
     start_paid = len(paid) + len(canceled30)
+    refunds = [r for u in us for r in u.get("refunds") or [] if now - int(r.get("at") or 0) < 30 * DAY]
     out = {"users": {"total": total, "dau": dau, "wau": wau, "mau": mau, "new7": new7, "new30": new30},
            "billing": billing}
     if billing:
@@ -47,7 +48,10 @@ def business(users, now=None):
             "trialToPaid": round(len(converted) / len(tried_done) * 100, 1) if tried_done else None,
             "churn": round(len(canceled30) / start_paid * 100, 1) if start_paid else None,
             "arppu": round(mrr / len(paid), 2) if paid else None,
-            "byPlan": _by_plan(paid + trial)}
+            "byPlan": _by_plan(paid + trial),
+            "failedPayments30": sum(1 for u in us if now - float(u.get("payment_failed_at") or 0) < 30 * DAY),
+            "refunds30": len(refunds), "refunded30": round(sum(int(r.get("amount_cents") or 0) for r in refunds) / 100, 2),
+            "disputesOpen": sum(1 for u in us if u.get("dispute_open"))}
     return out
 
 
