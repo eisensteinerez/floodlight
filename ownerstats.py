@@ -48,6 +48,7 @@ def business(users, now=None):
             "trialToPaid": round(len(converted) / len(tried_done) * 100, 1) if tried_done else None,
             "churn": round(len(canceled30) / start_paid * 100, 1) if start_paid else None,
             "arppu": round(mrr / len(paid), 2) if paid else None,
+            "arpu": round(mrr / mau, 2) if mau else None,   # recurring revenue a month per account active in the last 30 days
             "byPlan": _by_plan(paid + trial),
             "failedPayments30": sum(1 for u in us if now - float(u.get("payment_failed_at") or 0) < 30 * DAY),
             "refunds30": len(refunds), "refunded30": round(sum(int(r.get("amount_cents") or 0) for r in refunds) / 100, 2),

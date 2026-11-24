@@ -20,15 +20,16 @@
   // a ranked list drawn as bars: one series in the accent, the number written at the end of each bar
   const bars = (rows, label) => rows.length ? `<ol class="ow-bars" aria-label="${esc(label)}">${rows.map(([k, v], i, a) => { const max = Math.max(...a.map(r => r[1]), 1); return `<li><span class="ow-bk">${esc(k)}</span><span class="ow-bt"><i style="width:${Math.max(2, v / max * 100).toFixed(1)}%"></i></span><b class="num">${n(v)}</b></li>` }).join('')}</ol>` : '<p class="lb">Nothing counted yet in this window.</p>';
 
-  function business(b) {
-    const u = b.users, m = b.money;
+  function business(b, names = {}) {
+    const u = b.users, m = b.money, pn = k => { const t = /_trial$/.test(k), id = k.replace(/_trial$/, ''); return `${names.plans?.[id] || id}${t ? ', on trial' : ''}` };
     return `<section class="ow-sec" aria-labelledby="owBizH"><h2 id="owBizH">People</h2>
       <div class="ow-tiles">${tile('Total accounts', n(u.total))}${tile('Active in 30 days', n(u.mau), `${n(u.wau)} this week, ${n(u.dau)} today`)}${tile('New in 30 days', n(u.new30), `${n(u.new7)} in the last 7 days`)}</div></section>
       <section class="ow-sec" aria-labelledby="owMoneyH"><h2 id="owMoneyH">Revenue</h2>
       ${m ? `<div class="ow-tiles">${tile('Monthly recurring revenue', usd(m.mrr))}${tile('Annual recurring revenue', usd(m.arr))}${tile('Paying members', n(m.paid), m.pastDue ? `${n(m.pastDue)} with a failed payment` : '')}${tile('On a free trial', n(m.trial))}
-          ${tile('Conversion to paid', pc(m.conversion), 'Paying members out of all accounts')}${tile('Trial to paid', pc(m.trialToPaid), 'Finished trials that became paid')}${tile('Churn, 30 days', pc(m.churn), `${n(m.cancellations30)} cancellations`)}${tile('Revenue per paying member', usd(m.arppu), 'A month')}
-          ${tile('Failed payments, 30 days', n(m.failedPayments30 || 0), m.pastDue ? `${n(m.pastDue)} still in the grace period` : '')}${tile('Refunds, 30 days', usd(m.refunded30 || 0), `${n(m.refunds30 || 0)} refund${m.refunds30 === 1 ? '' : 's'}`)}${tile('Open disputes', n(m.disputesOpen || 0), m.disputesOpen ? 'Answer them in the Stripe dashboard' : '')}</div>`
-        : `<div class="card flat ow-wait"><b>Paid plans aren’t switched on yet</b><p class="lb">Monthly and annual recurring revenue, paying members, trials, conversion, trial-to-paid, churn and revenue per member fill in here as soon as checkout records its first plan. Until then they are left out rather than shown as zeros.</p></div>`}</section>`;
+          ${tile('Conversion to paid', pc(m.conversion), 'Paying members out of all accounts')}${tile('Trial to paid', pc(m.trialToPaid), 'Finished trials that became paid')}${tile('Churn, 30 days', pc(m.churn), `${n(m.cancellations30)} cancellations`)}${tile('Revenue per paying member', usd(m.arppu), 'A month')}${tile('Revenue per active member', usd(m.arpu), 'A month, across accounts active in 30 days')}
+          ${tile('Failed payments, 30 days', n(m.failedPayments30 || 0), m.pastDue ? `${n(m.pastDue)} still in the grace period` : '')}${tile('Refunds, 30 days', usd(m.refunded30 || 0), `${n(m.refunds30 || 0)} refund${m.refunds30 === 1 ? '' : 's'}`)}${tile('Open disputes', n(m.disputesOpen || 0), m.disputesOpen ? 'Answer them in the Stripe dashboard' : '')}</div>
+        <div class="card flat ow-mix"><h3>Plan mix</h3>${(m.byPlan || []).length ? bars(m.byPlan.map(([k, v]) => [pn(k), v]), 'Members on each plan') : '<p class="lb">No one is on a paid plan or a trial yet.</p>'}</div>`
+        : `<div class="card flat ow-wait"><b>Paid plans aren’t switched on yet</b><p class="lb">Monthly and annual recurring revenue, paying members, trials, conversion, trial-to-paid, churn, revenue per member and the plan mix fill in here as soon as checkout records its first plan. Until then they are left out rather than shown as zeros.</p></div>`}</section>`;
   }
   function journey(g) {
     const f = g.funnel, top = Math.max(f.steps[0]?.count || 0, ...f.steps.map(s => s.count), 1), r = g.retention;
@@ -36,20 +37,22 @@
       <p class="lb">${n(f.journeys)} ${f.journeys === 1 ? 'journey' : 'journeys'} started in the last ${f.days} days. A journey is an account, joined with what its browser did before signing up, or a visitor who never made one.</p>
       <ol class="ow-fun">${f.steps.map(s => `<li><span class="ow-fk">${esc(s.label)}</span><span class="ow-bt"><i style="width:${(s.count ? Math.max(1, s.count / top * 100) : 0).toFixed(1)}%"></i></span><b class="num">${n(s.count)}</b><small class="lb num">${f.journeys ? `${Math.round(s.count / f.journeys * 100)}% of journeys` : ''}</small></li>`).join('')}</ol>
       <div class="ow-tiles">${['d1', 'd7', 'd30'].map((k, i) => tile(['Day 1 retention', 'Day 7 retention', 'Day 30 retention'][i], pc(r[k].rate), r[k].cohort ? `${n(r[k].returned)} of ${n(r[k].cohort)} came back${i ? ` in days ${[0, 7, 30][i]} to ${[0, 13, 36][i]}` : ' the next day'}` : 'No accounts old enough yet')).join('')}
+        ${(r2 => [['landing', 'Landing page to account', 'saw the landing page'], ['signup', 'Sign-up completion', 'opened the sign-up form'], ['upgrade', 'Upgrade page to trial or paid', 'saw the upgrade page']].map(([k, l, what]) => { const x = r2[k]; return x ? tile(l, pc(x.rate), x.of ? `${n(x.n)} of ${n(x.of)} who ${what}` : `No one ${what} yet`) : '' }).join(''))(f.rates || {})}
         ${tile('Onboarding finished', pc(g.onboarding.rate), `${n(g.onboarding.finished)} of ${n(g.onboarding.signedUp)} new accounts`)}
         ${tile('Time to first useful action', g.firstUseful == null ? '–' : g.firstUseful < 60 ? `${g.firstUseful} min` : `${Math.round(g.firstUseful / 6) / 10} h`, 'Median, from sign-up to a first search, player, follow or board')}</div></section>`;
   }
-  function usage(p, g) {
+  function usage(p, g, names = {}) {
     const u = p.usage, s = p.saved, max = Math.max(1, ...u.series.map(x => x.searches));
     const emptyRate = u.searches ? Math.round(u.searchEmpty / u.searches * 100) : null;
     return `<section class="ow-sec" aria-labelledby="owUH"><h2 id="owUH">Product use</h2>
       <div class="ow-tiles">${tile('Lab searches', n(u.searches), `${n(u.searchEmpty)} empty${emptyRate != null ? ` (${emptyRate}%)` : ''}, ${n(u.searchFailed)} failed`)}${tile('Players opened', n(u.playersOpened))}${tile('Boards saved', n(u.boardsSaved), `${n(s.boards)} boards kept now`)}
-        ${tile('Predictions followed', n(u.predictionsFollowed), `${n(s.follows)} follows kept now`)}${tile('Alerts created', n(u.alertsCreated))}${tile('Prediction cards', n(u.cardsCreated), `${n(s.cards)} parlays kept now`)}${tile('Upgrade page views', n(u.upgradeViews))}${tile('Support tickets', n(u.tickets))}</div>
+        ${tile('Predictions followed', n(u.predictionsFollowed), `${n(s.follows)} follows kept now`)}${tile('Alerts created', n(u.alertsCreated))}${tile('Prediction cards', n(u.cardsCreated), `${n(s.cards)} parlays kept now`)}${tile('Upgrade page views', n(u.upgradeViews))}${tile('Plus features hit on Free', n(u.gates || 0), 'Each feature counted once per visit')}${tile('Support tickets', n(u.tickets))}</div>
       <figure class="card flat ow-chart"><figcaption><b>Lab searches a day</b><span class="lb">Last ${u.series.length} days, most recent on the right. Peak ${n(max === 1 && !u.searches ? 0 : max)}.</span></figcaption>
         <div class="ow-cols" role="img" aria-label="Lab searches a day: ${esc(u.series.map(x => `${x.day} ${x.searches}`).join(', '))}">${u.series.map(x => `<span class="ow-col" title="${esc(x.day)}: ${x.searches} searches, ${x.players} players opened"><i style="height:${(x.searches / max * 100).toFixed(1)}%"></i></span>`).join('')}</div></figure>
       <div class="ow-two">
         <div class="card flat"><h3>Most viewed players</h3>${bars(u.topPlayers.map(([k, v]) => [(m => m ? `${m[2]} (${m[1].toUpperCase()})` : k)(/^([a-z]+):(.+)$/.exec(k)), v]), 'Most viewed players')}</div>
         <div class="card flat"><h3>Most used sports</h3>${bars(u.topSports.map(([k, v]) => [k.toUpperCase(), v]), 'Most used sports')}</div>
+        <div class="card flat"><h3>Plus features Free members ran into</h3>${(u.topGates || []).length ? bars(u.topGates.map(([k, v]) => [names.features?.[k] || k, v]), 'Plus features Free members ran into') : '<p class="lb">None yet. This counts only while Free plan limits are on.</p>'}</div>
         <div class="card flat"><h3>Most used paid feature</h3>${g.paidFeature.length ? bars(g.paidFeature, 'Most used paid feature') : '<p class="lb">Shows once members are on a paid plan.</p>'}</div>
         <div class="card flat"><h3>Slow pages</h3>${u.slowPages.length ? `<table class="tbx"><thead><tr><th scope="col">Page</th><th scope="col">Device</th><th scope="col" class="r">Slow loads</th></tr></thead><tbody>${u.slowPages.map(r => `<tr><td>${esc(r.page)}</td><td>${esc(r.device)}</td><td class="r num">${n(r.count)}</td></tr>`).join('')}</tbody></table><p class="lb">A slow load is main content taking over 2.5 seconds to appear.</p>` : '<p class="lb">No page took longer than 2.5 seconds to show its main content.</p>'}</div>
       </div></section>`;
@@ -98,7 +101,7 @@
     el.innerHTML = `<header class="pg-head"><div><h1 class="pg-title">Owner dashboard</h1><p class="pg-sub">${isOwner() ? 'How Floodlight is doing, and what members are asking.' : 'Support tickets from members and visitors.'}</p></div>
         ${isOwner() ? `<div class="pg-acts"><div class="seg" role="radiogroup" aria-label="Time window">${[7, 30, 90].map(k => `<button type="button" role="radio" aria-checked="${O.days === k}" data-ow-days="${k}">${k} days</button>`).join('')}</div><button type="button" class="bt ghost sm" data-ow="refresh">Refresh</button></div>` : ''}</header>
       ${isOwner() ? (d ? `<p class="lb ow-at" role="status">Updated ${when(d.at)}. Usage counts are kept on Floodlight’s own server: no cookies, no IP addresses, and nothing from browsers that ask not to be tracked.</p>
-          ${business(d.business)}${journey(d.growth)}${usage(d.product, d.growth)}${cancels(d.growth.cancel)}${monitor()}${referrals(d.referrals)}`
+          ${business(d.business, d.names)}${journey(d.growth)}${usage(d.product, d.growth, d.names)}${cancels(d.growth.cancel)}${monitor()}${referrals(d.referrals)}`
         : `<p class="lb">${O.err ? esc(O.err) : 'Loading the numbers…'}</p>${O.err ? '<button type="button" class="bt ghost sm" data-ow="refresh">Try again</button>' : ''}`) : ''}
       <div id="owInbox">${inbox()}</div>`;
   }

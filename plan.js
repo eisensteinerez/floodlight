@@ -34,7 +34,9 @@
       return { ok: !!d.ok, left: d.left ?? null, error: d.error };
     } catch { return { ok: true, left: null } }
   }
+  const gated = new Set();   // a Free member ran into a Plus feature: counted once per feature per visit (owner dashboard)
   function upsell(feature, el) {
+    if (enforced() && !info()?.paid && !gated.has(feature)) { gated.add(feature); try { window.flTrack?.('gate', { feature }) } catch {} }
     const name = names()[feature] || 'This';
     const html = `<div class="plan-up" role="note"><span class="plan-up-tag">Plus</span><p><strong>${esc(name)}</strong> ${feature === 'lab_unlimited' ? "is part of Plus. You've used today's free searches; they reset at midnight." : 'is part of Plus.'}</p>
       <a class="bt sm" href="#/pricing" data-page="pricing">See Plus</a></div>`;

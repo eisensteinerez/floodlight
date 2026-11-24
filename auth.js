@@ -59,6 +59,7 @@
 
   function card(user, err) {
     if (err) A.err = err;
+    if (A.mode === 'signup' && !user) track('signup_start', { once: true });   // the sign-up form was shown (owner dashboard: sign-up completion)
     const title = A.invite && !A.invite.error && A.mode === 'signup' ? "You're invited" : TITLE[A.mode] || 'Floodlight';
     const lead = A.invite && !A.invite.error && A.mode === 'signup' ? `<p>${esc(A.invite.by)} invited <strong>${esc(A.invite.email)}</strong>${A.invite.rank === 'admin' ? ' as an admin' : ''}. Pick a username and password to join.</p>`
       : A.mode === 'login' ? '<p>Welcome back.</p>' : A.mode === 'signup' && !A.invite ? `<p>Free to start: live scores, ${window.flPricing?.config?.()?.free_limits?.lab_search ? `${flPricing.config().free_limits.lab_search} Lab searches a day` : 'daily Lab searches'} and your own Home.</p>` : '';

@@ -28,13 +28,13 @@ _dirty = {"n": 0, "saved": 0.0}
 
 # events the browser may send, and the journey step each one marks the first time it happens
 EVENTS = {"landing_view", "landing_cta", "page", "search", "player_open", "prediction_follow", "board_save", "alert_create",
-          "card_create", "onboarding_done", "upgrade_view", "trial_start", "subscribe", "renew", "cancel", "share",
+          "card_create", "onboarding_done", "onboarding_skip", "gate", "signup_start", "upgrade_view", "trial_start", "subscribe", "renew", "cancel", "share",
           "invite_copy", "help_search", "ticket_create", "slow_page", "signup", "session"}
-STEP_OF = {"landing_view": "landing", "signup": "signup", "onboarding_done": "onboarding", "search": "first_search",
+STEP_OF = {"landing_view": "landing", "signup_start": "signup_start", "signup": "signup", "onboarding_done": "onboarding", "search": "first_search",
            "player_open": "player_open", "prediction_follow": "prediction_follow", "board_save": "board_save",
            "upgrade_view": "upgrade_view", "trial_start": "trial_start", "subscribe": "subscribe", "renew": "renew", "cancel": "cancel"}
 # the customer journey, in order, with the words the dashboard uses
-FUNNEL = (("landing", "Saw the landing page"), ("signup", "Created an account"), ("onboarding", "Finished onboarding"),
+FUNNEL = (("landing", "Saw the landing page"), ("signup_start", "Opened sign-up"), ("signup", "Created an account"), ("onboarding", "Finished onboarding"),
           ("first_search", "First search"), ("player_open", "Opened a player"), ("prediction_follow", "Followed a prediction"),
           ("board_save", "Saved a board"), ("upgrade_view", "Saw the upgrade page"), ("trial_start", "Started a trial"),
           ("subscribe", "Subscribed"), ("renew", "Renewed"))
@@ -155,6 +155,10 @@ def _record(name, props, user=None, aid="", ts=None):
             d["empty"] += 1
         if props.get("failed"):
             d["failed"] += 1
+    if name == "gate":   # a Plus feature a Free member ran into: the feature's key only
+        f = str(props.get("feature") or "")
+        if re.fullmatch(r"[a-z_]{2,30}", f):
+            _bump(d.setdefault("gates", {}), f, cap=40)
     if name == "page":
         pg = _clean(props.get("name"), 24).lower()
         if re.fullmatch(r"[a-z-]{1,24}", pg or ""):
@@ -243,12 +247,12 @@ def _prune(now):
 
 def _sum_days(n, now):
     keys = {day_key(now - i * 86400) for i in range(n)}
-    out = {"ev": {}, "players": {}, "sports": {}, "pages": {}, "slow": {}, "empty": 0, "failed": 0, "actors": 0}
+    out = {"ev": {}, "players": {}, "sports": {}, "pages": {}, "slow": {}, "gates": {}, "empty": 0, "failed": 0, "actors": 0}
     for k in keys:
         d = S["days"].get(k)
         if not d:
             continue
-        for part in ("ev", "players", "sports", "pages", "slow"):
+        for part in ("ev", "players", "sports", "pages", "slow", "gates"):
             for kk, v in d.get(part, {}).items():
                 out[part][kk] = out[part].get(kk, 0) + v
         for part in ("empty", "failed", "actors"):
@@ -275,6 +279,7 @@ def usage(days=30, now=None):
             "playersOpened": ev.get("player_open", 0), "boardsSaved": ev.get("board_save", 0), "predictionsFollowed": ev.get("prediction_follow", 0),
             "alertsCreated": ev.get("alert_create", 0), "cardsCreated": ev.get("card_create", 0), "shares": ev.get("share", 0),
             "upgradeViews": ev.get("upgrade_view", 0), "landingViews": ev.get("landing_view", 0), "tickets": ev.get("ticket_create", 0),
+            "gates": ev.get("gate", 0), "topGates": _top(s["gates"], 8), "onboardingSkipped": ev.get("onboarding_skip", 0),
             "topPlayers": _top(s["players"], 10), "topSports": _top(s["sports"], 10), "topPages": _top(s["pages"], 10),
             "slowPages": slow, "series": series}
 
@@ -286,6 +291,7 @@ def funnel(days=30, now=None):
     since = now - days * 86400
     counts = {k: 0 for k, _ in FUNNEL}
     started = 0
+    pairs = {"landing": [0, 0], "signup": [0, 0], "upgrade": [0, 0]}   # [journeys that reached the first step, of them the second]
     with _lock:
         journeys = [u["steps"] for u in S["users"].values() if u.get("steps")]
         journeys += [a["steps"] for a in S["actors"].values() if not a.get("user") and a.get("steps")]
@@ -296,13 +302,20 @@ def funnel(days=30, now=None):
             for k in counts:
                 if k in st:
                     counts[k] += 1
+            for key, a, bs in (("landing", "landing", ("signup",)), ("signup", "signup_start", ("signup",)), ("upgrade", "upgrade_view", ("trial_start", "subscribe"))):
+                if a in st:
+                    pairs[key][0] += 1
+                    pairs[key][1] += any(st.get(b, 0) >= st[a] for b in bs)
     rows, prev = [], None
     for k, label in FUNNEL:
         n = counts[k]
         rows.append({"step": k, "label": label, "count": n,
                      "fromPrev": round(n / prev * 100, 1) if prev else None})
         prev = n if n else prev
-    return {"days": days, "journeys": started, "steps": rows}
+    # landing: saw the landing page, then made an account. signup: opened the sign-up form, then made an account.
+    # upgrade: saw the upgrade page, then started a trial or subscribed. None until someone reached the first step.
+    rates = {k: {"of": a, "n": b, "rate": round(b / a * 100, 1) if a else None} for k, (a, b) in pairs.items()}
+    return {"days": days, "journeys": started, "steps": rows, "rates": rates}
 
 
 def retention(created, now=None):

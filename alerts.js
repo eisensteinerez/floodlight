@@ -23,7 +23,12 @@
   const quietNow = () => { if (!A.quiet) return false; const h = new Date().getHours(); return A.qFrom > A.qTo ? h >= A.qFrom || h < A.qTo : h >= A.qFrom && h < A.qTo };
   const hr = h => new Date(2026, 0, 1, h).toLocaleTimeString([], { hour: 'numeric' });
   let A = read();
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(A)) } catch {} };
+  // saving also counts, without any detail, an alert switched on or a line alert added (owner dashboard: alerts created)
+  let was = { on: !!A.on, rules: (A.rules || []).length };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(A)) } catch {}
+    const now = { on: !!A.on, rules: (A.rules || []).length };
+    try { if (now.on && !was.on) window.flTrack?.('alert_create', { kind: 'on' }); if (now.rules > was.rules) window.flTrack?.('alert_create', { kind: 'line' }) } catch (e) {}
+    was = now };
   const can = () => 'Notification' in window;
   const perm = () => can() ? Notification.permission : 'unsupported';   // 'granted' | 'denied' | 'default' | 'unsupported'
   const advanced = () => window.flPlan?.can?.('advanced_alerts') ?? true;   // line and edge alerts may be a paid feature later
