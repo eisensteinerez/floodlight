@@ -329,6 +329,42 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     assert.deepStrictEqual(p.errors, []);
   });
 
+  await t('Alerts: a followed pick taken off the board, then back on it, with links to that pick; per-player choices', async () => {
+    const p = await page(); await explorer(p);
+    const got = () => p.evaluate(() => window.flInbox.list().map(x => ({ kind: x.kind, title: x.title, link: x.link })));
+    await p.evaluate(() => {
+      localStorage.setItem('fl.pdFollow', JSON.stringify([{ k: 'pk-ja', id: 'prop:nba:Ja Morant:ast', name: 'Ja Morant', text: 'Over 7.5 assists', sport: 'nba', start: Date.now() + 2 * 36e5, at: Date.now() }]));
+      localStorage.setItem('fl.follows', JSON.stringify([{ k: 'player', name: 'Anthony Edwards', lg: 'nba' }, { k: 'player', name: 'Rudy Gobert', lg: 'nba' }]));
+      // the verified feed says these lines are open (the stand-in feed leaves them awaiting verification, which never rings)
+      const M = window.flMarkets, real = M.open; M.open = q => real(q).map(m => ({ ...m, status: 'open' })); M.standing = () => ({ open: true, status: 'open' });
+      window.flAlerts.check();
+    });
+    assert.deepStrictEqual(await got(), [], 'the first look only records where things stand');
+    // the market leaves the board
+    await p.evaluate(() => { window.flMarkets.removed = () => [{ name: 'Ja Morant', sport: 'nba', k: 'ast', removalReason: 'The provider no longer offers this line' }]; window.flAlerts.check() });
+    let L = await got(); assert.strictEqual(L[0].kind, 'removed'); assert.match(L[0].title, /Ja Morant: taken off the board/);
+    assert.deepStrictEqual(L[0].link, { page: 'predictions', pick: 'pk-ja' });
+    // and comes back
+    await p.evaluate(() => { window.flMarkets.removed = () => []; window.flAlerts.check() });
+    L = await got(); assert.strictEqual(L[0].kind, 'reopened'); assert.match(L[0].title, /Ja Morant: back on the board/); assert.match(L.map(x => x.title).join(), /taken off/);
+    assert.deepStrictEqual(L[0].link, { page: 'predictions', pick: 'pk-ja' });
+    await p.evaluate(() => window.flAlerts.check()); assert.strictEqual((await got()).length, 2, 'said once');
+    // per-player: line moves off for Edwards only
+    await p.evaluate(() => { location.hash = '#/settings/alerts' }); await p.waitForSelector('#stAlerts'); await p.waitForTimeout(300);
+    await p.evaluate(() => document.querySelectorAll('#stAlerts details').forEach(d => d.open = true));
+    assert.ok(await p.$('[data-alpick="pk-ja|reopen"]'), 'a Reopened column for each pick'); assert.ok(await p.$('#al-pkReopen'), 'a Market reopened switch');
+    await p.uncheck('[data-alplayer="nba:anthonyedwards|line"]');
+    assert.deepStrictEqual(await p.evaluate(() => window.flAlerts.settings().players), { 'nba:anthonyedwards': { line: false } });
+    await p.evaluate(() => { const F = window.flFeed, real = F.now(); F.now = () => real.map(m => m.name === 'Anthony Edwards' || m.name === 'Rudy Gobert' ? { ...m, line: m.line + 1 } : m); window.flAlerts.check() });
+    L = await got(); const lines = L.filter(x => x.kind === 'line').map(x => x.title).join(' | ');
+    assert.match(lines, /Rudy Gobert/); assert.doesNotMatch(lines, /Anthony Edwards/);
+    assert.ok(L.find(x => /Rudy Gobert/.test(x.title)).link.lab, 'a line alert opens that player in the Lab');
+    // the inbox files it under Picks
+    await p.evaluate(() => { location.hash = '#/inbox' }); await p.waitForTimeout(400);
+    assert.match(await p.textContent('#main, body'), /back on the board/);
+    assert.deepStrictEqual(p.errors, []);
+  });
+
   await t('phone: the explorer folds into cards, nothing runs off the screen', async () => {
     for (const w of [320, 390]) {
       const p = await page(w, 800); await explorer(p); await p.evaluate(() => document.querySelector('.px-sum').scrollIntoView()); await shot(p, `explorer-${w}`);
