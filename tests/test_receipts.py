@@ -46,6 +46,7 @@ def test_a_receipt_keeps_the_evidence_grade_sample_size_and_provider_market_id()
     PB.seen([prop(**dict(FULL, grade="B", n=18, providerMarketId="pp-889120"))], now=NOW)
     r = one()["receipt"]
     assert r["evidence"] == "B" and r["sample"] == 18 and r["providerMarketId"] == "pp-889120" and GB.receipt_ok(r)
+    assert PB.entries(now=NOW)[0]["evidence"] == "B"                                  # Pick history groups by it
     r["evidence"] = "A"                                                                # a better grade written in later
     assert GB.receipt_ok(r) is False
 

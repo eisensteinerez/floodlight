@@ -348,7 +348,8 @@ def entries(limit=2000, since=None, receipts=False, tests=False, now=None):
                         "label": e["label"], "line": e["line"], "side": e["side"], "yes": e.get("yes"), "conf": e.get("conf"), "start": e["start"],
                         "ours": f.get("ours"), "market": f.get("market"), "edge": f.get("edge"), "books": f.get("books") or [],
                         "result": e.get("result"), "actual": e.get("actual"), "why": e.get("why"), "clv": clv(e),
-                        "sedge": (e.get("receipt") or {}).get("supportedEdge"), "event": e.get("event")})
+                        "sedge": (e.get("receipt") or {}).get("supportedEdge"), "evidence": (e.get("receipt") or {}).get("evidence"),
+                        "event": e.get("event")})
         return out
 
 
