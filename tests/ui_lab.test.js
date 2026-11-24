@@ -213,6 +213,21 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     assert.deepStrictEqual(p.errors, []);
   });
 
+  await t('Home, Continue researching: a line that left the board says Market expired, with the reason', async () => {
+    const p = await page(); await explorer(p);
+    await p.evaluate(() => {
+      window.flRecent.note({ kind: 'player', key: 'player:nba:Ja Morant:ast', label: 'Ja Morant', sub: 'Over 7.5 assists', open: { lab: { sport: 'nba', name: 'Ja Morant', kind: 'player', stat: 'ast', line: 7.5, side: 'over' } } });
+      const real = window.flMarkets.standing;
+      window.flMarkets.standing = q => q.name === 'Ja Morant' ? { open: false, market: { name: 'Ja Morant' }, status: 'started', message: 'Game started', reason: 'The game began at 7:00 PM' } : real(q);
+      window.flPages?.hide?.(); window.flHub.show();
+    });
+    await p.waitForSelector('#hmBackH', { timeout: 15000 }); await p.waitForTimeout(300);
+    const card = await p.locator('.rc', { hasText: 'Ja Morant' }).first().textContent();
+    assert.match(card, /Market expired: Game started/);
+    assert.match(card, /viewed/); assert.ok(await p.$('.rc [data-hubrc^="pin|player:nba:Ja Morant"]'), 'it can still be pinned');
+    assert.deepStrictEqual(p.errors, []);
+  });
+
   await t('Add to Prediction Card puts the line on the Predictions slip', async () => {
     const p = await page(); await explorer(p);
     await p.locator('[data-pxopen]').filter({ hasText: 'Rudy Gobert' }).click(); await p.waitForSelector('#rpT');

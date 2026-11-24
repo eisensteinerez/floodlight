@@ -3356,6 +3356,7 @@ h3.hm-brief-h{margin:0;font:700 17px/1.25 var(--font-body);color:var(--text)}
 .rc-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .rc-badge{min-height:24px;padding:0 8px;font-size:12px;gap:4px;color:var(--text)}
 .rc-badge.rc-inj{border-color:var(--bad)}
+.rc-badge.rc-gone{border-style:dashed;border-color:var(--muted);color:var(--text-2)}
 .rc-open time{color:var(--muted);font-size:12px}
 
 /* Your day */
