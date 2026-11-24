@@ -14,17 +14,22 @@
   const LG = { nfl: 'NFL', fbs: 'College football', fcs: 'College football (FCS)', ufl: 'UFL' };
   const PROP_SPORT = { nba: 'NBA', wnba: 'WNBA', nfl: 'NFL', nhl: 'NHL', mlb: 'MLB', soccer: 'Soccer' };
   const BOOK = { prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' };
+  const SOCCER_LG = { 'eng.1': 'Premier League', 'esp.1': 'LaLiga', 'ita.1': 'Serie A', 'ger.1': 'Bundesliga', 'fra.1': 'Ligue 1', 'usa.1': 'MLS', 'eng.2': 'Championship',
+    'ned.1': 'Eredivisie', 'por.1': 'Primeira Liga', 'sco.1': 'Scottish Premiership', 'mex.1': 'Liga MX', 'uefa.champions': 'Champions League', 'uefa.europa': 'Europa League', 'isr.1': "Israeli Premier League" };
+  const GRADE_WORD = { A: 'A · Strong evidence', B: 'B · Good evidence', C: 'C · Limited evidence', D: 'D · Highly uncertain' };   // labcore.js's words
   const fmt = v => Number.isInteger(+v) ? String(+v) : (+v).toFixed(1);
   /* Performance is not advertised before it means something (Erez's rule):
      under 25 graded picks: "Early results", the record only (no hit rate, units, ROI or calibration);
-     25 to 99: every figure, under a small-sample warning; 100 and more: full reporting. */
+     25 to 99: every figure, under a "Limited sample" warning; 100 and more: full reporting. */
   const EARLY = 25, FULL = 100;
   const MIN_RATE = EARLY;   // graded picks before a hit rate is shown at all
   const SMALL = FULL;       // under this, every figure says it is a small sample
   const tier = n => n < EARLY ? 'early' : n < FULL ? 'small' : 'full';
   const tierNote = (n, short) => n >= FULL ? '' : n < EARLY
     ? `<p class="hs-tier early" role="note"><b>Early results.</b> ${n} graded ${n === 1 ? 'pick' : 'picks'} so far${short ? '' : '. Hit rate, units and calibration appear at 25 graded picks, and full reporting at 100'}.</p>`
-    : `<p class="hs-tier small" role="note"><b>Small sample.</b> ${n} graded picks. ${short ? 'Figures can swing a lot until 100.' : 'These figures can swing a lot until 100 picks are graded; read them as a first look, not a track record.'}</p>`;
+    : `<p class="hs-tier small" role="note"><b>Limited sample.</b> ${n} graded picks. ${short ? 'Figures can swing a lot until 100.' : 'These figures can swing a lot until 100 picks are graded; read them as a first look, not a track record.'}</p>`;
+  // nothing graded yet, in the words the spec fixes: never a hit rate, never a failure
+  const zeroNote = waiting => `<p class="hs-tier early" role="status"><b>No graded picks yet.</b> ${waiting} ${waiting === 1 ? 'prediction is' : 'predictions are'} currently locked. Results will appear after ${waiting === 1 ? 'its game finishes' : 'their games finish'}.</p>`;
   const RANGE = [[7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']];
   const KINDS = [['all', 'All picks'], ['match', 'Match forecasts'], ['prop', 'Player props']];
   const CAL = [[0, 50, 'Under 50%'], [50, 60, '50–59%'], [60, 70, '60–69%'], [70, 80, '70–79%'], [80, 90, '80–89%'], [90, 101, '90%+']];
@@ -61,6 +66,8 @@
   /* ---------- one shape for both records ---------- */
   // decimal odds a pick was priced at: the book's own price when one was saved, else the market's no-vig chance
   const dec = (price, mkt) => typeof price === 'number' ? (price > 0 ? 1 + price / 100 : 1 + 100 / -price) : mkt > 0.02 && mkt < 0.98 ? 1 / mkt : null;
+  // the league a match was in: the soccer competition's name, or the football league
+  const leagueOf = e => e.sport === 'soccer' ? SOCCER_LG[e.lg] || (e.lg ? String(e.lg).toUpperCase() : 'Soccer') : LG[e.lg] || 'Football';
   function fromMatch(e) {
     const mk = e.market && typeof e.market[e.pick] === 'number' ? e.market[e.pick] : null, fin = Array.isArray(e.final) ? `${e.final[0]}–${e.final[1]}` : '';
     const reads = e.readings || [], first = e.first || reads[0] || null;
@@ -68,7 +75,7 @@
     // closing line for a match: did the market's chance for our pick rise between our first forecast and kick-off?
     const clv = mFirst != null && mk != null && Math.abs(mk - mFirst) >= 0.005 && first?.pick === e.pick ? { beat: mk > mFirst, moved: `Market ${pct(mFirst)}% to ${pct(mk)}%` } : null;
     const move = mFirst != null && mk != null && first?.pick === e.pick ? (mk - mFirst) * 100 : null;   // closing-line move, in points of chance for our pick
-    return { kind: 'match', key: e.key, t: e.ko, made: e.made || first?.at || null, move, sport: e.sport === 'soccer' ? 'Soccer' : LG[e.lg] || 'Football', providers: [mk == null ? 'No price saved' : 'Sportsbooks'],
+    return { kind: 'match', key: e.key, t: e.ko, made: e.made || first?.at || null, move, sport: e.sport === 'soccer' ? 'Soccer' : LG[e.lg] || 'Football', league: leagueOf(e), evidence: null, providers: [mk == null ? 'No price saved' : 'Sportsbooks'],
       market: e.pick === 'draw' ? 'Match result: draw' : 'Match result: win', ours: e.top, mkt: mk, edge: mk == null ? null : pct(e.top) - pct(mk), conf: e.conf || '', result: e.result || null,
       state: e.state || (e.result || 'pending'), clv, clvNote: clv?.moved || '', price: null,
       title: e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`, sub: `${e.home} ${fin || 'v'} ${e.away}`, actual: fin, why: e.why || '', raw: e };
@@ -81,14 +88,14 @@
   }
   function fromProp(e) {
     const over = e.side === 'over', what = e.yes ? `${e.label}: ${over ? 'Yes' : 'No'}` : `${over ? 'Over' : 'Under'} ${fmt(e.line)} ${String(e.label).toLowerCase()}`;
-    return { kind: 'prop', key: e.key, t: e.start, made: e.made || null, move: propMove(e), sedge: e.sedge ?? null, sport: PROP_SPORT[e.sport] || e.sport, providers: (e.books || []).map(b => BOOK[b] || b).filter(Boolean), market: e.label,
+    return { kind: 'prop', key: e.key, t: e.start, made: e.made || null, move: propMove(e), sedge: e.sedge ?? null, sport: PROP_SPORT[e.sport] || e.sport, league: PROP_SPORT[e.sport] || e.sport, evidence: e.evidence || e.receipt?.evidence || null, providers: (e.books || []).map(b => BOOK[b] || b).filter(Boolean), market: e.label,
       ours: e.ours, mkt: e.market, edge: e.edge, conf: e.conf || '', result: e.result || null, state: e.state || (e.result || 'pending'), price: e.first?.price ?? null,
       clv: e.clv && e.clv.beat != null && !['published', 'locked'].includes(e.state) ? e.clv : null, clvNote: e.clv?.moved || '',   // the close is only known after the lock
       title: `${e.player} ${what.charAt(0).toLowerCase() + what.slice(1)}`, sub: [e.team, e.opp].filter(Boolean).join(' v '), actual: e.actual || '', why: e.why || '', raw: e };
   }
   function fromUpcoming(e) {
     const mk = e.market && typeof e.market[e.pick] === 'number' ? e.market[e.pick] : null;
-    return { kind: 'match', key: e.key, t: e.ko, made: e.made, sport: e.sport === 'soccer' ? 'Soccer' : LG[e.lg] || 'Football', providers: [], market: e.pick === 'draw' ? 'Match result: draw' : 'Match result: win',
+    return { kind: 'match', key: e.key, t: e.ko, made: e.made, sport: e.sport === 'soccer' ? 'Soccer' : LG[e.lg] || 'Football', league: leagueOf(e), evidence: null, providers: [], market: e.pick === 'draw' ? 'Match result: draw' : 'Match result: win',
       ours: e.top, mkt: mk, edge: mk == null ? null : pct(e.top) - pct(mk), conf: e.conf || '', result: null, state: e.state, clv: null, clvNote: '', price: null,
       title: e.pick === 'draw' ? 'Draw' : `${e[e.pick]} to win`, sub: `${e.home} v ${e.away}`, actual: '', why: '', raw: { ...e, upcoming: true } };
   }
@@ -121,12 +128,14 @@
   const inBand = (list, v) => v == null ? null : (list.find(([lo, hi]) => v >= lo && v < hi) || [])[2] || null;
   const BY = {
     sport: ['Sport', rows => group(rows, e => e.sport).sort((a, b) => b.n - a.n)],
+    league: ['League', rows => group(rows, e => e.league).sort((a, b) => b.n - a.n)],
     market: ['Market', rows => group(rows, e => e.market).sort((a, b) => b.n - a.n)],
     said: ['Confidence range', rows => ordered(CAL, group(rows, e => e.ours == null ? null : inBand(CAL, e.ours * 100)))],
     conf: ['Confidence label', rows => group(rows, e => e.conf ? e.conf.charAt(0).toUpperCase() + e.conf.slice(1) : null).sort((a, b) => b.n - a.n)],
     lead: ['Time before start', rows => ordered(LEAD, group(rows, e => e.made ? inBand(LEAD, e.t - e.made) : null))],
     edge: ['Edge', rows => { const xs = group(rows, e => e.edge == null ? 'No market price' : inBand(EDGES, e.edge)), at = k => k === 'No market price' ? 99 : EDGES.findIndex(x => x[2] === k); return xs.sort((a, b) => at(a.k) - at(b.k)) }],
     provider: ['Provider', rows => group(rows, e => e.providers).sort((a, b) => b.n - a.n)],
+    evidence: ['Evidence quality', rows => { const xs = group(rows, e => e.evidence ? GRADE_WORD[e.evidence] || e.evidence : 'Not recorded'), at = k => k === 'Not recorded' ? 99 : 'ABCD'.indexOf(k[0]); return xs.sort((a, b) => at(a.k) - at(b.k)) }],
     sedge: ['Supported edge', rows => { const xs = group(rows, e => e.sedge == null ? 'Not recorded' : inBand(EDGES, e.sedge)), at = k => k === 'Not recorded' ? 99 : EDGES.findIndex(x => x[2] === k); return xs.sort((a, b) => at(a.k) - at(b.k)) }],
   };
   const signed = (v, d = 1) => v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
@@ -188,7 +197,7 @@
     return `<section class="card hs-card" aria-labelledby="hs-by-h"><div class="sec-h"><h2 id="hs-by-h">Record by</h2><div class="cx-row scroll" role="tablist" aria-label="Group the record by">${tabs}</div></div>
       <div id="hs-by" role="tabpanel" aria-labelledby="hs-tab-${Hs.by}">${xs.length ? `<div class="tbx-wrap"><table class="tbx hs-tbl"><thead><tr><th scope="col">${esc(first)}</th><th scope="col" class="r">Graded</th><th scope="col" class="r">Hit–miss</th><th scope="col" class="r">Hit rate</th><th scope="col" class="r">Expected</th><th scope="col" class="r">Units</th><th scope="col" class="r">ROI</th><th scope="col" class="r">Beat the close</th></tr></thead>
         <tbody>${xs.map(r => `<tr><th scope="row">${esc(r.k)}</th><td class="r num">${r.n}</td><td class="r num">${r.won}–${r.lost}</td><td class="r num">${rateCell(r)}</td><td class="r num">${r.n ? pct(r.said) + '%' : '–'}</td><td class="r num">${r.units == null ? '<span class="lb">no prices</span>' : signed(r.units)}</td><td class="r num">${r.roi == null ? '–' : signed(r.roi * 100) + '%'}</td><td class="r num">${r.clvN ? `${pct(r.clv)}% <small class="lb">of ${r.clvN}</small>` : '<span class="lb">–</span>'}</td></tr>`).join('')}</tbody></table></div>
-        <p class="lb">A row with fewer than 10 graded picks shows the count, not a percentage.${Hs.by === 'provider' ? ' A prop posted on more than one app is counted under each of them.' : ''}${Hs.by === 'lead' ? ' Time before start is when the pick was first published.' : ''}</p>` : '<p class="lb">Nothing graded in this view yet.</p>'}</div></section>`;
+        <p class="lb">A row with fewer than 10 graded picks shows the count, not a percentage.${Hs.by === 'provider' ? ' A prop posted on more than one app is counted under each of them.' : ''}${Hs.by === 'lead' ? ' Time before start is when the pick was first published.' : ''}${Hs.by === 'evidence' ? ' The grade is the one locked in the receipt when the pick was published. Match forecasts and picks published before grades were saved show as Not recorded.' : ''}</p>` : '<p class="lb">Nothing graded in this view yet.</p>'}</div></section>`;
   }
 
   function calibration(rows) {
@@ -285,7 +294,7 @@
     const voided = rows.filter(e => e.result === 'void'), fixed = rows.filter(e => (e.raw?.corrections || []).length);
     el.innerHTML = `${statusLine()}<div class="pd-filters"><div class="cx-row scroll" role="radiogroup" aria-label="Sport">${[['all', 'All sports'], ...sports.map(s => [s, s])].map(([k, l]) => `<button type="button" class="cx" role="radio" aria-checked="${Hs.sport === k}" tabindex="${Hs.sport === k ? 0 : -1}" data-hssport="${esc(k)}" data-fk="sp-${esc(k)}">${esc(l)}</button>`).join('')}</div>
         <div class="pd-ctl">${seg('kind', 'Kind of pick', KINDS, Hs.kind)}${seg('days', 'Period', RANGE, Hs.days)}<span class="lb hs-at">${Hs.loading ? 'Checking…' : `Record read ${new Date(Hs.at || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}${Hs.err ? ' · the last check failed, showing the earlier reading' : ''}${Hs.propErr ? ' · the props record did not load' : ''}</span><button type="button" class="bt ghost sm" data-hs="reload" data-fk="reload"${Hs.loading ? ' disabled' : ''}>Refresh</button></div></div>
-      ${rows.length ? tierNote(S.n) : ''}
+      ${rows.length ? (S.n ? tierNote(S.n) : zeroNote(rows.filter(isWaiting).length)) : ''}
       ${!rows.length ? `<div class="card emp">${ic('bars', 28) || ic('trophy', 28)}<b>No picks in this period</b><p>A pick lands here the moment it is published: a match forecast when the model first makes it, a player prop the first time the Predictions page shows it. Widen the period or choose another sport.</p></div>` : `
       <div class="hs-tiles">
         <div class="tile inset"><span class="lb">Record</span><b class="fig num">${S.won}–${S.lost}${S.push ? `–${S.push}` : ''}</b><small class="lb">hits–misses${S.push ? '–pushes' : ''}${S.void ? ` · ${S.void} void` : ''}${S.unknown ? ` · ${S.unknown} not graded` : ''}</small></div>

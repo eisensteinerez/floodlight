@@ -58,7 +58,7 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
 
   await t('Prop Explorer lists every open line from the feed, with L5/L10/L20, supported edge and an evidence letter', async () => {
     const p = await page(); await explorer(p); await shot(p, 'explorer-1440');
-    const names = await p.$$eval('.px-t tbody .px-open b', bs => bs.map(b => b.textContent));
+    const names = await p.$$eval('.px-t tbody .px-open .px-nm', bs => bs.map(b => b.textContent));
     assert.deepStrictEqual(names.slice().sort(), ['Anthony Edwards', 'Ja Morant', 'Jalen Hurts', 'Rudy Gobert']);
     const g = await p.$$eval('.px-g b', bs => bs.map(b => b.textContent)); assert.ok(g.every(x => /^[ABCD]$/.test(x)), g.join());
     // the count beside each rate, so colour is never the only signal
@@ -70,13 +70,13 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
   await t('filters: sport chips, player search, a filter chip that removes itself, and an empty state that clears', async () => {
     const p = await page(); await explorer(p);
     await p.click('[data-pxsport="nfl"]'); await p.waitForTimeout(200);
-    assert.deepStrictEqual(await p.$$eval('.px-t tbody .px-open b', bs => bs.map(b => b.textContent)), ['Jalen Hurts']);
+    assert.deepStrictEqual(await p.$$eval('.px-t tbody .px-open .px-nm', bs => bs.map(b => b.textContent)), ['Jalen Hurts']);
     await p.click('[data-pxsport="all"]'); await p.fill('#pxQ', 'gob'); await p.waitForTimeout(400);
-    assert.deepStrictEqual(await p.$$eval('.px-t tbody .px-open b', bs => bs.map(b => b.textContent)), ['Rudy Gobert']);
+    assert.deepStrictEqual(await p.$$eval('.px-t tbody .px-open .px-nm', bs => bs.map(b => b.textContent)), ['Rudy Gobert']);
     await p.click('[data-pxdrop="q"]'); await p.waitForTimeout(200);
     assert.strictEqual(await p.$$eval('.px-t tbody tr', r => r.length), 4);
     await p.click('[data-px="filters"]'); await p.selectOption('#pxSide', { label: 'Under only' }); await p.waitForTimeout(200);
-    assert.deepStrictEqual(await p.$$eval('.px-t tbody .px-open b', bs => bs.map(b => b.textContent)), ['Rudy Gobert']);
+    assert.deepStrictEqual(await p.$$eval('.px-t tbody .px-open .px-nm', bs => bs.map(b => b.textContent)), ['Rudy Gobert']);
     await p.selectOption('#pxL5', { label: '100%' }); await p.waitForTimeout(200); await shot(p, 'explorer-empty-1440');
     assert.ok(await p.isVisible('text=No lines match these filters'));
     await p.click('.emp [data-px="clear"]'); await p.waitForTimeout(200);
@@ -86,7 +86,7 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
   await t('sorts: starting soon puts the NBA game first; highest hit rate leads with a 100% or the best rate', async () => {
     const p = await page(); await explorer(p);
     await p.selectOption('#pxSort', 'soon'); await p.waitForTimeout(200);
-    assert.notStrictEqual(await p.textContent('.px-t tbody tr:first-child .px-open b'), 'Jalen Hurts');
+    assert.notStrictEqual(await p.textContent('.px-t tbody tr:first-child .px-open .px-nm'), 'Jalen Hurts');
     await p.selectOption('#pxSort', 'hit'); await p.waitForTimeout(200);
     const rates = await p.$$eval('td[data-k="Last 10"] b', bs => bs.map(b => parseInt(b.textContent)));
     assert.deepStrictEqual(rates, rates.slice().sort((a, b) => b - a));

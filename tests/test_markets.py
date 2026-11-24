@@ -82,7 +82,7 @@ def test_an_open_market_carries_every_required_field():
               "status", "verifiedAt", "firstSeen", "closingLine", "removalReason", "openLine"):
         assert k in m, k
     assert m["providerMarketId"] == "prizepicks:pp1" and m["provider"] == "prizepicks" and m["eventDay"] == "2026-11-23"
-    assert set(M.STATUS) == {"open", "suspended", "closed", "started", "expired", "voided", "missing_matchup", "player_out", "provider_unavailable", "awaiting_verification"}
+    assert set(M.STATUS) == {"open", "suspended", "closed", "started", "expired", "voided", "postponed", "missing_matchup", "player_out", "provider_unavailable", "awaiting_verification"}
 
 
 # ---------- 1. a prop disappears when its game starts ----------
@@ -285,3 +285,115 @@ def test_the_public_summary_counts_open_and_removed_markets_and_names_providers(
     assert nfl["removed"] == {M.LABEL["started"]: 1, M.LABEL["provider_unavailable"]: 1}
     names = {p["name"]: p["ok"] for p in nfl["providers"]}
     assert names["PrizePicks"] is True and names["Sleeper"] is False
+
+
+# ---------- the rest of Erez's Phase 1 list ----------
+def test_an_open_market_carries_the_names_price_availability_and_expiry():
+    fresh()
+    r = run([row()])["rows"][0]
+    m = M.get(r["mid"])
+    assert m["teamName"] == "Eagles" and m["oppName"] == "Giants" and m["eventStatus"] == "scheduled"
+    assert m["availability"] == "Not on the injury report" and m["startLabel"].endswith("ET")
+    # open until the start or until its read is 90 minutes old, whichever is first
+    assert m["expiresAt"] == min(NOW + 3 * H, NOW - 120 + M.MAX_AGE)
+    # PrizePicks posts no two-sided price, so no implied chance is made up; Sleeper's no-vig over chance is kept
+    sl = next(x for x in M.snapshot("nfl") if x["provider"] == "sleeper")
+    assert m["impliedProb"] is None and sl["impliedProb"] == .52
+    assert r["availability"] and r["expiresAt"] and r["teamName"] == "Eagles"
+
+
+def test_availability_says_when_the_injury_report_did_not_load():
+    fresh()
+    r = run([row()], injuries={"ok": False, "players": {}})["rows"][0]
+    assert M.get(r["mid"])["availability"] == "Injury report not checked"
+
+
+def test_a_postponed_game_does_not_stay_active():
+    fresh()
+    s = sched(ev("401", NOW + 3 * H, PHI, NYG, state="pre", name="STATUS_POSTPONED"))
+    v = run([row()], schedule=s)
+    assert not v["rows"]
+    g = v["removed"][0]
+    assert g["status"] == "postponed" and g["statusLabel"] == "Postponed" and g["message"] == "Event postponed"
+
+
+def test_a_cancelled_game_is_voided():
+    fresh()
+    s = sched(ev("401", NOW + 3 * H, PHI, NYG, state="pre", name="STATUS_CANCELED"))
+    g = run([row()], schedule=s)["removed"][0]
+    assert g["status"] == "voided" and g["message"] == "Market closed"
+
+
+def test_duplicate_provider_markets_are_normalized():
+    fresh()
+    # the same Sleeper market twice (two spellings of one name), and PrizePicks' line for it under the second spelling
+    a = row(books=(("sleeper", "sl1"),), opp="")
+    b = row(player="Jalen Hurts Jr.", books=(("sleeper", "sl1"), ("prizepicks", "pp1")))
+    v = run([a, b])
+    assert len(v["rows"]) == 1
+    r = v["rows"][0]
+    assert sorted(o["book"] for o in r["offers"]) == ["prizepicks", "sleeper"]
+    assert len({m["id"] for m in M.snapshot("nfl")}) == len(M.snapshot("nfl")) == 2
+    assert next(c for c in M.monitor(now=NOW)["checks"] if c["key"] == "duplicates")["n"] == 0
+
+
+def test_a_provider_failure_never_reuses_an_old_read_as_current():
+    fresh()
+    # PrizePicks answered 40 minutes ago and fails now: its line is not passed off as current, even inside 90 minutes
+    run([row(books=(("prizepicks", "pp1"),))], now=NOW - 40 * 60, fetched=NOW - 40 * 60)
+    v = run([row(books=(("prizepicks", "pp1"),))], fetched=NOW, errors={"prizepicks": "timed out"})
+    assert not v["rows"]
+    assert v["removed"][0]["status"] == "provider_unavailable" and v["removed"][0]["message"] == "Data source temporarily unavailable"
+    # within 30 minutes of its last good read the line stays, with that read's time, never "just now"
+    fresh()
+    run([row(books=(("prizepicks", "pp1"),))], now=NOW - 600, fetched=NOW - 600)
+    v = run([row(books=(("prizepicks", "pp1"),))], fetched=NOW, errors={"prizepicks": "timed out"})
+    assert v["rows"][0]["verifiedAt"] == NOW - 600 and v["providers"]["prizepicks"]["ok"] is False
+    # and with no good read on record at all, the line is never shown
+    fresh()
+    assert not run([row(books=(("prizepicks", "pp1"),))], errors={"prizepicks": "timed out"})["rows"]
+
+
+def test_a_market_the_provider_drops_says_the_provider_removed_it():
+    fresh()
+    run([row(books=(("prizepicks", "pp1"),))])
+    v = run([], now=NOW + 600, fetched=NOW + 590)
+    g = next(x for x in v["removed"] if x["status"] == "closed")
+    assert g["message"] == "Provider removed the line"
+
+
+def test_a_closed_market_stops_being_open_at_once_and_keeps_its_closing_line():
+    fresh()
+    r = run([row()])["rows"][0]
+    v = run([row(start=NOW - 60)], now=NOW + 3 * H + 60, schedule=sched(ev("401", NOW + 3 * H, PHI, NYG, state="in")))
+    m = M.get(r["mid"])
+    assert m["status"] == "started" and m["closingLine"] == 225.5 and m["expiresAt"] <= NOW + 3 * H + 60 and not v["rows"]
+
+
+def test_monitor_lists_every_source_with_its_last_good_read_and_the_missing_checks():
+    fresh()
+    run([row(), row(player="X", opp="DAL")])
+    run([row(books=(("sleeper", "sl1"),), opp="")], now=NOW + 600, errors={"prizepicks": "HTTPError 403"})
+    M.refresh("soccer", [row(player="Cole Palmer", team_="CHE", opp="", books=(("sleeper", "cp"),))], fetched=NOW + 540, schedule=None, injuries=None, now=NOW + 600)
+    M.S["injuries"]["nba"] = {"ok": False, "at": None, "players": {}, "error": "Timeout"}
+    rep = M.monitor(now=NOW + 600)
+    by = {c["key"]: c for c in rep["checks"]}
+    for k in ("providers", "delayed", "schedules", "injuries", "stale", "no_event", "no_opponent", "mismatch", "timezone", "duplicates"):
+        assert k in by, k
+    assert by["injuries"]["n"] == 1 and by["no_opponent"]["n"] >= 1
+    src = {(x["kind"], x["key"]): x for x in rep["sources"]}
+    pp = next(x for (kind, key), x in src.items() if kind == "provider" and key.endswith(":prizepicks"))
+    sl = next(x for (kind, key), x in src.items() if kind == "provider" and key.endswith(":sleeper"))
+    assert pp["state"] == "failed" and pp["name"] == "PrizePicks" and pp["error"] == "HTTPError 403" and pp["lastSuccess"]
+    assert sl["state"] == "live" and sl["lastSuccess"]
+    assert rep["sources"][0]["state"] == "failed"                                     # problems first
+
+
+def test_a_source_asked_lately_whose_newest_read_is_old_is_delayed_and_one_nobody_asked_for_is_idle():
+    fresh()
+    run([row()])
+    key = next(k for k in M.S["providers"] if k.endswith(":sleeper"))
+    M.S["providers"][key].update(ok=True, at=NOW - 3 * H, checked=NOW - 60)
+    assert next(x for x in M.monitor(now=NOW)["sources"] if x["key"] == key)["state"] == "delayed"
+    M.S["providers"][key].update(checked=NOW - 3 * H)
+    assert next(x for x in M.monitor(now=NOW)["sources"] if x["key"] == key)["state"] == "idle"

@@ -9,7 +9,8 @@
   const YES = new Set(['win', 'btts', 'cs', 'dd', 'g1']);
   const cache = new Map();   // sport -> { at, promise, data }
   const TTL = 5 * 60000;
-  const get = (url, ms = 25000) => Promise.race([fetch(url, { credentials: 'same-origin' }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(d.error || String(r.status)); e.status = r.status; throw e } return d }),
+  // flBoardFetch: a page that reaches the server another way (the Lab opened inside Discord sends its pass) reads through it
+  const get = (url, ms = 25000) => window.flBoardFetch ? window.flBoardFetch(url, ms) : Promise.race([fetch(url, { credentials: 'same-origin' }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(d.error || String(r.status)); e.status = r.status; throw e } return d }),
     new Promise((_, no) => setTimeout(() => no(new Error('It took too long to answer.')), ms))]);
   const fmt = v => Number.isInteger(v) ? String(v) : (+v).toFixed(1);
 
@@ -42,7 +43,9 @@
       books: r.books || [], l5: rate(h5), l10: rate(h10), l20: rate(h20), h10, avg: S ? S.avg : r.avg, smp: S, mu: J.mu, sd: J.sd,
       games: games.slice(0, 60), offers: r.offers || [], neff: J.neff,   // the games and prices behind the reading, for the evidence panel   // mu and sd: what the reading expects, used to follow the pick live
       // the verified market service's record (markets.py): ids, status, the provider's real read time, the game it belongs to
-      ...mrec(r) };
+      ...mrec(r),
+      // running hot: the one rule (market.js hotRead), on this pick's own side and line, the same games every page reads
+      hot: !!window.flMarket?.hotRead(games, r.line, side).hot };
   }
   const ms = v => v == null || v === '' ? null : typeof v === 'number' ? (v > 1e11 ? v : v * 1000) : (Date.parse(v) || null);
   const mrec = r => r.mid ? { mid: r.mid, marketId: r.mid, providerMarketId: r.providerMarketId || '', eventId: r.eventId || '', playerId: r.playerId || r.fid || '', teamId: r.teamId || '', oppId: r.oppId || '',
@@ -96,10 +99,11 @@
     for (const p of upcoming(picks)) { const over = p.side === 'over' ? p.heat : 100 - p.heat, cur = best.get(p.sport + p.name); if (!cur || Math.abs(over - 50) > Math.abs(cur.heat - 50)) best.set(p.sport + p.name, { ...p, heat: over }) }
     return [...best.values()];
   }
-  // "running hot" is decided once, by the server (markets.py is_hot), so Home, the Lab and Prop Explorer always agree
-  const isHot = p => p.mid ? !!p.hot : p.heat >= 60;
-  const hot = (picks, n = 3) => { const best = new Map(); for (const p of upcoming(picks)) if (isHot(p)) { const k = p.sport + p.name, c = best.get(k); if (!c || (p.l10r ?? p.l10 ?? 0) > (c.l10r ?? c.l10 ?? 0)) best.set(k, p) }
-    return [...best.values()].sort((a, b) => (b.l10r ?? b.l10 ?? 0) - (a.l10r ?? a.l10 ?? 0) || (b.l5r ?? b.l5 ?? 0) - (a.l5r ?? a.l5 ?? 0) || b.heat - a.heat).slice(0, n) };
+  // "running hot" is one rule (market.js hotRead, the same as markets.py is_hot), so Home, the Lab and Prop Explorer always agree
+  const isHot = p => window.flMarket?.isHot ? window.flMarket.isHot(p) : !!p.hot;
+  // ranked by the same last-10 and last-5 rates Prop Explorer shows for that side (not the server's, which may be the other side)
+  const hot = (picks, n = 3) => { const best = new Map(); for (const p of upcoming(picks)) if (isHot(p)) { const k = p.sport + p.name, c = best.get(k); if (!c || (p.l10 ?? 0) > (c.l10 ?? 0)) best.set(k, p) }
+    return [...best.values()].sort((a, b) => (b.l10 ?? 0) - (a.l10 ?? 0) || (b.l5 ?? 0) - (a.l5 ?? 0) || b.heat - a.heat).slice(0, n) };
   const cold = (picks, n = 2) => players(picks).filter(p => p.heat < 40).sort((a, b) => a.heat - b.heat).slice(0, n);
   const ranked = picks => upcoming(picks).filter(p => p.edge != null).sort((a, b) => b.edge - a.edge || b.ours - a.ours);
   // opening a pick in the Lab: the player, the stat and the line it was read at

@@ -145,7 +145,14 @@
   /* ---------- Admin mode: data monitoring and open reports ---------- */
   function monitorBlock() {
     const m = D.mon; if (!m) return '<p class="lb">The monitoring check didn’t answer.</p>';
-    return `<ul class="ds-subs">${m.checks.map(c => `<li><span><b>${esc(c.label)}</b>${c.items.length ? `<small class="lb">${c.items.slice(0, 3).map(x => esc([x.player || x.key, x.stat, x.line, x.reason || x.error].filter(v => v != null && v !== '').join(' · '))).join('<br>')}</small>` : ''}</span><b class="num ds-n${c.n ? ' bad' : ''}">${c.n}</b></li>`).join('')}</ul>`;
+    const SRC = { live: 'Live', delayed: 'Delayed', failed: 'Failed', idle: 'Not asked lately' }, KIND = { provider: 'Lines', schedule: 'Schedule', injuries: 'Injury report' };
+    const srcs = (m.sources || []).filter(x => x.state !== 'idle' || x.lastSuccess);
+    const table = srcs.length ? `<div class="tbx-wrap"><table class="tbx ds-src"><caption class="lb">Every source, newest good read first within each state. ${m.open ?? 0} markets open.</caption>
+      <thead><tr><th scope="col">Source</th><th scope="col">State</th><th scope="col" class="r">Last good read</th></tr></thead>
+      <tbody>${srcs.map(x => `<tr><th scope="row">${esc(x.name)} <small class="lb">${esc(String(x.sport || '').toUpperCase())} · ${esc(KIND[x.kind] || x.kind)}</small></th>
+        <td><span class="ds-st ${x.state === 'live' ? 'ok' : x.state === 'idle' ? '' : 'bad'}">${esc(SRC[x.state] || x.state)}</span>${x.error ? `<small class="lb">${esc(x.error)}</small>` : ''}</td>
+        <td class="r num">${x.lastSuccess ? `<time datetime="${new Date(x.lastSuccess * 1000).toISOString()}" title="${esc(when(x.lastSuccess))}">${esc(ago(x.lastSuccess) || when(x.lastSuccess))}</time>` : 'Never'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="lb">No source has been read since the server started.</p>';
+    return `${table}<ul class="ds-subs">${m.checks.map(c => `<li><span><b>${esc(c.label)}</b>${c.items.length ? `<small class="lb">${c.items.slice(0, 3).map(x => esc([x.player || x.key, x.stat, x.line, x.reason || x.error].filter(v => v != null && v !== '').join(' · '))).join('<br>')}</small>` : ''}</span><b class="num ds-n${c.n ? ' bad' : ''}">${c.n}</b></li>`).join('')}</ul>`;
   }
   function reportsBlock() {
     const rs = (D.mon?.corrections?.reports || []).filter(r => !r.resolved);

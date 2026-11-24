@@ -15,9 +15,9 @@ A market is one provider's line for one player, statistic and number. It is open
     game in the next 36 hours, and a provider id first seen before the team's last game belongs to that game)
   - the player is not ruled out on the injury report
 
-Statuses (STATUS): open, suspended, closed, started, expired, voided, missing_matchup, player_out, provider_unavailable,
-awaiting_verification. Only open is shown on a board; every other one is listed under "Taken off the board" with its
-reason.
+Statuses (STATUS): open, suspended, closed, started, expired, voided, postponed, missing_matchup, player_out,
+provider_unavailable, awaiting_verification. Only open is shown on a board; every other one is listed under "Taken off
+the board" with a short message (REMOVAL: "Game started", "Player ruled out", ...) and the detailed reason.
 
 Each market keeps: internal id, provider's id, event, player, team and opponent ids, sport, league, statistic, side,
 line, provider, price, event start, the user-facing time zone, status, last verified, first observed, closing line and
@@ -37,10 +37,23 @@ from pathlib import Path
 
 import storage
 
-STATUS = ("open", "suspended", "closed", "started", "expired", "voided", "missing_matchup", "player_out", "provider_unavailable", "awaiting_verification")
-LABEL = {"open": "Open", "suspended": "Suspended", "closed": "Closed", "started": "Started", "expired": "Expired", "voided": "Voided",
+STATUS = ("open", "suspended", "closed", "started", "expired", "voided", "postponed", "missing_matchup", "player_out", "provider_unavailable", "awaiting_verification")
+LABEL = {"open": "Open", "suspended": "Suspended", "closed": "Closed", "started": "Started", "expired": "Expired", "voided": "Voided", "postponed": "Postponed",
          "missing_matchup": "Missing matchup", "player_out": "Player ruled out", "provider_unavailable": "Provider unavailable",
          "awaiting_verification": "Awaiting verification"}
+# the short message every page shows for a market taken off the board (the detailed reason sits beside it)
+REMOVAL = {"started": "Game started", "expired": "Game started", "closed": "Market closed", "suspended": "Market closed", "voided": "Market closed",
+           "postponed": "Event postponed", "player_out": "Player ruled out", "missing_matchup": "Matchup could not be verified",
+           "provider_unavailable": "Data source temporarily unavailable", "awaiting_verification": "Data source temporarily unavailable"}
+
+
+def removal_message(status, reason=""):
+    """'Provider removed the line' when the provider stopped offering it; otherwise the status's message."""
+    if status == "closed" and re.search(r"no longer offers|removed", reason or "", re.I):
+        return "Provider removed the line"
+    return REMOVAL.get(status, "")
+
+
 MAX_AGE = 90 * 60          # a line its provider has not re-read for this long is no longer verified
 FRESH = 30 * 60            # within this it is "current"; between FRESH and MAX_AGE the page says "last verified"
 NO_START_HORIZON = 36 * 3600   # a line with no start time of its own binds only to a game this close
@@ -159,6 +172,47 @@ def last_started(team_names, events, now):
     return max(ts_) if ts_ else None
 
 
+def implied(o, side):
+    """The market's own chance for the side, with the margin taken out (pOver is the no-vig over chance); None when the
+    provider posts no two-sided price (pick'em apps), so nothing is made up."""
+    p = (o or {}).get("pOver")
+    if p is None:
+        return None
+    try:
+        p = float(p)
+    except (TypeError, ValueError):
+        return None
+    return round(p if side != "under" else 1 - p, 4)
+
+
+def _availability(r, v):
+    """The player's availability as the injury report gives it, in words: its status, 'Not on the injury report', or
+    'Injury report not checked' when the report did not load (never assumed fine)."""
+    st = (v or {}).get("injury") or r.get("injury")
+    if st and st.get("status"):
+        return st["status"]
+    if (v or {}).get("status") == "player_out":
+        return "Out"
+    return "Not on the injury report" if r.get("injuryChecked") else "Injury report not checked"
+
+
+def _dedupe(rows):
+    """Duplicate provider rows normalized: one row per player (name spelled any way), statistic, line and side, with
+    every provider's offer merged and the same provider market id kept once."""
+    out, by = [], {}
+    for r in rows:
+        k = (_pname(r.get("player")), r.get("k"), r.get("line"), r.get("side"))
+        if k not in by:
+            by[k] = dict(r, offers=list(r.get("offers") or []))
+            out.append(by[k])
+            continue
+        have = {(o.get("book"), o.get("mid") or "", o.get("line")) for o in by[k]["offers"]}
+        for o in r.get("offers") or []:
+            if (o.get("book"), o.get("mid") or "", o.get("line")) not in have:
+                by[k]["offers"].append(o)
+    return out
+
+
 # ---------- one row: is it open? ----------
 def _verdict(status, reason, **kw):
     return dict(status=status, label=LABEL[status], reason=reason, **kw)
@@ -185,7 +239,8 @@ def evaluate(row, ctx):
                 per[id(o)] = v
             elif str(o.get("status") or "").lower() not in ("", "pre_game", "active", "open"):
                 per[id(o)] = _verdict("suspended", f"{BOOK_NAME.get(b, b)} has suspended this line")
-            elif not pv.get("ok", True) and (not at or now - at > MAX_AGE):
+            elif not pv.get("ok", True) and (not at or now - at > FRESH):
+                # the provider's latest read failed: an older reading is never passed off as current
                 per[id(o)] = _verdict("provider_unavailable", f"{BOOK_NAME.get(b, b)} did not answer" + (f"; last verified {_clock(at)}" if at else ""))
             elif not at or now - at > MAX_AGE:
                 per[id(o)] = _verdict("awaiting_verification", f"{BOOK_NAME.get(b, b)} has not re-checked this line since {_clock(at)}" if at else "Not verified by the provider yet")
@@ -207,7 +262,7 @@ def evaluate(row, ctx):
         if good:
             rv = dict(v, verifiedAt=max(x.get("verifiedAt") or 0 for x in good))
         else:
-            order = ["player_out", "started", "expired", "voided", "closed", "suspended", "provider_unavailable", "missing_matchup", "awaiting_verification"]
+            order = ["player_out", "started", "expired", "postponed", "voided", "closed", "suspended", "provider_unavailable", "missing_matchup", "awaiting_verification"]
             rv = sorted(main or [v], key=lambda x: order.index(x["status"]) if x["status"] in order else 99)[0] if main else v
         return rv, per, ev, me, op
 
@@ -228,8 +283,10 @@ def evaluate(row, ctx):
         ev, me, op = find_event(names, sched.get("events"), pstart, now)
         if not ev:
             return done(_verdict("missing_matchup", f"No {row.get('teamName') or row.get('team') or 'team'} game on the league schedule"))
-        if ev["status"] in ("cancelled", "postponed"):
-            return done(_verdict("voided", f"The game was {ev['status']}"))
+        if ev["status"] == "postponed":
+            return done(_verdict("postponed", "The game was postponed"))
+        if ev["status"] == "cancelled":
+            return done(_verdict("voided", "The game was cancelled"))
         if ev["status"] == "live":
             return done(_verdict("started", "The game has started"))
         if ev["status"] == "final":
@@ -354,8 +411,10 @@ def refresh(sport, rows, fetched=None, errors=None, tz=LEAGUE_TZ, schedule=None,
             provs[b] = S["providers"][key] = {"ok": ok, "at": at, "error": errors.get(b, ""), "checked": now}
         ctx = {"now": now, "sport": sport, "schedule": sched, "injuries": inj, "providers": provs, "seen": S["seen"]}
         out, removed, live_ids = [], [], set()
-        for r in rows:
+        injp = (inj or {}).get("players") or {}
+        for r in _dedupe(rows):
             rv, per, ev, me, op = evaluate(r, ctx)
+            r = dict(r, injury=injp.get(_pname(r.get("player"))) if inj and inj.get("ok") else None, injuryChecked=bool(inj and inj.get("ok")))
             offers = []
             for o in r.get("offers") or []:
                 v = per.get(id(o)) or rv
@@ -374,7 +433,8 @@ def refresh(sport, rows, fetched=None, errors=None, tz=LEAGUE_TZ, schedule=None,
                                 "line": r.get("line"), "side": r.get("side"), "books": sorted({o.get("book") for o in r.get("offers") or [] if o.get("book")}),
                                 "status": rv["status"] if rv["status"] != "open" else "awaiting_verification", "statusLabel": LABEL[rv["status"] if rv["status"] != "open" else "awaiting_verification"],
                                 "reason": rv["reason"] or "No provider has this line open", "start": iso((ev or {}).get("start") or rv.get("start")), "eventId": (ev or {}).get("id") or "",
-                                "verifiedAt": int(rv.get("verifiedAt") or 0) or None})
+                                "verifiedAt": int(rv.get("verifiedAt") or 0) or None, "message": removal_message(rv["status"] if rv["status"] != "open" else "awaiting_verification", rv["reason"]),
+                                "eventStatus": (ev or {}).get("status") or ""})
         # markets on record that this read no longer has (only a full board read can say a line is gone)
         answered = {b for b, p in provs.items() if p["ok"]}
         for mid, m in S["markets"].items():
@@ -393,7 +453,8 @@ def refresh(sport, rows, fetched=None, errors=None, tz=LEAGUE_TZ, schedule=None,
             if sweep and m.get("sport") == sport and m.get("status") != "open" and mid not in live_ids and mid not in have and now - (m.get("removedAt") or 0) < 12 * 3600:
                 removed.append({"mid": mid, "player": m.get("player"), "team": m.get("team"), "opp": m.get("oppAbbr") or "", "k": m.get("stat"), "label": m.get("statLabel"),
                                 "line": m.get("line"), "side": m.get("side"), "books": [m.get("provider")], "status": m["status"], "statusLabel": LABEL.get(m["status"], m["status"]),
-                                "reason": m.get("removalReason") or "", "start": iso(m.get("start")), "eventId": m.get("eventId") or "", "verifiedAt": int(m.get("verifiedAt") or 0) or None})
+                                "reason": m.get("removalReason") or "", "start": iso(m.get("start")), "eventId": m.get("eventId") or "", "verifiedAt": int(m.get("verifiedAt") or 0) or None,
+                                "message": m.get("removalMessage") or removal_message(m["status"], m.get("removalReason")), "eventStatus": m.get("eventStatus") or ""})
     save()
     counts = {}
     for x in removed:
@@ -409,6 +470,8 @@ def _close(m, status, reason, now):
     if m.get("status") == status:
         return
     m["status"], m["removalReason"], m["removedAt"] = status, reason, int(now)
+    m["removalMessage"] = removal_message(status, reason)
+    m["expiresAt"] = int(now) if not m.get("expiresAt") or m["expiresAt"] > now else m["expiresAt"]
     if status in ("started", "expired") and m.get("closingLine") is None:
         m["closingLine"], m["closingPrice"] = m.get("line"), m.get("price")
 
@@ -427,12 +490,16 @@ def _keep(mid, sport, r, o, v, ev, me, op, now, tz):
     m.update(line=o.get("line"), price={"pOver": o.get("pOver"), "overMult": o.get("overMult"), "underMult": o.get("underMult")} if any(o.get(k) is not None for k in ("pOver", "overMult", "underMult")) else None,
              kind=o.get("kind") or "standard", team=(me or {}).get("abbr") or r.get("team") or "", teamId=(me or {}).get("id") or "", oppAbbr=(op or {}).get("abbr") or r.get("opp") or "",
              oppId=(op or {}).get("id") or "", eventId=(ev or {}).get("id") or m.get("eventId") or "", start=(ev or {}).get("start") or v.get("start") or m.get("start"),
-             tz=tz, lastSeen=int(now))
+             tz=tz, lastSeen=int(now), teamName=(me or {}).get("name") or r.get("teamName") or m.get("teamName") or "", oppName=(op or {}).get("name") or m.get("oppName") or r.get("opp") or "",
+             eventStatus=(ev or {}).get("status") or m.get("eventStatus") or "", availability=_availability(r, v), impliedProb=implied(o, r.get("side")))
     if m.get("start"):
         m["eventDay"] = day_key(m["start"])
+        m["startLabel"] = _clock(m["start"])   # the league's own time (ET); every page shows the viewer's time from start
     if v["status"] == "open":
         m["verifiedAt"] = int(v.get("verifiedAt") or now)
-        m["status"], m["removalReason"], m["removedAt"] = "open", "", None
+        m["status"], m["removalReason"], m["removedAt"], m["removalMessage"] = "open", "", None, ""
+        # open until whichever comes first: the start, or the moment the provider's read is too old to call verified
+        m["expiresAt"] = int(min(x for x in (m.get("start"), m["verifiedAt"] + MAX_AGE) if x))
         m["closingLine"], m["closingPrice"] = m["line"], m.get("price")   # the last line seen open before the start
     else:
         _close(m, v["status"], v["reason"], now)
@@ -454,7 +521,10 @@ def _row_fields(rec, rv, me, op, ev, now, r):
             "verifiedAt": int(rv.get("verifiedAt") or rec.get("verifiedAt") or 0), "firstSeen": rec.get("firstSeen"), "closingLine": rec.get("closingLine"), "openLine": rec.get("openLine"),
             "lineFrom": rec.get("lineFrom"), "lineAt": rec.get("lineAt"), "start": iso(rec.get("start")), "eventDay": rec.get("eventDay"), "tz": rec.get("tz"),
             "opp": (op or {}).get("abbr") or r.get("opp") or "", "oppName": (op or {}).get("name") or r.get("opp") or "", "home": (me or {}).get("home"),
-            "matchup": "provider" if rv.get("provider_only") else "schedule", "hot": is_hot(r)}
+            "matchup": "provider" if rv.get("provider_only") else "schedule", "hot": is_hot(r),
+            "teamName": rec.get("teamName") or r.get("teamName") or "", "eventStatus": rec.get("eventStatus") or "scheduled", "availability": rec.get("availability") or "",
+            "expiresAt": rec.get("expiresAt"), "startLabel": rec.get("startLabel") or "", "impliedProb": rec.get("impliedProb"), "closingPrice": rec.get("closingPrice"),
+            "provider": rec.get("provider") or ""}
 
 
 def check_lines(sport, player, team, fid, lines, fetched=None, errors=None):
@@ -503,6 +573,7 @@ def monitor(now=None):
         ms = list(S["markets"].values())
         provs = {k: dict(v) for k, v in S["providers"].items()}
         scheds = {k: {"ok": v.get("ok"), "at": v.get("at"), "error": v.get("error") or ""} for k, v in S["schedules"].items()}
+        injs = {k: {"ok": v.get("ok"), "at": v.get("at"), "error": v.get("error") or ""} for k, v in S["injuries"].items()}
     open_ = [m for m in ms if m.get("status") == "open" and (m.get("start") or 0) > now]
     stale = [m for m in open_ if now - (m.get("verifiedAt") or 0) > FRESH]
     no_event = [m for m in ms if m.get("status") == "missing_matchup" and now - (m.get("removedAt") or 0) < 86400]
@@ -516,14 +587,35 @@ def monitor(now=None):
         seen[k] = m
     failed = [{"key": k, "error": v.get("error") or "", "at": v.get("at")} for k, v in provs.items() if not v.get("ok")]
     sched_bad = [{"key": k, "error": v["error"], "at": v["at"]} for k, v in scheds.items() if not v.get("ok")]
+    inj_bad = [{"key": k, "error": v["error"], "at": v["at"]} for k, v in injs.items() if not v.get("ok")]
+    # a market whose opponent is unknown: one still open (which the checks should never allow) or one taken off for it today
+    no_opp = [m for m in ms if not (m.get("oppAbbr") or m.get("oppName")) and ((m in open_) or (m.get("status") == "missing_matchup" and now - (m.get("removedAt") or 0) < 86400))]
+
+    # every source with its last good read: live, failed, delayed (asked in the last 30 minutes, but the newest good
+    # read it gave is older than that) or idle (nobody has asked for that sport lately, so nothing was due)
+    def src(kind, key, v):
+        sport, _, who = key.partition(":")
+        at, checked = v.get("at"), v.get("checked")
+        state = ("failed" if not v.get("ok") else "live" if at and now - at <= FRESH
+                 else "delayed" if checked and now - checked <= FRESH else "idle")
+        return {"kind": kind, "key": key, "sport": sport, "name": PROVIDER_NAME.get(who, who) if who else ("ESPN schedule" if kind == "schedule" else "ESPN injury report"),
+                "state": state, "lastSuccess": int(at) if at else None, "checked": v.get("checked"), "error": v.get("error") or ""}
+    sources = sorted([src("provider", k, v) for k, v in provs.items()] + [src("schedule", k, v) for k, v in scheds.items()]
+                     + [src("injuries", k, v) for k, v in injs.items()], key=lambda x: ({"failed": 0, "delayed": 1, "live": 2, "idle": 3}[x["state"]], x["key"]))
+    delayed = [x for x in sources if x["state"] == "delayed"]
+    ago = lambda t: "never" if not t else f"{int((now - t) // 60)} minutes ago"
     pick = lambda xs: [{"mid": m.get("id"), "sport": m.get("sport"), "player": m.get("player"), "stat": m.get("statLabel") or m.get("stat"), "line": m.get("line"),
                         "provider": m.get("provider"), "reason": m.get("removalReason") or "", "verifiedAt": m.get("verifiedAt"), "start": m.get("start")} for m in xs[:25]]
-    return {"at": int(now), "open": len(open_),
+    return {"at": int(now), "open": len(open_), "sources": sources,
             "checks": [
                 {"key": "providers", "label": "Provider failures", "n": len(failed), "items": failed},
+                {"key": "delayed", "label": "Delayed sources (no good read in 30 minutes)", "n": len(delayed),
+                 "items": [{"key": x["key"], "reason": f"{x['name']}: last good read {ago(x['lastSuccess'])}"} for x in delayed]},
                 {"key": "schedules", "label": "Schedule failures", "n": len(sched_bad), "items": sched_bad},
+                {"key": "injuries", "label": "Injury report failures", "n": len(inj_bad), "items": inj_bad},
                 {"key": "stale", "label": "Stale markets (not re-verified in 30 minutes)", "n": len(stale), "items": pick(stale)},
                 {"key": "no_event", "label": "Markets missing an event", "n": len(no_event), "items": pick(no_event)},
+                {"key": "no_opponent", "label": "Markets missing an opponent", "n": len(no_opp), "items": pick(no_opp)},
                 {"key": "mismatch", "label": "Player/team mismatches", "n": len(mismatch), "items": pick(mismatch)},
                 {"key": "timezone", "label": "Start times that don't match the schedule", "n": len(tzbad), "items": pick(tzbad)},
                 {"key": "duplicates", "label": "Duplicate markets", "n": len(dup), "items": pick(dup)},

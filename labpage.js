@@ -41,12 +41,15 @@
   function flagOf(v, now = Date.now()) {
     const s = lineOf(v); if (!s) return null;
     if (s.start && s.start <= now) return { k: 'closed', t: 'Closed', d: 'The game has started, so this line is no longer open.' };
-    const rows = window.flPropX?.rows?.() || L.picks, cur = rows?.find(p => p.sport === s.sport && p.name === s.name && p.k === s.k);
-    if (rows?.length && !cur) return { k: 'gone', t: 'Not offered now', d: 'No provider in the verified feed has this line open right now.' };
+    // the verified feed decides: the same standing every page uses (markets.js), with its own message and reason
+    const M = window.flMarkets, st = M?.standing ? M.standing({ mid: v.mid, sport: s.sport, name: s.name, k: s.k }, now) : null;
+    if (st && !st.open && st.status !== 'awaiting_verification') return { k: ['started', 'expired'].includes(st.status) ? 'closed' : 'gone', t: st.message || 'Not offered now', d: st.reason || 'No provider in the verified feed has this line open right now.' };
+    const rows = st ? null : window.flPropX?.rows?.() || L.picks, cur = st ? st.market : rows?.find(p => p.sport === s.sport && p.name === s.name && p.k === s.k);
+    if (!st && rows?.length && !cur) return { k: 'gone', t: 'Not offered now', d: 'No provider in the verified feed has this line open right now.' };
     if (cur && cur.line != null && +cur.line !== s.line) { const easier = s.side === 'under' ? +cur.line > s.line : +cur.line < s.line;
       return { k: 'moved', t: `Line moved to ${num(cur.line)}`, d: `Saved at ${num(s.line)}. The ${s.side} is now ${easier ? 'easier' : 'harder'} to hit.` } }
-    const st = s.start || ms(cur?.start);
-    if (st && st - now < 6 * 3600e3) return { k: 'soon', t: `Closes in ${window.flLabCore?.countdown ? window.flLabCore.countdown(st - now) : Math.round((st - now) / 6e4) + ' min'}`, d: 'Lines close when the game starts.' };
+    const t0 = s.start || ms(cur?.start);
+    if (t0 && t0 - now < 6 * 3600e3) return { k: 'soon', t: `Closes in ${window.flLabCore?.countdown ? window.flLabCore.countdown(t0 - now) : Math.round((t0 - now) / 6e4) + ' min'}`, d: 'Lines close when the game starts.' };
     return null;
   }
   function flagSum(b) {
@@ -86,7 +89,7 @@
       <section class="lab-start" id="labStart" aria-label="Start here"></section>
       <section class="lab-boards" id="labBoards" aria-label="Saved boards"></section>
       <section class="card lab-more" aria-label="More tools"><div class="sec-h"><h2>More tools</h2><span class="lb">Tennis, combos, sportsbook boards and more</span></div>
-        <div class="cx-row">${[['tennis', 'Tennis players'], ['combo', 'Combo of two players'], ['book', 'Sportsbook prop board'], ['teamprops', 'Team props for today'], ['browse', 'Browse teams by league'], ['classic', 'College and minor leagues']].map(([k, l]) => `<button type="button" class="cx" data-labmore="${k}">${l}</button>`).join('')}</div></section>
+        <div class="cx-row">${[['tennis', 'Tennis players'], ['combo', 'Combo of two players'], ['teamprops', 'Team props for today'], ['browse', 'Browse teams by league'], ['classic', 'College and minor leagues']].map(([k, l]) => `<button type="button" class="cx" data-labmore="${k}">${l}</button>`).join('')}</div></section>
       <p class="lb lab-note">Hit rates describe the past, not the next game. Bet only what you can afford to lose.</p>`;
     L.loaded = true; L.ready = false; L.engine = null;
     drawTry(); drawStart(); drawBoards(); loadPicks();
@@ -127,7 +130,7 @@
     box.innerHTML = `<div class="sec-h"><h2>${cmp ? 'Add a player to Compare' : 'Start with tonight’s hottest'}</h2>${hot?.length ? `<span class="lb">${cmp ? 'Drag a card onto a slot, or select it to fill the next empty one' : 'Players with a line posted today'}</span>` : ''}</div>` +
       (hot == null ? `<div class="g3">${'<div class="skl lab-card-skl"></div>'.repeat(6)}</div>`
         : hot.length ? `<div class="g3">${hot.map(p => `<button type="button" class="card hit lab-starter" data-labopen="${esc(JSON.stringify(window.flEdge.labArgs(p)))}" draggable="true" data-cmpdrag="${esc(JSON.stringify({ sport: p.sport, name: p.name, stat: p.k }))}">${face(p.photo, p.name, 'avx av-lg')}<span class="rw-t"><b>${esc(p.name)}</b><small>${[p.fid || p.team ? (window.flPlayers ? window.flPlayers.span(p.fid, p.teamName || p.team) : esc(p.teamName || p.team || '')) : '', esc(SPORT_NAME[p.sport] || '')].filter(Boolean).join(' · ')}</small><small>${esc(p.text)}</small></span>${window.flHeat.badge(p.heat)}</button>`).join('')}</div>`
-        : `<div class="card emp">${ic('lab', 28)}<b>${L.denied ? 'The Lab is switched off for your account' : 'No open line reads hot right now'}</b><p>${L.denied ? 'Ask your admin to switch it on.' : `A line is hot when Floodlight’s chance for it is 60% or more. ${L.picks.length ? `None of the ${L.picks.length} open lines does yet; Prop Explorer lists them all with their recent hit rates.` : 'No player lines are open yet.'}`}</p>${!L.denied && L.picks.length ? '<button type="button" class="bt" data-labtool="props">Open Prop Explorer</button>' : ''}</div>`);
+        : `<div class="card emp">${ic('lab', 28)}<b>${L.denied ? 'The Lab is switched off for your account' : 'No open line reads hot right now'}</b><p>${L.denied ? 'Ask your admin to switch it on.' : `A line is hot when the player cleared it 7 of the last 10 and 3 of the last 5 times, with 8 or more games. ${L.picks.length ? `None of the ${L.picks.length} open lines meets that yet. Prop Explorer lists them all with the same hit rates and a Hot filter.` : 'No player lines are open yet.'}`}</p>${!L.denied && L.picks.length ? '<button type="button" class="bt" data-labtool="props">Open Prop Explorer</button>' : ''}</div>`);
   }
 
   /* ---------- the command bar ---------- */
@@ -251,7 +254,7 @@
     const host = $('labClassic');
     try { const el = rsEl(); if (el.parentElement !== host) host.appendChild(el); el.classList.add('rs-inpage'); openResearch({ ...o, _in: true, classic: true }) } catch (e) { host.innerHTML = `<div class="card emp"><b>That tool did not open</b><p>Reload the page and try again.</p></div>` }
     L.hint = o.compare ? (o.name ? 'Compare · search the second player' : 'Compare · search the first player, then choose Combo') : '';
-    drawHead(o.compare ? (o.name ? `${o.name} and another player` : 'Compare two players') : o.name || (o.tab === 'board' ? 'Sportsbook prop board' : o.tab === 'team' ? 'Team props' : o.sport === 'tennis' ? 'Tennis' : 'More tools'));
+    drawHead(o.compare ? (o.name ? `${o.name} and another player` : 'Compare two players') : o.name || (o.tab === 'team' ? 'Team props' : o.sport === 'tennis' ? 'Tennis' : 'More tools'));
     focusWs();
   }
   function focusWs() { const ws = $('labWs'); if (!ws || L.kbTab) return; setTimeout(() => { ws.scrollIntoView({ behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' }); $('labWsT')?.focus({ preventScroll: true }) }, 60) }
@@ -276,7 +279,7 @@
   function more(k) {
     if (k === 'tennis') return openClassic({ sport: 'tennis', tab: 'player' });
     if (k === 'combo') return openTools('compare', {});
-    if (k === 'book') return openClassic({ tab: 'board' });
+    if (k === 'book') return openTools('props', {});   // the old sportsbook prop board is Prop Explorer, on the verified feed
     if (k === 'teamprops') return openClassic({ tab: 'team' });
     if (k === 'browse') { openClassic({ tab: 'player' }); try { S.rs.browse = { ...(S.rs.browse || {}), open: true, sport: S.rs.sport }; document.querySelector('#rs [data-rs="browse"]')?.click() } catch (e) {} return }
     openClassic({ tab: 'player' });
@@ -324,7 +327,7 @@
     L.board = b.id; L.saving = false;
     saveBoards(`Saved to ${b.name}. ${b.items.length} view${b.items.length === 1 ? '' : 's'} in this board.`); drawHead();
   }
-  function openView(b, i) { const v = b.items[i]; if (!v) return;
+  function openView(b, i) { const v = b.items[i]; if (!v) return; recheckBoards();
     if (v.kind) { if (v.kind === 'note') return; return window.flRecent?.open(v) }
     L.board = b.id;
     openLab(v.view === 'board' ? { sport: v.sport, tab: 'board' } : { sport: v.sport, name: v.name, kind: v.view === 'team' ? 'team' : 'player', stat: v.k, line: v.line, side: v.side }, true) }
@@ -502,6 +505,14 @@
   // redraw for new data only when nobody is typing or has a menu open on the page
   function quietRedraw() { const el = $('pg-boards'); if (!el || el.hidden) return; if (BV.note || BV.edit || BV.more || el.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT|SUMMARY)$/.test(document.activeElement.tagName)) return; drawBoardsPage() }
   function drawBoardsPage(focus) { const el = $('pg-boards'); if (!el || el.hidden) return; boardsPage(el); if (focus) (el.querySelector(focus) || el.querySelector('.pg-title'))?.focus() }
+  /* opening a saved board checks its lines again (markets.js recheck: read again if the board is over two minutes old),
+     then redraws the flags; at most once a minute */
+  let rcAt = 0;
+  function recheckBoards() {
+    const M = window.flMarkets; if (!M?.recheck || Date.now() - rcAt < 60000) return; rcAt = Date.now();
+    const items = L.boards.flatMap(b => (b.items || []).map(lineOf).filter(Boolean));
+    if (items.length) M.recheck(items).then(() => { drawBoards(); drawBoardsPage() }).catch(() => {});
+  }
   document.addEventListener('click', ev => {
     const pg = $('pg-boards'); if (!pg || pg.hidden || !pg.contains(ev.target)) return;
     const t = ev.target, find = id => L.boards.find(x => x.id === id);
@@ -543,7 +554,7 @@
     const was = b.name; b.name = name; b.at = Date.now(); BV.edit = null; BV.err = '';
     saveBoards(was === name ? '' : `Renamed ${was} to ${name}.`); drawBoardsPage(`[data-bd="rename"][data-id="${id}"]`);
   });
-  window.flPages?.add('boards', { title: 'Research boards', render: boardsPage, fresh: true, onHide() { BV.edit = BV.del = BV.note = BV.link = BV.more = null; BV.err = BV.made = BV.shareMsg = '' } });
+  window.flPages?.add('boards', { title: 'Research boards', render: el => { boardsPage(el); recheckBoards() }, fresh: true, onHide() { BV.edit = BV.del = BV.note = BV.link = BV.more = null; BV.err = BV.made = BV.shareMsg = '' } });
 
   /* ---------- a shared board (#/board/<id>): the read-only copy behind a link, open without an account ---------- */
   const SB = { id: null, d: null, err: '' };

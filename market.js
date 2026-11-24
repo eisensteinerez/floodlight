@@ -125,13 +125,30 @@
     return { state: 'open', why: '', text: '', start, event: { ...ev, verified }, price };
   }
   /* ---------- the verified market service's statuses (markets.py) ---------- */
-  const STATUS = ['open', 'suspended', 'closed', 'started', 'expired', 'voided', 'missing_matchup', 'player_out', 'provider_unavailable', 'awaiting_verification'];
-  const STATUS_LABEL = { open: 'Open', suspended: 'Suspended', closed: 'Closed', started: 'Started', expired: 'Expired', voided: 'Voided', missing_matchup: 'Missing matchup',
+  const STATUS = ['open', 'suspended', 'closed', 'started', 'expired', 'voided', 'postponed', 'missing_matchup', 'player_out', 'provider_unavailable', 'awaiting_verification'];
+  const STATUS_LABEL = { open: 'Open', suspended: 'Suspended', closed: 'Closed', started: 'Started', expired: 'Expired', voided: 'Voided', postponed: 'Postponed', missing_matchup: 'Missing matchup',
     player_out: 'Player ruled out', provider_unavailable: 'Provider unavailable', awaiting_verification: 'Awaiting verification' };
   // where a status that is not open is filed on the Predictions page: taken off the board, or an incomplete market
   const STATUS_STATE = { suspended: 'incomplete', missing_matchup: 'incomplete', awaiting_verification: 'incomplete', provider_unavailable: 'incomplete',
-    closed: 'closed', started: 'closed', expired: 'closed', voided: 'closed', player_out: 'closed' };
-  const STATUS_GONE = { closed: 'Market closed', started: 'Awaiting result', expired: 'Awaiting result', voided: 'Voided', player_out: 'Voided' };
+    closed: 'closed', started: 'closed', expired: 'closed', voided: 'closed', postponed: 'closed', player_out: 'closed' };
+  const STATUS_GONE = { closed: 'Market closed', started: 'Awaiting result', expired: 'Awaiting result', voided: 'Voided', postponed: 'Cancelled', player_out: 'Voided' };
+  /* the short message every page shows for a market taken off the board (markets.py REMOVAL); the reason sits beside it */
+  const REMOVAL = { started: 'Game started', expired: 'Game started', closed: 'Market closed', suspended: 'Market closed', voided: 'Market closed', postponed: 'Event postponed',
+    player_out: 'Player ruled out', missing_matchup: 'Matchup could not be verified', provider_unavailable: 'Data source temporarily unavailable', awaiting_verification: 'Data source temporarily unavailable' };
+  const removalMessage = (status, reason) => status === 'closed' && /no longer offers|removed/i.test(reason || '') ? 'Provider removed the line' : REMOVAL[status] || '';
+
+  /* ---------- running hot: the one rule (markets.py is_hot) ----------
+     A line is hot when, on its own side and number, the player has at least 8 games in the last 10 and cleared it in 70%
+     or more of the decided ones, and 60% or more of the last 5. Pushes don't count either way. Every page (Home, the
+     Lab's start screen, Prop Explorer's Hot tag and filter, alerts) calls this on the same games, so they can't disagree. */
+  const HOT = { l10: .7, l5: .6, n: 8 };
+  function hotRead(games, line, side) {
+    const gs = (games || []).filter(g => g && g.v != null && !isNaN(g.v)), over = side !== 'under', L = +line;
+    const win = n => { const xs = gs.slice(0, n), push = xs.filter(g => g.v === L).length, dec = xs.length - push, hit = xs.filter(g => over ? g.v > L : g.v < L).length; return { n: xs.length, dec, hit, rate: dec ? hit / dec : null } };
+    const l5 = win(5), l10 = win(10);
+    return { hot: l10.n >= HOT.n && l10.rate != null && l5.rate != null && l10.rate >= HOT.l10 && l5.rate >= HOT.l5, l5, l10 };
+  }
+  const isHot = p => !!p && (p.games ? hotRead(p.games, p.line, p.side).hot : !!p.hot);
   const ms = v => v == null || v === '' ? null : typeof v === 'number' ? (v > 1e11 ? v : v * 1000) : (Date.parse(v) || null);
   /* gate(): the checks that depend on the clock, run on every market the server marked open, in every page, every time
      it draws. p: a market (the server's row fields: status, start, verifiedAt, eventId). o: { now, injury: { lv } }.
@@ -284,7 +301,7 @@
     return { avail, report, start, tag, lv: lv || 'ok' };
   }
 
-  const api = { STATUS, STATUS_LABEL, STATUS_STATE, gate, fromServer, FRESH, MAX_AGE, SCHED_SPORTS, GONE, localTz, dayKey, dayDiff, dayWord, toMidnight, when, clock, findEvent, evStatus, verify, withdrawn, sample, supported, SORTS, arrange, playerKey, gameKey, availability };
+  const api = { STATUS, STATUS_LABEL, STATUS_STATE, REMOVAL, removalMessage, HOT, hotRead, isHot, gate, fromServer, FRESH, MAX_AGE, SCHED_SPORTS, GONE, localTz, dayKey, dayDiff, dayWord, toMidnight, when, clock, findEvent, evStatus, verify, withdrawn, sample, supported, SORTS, arrange, playerKey, gameKey, availability };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.flMarket = api;
 })(typeof window !== 'undefined' ? window : globalThis);

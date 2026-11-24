@@ -109,13 +109,20 @@ RECEIPT_FIELDS = ("id", "publishedAt", "event", "start", "league", "player", "pl
                   "rawEdge", "supportedEdge", "confidence", "confRange", "sources", "injury", "lineup", "verifiedAt")
 
 
+# added later (evidence grade, sample size, the provider's own market id): part of the fingerprint only for a receipt
+# that carries them, so a receipt published before they existed still checks out unchanged
+RECEIPT_EXTRA = ("evidence", "sample", "providerMarketId")
+
+
 def _fingerprint(r):
     body = {k: r.get(k) for k in RECEIPT_FIELDS}
+    body.update({k: r[k] for k in RECEIPT_EXTRA if k in r})
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()[:24]
 
 
 def receipt(**fields):
     r = {k: fields.get(k) for k in RECEIPT_FIELDS}
+    r.update({k: fields.get(k) for k in RECEIPT_EXTRA if k in fields})
     if fields.get("backfilled"):
         r["backfilled"] = True   # made later from the original first reading, for a pick published before receipts existed
     r["sha"] = _fingerprint(r)

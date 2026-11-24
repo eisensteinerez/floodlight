@@ -6,6 +6,8 @@
    shows a market another page has taken off.
 
    list({ sport?, sports?, force? }) -> Promise<{ markets, removed, at, by }>
+   standing({ mid? | sport, name, k }) -> { open, market, status, message, reason }
+   recheck([items], { maxAge }) -> Promise<[standing]>: read again first if the board is older than two minutes
    open(sport?) · removed(sport?) · get(mid) · hot(n, { sport }) · cold(n, { sport }) · enrich(pick)
    document event 'fl:markets' { sport, reason, added: [mid], changed: [mid], removed: [{ mid, status, reason }] }
    Rechecked: on load, when the tab comes back, when a provider read finishes, at each game's start, when an injury
@@ -33,7 +35,7 @@
     return q;
   }
   const gone = (p, status, reason) => ({ mid: p.mid || p.id, id: p.id, sport: p.sport, name: p.name, player: p.name, team: p.team, opp: p.opp, k: p.k, label: p.label, line: p.line, side: p.side,
-    books: p.books || [], status, statusLabel: MK.STATUS_LABEL[status] || status, reason, removalReason: reason, start: p.start ? +p.start : null, eventId: p.eventId || '', verifiedAt: p.verifiedAt || null });
+    books: p.books || [], status, statusLabel: MK.STATUS_LABEL[status] || status, reason, removalReason: reason, message: MK.removalMessage(status, reason), start: p.start ? +p.start : null, eventId: p.eventId || '', verifiedAt: p.verifiedAt || null });
 
   /* rebuild what is open from every board in hand, compare with the last build and tell the pages what changed */
   function rebuild(reason = 'refresh', only) {
@@ -41,7 +43,7 @@
     const now = Date.now(), open = new Map(), off = new Map();
     for (const sp of SPORTS()) {
       const r = E().have(sp); if (!r) continue;
-      for (const x of r.removed || []) off.set(x.mid, { ...x, sport: sp, name: x.player, removalReason: x.reason, start: x.start ? Date.parse(x.start) || null : null });
+      for (const x of r.removed || []) off.set(x.mid, { ...x, sport: sp, name: x.player, removalReason: x.reason, message: x.message || MK.removalMessage(x.status, x.reason), start: x.start ? Date.parse(x.start) || null : null });
       for (const p of [...(r.picks || []), ...(r.held || [])]) {
         if (!p.mid) { if (p.start && +p.start > now) open.set(p.id, enrich(p, now)); continue }   // an older server: start time only
         const q = enrich(p, now);
@@ -71,6 +73,28 @@
   const get = mid => F.open.get(mid) || F.gone.get(mid) || null;
   const hot = (n = 3, o = {}) => E() ? E().hot(open(o.sport), n) : [];
   const cold = (n = 2, o = {}) => E() ? E().cold(open(o.sport), n) : [];
+  /* one market's standing in the feed, found by its market id or by player, sport and statistic (a saved board item, a
+     parlay leg, a followed pick): { open, market, status, message, reason } */
+  const flat = s => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  function standing(x, now = Date.now()) {
+    const same = p => (!x.sport || p.sport === x.sport) && flat(p.name || p.player) === flat(x.name || x.player) && (!x.k || p.k === x.k);
+    const m = (x.mid && (F.open.get(x.mid) || F.gone.get(x.mid))) || [...F.open.values()].find(same) || [...F.gone.values()].find(same) || null;
+    if (m && F.open.has(m.mid || m.id)) { const g = MK.gate(m, { now, injury: injuryOf(m).st }); if (g.status === 'open') return { open: true, market: m, status: 'open', message: '', reason: '' };
+      return { open: false, market: m, status: g.status, message: MK.removalMessage(g.status, g.reason), reason: g.reason } }
+    if (m) return { open: false, market: m, status: m.status, message: m.message || MK.removalMessage(m.status, m.reason || m.removalReason), reason: m.reason || m.removalReason || '' };
+    const asked = !x.sport || F.asked.has(x.sport) || !!E()?.have(x.sport);
+    return asked ? { open: false, market: null, status: 'closed', message: 'Market closed', reason: 'No provider in the verified feed has this line open' }
+      : { open: false, market: null, status: 'awaiting_verification', message: 'Data source temporarily unavailable', reason: 'Not checked yet' };
+  }
+  /* Check markets again right before they are used: when a saved board opens, before an alert rings, before a share
+     card is drawn. A sport whose board is older than maxAge (two minutes) is read again first. -> [standing] */
+  async function recheck(items, o = {}) {
+    const xs = (items || []).filter(Boolean), maxAge = o.maxAge ?? 2 * 60000;
+    const sports = [...new Set(xs.map(x => x.sport).filter(s => SPORTS().includes(s)))];
+    const old = sports.filter(s => { const r = E()?.have(s); return !r || Date.now() - (r.got || 0) > maxAge });
+    if (old.length) await list({ sports: old, force: true }).catch(() => null); else rebuild('recheck');
+    return xs.map(x => standing(x));
+  }
   async function list(o = {}) {
     const sports = o.sports || (o.sport ? [o.sport] : null);
     (sports || SPORTS()).forEach(s => F.asked.add(s));
@@ -92,6 +116,6 @@
     const old = [...F.asked].filter(s => { const r = E()?.have(s); return !r || Date.now() - (r.got || 0) > 5 * 60000 });
     if (old.length) E()?.props(old, true, r => rebuild('refresh', r.sport)).catch(() => {});
   });
-  const api = { list, open, removed, get, hot, cold, enrich, rebuild, STATUS: MK.STATUS, LABEL: MK.STATUS_LABEL };
+  const api = { list, open, removed, get, hot, cold, enrich, rebuild, standing, recheck, STATUS: MK.STATUS, LABEL: MK.STATUS_LABEL };
   window.flMarkets = api; window.flVerified = api;
 })();

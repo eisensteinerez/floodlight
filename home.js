@@ -372,7 +372,7 @@
     if (whole) return `<aside class="card hm-heat" aria-label="Hot and cold players">${head}${whole}</aside>`;
     const none = (t, d) => `<p class="hm-none"><b>${t}</b><span>${d}</span></p>`;
     return `<aside class="card hm-heat" aria-label="Hot and cold players">${head}
-      <div class="hm-rows">${hot.length ? hot.map(heatRow).join('') : none('Nobody is running hot', 'No player with a line today reads 60 or more.')}</div>
+      <div class="hm-rows">${hot.length ? hot.map(heatRow).join('') : none('Nobody is running hot', 'No open line has been cleared 7 of the last 10 and 3 of the last 5 times, with 8 or more games. Prop Explorer uses the same rule.')}</div>
       <div class="sec-h hm-ice"><h3>Ice cold</h3></div>
       <div class="hm-rows">${cold.length ? cold.map(heatRow).join('') : none('Nobody is ice cold', 'No player with a line today reads under 40.')}</div>${stamp('heat')}</aside>`;
   }

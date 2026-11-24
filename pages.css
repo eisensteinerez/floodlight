@@ -2639,6 +2639,7 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .px-mk b{font-weight:700}
 .px-when{white-space:nowrap;color:var(--text-2)}
 .px-hi b{color:var(--good)}.px-lo b{color:var(--bad)}
+.px-hot{min-height:20px;padding:0 8px;margin-left:6px;font-size:11px;letter-spacing:.04em;vertical-align:2px;color:var(--good);border-color:color-mix(in oklab,var(--good) 55%,transparent);background:color-mix(in oklab,var(--good) 14%,transparent)}
 .px-na{color:var(--muted)}
 .px-se b{font:var(--display-weight) 18px/1 var(--font-display);letter-spacing:var(--display-track)}
 .px-up{color:var(--good)}.px-dn{color:var(--bad)}
@@ -3243,6 +3244,8 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .ds-m summary::after{content:"+";font:600 20px/1 var(--font-body);color:var(--text-2)}.ds-m[open] summary::after{content:"−"}
 .ds-m p{margin:0 0 12px;max-width:72ch;color:var(--text-2);line-height:1.55}
 .ds-n{min-width:2ch;text-align:right;color:var(--text-2)}.ds-n.bad{color:var(--error)}
+.ds-src{margin-bottom:12px}.ds-src caption{text-align:left;padding:0 0 8px}.ds-src th small,.ds-src td small{display:block}
+.ds-st{font-weight:600;color:var(--text-2)}.ds-st.ok{color:var(--good)}.ds-st.bad{color:var(--error)}
 .ds-rp>span:first-child{display:grid;gap:3px}.ds-rpb{display:flex;flex-wrap:wrap;gap:6px}
 .ds-dlg{width:min(520px,calc(100vw - 32px));padding:20px;border:1px solid var(--border-2);border-radius:var(--radius-tile);background:var(--raised);color:var(--text);box-shadow:var(--shadow-pop)}
 .ds-dlg::backdrop{background:rgb(0 0 0 / .6)}

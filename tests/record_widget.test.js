@@ -55,13 +55,13 @@ let n = 0; const t = async (name, fn) => { reset(); await fn(); n++; console.log
   await t('25 to 99 graded: every figure, under a small-sample warning', () => {
     Hs.rows = []; Hs.props = Array.from({ length: 30 }, (_, i) => prop({ key: 'k' + i, result: i % 3 ? 'won' : 'lost', state: i % 3 ? 'won' : 'lost' }));
     const s = text(H.widget());
-    assert.match(s, /Small sample\. 30 graded picks/); assert.match(s, /Hit rate 67%/); assert.match(s, /Units/); assert.match(s, /Closing line/);
+    assert.match(s, /Limited sample\. 30 graded picks/); assert.match(s, /Hit rate 67%/); assert.match(s, /Units/); assert.match(s, /Closing line/);
     assert.match(s, /Calibration by probability range/); assert.match(s, /Record by/);
   });
   await t('100 or more graded: full reporting, no warning', () => {
     Hs.rows = []; Hs.props = Array.from({ length: 100 }, (_, i) => prop({ key: 'k' + i, result: i % 2 ? 'won' : 'lost', state: i % 2 ? 'won' : 'lost' }));
     const s = text(H.widget());
-    assert.doesNotMatch(s, /Small sample|Early results/); assert.match(s, /Hit rate 50%/);
+    assert.doesNotMatch(s, /Limited sample|Early results/); assert.match(s, /Hit rate 50%/);
   });
   await t('the sport filter is applied to the same rows', () => {
     Hs.rows = []; Hs.props = [prop(), prop({ sport: 'nhl', result: 'lost', state: 'lost' })];
@@ -72,6 +72,19 @@ let n = 0; const t = async (name, fn) => { reset(); await fn(); n++; console.log
     const a = H.load(true), b = H.load(); assert.strictEqual(a, b); await a;
     assert.deepStrictEqual(calls.sort(), ['/api/grading/status', '/api/props/record?receipts=1', '/api/record?receipts=1']);
     assert.equal(Hs.props.length, 1); assert.equal(Hs.err, '');
+  });
+  await t('Pick history breaks the record down by league and by the evidence grade locked in the receipt', () => {
+    const rows = H.all([{ key: 'm1', sport: 'soccer', lg: 'eng.1', ko: now - 86400, home: 'Arsenal', away: 'Chelsea', pick: 'home', top: 0.55, result: 'won', state: 'won' }],
+      [prop({ evidence: 'B' }), prop({ evidence: 'B', result: 'lost', state: 'lost' }), prop({ receipt: { evidence: 'A' } }), prop()]);
+    const lg = H.BY.league[1](rows), ev = H.BY.evidence[1](rows);
+    assert.deepEqual(lg.map(x => [x.k, x.n]), [['NBA', 4], ['Premier League', 1]]);
+    assert.deepEqual(ev.map(x => [x.k, x.n]), [['A · Strong evidence', 1], ['B · Good evidence', 2], ['Not recorded', 2]]);
+    for (const k of ['sport', 'league', 'market', 'provider', 'sedge', 'conf', 'said', 'evidence']) assert.ok(H.BY[k], k);
+  });
+  await t('25 to 99 graded picks are labelled "Limited sample"', () => {
+    Hs.rows = []; Hs.props = Array.from({ length: 30 }, (_, i) => prop(i % 3 ? {} : { result: 'lost', state: 'lost' }));
+    assert.match(text(H.widget()), /Limited sample\. 30 graded picks/);
+    assert.equal(H.tier(24), 'early'); assert.equal(H.tier(25), 'small'); assert.equal(H.tier(99), 'small'); assert.equal(H.tier(100), 'full');
   });
   console.log(`${n} passed`); process.exit(0);
 })().catch(e => { console.error(e); process.exit(1) });

@@ -4,10 +4,11 @@
    game log. "Today's player props" ranks every player line from PrizePicks, Sleeper and the sportsbooks by hit rate,
    and "Team props" puts each game's moneyline, spread and total next to how often the teams have covered them.
    Soccer comes from FotMob (through the local server), NBA/WNBA and NFL from ESPN, MLB from MLB StatsAPI,
-   pick'em lines from /api/dfs (dfs.py) and sportsbook prices from /api/odds/board (odds.py). */
+   player lines from the verified market feed (markets.js, window.flMarkets: the same open markets as Predictions and
+   Prop Explorer) and team prices from /api/odds/board (odds.py). It never reads the pick'em apps' lines itself. */
 S.rs = { open: false, sport: store.get('fl.rsSport', 'soccer'), tab: 'player', p: null, loading: false, err: null,
   stat: null, line: null, side: 'over', range: 'l10', venue: 'all', comp: 'all', season: 'all', minMin: 0, res: 'all', opp: '',
-  q: '', hits: [], recent: store.get('fl.rsRecent', []), board: null, bmk: 'all', bsort: 'l10', bq: '', team: null, dfs: {} };
+  q: '', hits: [], recent: store.get('fl.rsRecent', []), team: null, dfs: {} };
 const RS_SPORTS = [['soccer', 'Soccer'], ['nba', 'Basketball'], ['nfl', 'Football'], ['mlb', 'Baseball'], ['nhl', 'Hockey'], ['tennis', 'Tennis']];
 // ESPN covers basketball, football and hockey the same way
 const RS_ESPN = { nba: 'basketball', nfl: 'football', nhl: 'hockey' };
@@ -765,38 +766,29 @@ function rsNextOpp(p){
 /* ---------- lines from PrizePicks, Sleeper and the sportsbooks ---------- */
 const RS_BOOK = { prizepicks: 'PrizePicks', sleeper: 'Sleeper', fanduel: 'FanDuel', draftkings: 'DraftKings', kalshi: 'Kalshi', polymarket: 'Polymarket' };
 const RS_BK = { prizepicks: 'PP', sleeper: 'SL', fanduel: 'FD', draftkings: 'DK', kalshi: 'KX', polymarket: 'PM' };
+// the sports the verified market service covers; anything else (tennis, college) has no verified player lines
+const RS_FEED = new Set(['nba', 'wnba', 'nfl', 'nhl', 'mlb', 'soccer']);
+// open markets from the one feed, as line chips: every provider's line for the same market
+const rsFeedLines = ms => ms.flatMap(p => (p.offers?.length ? p.offers : (p.books || []).map(b => ({ book: b, line: p.line }))).map(o => ({ player: p.name, team: p.team, opp: p.opp, stat: p.label, k: p.k,
+  book: o.book, line: o.line, kind: o.kind || 'standard', pOver: o.pOver ?? null, mid: p.mid || p.id, start: p.start ? +p.start : null })));
 function rsDfsLoad(sport, force){
   const r = S.rs, have = r.dfs[sport];
   if (have && !force && (have.loading || Date.now() - have.at < 120000)) return have.req || Promise.resolve();
   const d = r.dfs[sport] = { loading: true, at: Date.now(), lines: [], errors: {} };
-  d.req = getJSON(`/api/dfs/lines?sport=${sport}`).then(x => { d.lines = x.lines || []; d.errors = x.errors || {} })
-    .catch(() => { d.errors = { server: 'old' } }).finally(() => { d.loading = false; if (S.rs.open) rsRender() });
+  if (!RS_FEED.has(sport) || !window.flMarkets?.list) { d.loading = false; d.none = true; return d.req = Promise.resolve() }
+  d.req = window.flMarkets.list({ sport, force: !!force }).then(x => { d.lines = rsFeedLines(x.markets || []); const e = x.by?.[sport]?.error; if (e) d.errors = { feed: e } })
+    .catch(e => { d.errors = { feed: e?.message || 'did not load' } }).finally(() => { d.loading = false; if (S.rs.open) rsRender() });
   return d.req;
 }
-// the books' cat names (odds.py) in words our alias table knows
-const RS_CAT = { anytime_goal: 'goals', anytime_td: 'anytimetd', pass_yds: 'passyards', rush_yds: 'rushyards', rec_yds: 'receivingyards', rush_rec_yds: 'rushrecyards', pass_td: 'passtds',
-  pass_att: 'passattempts', pass_cmp: 'completions', rush_att: 'rushattempts', longest_rec: 'longestreception', longest_rush: 'longestrush', int: 'intsthrown', hrr: 'hrr', home_runs: 'homeruns',
-  total_bases: 'totalbases', hits_allowed: 'hitsallowed', earned_runs: 'earnedruns', stolen_bases: 'stolenbases', strikeouts: 'pitcherstrikeouts', threes: 'threes', outs: 'pitchingouts' };
-// sportsbook props from the odds boards the app has loaded: [{e, player, stat, offers:[{book, line, over, under, pOver}]}]
-function rsBookProps(sport){
-  const out = [];
-  for (const e of rsEvents(sport)) {
-    const d = S.books?.get(rsBkKey(sport, e)); if (!d?.props) continue;
-    for (const pr of d.props) {
-      const stat = rsStatKey(sport, RS_CAT[pr.cat] || pr.label || pr.cat) || rsStatKey(sport, pr.cat); if (!stat) continue;
-      const offers = pr.offers.map(o => pr.kind === 'yes' ? { book: o.book, line: .5, over: o.yes, pOver: o.yes?.p }
-        : { book: o.book, line: o.line, over: o.over, under: o.under, pOver: o.over?.p && o.under?.p ? o.over.p / (o.over.p + o.under.p) : o.over?.p });
-      out.push({ e, player: pr.player, stat, offers });
-    }
-  }
-  return out;
-}
+// the feed took a line off (game started, player ruled out, provider removed it): the chips follow at once
+document.addEventListener('fl:markets', ev => { if (ev.detail?.reason === 'load' || !window.flMarkets?.open) return;
+  for (const sp of Object.keys(S.rs?.dfs || {})) if (RS_FEED.has(sp) && !S.rs.dfs[sp].loading) S.rs.dfs[sp].lines = rsFeedLines(window.flMarkets.open(sp));
+  if (S.rs?.open && S.rs.p) rsRender() });
 // every posted line for this player and stat
 function rsLinesFor(sport, name, key){
   const n = normName(name), out = [];
   for (const x of S.rs.dfs[sport]?.lines || []) if (normName(x.player) === n && rsStatKey(sport, x.stat) === key)
     out.push({ book: x.book, line: x.line, kind: x.kind, overMult: x.overMult, underMult: x.underMult, pOver: x.pOver });
-  for (const row of rsBookProps(sport)) if (normName(row.player) === n && row.stat === key) out.push(...row.offers);
   const order = Object.keys(RS_BOOK);
   return out.sort((a, b) => order.indexOf(a.book) - order.indexOf(b.book));
 }
@@ -967,11 +959,11 @@ function rsRender(){
   const r = S.rs, keepY = el.scrollTop, act = document.activeElement?.id;
   el.innerHTML = `<div class="rs-in">
     <div class="rs-top"><div class="seg rs-sp" role="tablist" aria-label="Sport">${RS_SPORTS.map(([k, l]) => `<button role="tab" data-rs="sport" data-to="${k}" aria-selected="${r.sport === k}" class="${r.sport === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-    <div class="rs-tabs" role="tablist">${[['player', 'Players and teams'], ['board', "Today's player props"], ['team', 'Team props']].map(([k, l]) => `<button role="tab" data-rs="tab" data-to="${k}" aria-selected="${r.tab === k}">${l}</button>`).join('')}</div>
-    ${r.tab === 'board' ? rsBoardHTML() : r.tab === 'team' ? rsTeamHTML() : rsPlayerHTML()}
+    <div class="rs-tabs" role="tablist">${[['player', 'Players and teams'], ['team', 'Team props']].map(([k, l]) => `<button role="tab" data-rs="tab" data-to="${k}" aria-selected="${r.tab === k}">${l}</button>`).join('')}</div>
+    ${r.tab === 'board' ? rsPropsHTML() : r.tab === 'team' ? rsTeamHTML() : rsPlayerHTML()}
     <p class="srcnote rs-rg">Hit rates describe the past, not the next game. Bet only what you can afford to lose.</p></div>`;
   el.scrollTop = keepY;
-  for (const id of ['rsQ', 'rsBq', 'rsCq', 'rsBf']) if (act === id && $(id)) { const q = $(id); q.focus(); q.setSelectionRange(q.value.length, q.value.length) }
+  for (const id of ['rsQ', 'rsCq', 'rsBf']) if (act === id && $(id)) { const q = $(id); q.focus(); q.setSelectionRange(q.value.length, q.value.length) }
   rsPaintHits();
 }
 function rsSearchHTML(){
@@ -985,7 +977,7 @@ function rsSearchHTML(){
 function rsPlayerHTML(){
   const r = S.rs; let p = r.p;
   let h = rsSearchHTML();
-  if (!p || p.sport !== r.sport) return h + `<div class="rs-empty"><strong>Look up any player prop</strong>Search a player, pick a stat and a line, and see how often they have gone over it: the last 5, 10 and 20 games, this season, their whole career, at home or away and against the next opponent. PrizePicks, Sleeper and sportsbook lines show up next to the line box when they're posted. Search a team to see its points, totals, spreads and yards the same way, or use Combo to add two players together (say two running backs' rushing yards). Or open <button class="linkbtn" data-rs="tab" data-to="board">Today's player props</button> to rank every line by hit rate.</div>`;
+  if (!p || p.sport !== r.sport) return h + `<div class="rs-empty"><strong>Look up any player prop</strong>Search a player, pick a stat and a line, and see how often they have gone over it: the last 5, 10 and 20 games, this season, their whole career, at home or away and against the next opponent. Verified PrizePicks and Sleeper lines show up next to the line box while their game is still ahead. Search a team to see its points, totals, spreads and yards the same way, or use Combo to add two players together (say two running backs' rushing yards). ${RS_FEED.has(r.sport) ? ` Or open <button class="linkbtn" data-rs="explorer">Prop Explorer</button> to rank every open, verified line.` : ''}</div>`;
   if (r.err) return h + `<div class="note">${esc(r.err)}</div>`;
   // the player card: the crest, blurred right out, lights the card in the team's colours
   const glow = p.crest || (p.kind === 'team' ? p.photo : ''), last = String(p.name || '').trim().split(/\s+/).slice(p.kind === 'team' ? 0 : -1).join(' ');
@@ -1026,7 +1018,7 @@ function rsPlayerHTML(){
   // the form meter blends the four spans into one reading: recent games count most
   const parts = [['l5', .35], ['l10', .3], ['l20', .2], ['season', .15]].map(([k, w]) => [rsRate(rsRangeGames(p, pool, k), def, r.line, r.side).pct, w]).filter(x => x[0] != null);
   const meter = parts.length ? parts.reduce((a, [v, w]) => a + v * w, 0) / parts.reduce((a, x) => a + x[1], 0) : null;
-  const mWord = meter == null ? '' : meter >= .7 ? 'Running hot' : meter >= .57 ? 'Warm' : meter > .43 ? 'Coin flip' : meter > .3 ? 'Cool' : 'Ice cold';
+  const mWord = meter == null ? '' : meter >= .7 ? 'Strong form' : meter >= .57 ? 'Warm' : meter > .43 ? 'Coin flip' : meter > .3 ? 'Cool' : 'Weak form';
   const arcLen = Math.PI * 52, spark = sv.slice(0, 12).reverse(), sMax = Math.max(...spark, r.line * 1.1, 1);
   const gauge = meter == null ? '' : `<div class="rs-meterbox" title="A blend of the last 5 (35%), last 10 (30%), last 20 (20%) and season (15%) hit rates for ${esc(yesNo('over', 'under'))} ${rsLineTxt(r.line)}">
       <svg viewBox="0 0 128 76" aria-hidden="true"><defs><linearGradient id="rsMg" x1="0" x2="1"><stop offset="0" stop-color="var(--loss)"/><stop offset=".5" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--win)"/></linearGradient></defs>
@@ -1244,81 +1236,18 @@ function rsBookLoad(sport, e){
   return getJSON(`/api/odds/board?${q}`).then(d => { d.at = Date.now(); S.books.set(k, d) }).catch(() => {});
 }
 
-/* ---------- today's player props ---------- */
-async function rsBoardLoad(force){
-  const r = S.rs, sport = r.sport, b = r.board = { sport, loading: true, rows: [], events: rsBoardEvents(sport), done: 0 };
-  rsRender();
-  await Promise.all([rsDfsLoad(sport, force), ...b.events.map(e => rsBookLoad(sport, e).catch(() => {}).then(() => { b.done++; if (S.rs.board === b) rsSoon() }))]);
-  // one row per player and stat, with every source's line on it
-  const rows = new Map(), add = (player, team, stat, o, extra) => { const k = normName(player) + '|' + stat; let row = rows.get(k);
-    if (!row) rows.set(k, row = { player, team, stat, offers: [], st: 'wait' }); row.offers.push(o); if (!row.team && team) row.team = team; Object.assign(row, extra) };
-  for (const x of r.dfs[sport]?.lines || []) { const stat = rsStatKey(sport, x.stat); if (stat) add(x.player, x.team, stat, { book: x.book, line: x.line, kind: x.kind, overMult: x.overMult, underMult: x.underMult, pOver: x.pOver }, x.opp ? { opp: x.opp } : {}) }
-  for (const pr of rsBookProps(sport)) for (const o of pr.offers) add(pr.player, '', pr.stat, o, { e: pr.e });
-  for (const row of rows.values()) {
-    const std = row.offers.find(o => o.book === 'prizepicks' && (!o.kind || o.kind === 'standard'));
-    const count = new Map(); for (const o of row.offers) count.set(o.line, (count.get(o.line) || 0) + 1);
-    row.line = std ? std.line : [...count].sort((a, c) => c[1] - a[1])[0][0]; row.pct = rsBookPct(row.offers, row.line);
-  }
-  b.rows = [...rows.values()];
-  b.loading = false; rsRender();
-  rsBoardAnalyse(b);
-}
-function rsBoardVisible(b){
-  const r = S.rs, q = normName(r.bq);
-  return b.rows.filter(x => (r.bmk === 'all' || x.stat === r.bmk) && (!q || normName(x.player).includes(q) || normName(x.team || '').includes(q)));
-}
-// hit rates for the rows on screen, three players at a time; one load per player serves all their stats
-async function rsBoardAnalyse(b){
-  if (b.running) return; b.running = true;
-  const worker = async () => { for (;;) {
-    if (S.rs.board !== b) return;
-    const row = rsBoardVisible(b).slice(0, 80).find(x => x.st === 'wait'); if (!row) return;
-    row.st = 'load';
-    try {
-      const o = await rsFindPlayer(b.sport, row.player, row.team); if (!o) throw 0;
-      const p = await rsLoad({ ...o, sport: b.sport }), def = rsStatDef(b.sport, row.stat);
-      row.p = p;
-      if (def.deep && b.sport === 'soccer') await rsLoadDeep(p, 10);
-      if (def.deep && b.sport !== 'soccer') { row.st = 'deep'; continue }
-      const gs = p.games.filter(g => def.get(g) != null), R = n => rsRate(gs.slice(0, n), def, row.line, 'over');
-      Object.assign(row, { l5: R(5), l10: R(10), l20: R(20), avg: rsAvg(gs.slice(0, 10).map(def.get)), st: 'ok' });
-    } catch { row.st = 'err' }
-    if (S.rs.open && S.rs.tab === 'board') rsSoon() } };
-  await Promise.all(Array.from({ length: b.sport === 'soccer' || b.sport === 'tennis' ? 3 : 5 }, worker));
-  b.running = false; if (S.rs.open && S.rs.tab === 'board') rsRender();
-}
 function rsDfsNote(sport){
   const e = S.rs.dfs[sport]?.errors || {};
-  if (e.server) return 'PrizePicks and Sleeper need the updated server: stop it and run python3 server.py again.';
-  return Object.entries(e).map(([k, v]) => `${RS_BOOK[k] || k} didn't answer (${v}).`).join(' ');
+  return e.feed ? `The verified lines didn't load (${e.feed}).` : '';
 }
-function rsBoardHTML(){
-  const r = S.rs, b = r.board?.sport === r.sport ? r.board : null, G = r.sport === 'soccer' ? 'matches' : 'games';
-  if (!b) { const n = rsBoardEvents(r.sport).length;
-    return `<div class="rs-empty"><strong>Rank today's ${esc(rsSportName(r.sport))} props by hit rate</strong>Pulls every player line from PrizePicks and Sleeper${n ? `, plus FanDuel, DraftKings, Kalshi and Polymarket props for the next ${n} ${G} Floodlight has loaded,` : ''} then checks each player's last 5, 10 and 20 games against the line.
-      ${n ? '' : `<br><small>Sportsbook props come from the fixtures Floodlight has loaded; open the ${rsScreen(r.sport)} screen once to add them.</small>`}
-      <div style="margin-top:14px"><button class="btn" data-rs="board">Load props</button></div></div>` }
-  if (b.loading) return `<p class="rs-wait">Loading lines… ${b.done}/${b.events.length} ${G}${r.dfs[r.sport]?.loading ? ' · PrizePicks and Sleeper' : ''}</p><div class="skel" style="height:260px"></div>`;
-  const note = rsDfsNote(r.sport);
-  if (!b.rows.length) return `<div class="note">No player lines posted yet. ${esc(note)} <button class="linkbtn" data-rs="board">Try again</button></div>`;
-  const mk = [...new Set(b.rows.map(x => x.stat))].map(k => [k, rsStatDef(r.sport, k)?.l || k]);
-  const sortKey = { l5: x => x.l5?.pct, l10: x => x.l10?.pct, l20: x => x.l20?.pct, avg: x => x.avg == null ? null : x.avg - x.line, book: x => x.pct }[r.bsort];
-  const vis = rsBoardVisible(b), rows = vis.slice().sort((a, c) => (sortKey(c) ?? -9) - (sortKey(a) ?? -9));
-  const todo = vis.slice(0, 80), done = todo.filter(x => x.st !== 'wait' && x.st !== 'load').length;
-  const th = (k, l) => `<th><button class="rs-sort" data-rs="bsort" data-to="${k}" aria-pressed="${r.bsort === k}">${l}${r.bsort === k ? ' ▾' : ''}</button></th>`;
-  return `<div class="rs-bbar"><label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="rsBq" type="search" placeholder="Filter by player or team" value="${esc(r.bq)}" aria-label="Filter by player or team"></label></div>
-    <div class="rs-stats" role="group" aria-label="Market"><button class="qf" data-rs="bmk" data-to="all" aria-pressed="${r.bmk === 'all'}">All markets · ${b.rows.length}</button>${mk.map(([k, l]) => `<button class="qf" data-rs="bmk" data-to="${k}" aria-pressed="${r.bmk === k}">${esc(l)}</button>`).join('')}</div>
-    <p class="rs-wait">${done < todo.length ? `Checking hit rates… ${done}/${todo.length}` : `${vis.length} props`} · hit rates are for the over at the PrizePicks line (or the most common line) · <button class="linkbtn" data-rs="board">Refresh</button>${note ? ` · ${esc(note)}` : ''}</p>
-    <div class="tbl-wrap"><table class="ctable rs-t rs-board"><thead><tr><th style="text-align:left">Player</th><th style="text-align:left">Prop</th><th style="text-align:left">Lines</th>${th('book', 'Books %')}${th('l5', 'L5')}${th('l10', 'L10')}${th('l20', 'L20')}${th('avg', 'Avg L10')}</tr></thead><tbody>
-    ${rows.slice(0, 200).map(x => { const i = b.rows.indexOf(x), c = R => R ? `<span class="rs-pc ${rsPctCls(R.pct)}">${rsPctTxt(R.pct)}</span>` : x.st === 'err' ? '–' : x.st === 'deep' ? '<small>tap</small>' : '<span class="rs-dots">···</span>';
-      const sub = x.e ? `${x.e.home.name} v ${x.e.away.name} · ${fmtDate(x.e.date, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : [x.team, x.opp ? 'vs ' + x.opp : ''].filter(Boolean).join(' · ');
-      return `<tr data-rs="brow" data-i="${i}" tabindex="0"><td class="rs-tl"><b>${esc(x.p?.name || x.player)}</b><small class="rs-comp">${esc(sub)}</small></td>
-        <td class="rs-tl">${esc(rsLineTxt(x.line))} ${esc(rsStatDef(r.sport, x.stat)?.l || x.stat)}</td><td class="rs-tl rs-lns">${x.offers.slice(0, 6).map(o => `<span class="rs-lchip sm${o.line === x.line ? ' on' : ''}"><b>${esc(RS_BK[o.book] || o.book)}</b> ${rsLineTxt(o.line)}${o.book === 'sleeper' && o.overMult ? ` <small>×${o.overMult}</small>` : o.over?.am != null ? ` <small>${rsAm(o.over)}</small>` : o.kind && o.kind !== 'standard' ? ` <small>${esc(o.kind)}</small>` : ''}</span>`).join('')}</td>
-        <td>${x.pct != null ? `<span class="rs-pc ${rsPctCls(x.pct)}">${rsPctTxt(x.pct)}</span>` : '–'}</td><td>${c(x.l5)}</td><td>${c(x.l10)}</td><td>${c(x.l20)}</td>
-        <td class="num">${x.avg != null ? x.avg.toFixed(1) : x.st === 'err' ? '<small>not found</small>' : ''}</td></tr>` }).join('')}</tbody></table></div>
-    <p class="srcnote">PP = PrizePicks (goblin and demon are its easier and harder lines), SL = Sleeper (×payout on the over), FD = FanDuel, DK = DraftKings, KX = Kalshi, PM = Polymarket. "Books %" is the chance the books give the over, with their margin taken out. Fanatics blocks outside apps, so it isn't included. Tap a prop to open the full research.</p>`;
+/* The ranked prop board is Prop Explorer, on the verified market feed: an old link to this tab lands there, so there is
+   only one list of current lines and it can't disagree with Predictions or Home. */
+function rsExplorer(){ try { if (window.flLab?.open) return window.flLab.open({ tool: 'props', sport: RS_FEED.has(S.rs.sport) ? S.rs.sport : '' }) } catch (e) {} S.rs.tab = 'player'; rsRender() }
+function rsPropsHTML(){
+  const ok = RS_FEED.has(S.rs.sport);
+  if (ok) setTimeout(rsExplorer, 0);
+  return `<div class="rs-empty"><strong>${ok ? 'Opening Prop Explorer…' : `No verified ${esc(rsSportName(S.rs.sport))} player lines`}</strong>${ok ? 'Every open, verified line is ranked there.' : 'Floodlight only lists a player line once its game, teams and start are confirmed, and that check doesn’t cover this sport yet. You can still research any line by hand under Players and teams.'}</div>`;
 }
-
 /* ---------- team props: moneyline, spread and total against each team's recent results ---------- */
 const rsTeamRes = new Map();
 // a team's finished games, newest first: [{for, against, home, date}]
@@ -1380,7 +1309,7 @@ document.addEventListener('click', ev => {
   if (a === 'open') return openResearch();
   if (a === 'pp') return openResearch({ sport: t.dataset.sport, name: t.dataset.name, stat: t.dataset.stat, line: t.dataset.line != null ? +t.dataset.line : undefined });
   if (a === 'close') return closeResearch();
-  if (a === 'sport') { r.sport = to; store.set('fl.rsSport', to); r.hits = []; r.q = ''; r.bmk = 'all'; rsDfsLoad(to); return rsRender() }
+  if (a === 'sport') { r.sport = to; store.set('fl.rsSport', to); r.hits = []; r.q = ''; rsDfsLoad(to); return rsRender() }
   if (a === 'tab') { r.tab = to; return rsRender() }
   if (a === 'pick') { const x = r.hits[+t.dataset.i]; r.hits = []; return x && rsPick({ ...x, sport: r.sport }) }
   if (a === 'cpick') { const x = r.chits?.[+t.dataset.i]; r.chits = []; r.comboAdd = false; r.cq = ''; if (!x) return rsRender();
@@ -1403,14 +1332,8 @@ document.addEventListener('click', ev => {
   if (a === 'side') { r.side = to; return rsRender() }
   if (a === 'range') { r.range = to; rsRender(); if (to === 'h2h' && !r.opp) $('rs').querySelector('[data-rsf="opp"]')?.focus(); return }
   if (a === 'logall') { r.logAll = true; return rsRender() }
-  if (a === 'board') return rsBoardLoad(true);
+  if (a === 'explorer') return rsExplorer();
   if (a === 'teamload') return rsTeamLoad();
-  if (a === 'bmk') { r.bmk = to; rsRender(); return r.board && rsBoardAnalyse(r.board) }
-  if (a === 'bsort') { r.bsort = to; return rsRender() }
-  if (a === 'brow') { const x = r.board?.rows[+t.dataset.i]; if (!x) return;
-    const go = o => rsPick({ ...o, sport: r.sport, stat: x.stat, line: x.line }).then(() => { $('rs').scrollTop = 0 });
-    if (x.p) { rsCache.set(`${r.sport}:${x.p.id}`, Promise.resolve(x.p)); return go({ id: x.p.id, fmId: r.sport === 'soccer' ? x.p.id : undefined, lg: x.p.lg, name: x.p.name }) }
-    return rsFindPlayer(r.sport, x.player, x.team).then(o => go(o || { name: x.player })) }
 });
 // Get a head start: begin loading a player the moment the pointer (or a finger) lands on them, before the click.
 function rsWarm(t){
@@ -1463,12 +1386,11 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') { if (S.rs.hits.length || S.rs.chits?.length) { S.rs.hits = []; S.rs.chits = []; return rsPaintHits() } if (S.rs.comboAdd) { S.rs.comboAdd = false; return rsRender() } return closeResearch() }
   if (ev.key === 'Enter' && ev.target.matches?.('tr[data-rs="brow"]')) ev.target.click();
 });
-let rsT, rsBT;
+let rsT;
 document.addEventListener('input', ev => {
   if (ev.target.id === 'rsQ') { S.rs.q = ev.target.value; clearTimeout(rsT); rsT = setTimeout(() => rsSearch(S.rs.q), 220) }
   if (ev.target.id === 'rsBf' && S.rs.browse) { S.rs.browse.q = ev.target.value; return rsRender() }
   if (ev.target.id === 'rsCq') { S.rs.cq = ev.target.value; clearTimeout(rsT); rsT = setTimeout(() => rsSearch(S.rs.cq, true), 220) }
-  if (ev.target.id === 'rsBq') { S.rs.bq = ev.target.value; clearTimeout(rsBT); rsBT = setTimeout(() => { rsRender(); S.rs.board && rsBoardAnalyse(S.rs.board) }, 250) }
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
