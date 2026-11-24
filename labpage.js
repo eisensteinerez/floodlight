@@ -270,7 +270,7 @@
   function openTools(k, o) {
     L.board = null; L.cur = null; L.saving = false; setEngine(k); tool(k);
     const host = $('labTool'), api = { openPlayer: a => openLab({ kind: 'player', ...a, name: a.name || a.player }) };
-    drawHead(k === 'props' ? 'Prop explorer' : k === 'compare' ? (o.name ? `${o.name} and another player` : 'Compare two players') : 'Trends on today’s lines');
+    drawHead(k === 'props' ? 'Prop explorer' : k === 'compare' ? (o.who === 'one' && o.a ? `Compare: ${o.a}` : o.name ? `${o.name} and another player` : 'Compare') : 'Trends on today’s lines');
     const lib = k === 'props' ? window.flPropX && { props: window.flPropX.mount } : window.flLabTools;
     if (!lib) host.innerHTML = `<div class="card emp"><b>That tool did not load</b><p>Reload the page and try again.</p></div>`;
     else lib[k](host, o, api);
@@ -650,7 +650,7 @@
 
   window.flLab = { open, recent: () => L.recent, boards: () => L.boards,
     // a saved comparison reopens with both players and its choices: { sport, a, b, stat, statB, win, preset, mode, venue, vs }
-    compare: (a = {}) => { if (denied()) return window.flPages.show('lab'); if (show()) openTools('compare', a.a && a.b ? { sport: a.sport, a: a.a, b: a.b, stat: a.stat, statB: a.statB, win: a.win, preset: a.preset, mode: a.mode, venue: a.venue, vs: a.vs } : { sport: a.sport, name: a.name, stat: a.stat }) },
+    compare: (a = {}) => { if (denied()) return window.flPages.show('lab'); if (show()) openTools('compare', a.who === 'one' ? { ...a, a: a.a || a.name } : a.a && a.b ? { sport: a.sport, a: a.a, b: a.b, stat: a.stat, statB: a.statB, win: a.win, preset: a.preset, mode: a.mode, venue: a.venue, vs: a.vs } : { sport: a.sport, name: a.name, stat: a.stat }) },
     trends: (a = {}) => { if (denied()) return window.flPages.show('lab'); if (show()) openTools('trends', { sport: a.sport, filters: a.filters }) } };
   window.flPages?.add('lab', { title: 'The Lab', render,
     onShow(el) { if (denied() !== !$('labAsk')) render(el); if (L.engine === 'classic') { try { const r = $('rs'); if (r) { r.hidden = false; S.rs.open = true } } catch (e) {} } drawTry(); drawCast(); drawBoards(); if (L.picks == null) loadPicks() } });

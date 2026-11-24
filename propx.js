@@ -421,6 +421,7 @@
         <button type="button" class="bt ghost" data-rp="follow" aria-pressed="${followed(p)}">${ic('star', 18)}${followed(p) ? 'Following' : 'Follow'}</button>
         <button type="button" class="bt ghost" data-rp="board">${ic('save', 18)}Save to board</button>
         <button type="button" class="bt ghost" data-rp="share">${ic('share', 18)}Share</button>
+        <button type="button" class="bt ghost" data-rp="compare">${ic('compare', 18)}Compare</button>
         <button type="button" class="lk" data-rp="lab">Full player page${ic('arrow', 16)}</button></div>
       <p class="sr-only" role="status" id="rpSay"></p>
       <section class="rp-sec"><h3>Every game against this line</h3><p class="rp-sum">${esc(s.summary)}</p>
@@ -450,6 +451,8 @@
     if (a === 'board') return window.flBoards?.offer({ kind: 'player', key: `player:${p.sport}:${p.name}:${p.k}`, label: p.name, sub: p.text, photo: p.photo || '', line: p.line, side: p.side, start: p.start ? +p.start : null, mid: p.mid || p.id,
       open: { lab: { sport: p.sport, name: p.name, kind: 'player', stat: p.k, line: p.line, side: p.side } } }, ev.target.closest('button'));
     if (a === 'share') return share(p);
+    // Compare, one player: this player and stat, two lines to start (the posted one and the next open one)
+    if (a === 'compare') { const args = { sport: p.sport, a: p.name, who: 'one', one: 'lines', stat: p.k }; closePanel(); return window.flLab?.compare?.(args) }
     if (a === 'lab') { const args = { sport: p.sport, name: p.name, kind: 'player', stat: p.k, line: p.line, side: p.side }; closePanel(); return X.api?.openPlayer ? X.api.openPlayer(args) : window.flLab?.open(args) }
   });
   document.addEventListener('keydown', ev => {

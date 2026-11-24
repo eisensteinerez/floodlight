@@ -11,7 +11,7 @@ if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 const freePort = () => new Promise(res => { const s = net.createServer(); s.listen(0, () => { const p = s.address().port; s.close(() => res(p)) }) });
 const ROOT = path.join(__dirname, '..');
 let n = 0, failed = 0;
-async function t(name, fn) { if (process.env.ONLY && !name.includes(process.env.ONLY)) return; try { await fn(); n++; console.log('ok', name) } catch (e) { failed++; console.log('FAIL', name, '\n  ', e.message.split('\n').slice(0, 6).join('\n   ')) } }
+async function t(name, fn) { if (process.env.ONLY && !name.includes(process.env.ONLY)) return; try { await fn(); n++; console.log('ok', name) } catch (e) { failed++; console.log('FAIL', name, '\n  ', e.message.split('\n').slice(0, 6).join('\n   '), process.env.ONLY ? e.stack.split('\n').find(l => l.includes('ui_lab.test')) : '') } }
 
 // stand-in lines: three NBA players in the upcoming Timberwolves v Grizzlies game, one NFL player
 const now = Date.now(), H = 36e5, D = 864e5;
@@ -149,6 +149,40 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
       await p.click('[data-ll="reset"]'); assert.strictEqual(await p.inputValue('#llR'), '215.5'); assert.ok(!(await p.isVisible('[data-ll="reset"]')));
       await p.evaluate(() => document.getElementById('llH').scrollIntoView()); await p.waitForTimeout(150); await shot(p, `linelens-${w}`);
       const over = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth); assert.ok(over <= 0, 'no sideways scroll');
+      assert.deepStrictEqual(p.errors, []);
+    }
+  });
+
+  await t('Compare, one player: two lines, two stats, home and away, recent and season, two providers from the open feed', async () => {
+    for (const [w, h] of [[1440, 900], [390, 844]]) {
+      const p = await page(w, h);
+      // stand-in game log for Jalen Hurts: passing and rushing yards, alternating home and away
+      const vals = [240, 198, 260, 221, 230, 190, 250, 205, 233, 260, 212, 244];
+      const games = vals.map((v, i) => ({ id: String(900 + i), date: new Date(now - (i + 1) * 7 * D).toISOString(), opp: 'Cowboys', oppAbbr: 'DAL', home: i % 2 === 0, min: null, v: { pyds: v, ryds: 20 + i * 3 } }));
+      await p.context().route(/\/api\/lab\/player\?/, r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sport: 'nfl', name: 'Jalen Hurts', team: 'Eagles', photo: '', pos: 'QB',
+        seasonStart: new Date(now - 200 * D).toISOString(), stats: [{ k: 'pyds', l: 'Passing yards', n: 12 }, { k: 'ryds', l: 'Rushing yards', n: 12 }], games, lines: [{ k: 'pyds', line: 215.5, book: 'prizepicks', kind: 'standard' }], at: Math.round(now / 1000) }) }));
+      await explorer(p);   // loads the verified feed, where Hurts has PrizePicks 215.5 and Sleeper 224.5 open
+      await p.locator('[data-pxopen]').filter({ hasText: 'Jalen Hurts' }).click(); await p.waitForSelector('[data-rp="compare"]');
+      await p.click('[data-rp="compare"]'); await p.waitForSelector('[data-cmpone]', { timeout: 15000 }); await p.waitForTimeout(300);
+      assert.strictEqual(await p.getAttribute('[data-cmpwho="one"]', 'aria-checked'), 'true');
+      // two lines: the posted line and the next open one
+      assert.deepStrictEqual(await p.$$eval('[data-cmpline]', xs => xs.map(x => x.value)), ['215.5', '224.5']);
+      assert.match(await p.textContent('.lc-lead'), /From 215\.5 to 224\.5, the overs go from 7 to \d of 10/);
+      // two providers: each lane is a provider's open line, with when it was verified
+      await p.click('[data-cmpone="books"]'); await p.waitForTimeout(150);
+      const lead = await p.textContent('.lc-lead'); assert.match(lead, /over is easier on PrizePicks \(215\.5\)/); assert.match(lead, /under on Sleeper \(224\.5\)/);
+      assert.match(await p.textContent('.lc-sum'), /verified/);
+      // home and away, recent and season, two stats
+      await p.click('[data-cmpone="venue"]'); assert.match(await p.textContent('.lc-cols'), /Home[\s\S]*Away/);
+      await p.click('[data-cmpone="form"]'); assert.match(await p.textContent('.lc-cols'), /Last 10[\s\S]*This season/);
+      await p.click('[data-cmpone="stats"]'); assert.match(await p.textContent('.lc-cols'), /Passing yards[\s\S]*Rushing yards/);
+      // the radio groups move with the arrow keys
+      await p.focus('[data-cmpone="stats"]'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(50); assert.strictEqual(await p.getAttribute('[data-cmpone="venue"]', 'aria-checked'), 'true');
+      assert.ok(await p.evaluate(() => document.activeElement?.dataset.cmpone === 'venue'));
+      // back to two players keeps the first one
+      await p.click('[data-cmpone="lines"]'); await shot(p, `compare-one-${w}`);
+      const over = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth); assert.ok(over <= 0, 'no sideways scroll');
+      await p.click('[data-cmpwho="two"]'); assert.ok(await p.$('#lc-b'), 'the second slot is back');
       assert.deepStrictEqual(p.errors, []);
     }
   });

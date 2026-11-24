@@ -1764,6 +1764,7 @@ html:root[data-theme="stadium-gold"] .pd-pk .pd-evbar :is(.lk){min-height:44px}
 .lc-top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
 .lc-top .seg{flex-wrap:wrap}
 .lc-slots{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:stretch}
+.lc-slots.one{grid-template-columns:minmax(0,560px)}
 .lc-vs{align-self:center;font:800 13px/1 var(--font-body);color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .lc-slot{position:relative;display:grid;gap:10px;align-content:start;min-height:132px;border:1.5px dashed var(--border);background:transparent;transition:border-color var(--t-fast,.15s),background var(--t-fast,.15s)}
 .lc-slot.full{border-style:solid;background:var(--surface)}

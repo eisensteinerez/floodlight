@@ -1,4 +1,6 @@
 /* Floodlight · two Lab tools that live on the Lab page itself: Compare and Trends.
+   Compare, one player: the same player against himself: two lines on one stat, two stats, home against away, recent
+   form against the season, or two providers' open lines (from the verified feed only, never an expired line).
    Compare: two players side by side. Choose a sport, put a player in each slot (search, or drag a player card onto a
    slot), and the numbers line up: average, median, season average, how often each cleared their line, and one shared
    chart of both game logs on a common date axis with a line you can drag. Three ways to compare: the same stat, a
@@ -34,16 +36,33 @@
   /* ---------------- Compare ---------------- */
   const MODES = [['same', 'Same stat'], ['diff', 'Different stats'], ['sum', 'Combined total']];
   const VENUES = [['all', 'Home and away'], ['home', 'Home'], ['away', 'Away']];
-  const C = { sport: 'nba', a: null, b: null, stat: '', statB: '', mode: 'same', win: 10, preset: 'all', venue: 'all', vs: 'any', lines: {}, sum: null,
+  /* One player: the same player set against himself. Two lines on one stat, two stats, home against away, recent form
+     against the season, or one provider's line against another's (open lines from the verified feed only). */
+  const WHO = [['two', 'Two players'], ['one', 'One player']];
+  const ONE = [['lines', 'Two lines'], ['stats', 'Two stats'], ['venue', 'Home and away'], ['form', 'Recent and season'], ['books', 'Two providers']];
+  const RECENT = [[5, 'Last 5'], [10, 'Last 10'], [20, 'Last 20']];
+  const BOOKN = { prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' }, bookName = b => BOOKN[b] || b;
+  const C = { who: 'two', one: 'lines', recent: 10, bk: ['', ''], sport: 'nba', a: null, b: null, stat: '', statB: '', mode: 'same', win: 10, preset: 'all', venue: 'all', vs: 'any', lines: {}, sum: null,
     q: { a: '', b: '' }, hits: { a: null, b: null }, sel: { a: -1, b: -1 }, seq: 0, host: null, api: null, drag: null, noted: '', w: 0 };
   const slot = k => C[k];
   const other = k => k === 'a' ? 'b' : 'a';
-  const statOf = k => k === 'b' && C.mode === 'diff' ? (C.statB || C.stat) : C.stat;
+  const solo = () => C.who === 'one';
+  const statOf = k => k === 'b' && (solo() ? C.one === 'stats' : C.mode === 'diff') ? (C.statB || C.stat) : C.stat;
+  // the lines open right now for this player and stat, one per provider: the verified feed's open markets only
+  function offersOf(d, st) {
+    const out = [], ms = (window.flMarkets?.open?.() || []).filter(m => m.sport === C.sport && nm(m.name) === nm(d?.name) && m.k === st);
+    for (const m of ms) for (const o of (m.offers?.length ? m.offers : (m.books || []).map(b => ({ book: b, line: m.line })))) { const b = o.book || o.provider; if (o.line != null && b && !out.some(x => x.book === b)) out.push({ book: b, line: +o.line, at: o.at || m.verifiedAt || m.at || null }) }
+    return out;
+  }
+  function bookPair(d) {
+    const os = offersOf(d, C.stat), a = os.find(o => o.book === C.bk[0]) || os[0], b = os.find(o => o !== a && o.book === C.bk[1]) || os.find(o => o !== a);
+    return [a, b].filter(Boolean);
+  }
   const statLabel = k => { const d = C[k]?.d || C[other(k)]?.d, st = statOf(k); return (d?.stats || []).find(s => s.k === st)?.l || (C[other(k)]?.d?.stats || []).find(s => s.k === st)?.l || st };
   function load(k, name) {
     const seq = ++C.seq; C[k] = { name, loading: true }; draw();
     get(`/api/lab/player?sport=${encodeURIComponent(C.sport)}&name=${encodeURIComponent(name)}`)
-      .then(d => { if (C[k]?.name !== name) return; C[k] = { name: d.name, d }; pickStat() })
+      .then(d => { if (C[k]?.name !== name) return; C[k] = { name: d.name, d }; if (solo()) C.b = C.a; pickStat() })
       .catch(e => { if (C[k]?.name !== name) return; C[k] = { name, err: e.message || 'That player did not load.' } })
       .finally(() => { draw(); if (seq === C.seq) focusSlot(k) });
   }
@@ -55,13 +74,18 @@
       const posted = [...(A?.lines || []), ...(C.mode === 'diff' ? [] : B?.lines || [])].map(l => l.k).find(okA);
       C.stat = posted || (A || B).stats.find(s => okA(s.k))?.k || '';
     }
-    if (C.mode === 'diff' && B && !(C.statB && has(B, C.statB))) C.statB = (B.lines || []).map(l => l.k).find(k => has(B, k)) || (has(B, C.stat) ? C.stat : B.stats[0]?.k || '');
+    if (solo() && C.one === 'stats' && A && !(C.statB && has(A, C.statB) && C.statB !== C.stat)) C.statB = (A.stats.find(s => s.k !== C.stat) || A.stats[0])?.k || '';
+    if (C.mode === 'diff' && B && !solo() && !(C.statB && has(B, C.statB))) C.statB = (B.lines || []).map(l => l.k).find(k => has(B, k)) || (has(B, C.stat) ? C.stat : B.stats[0]?.k || '');
   }
   const statsBoth = () => { const A = C.a?.d, B = C.b?.d; if (!A && !B) return []; const base = (A || B).stats; return base.filter(s => (!A || A.stats.some(x => x.k === s.k)) && (!B || B.stats.some(x => x.k === s.k))) };
   const postedOf = (d, k) => { const ls = (d?.lines || []).filter(l => l.k === k); if (!ls.length) return null; return ls.find(l => l.kind === 'standard') || ls[0] };
   const postedLine = (d, k) => postedOf(d, k)?.line ?? null;
   const lineKey = k => `${k}:${statOf(k)}`;
-  const lineOf = k => { const d = C[k]?.d; if (!d) return null; return C.lines[lineKey(k)] ?? postedLine(d, statOf(k)) ?? null };
+  const lineOf = k => { const d = C[k]?.d; if (!d) return null; const set = C.lines[lineKey(k)]; if (set != null) return set;
+    if (solo() && C.one === 'books') return bookPair(d)[k === 'a' ? 0 : 1]?.line ?? null;
+    // two lines: the second starts on another open line for the stat, else one step above the first
+    if (solo() && C.one === 'lines' && k === 'b') { const a = lineOf('a'); if (a == null) return null; return offersOf(d, C.stat).map(o => o.line).find(l => l !== a) ?? a + 1 }
+    return postedLine(d, statOf(k)) ?? null };
   const setLine = (k, v) => { if (k === 'sum') C.sum = v; else C.lines[lineKey(k)] = v };
   const season = d => d.seasonStart ? day(d.seasonStart) : '';
   const nextOpp = d => d?.next?.opp || (d?.lines || []).find(l => l.opp)?.opp || '';
@@ -72,7 +96,7 @@
      the opponents) say which side each was on. Without ids, the opponent's name against the other player's team. */
   let MC = null;
   function meet() {
-    const A = C.a?.d, B = C.b?.d; if (!A || !B) return new Map();
+    const A = C.a?.d, B = C.b?.d; if (!A || !B || solo()) return new Map();
     if (MC && MC.A === A && MC.B === B) return MC.m;
     const bd = new Map(), m = new Map(); for (const g of B.games) { const k = day(g.date); if (!bd.has(k)) bd.set(k, g) }
     for (const ga of A.games) { const k = day(ga.date), gb = bd.get(k); if (!gb || m.has(k)) continue;
@@ -84,6 +108,12 @@
   function gamesOf(k) {
     const d = C[k]?.d; if (!d) return [];
     const st = statOf(k), M = meet(), has2 = !!C[other(k)]?.d;
+    if (solo()) {
+      let gs = d.games.filter(g => g.v[st] != null); const sea = () => { const s = season(d); return s ? gs.filter(g => day(g.date) >= s) : gs.slice(0, 82) };
+      if (C.one === 'form') return k === 'a' ? gs.slice(0, C.recent) : sea();
+      if (C.one === 'venue') gs = gs.filter(g => g.home === (k === 'a'));
+      return C.win ? gs.slice(0, C.win) : sea();
+    }
     let gs = d.games.filter(g => g.v[st] != null);
     if (has2 && C.preset === 'both') gs = gs.filter(g => M.has(day(g.date)));
     if (has2 && C.preset === 'h2h') gs = gs.filter(g => M.get(day(g.date)) === 'h2h');
@@ -137,7 +167,7 @@
     const dom = ls => { const xs = ls.flatMap(l => [...l.pts.map(p => p.v), l.line, l.posted, l.avg, l.sAvg]).filter(v => v != null); if (!xs.length) return [0, 1];
       const a = Math.min(...xs), b = Math.max(...xs), pad = Math.max(1, (b - a) * .12); return [Math.max(0, Math.floor(a - pad)), Math.ceil(b + pad)] };
     const shared = same ? dom(lanes.filter(l => l.key !== 'sum')) : null;
-    const pl = lanes.filter(l => l.key !== 'sum'), both = pl.length === 2 ? new Set(pl[0].pts.map(p => p.day).filter(d => pl[1].pts.some(p => p.day === d))) : new Set();
+    const pl = lanes.filter(l => l.key !== 'sum'), both = pl.length === 2 && !solo() ? new Set(pl[0].pts.map(p => p.day).filter(d => pl[1].pts.some(p => p.day === d))) : new Set();
     // the dates both played: a band through both player lanes, and a mark on the axis (a diamond when they faced each other)
     const yb0 = top(0) - 6, yb1 = bot(Math.min(1, lanes.length - 1)) + 4;
     const bands = [...both].map(d => { const t = M.get(d) || 'apart', x = X.get(d) - step / 2;
@@ -188,7 +218,7 @@
   }
 
   function slotHTML(k) {
-    const s = slot(k), lab = k === 'a' ? 'First player' : 'Second player';
+    const s = slot(k), lab = solo() ? 'Player' : k === 'a' ? 'First player' : 'Second player';
     if (s?.d) { const d = s.d;
       return `<div class="card lc-slot full c-${k}" data-cmpdrop="${k}"><span class="lb">${lab}</span><div class="lc-who">${face(d.photo, d.name, 'avx av-lg')}<span class="rw-t"><b>${esc(d.name)}</b><small>${[d.fid && window.flPlayers ? window.flPlayers.span(d.fid, d.team) : esc(d.team || ''), esc(d.pos || '')].filter(Boolean).join(' · ')}</small></span></div>
         <div class="lc-sa"><button type="button" class="bt ghost sm" data-cmp="change" data-k="${k}">Change</button><button type="button" class="lk" data-cmp="lab" data-k="${k}">Open in the Lab</button></div></div>` }
@@ -202,6 +232,7 @@
   const radios = (label, opts, cur, attr, cls = 'seg') => `<div class="${cls}" role="radiogroup" aria-label="${esc(label)}">${opts.map(([k, l]) => `<button type="button" role="radio" aria-checked="${cur === k}" class="${cls === 'seg' ? (cur === k ? 'on' : '') : 'cx sm'}" tabindex="${cur === k ? 0 : -1}" ${attr}="${k}">${esc(l)}</button>`).join('')}</div>`;
   const presets = () => [['all', 'Every game'], ['both', 'Only dates both played'], ...(sameTeam() ? [['without', 'Only games the other missed']] : [['h2h', 'Only games against each other']])];
   function cmpItem() {
+    if (solo()) return oneItem();
     const A = C.a?.d, B = C.b?.d; if (!A || !B) return null;
     const la = statLabel('a').toLowerCase(), lb = statLabel('b').toLowerCase(), l1 = lineOf('a'), l2 = lineOf('b');
     const label = C.mode === 'diff' ? `${A.name}, ${la}, and ${B.name}, ${lb}` : `${A.name} and ${B.name}, ${la}${C.mode === 'sum' ? ' combined' : ''}`;
@@ -211,6 +242,7 @@
     return { kind: 'compare', key: `compare:${C.sport}:${A.name}|${B.name}:${C.stat}:${open.statB}:${C.mode}:${C.preset}:${C.win}:${C.venue}:${C.vs}`, label, sub, photo: A.photo || '', photo2: B.photo || '', open: { compare: open } };
   }
   function resultHTML(W) {
+    if (solo()) return resultOne(W);
     const A = C.a?.d, B = C.b?.d;
     if (!A || !B) return `<div class="lc-empty">${ic('compare', 22)}<p><b>${A || B ? 'Now add the second player' : 'Put a player in each slot'}</b><span>${A || B ? 'Their numbers will line up next to the first one’s.' : 'Search, or drag a card from “Start with tonight’s hottest” below. Then pick a stat.'}</span></p></div>`;
     const st = statsBoth();
@@ -281,6 +313,66 @@
       <div class="lc-cols">${tile(A, sa, 'a', labA)}${tile(B, sb, 'b', labB)}</div>
       ${combo}`;
   }
+
+  /* ---------- One player ---------- */
+  function names() {
+    const A = C.a?.d, pr = C.one === 'books' && A ? bookPair(A) : [];
+    return { lines: ['First line', 'Second line'], stats: [statLabel('a'), statLabel('b')], venue: ['Home', 'Away'], form: [`Last ${C.recent}`, 'This season'],
+      books: [pr[0] ? bookName(pr[0].book) : 'First provider', pr[1] ? bookName(pr[1].book) : 'Second provider'] }[C.one];
+  }
+  function oneItem() {
+    const A = C.a?.d; if (!A) return null;
+    const [na, nb] = names(), st = statLabel('a').toLowerCase();
+    const label = `${A.name}: ${C.one === 'stats' ? `${statLabel('a').toLowerCase()} and ${statLabel('b').toLowerCase()}` : `${na.toLowerCase()} and ${nb.toLowerCase()}, ${st}`}`;
+    const sub = [C.one === 'form' ? '' : WINDOWS.find(w => w[0] === C.win)?.[1], ['lines', 'books'].includes(C.one) ? `Lines ${fmt(lineOf('a'))} and ${fmt(lineOf('b'))}` : ''].filter(Boolean).join(' · ');
+    const open = { sport: C.sport, a: A.name, who: 'one', one: C.one, stat: C.stat, statB: C.one === 'stats' ? C.statB : '', win: C.win, recent: C.recent, bk: C.one === 'books' ? bookPair(A).map(o => o.book) : [] };
+    return { kind: 'compare', key: `compare1:${C.sport}:${A.name}:${C.one}:${C.stat}:${open.statB}:${C.win}:${C.recent}`, label, sub, photo: A.photo || '', open: { compare: open } };
+  }
+  function resultOne(W) {
+    const A = C.a?.d;
+    if (!A) return `<div class="lc-empty">${ic('compare', 22)}<p><b>Choose a player</b><span>Then set him against himself: two lines, two stats, home and away, recent form and the season, or two providers.</span></p></div>`;
+    C.b = C.a; pickStat();
+    const sa = summary('a'), sb = summary('b'), labA = statLabel('a'), labB = statLabel('b'), same = C.one !== 'stats' || C.stat === C.statB, [na, nb] = names();
+    const offers = offersOf(A, C.stat), pair = C.one === 'books' ? bookPair(A) : [];
+    const stSel = (k, cur, label) => `<label class="lc-stat"><span class="lb">${esc(label)}</span><select class="inp" data-cmpstat="${k}">${A.stats.map(x => `<option value="${esc(x.k)}"${x.k === cur ? ' selected' : ''}>${esc(x.l)}</option>`).join('')}</select></label>`;
+    const bkSel = (i, cur) => `<label class="lc-stat"><span class="lb">${i ? 'Second provider' : 'First provider'}</span><select class="inp" data-cmpbook="${i}">${offers.map(o => `<option value="${esc(o.book)}"${o.book === cur ? ' selected' : ''}>${esc(bookName(o.book))} · ${fmt(o.line)}</option>`).join('')}</select></label>`;
+    const opts = `<div class="lc-opts">${radios('Compare', ONE, C.one, 'data-cmpone')}</div>
+      <div class="lc-opts">${C.one === 'stats' ? stSel('a', C.stat, 'First stat') + stSel('b', C.statB, 'Second stat') : stSel('a', C.stat, 'Stat')}
+        ${C.one === 'books' && offers.length > 1 ? bkSel(0, pair[0]?.book) + bkSel(1, pair[1]?.book) : ''}
+        ${C.one === 'form' ? radios('Recent games', RECENT, C.recent, 'data-cmprecent') : radios('Games', WINDOWS, C.win, 'data-cmpwin')}</div>`;
+    if (C.one === 'books' && pair.length < 2) return opts + `<p class="lc-none">${offers.length ? `Only ${esc(bookName(offers[0].book))} has a ${esc(labA.toLowerCase())} line open for ${esc(A.name)} right now (${fmt(offers[0].line)}), so there is no second provider to set against it.` : `No provider has a ${esc(labA.toLowerCase())} line open for ${esc(A.name)} right now. Only open lines from the verified feed are compared.`}</p>`;
+    const rate = s => s.line == null || !s.of ? '–' : `${s.over} of ${s.of}`;
+    const one = (n, s, label) => s.line == null ? `${n}: no line yet; drag the handle or type one.` : !s.of ? `${n}: no games to count against ${fmt(s.line)}.` : `${n}: over ${fmt(s.line)} ${label.toLowerCase()} in ${s.over} of ${s.of} ${s.of === 1 ? 'game' : 'games'}, average ${fmt(s.avg)}.`;
+    const diff = sa.avg != null && sb.avg != null ? sa.avg - sb.avg : null;
+    const lead = C.one === 'lines' ? (sa.line != null && sb.line != null && sa.of ? `From ${fmt(sa.line)} to ${fmt(sb.line)}, the overs go from ${sa.over} to ${sb.over} of ${sa.of}` : '')
+      : C.one === 'books' ? (pair[0].line === pair[1].line ? `${na} and ${nb} post the same line, ${fmt(pair[0].line)}` : `The over is easier on ${pair[0].line < pair[1].line ? na : nb} (${fmt(Math.min(pair[0].line, pair[1].line))}) and the under on ${pair[0].line < pair[1].line ? nb : na} (${fmt(Math.max(pair[0].line, pair[1].line))})`)
+      : (C.one === 'venue' || C.one === 'form') && diff != null ? (Math.abs(diff) < .05 ? `${na} and ${nb} are level at ${fmt(sa.avg)} ${labA.toLowerCase()}` : `${diff > 0 ? na : nb} is higher by ${fmt(Math.abs(diff))} ${labA.toLowerCase()} a game`) : '';
+    const scope = C.one === 'form' ? `The last ${C.recent} games against this season` : C.win ? `Over the last ${C.win} games` : 'This season';
+    const sents = [one(na, sa, labA), one(nb, sb, labB)];
+    if (C.one === 'books') sents.push(`Both lines open now; ${esc(bookName(pair[0].book))} verified ${pair[0].at ? agoT(pair[0].at) : 'at an unknown time'}, ${esc(bookName(pair[1].book))} ${pair[1].at ? agoT(pair[1].at) : 'at an unknown time'}.`);
+    const W2 = Math.max(280, W);
+    const lanes = [['a', na, sa, labA], ['b', nb, sb, labB]].map(([k, n, s, label]) => ({ key: k, name: n, stat: label, line: s.line, posted: C.one === 'books' ? (pair[k === 'a' ? 0 : 1]?.line ?? null) : s.posted?.line ?? null, avg: s.avg, sAvg: s.sAvg,
+      pts: s.gs.map(g => ({ day: day(g.date), v: g.v[s.st], opp: g.oppAbbr || g.opp, home: g.home })) }));
+    const svg = sa.n || sb.n ? chart(lanes, W2, same) : '';
+    const tile = (n, s, k, label) => `<div class="lc-col c-${k}"><div class="lc-h"><span class="lc-sw" aria-hidden="true"></span><b>${esc(n)}</b></div>
+      <dl class="lc-dl"><div><dt>Average</dt><dd class="num">${fmt(s.avg)}</dd></div><div><dt>Median</dt><dd class="num">${fmt(s.med)}</dd></div><div><dt>Over the line</dt><dd class="num">${rate(s)}</dd></div><div><dt>Range</dt><dd class="num">${s.n ? `${fmt(s.lo)}–${fmt(s.hi)}` : '–'}</dd></div></dl>
+      <label class="lc-line"><span class="lb">Line</span><input class="inp num" type="number" step="0.5" min="0" inputmode="decimal" data-cmpline="${k}" value="${s.line ?? ''}" placeholder="none" aria-label="${esc(n)}: line for ${esc(label)}"></label>
+      <p class="lb">${esc(label)} · ${games(s.n)}${s.n && s.n < 5 ? ' · <b class="lc-ss">small sample</b>' : ''}</p></div>`;
+    const days = [...new Set([...sa.gs, ...sb.gs].map(g => day(g.date)))].sort().reverse(), at = (s, x) => s.gs.find(g => day(g.date) === x);
+    const cell = (g, s) => g ? `${fmt(g.v[s.st])}${s.line != null && g.v[s.st] !== s.line ? ` <span class="lb">${g.v[s.st] > s.line ? 'over' : 'under'}</span>` : ''}` : '<span class="lb">–</span>';
+    const table = `<details class="lc-tbl"><summary>See every game in the chart</summary><div class="tbx-wrap"><table class="tbx"><caption class="sr-only">Every game in the chart, newest first</caption><thead><tr><th scope="col">Date</th><th scope="col">Opponent</th><th scope="col" class="r">${esc(na)}</th><th scope="col" class="r">${esc(nb)}</th></tr></thead>
+      <tbody>${days.map(x => { const ga = at(sa, x), gb = at(sb, x), g = ga || gb; return `<tr><td class="num">${esc(short(x))}</td><td>${g ? `${g.home === false ? 'at ' : g.home ? 'v ' : ''}${esc(g.oppAbbr || g.opp || '')}` : ''}</td><td class="r num">${cell(ga, sa)}</td><td class="r num">${cell(gb, sb)}</td></tr>` }).join('')}</tbody></table></div></details>`;
+    return `${opts}
+      ${lead ? `<p class="lc-lead"><b>${esc(lead)}.</b> <span class="lb">${esc(scope)}.</span></p>` : ''}
+      <p class="lc-sum">${sents.map(esc).join(' ')}</p>
+      ${svg ? `<figure class="lc-fig"><div class="lc-cw">${svg}</div>
+        <figcaption class="lc-key"><span><i class="k-p c-a" aria-hidden="true"></i>${esc(na)}</span><span><i class="k-p d c-b" aria-hidden="true"></i>${esc(nb)}</span>
+          <span><i class="k-h" aria-hidden="true"></i>Filled: cleared the line</span><span><i class="k-m" aria-hidden="true"></i>Hollow: under it</span>
+          <span><i class="k-ln" aria-hidden="true"></i>Line (drag the handle, or focus it and use the arrow keys)</span><span><i class="k-av" aria-hidden="true"></i>Average of these games</span><span><i class="k-sa" aria-hidden="true"></i>Season average</span><span><i class="k-pm" aria-hidden="true"></i>${C.one === 'books' ? 'Provider’s line' : 'Posted line'}</span></figcaption>
+        ${table}</figure>` : `<p class="lc-none">No games match. Try a longer window.</p>`}
+      <div class="lc-cols">${tile(na, sa, 'a', labA)}${tile(nb, sb, 'b', labB)}</div>`;
+  }
+  const agoT = t => { const ms = t > 1e11 ? t : t * 1000, s = Math.max(0, Math.round((Date.now() - ms) / 1000)); return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago` };
   // the combined section's own bars, newest on the right (kept for Same stat; Combined total draws it in the shared chart)
   function bars(vals, line, label, W = 320) {
     if (!vals.length) return '';
@@ -305,10 +397,10 @@
     const act = document.activeElement, keep = focusKey(h), caret = act?.selectionStart;
     const W = Math.round((h.querySelector('.lc-cw')?.clientWidth || h.clientWidth - 2) || 640); C.w = h.clientWidth;
     h.innerHTML = `<div class="lc">
-      <div class="lc-top"><div class="seg" role="radiogroup" aria-label="Sport">${SPORTS.map(([k, l]) => `<button type="button" role="radio" aria-checked="${C.sport === k}" class="${C.sport === k ? 'on' : ''}" tabindex="${C.sport === k ? 0 : -1}" data-cmpsport="${k}">${l}</button>`).join('')}</div>
-        ${C.a || C.b ? '<button type="button" class="lk" data-cmp="swap">Swap the two</button><button type="button" class="lk" data-cmp="clear">Start again</button>' : ''}
-        ${C.a?.d && C.b?.d && window.flBoards ? `<button type="button" class="bt ghost sm lc-save" data-cmp="save">${ic('save', 16)}Save to board</button>` : ''}</div>
-      <div class="lc-slots${C.a?.d && C.b?.d ? ' both' : ''}">${slotHTML('a')}<span class="lc-vs" aria-hidden="true">v</span>${slotHTML('b')}</div>
+      <div class="lc-top">${radios('What to compare', WHO, C.who, 'data-cmpwho')}<div class="seg" role="radiogroup" aria-label="Sport">${SPORTS.map(([k, l]) => `<button type="button" role="radio" aria-checked="${C.sport === k}" class="${C.sport === k ? 'on' : ''}" tabindex="${C.sport === k ? 0 : -1}" data-cmpsport="${k}">${l}</button>`).join('')}</div>
+        ${C.a || C.b ? `${solo() ? '' : '<button type="button" class="lk" data-cmp="swap">Swap the two</button>'}<button type="button" class="lk" data-cmp="clear">Start again</button>` : ''}
+        ${C.a?.d && (C.b?.d || solo()) && window.flBoards ? `<button type="button" class="bt ghost sm lc-save" data-cmp="save">${ic('save', 16)}Save to board</button>` : ''}</div>
+      ${solo() ? `<div class="lc-slots one">${slotHTML('a')}</div>` : `<div class="lc-slots${C.a?.d && C.b?.d ? ' both' : ''}">${slotHTML('a')}<span class="lc-vs" aria-hidden="true">v</span>${slotHTML('b')}</div>`}
       <div class="lc-res">${resultHTML(W)}</div></div>`;
     // the chart was drawn for the width the last one had; the first time, measure again and redraw at the real width
     const cw = h.querySelector('.lc-cw'); if (cw && Math.abs(cw.clientWidth - W) > 8 && !C._re) { C._re = true; draw(); C._re = false; return }
@@ -349,7 +441,9 @@
     host.addEventListener('input', ev => { const t = ev.target;
       if (t.id === 'lc-a' || t.id === 'lc-b') return find(t.id.slice(-1), t.value);
       if (t.dataset.cmpline) { const v = t.value === '' ? null : +t.value; setLine(t.dataset.cmpline, v); clearTimeout(t._t); t._t = setTimeout(draw, 350) } });
-    host.addEventListener('change', ev => { const t = ev.target; if (!t.matches('[data-cmpstat]')) return; if (t.dataset.cmpstat === 'b') C.statB = t.value; else C.stat = t.value; C.sum = null; draw() });
+    host.addEventListener('change', ev => { const t = ev.target;
+      if (t.matches('[data-cmpbook]')) { const i = +t.dataset.cmpbook; C.bk[i] = t.value; if (C.bk[1 - i] === t.value) C.bk[1 - i] = ''; C.lines = {}; return draw() }
+      if (!t.matches('[data-cmpstat]')) return; if (solo()) C.lines = {}; if (t.dataset.cmpstat === 'b') C.statB = t.value; else C.stat = t.value; C.sum = null; draw() });
     host.addEventListener('keydown', ev => { const t = ev.target;
       const hd = t.closest?.('[data-cmphd]');
       if (hd) { const k = hd.dataset.cmphd, lo = +hd.dataset.lo, max = +hd.dataset.max, cur = +hd.getAttribute('aria-valuenow') || 0;
@@ -371,17 +465,20 @@
     host.addEventListener('click', ev => { const t = ev.target;
       const pk = t.closest('[data-cmppick]'); if (pk) { const [k, i] = pk.dataset.cmppick.split('|'); const h = C.hits[k]?.[+i]; return h && put(k, h.name) }
       const sp = t.closest('[data-cmpsport]'); if (sp) { if (C.sport !== sp.dataset.cmpsport) { C.sport = sp.dataset.cmpsport; C.a = C.b = null; C.stat = C.statB = ''; C.lines = {}; C.sum = null; C.hits = { a: null, b: null } } return draw() }
+      const wh = t.closest('[data-cmpwho]'); if (wh) { const v = wh.dataset.cmpwho; if (v !== C.who) { C.who = v; C.lines = {}; C.sum = null; if (v === 'one') C.b = C.a; else C.b = null } draw(); return focusSlot(C.a?.d ? (solo() ? 'a' : 'b') : 'a') }
+      const on = t.closest('[data-cmpone]'); if (on) { C.one = on.dataset.cmpone; C.lines = {}; pickStat(); return draw() }
+      const rc = t.closest('[data-cmprecent]'); if (rc) { C.recent = +rc.dataset.cmprecent; return draw() }
       const w = t.closest('[data-cmpwin]'); if (w) { C.win = +w.dataset.cmpwin; return draw() }
       const md = t.closest('[data-cmpmode]'); if (md) { C.mode = md.dataset.cmpmode; C.sum = null; pickStat(); return draw() }
       const vn = t.closest('[data-cmpven]'); if (vn) { C.venue = vn.dataset.cmpven; return draw() }
       const vs = t.closest('[data-cmpvs]'); if (vs) { C.vs = C.vs === 'opp' ? 'any' : 'opp'; return draw() }
       const pr = t.closest('[data-cmppre]'); if (pr) { C.preset = pr.dataset.cmppre; return draw() }
       const b = t.closest('[data-cmp]'); if (!b) return; const a = b.dataset.cmp, k = b.dataset.k;
-      if (a === 'change') { C[k] = null; C.sum = null; draw(); return focusSlot(k) }
+      if (a === 'change') { C[k] = null; if (solo()) C.b = null; C.sum = null; C.lines = {}; draw(); return focusSlot(k) }
       if (a === 'lab') return C.api?.openPlayer({ sport: C.sport, name: C[k].d.name, stat: statOf(k), line: lineOf(k) });
       if (a === 'save') { const it = cmpItem(); return it && window.flBoards?.offer(it, b) }
       if (a === 'swap') { [C.a, C.b] = [C.b, C.a]; if (C.mode === 'diff') [C.stat, C.statB] = [C.statB, C.stat]; C.lines = Object.fromEntries(Object.entries(C.lines).map(([key, v]) => [key.replace(/^[ab]/, m => m === 'a' ? 'b' : 'a'), v])); return draw() }
-      if (a === 'clear') { C.a = C.b = null; C.stat = C.statB = ''; C.lines = {}; C.sum = null; draw(); return focusSlot('a') } });
+      if (a === 'clear') { C.a = C.b = null; C.bk = ['', '']; C.stat = C.statB = ''; C.lines = {}; C.sum = null; draw(); return focusSlot('a') } });
     // drag a player card (anything with data-cmpdrag) onto a slot
     host.addEventListener('dragover', ev => { const z = ev.target.closest('[data-cmpdrop]'); if (!z || !ev.dataTransfer.types.includes('application/x-fl-player')) return; ev.preventDefault(); z.classList.add('over') });
     host.addEventListener('dragleave', ev => ev.target.closest?.('[data-cmpdrop]')?.classList.remove('over'));
@@ -395,6 +492,15 @@
   function compare(host, o = {}, api) {
     C.host = host; C.api = api; wire(host);
     if (o.sport && NAME[o.sport] && o.sport !== C.sport) { C.sport = o.sport; C.a = C.b = null; C.stat = C.statB = ''; C.lines = {} }
+    if (o.who === 'one' && o.a) {
+      C.who = 'one'; C.one = ONE.some(x => x[0] === o.one) ? o.one : 'lines'; if (o.stat) C.stat = o.stat; C.statB = o.statB || '';
+      if (o.win != null && WINDOWS.some(w => w[0] === +o.win)) C.win = +o.win; if (RECENT.some(r => r[0] === +o.recent)) C.recent = +o.recent;
+      C.bk = Array.isArray(o.bk) ? [o.bk[0] || '', o.bk[1] || ''] : ['', '']; C.lines = {};
+      if (!(C.a?.d && nm(C.a.name) === nm(o.a))) { C.b = null; load('a', o.a) } else { C.b = C.a; pickStat(); draw() }
+      return;
+    }
+    if (o.who === 'one') { C.who = 'one'; if (o.one && ONE.some(x => x[0] === o.one)) C.one = o.one }
+    else if (o.a && o.b) C.who = 'two';
     if (o.a && o.b) {
       if (MODES.some(m => m[0] === o.mode)) C.mode = o.mode; else C.mode = 'same';
       if (o.stat) C.stat = o.stat; C.statB = o.statB || '';
