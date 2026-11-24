@@ -11,7 +11,7 @@ if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 const freePort = () => new Promise(res => { const s = net.createServer(); s.listen(0, () => { const p = s.address().port; s.close(() => res(p)) }) });
 const ROOT = path.join(__dirname, '..');
 let n = 0, failed = 0;
-async function t(name, fn) { try { await fn(); n++; console.log('ok', name) } catch (e) { failed++; console.log('FAIL', name, '\n  ', e.message.split('\n').slice(0, 6).join('\n   ')) } }
+async function t(name, fn) { if (process.env.ONLY && !name.includes(process.env.ONLY)) return; try { await fn(); n++; console.log('ok', name) } catch (e) { failed++; console.log('FAIL', name, '\n  ', e.message.split('\n').slice(0, 6).join('\n   ')) } }
 
 // stand-in lines: three NBA players in the upcoming Timberwolves v Grizzlies game, one NFL player
 const now = Date.now(), H = 36e5, D = 864e5;
@@ -24,7 +24,8 @@ const NBA = { at: Math.round(now / 1000) - 60, checked: 40, rows: [
   row({ player: 'Ja Morant', team: 'MEM', opp: 'MIN', teamName: 'Grizzlies', k: 'ast', label: 'Assists', line: 7.5, start: now + 2 * H, vals: [8, 9, 6, 10], books: ['prizepicks'], offers: [{ book: 'prizepicks', line: 7.5 }] }),
 ] };
 const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
-  row({ player: 'Jalen Hurts', team: 'PHI', opp: 'LV', teamName: 'Eagles', k: 'pyds', label: 'Passing yards', line: 215.5, start: now + 3 * H, vals: [240, 198, 260, 221, 230, 190, 250, 205, 233, 260], pOver: .5 }),
+  row({ player: 'Jalen Hurts', team: 'PHI', opp: 'LV', teamName: 'Eagles', k: 'pyds', label: 'Passing yards', line: 215.5, start: now + 3 * H, vals: [240, 198, 260, 221, 230, 190, 250, 205, 233, 260], pOver: .5,
+    offers: [{ book: 'prizepicks', line: 215.5 }, { book: 'sleeper', line: 224.5, pOver: .5 }] }),
 ] };
 
 (async () => {
@@ -112,6 +113,42 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
       await p.keyboard.press('Escape'); await p.waitForTimeout(200);
       assert.ok(!(await p.$('#flRP')), 'the panel closes on Escape');
       assert.match(await p.evaluate(() => document.activeElement?.textContent || ''), /Anthony Edwards/);
+      assert.deepStrictEqual(p.errors, []);
+    }
+  });
+
+  await t('Line Lens: the slider and a drag recount the games, provider lines are snap points, the posted line comes back', async () => {
+    for (const [w, h] of [[1440, 900], [390, 844]]) {
+      const p = await page(w, h); await explorer(p);
+      await p.locator('[data-pxopen]').filter({ hasText: 'Jalen Hurts' }).click(); await p.waitForSelector('#llR'); await p.waitForTimeout(300);
+      // two open lines, each a snap point with its provider and when it was verified; the posted one is pressed
+      const chips = await p.$$eval('[data-llsnap]', bs => bs.map(b => [b.dataset.llsnap, b.getAttribute('aria-pressed'), b.textContent]));
+      assert.deepStrictEqual(chips.map(c => c[0]), ['215.5', '224.5']); assert.strictEqual(chips[0][1], 'true');
+      assert.match(chips[0][2], /PrizePicks/); assert.match(chips[1][2], /Sleeper/); assert.ok(chips.every(c => /verified|unknown/.test(c[2])));
+      assert.match(await p.textContent('#llOut'), /^Over 215\.5 in 7 of the last 10/);
+      // the slider: the line moves and the counts follow, in the table and in the words read out
+      await p.focus('#llR'); for (let i = 0; i < 20; i++) await p.keyboard.press('ArrowRight');
+      assert.strictEqual(await p.inputValue('#llR'), '225.5'); assert.match(await p.textContent('#llOut'), /^Over 225\.5 in 6 of the last 10/);
+      assert.match(await p.getAttribute('#llR', 'aria-valuetext'), /225\.5/);
+      assert.ok(await p.isVisible('[data-ll="reset"]'));
+      // a snap chip jumps to the provider's line
+      await p.click('[data-llsnap="224.5"]'); assert.strictEqual(await p.inputValue('#llR'), '224.5');
+      assert.strictEqual(await p.getAttribute('[data-llsnap="224.5"]', 'aria-pressed'), 'true');
+      // a drag that ends next to a provider line snaps onto it
+      await p.locator('[data-llchart]').scrollIntoViewIfNeeded();
+      const box = await p.locator('[data-llchart]').boundingBox(), top = +(await p.getAttribute('[data-llchart]', 'data-top'));
+      const yAt = v => box.y + box.height * (1 - v / top * 56 / 60);
+      await p.mouse.move(box.x + box.width / 2, yAt(250)); await p.mouse.down(); await p.mouse.move(box.x + box.width / 2, yAt(215.6), { steps: 6 }); await p.mouse.up();
+      assert.strictEqual(await p.inputValue('#llR'), '215.5', 'a drag that ends next to 215.5 snaps onto it');
+      // the curve: a rate at every line, with a table version
+      assert.ok(await p.$('.ll-cvs path.ll-path')); assert.ok((await p.$$('.ll-tbl tbody tr')).length > 5);
+      await p.click('[data-llwin="l5"]'); assert.strictEqual(await p.getAttribute('[data-llwin="l5"]', 'aria-checked'), 'true');
+      // the chance and edge above stay on the posted line
+      await p.fill('#llR', '200');
+      assert.match(await p.textContent('.rp-line .rp-lt'), /215\.5/);
+      await p.click('[data-ll="reset"]'); assert.strictEqual(await p.inputValue('#llR'), '215.5'); assert.ok(!(await p.isVisible('[data-ll="reset"]')));
+      await p.evaluate(() => document.getElementById('llH').scrollIntoView()); await p.waitForTimeout(150); await shot(p, `linelens-${w}`);
+      const over = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth); assert.ok(over <= 0, 'no sideways scroll');
       assert.deepStrictEqual(p.errors, []);
     }
   });

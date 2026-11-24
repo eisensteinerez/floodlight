@@ -2715,6 +2715,42 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .rp-why li{display:flex;gap:8px;align-items:flex-start}.rp-why li.ok svg{color:var(--good)}.rp-why li.no svg{color:var(--muted)}
 .rp-av li{display:grid;grid-template-columns:120px 1fr;gap:10px}.rp-av b{font-weight:600}
 .rp-lh li,.rp-sim li{display:flex;align-items:center;gap:12px}.rp-lh time{min-width:120px;color:var(--text-2)}.rp-sim small{color:var(--muted);margin-right:auto}
+/* Line Lens (propx.js): drag the line over the games, snap to a provider's open line, the rate at every line */
+.ll-hd{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ll-snaps{display:flex;flex-wrap:wrap;gap:8px}
+.ll-snap{min-height:44px;height:auto;padding:6px 14px;flex-direction:column;align-items:flex-start;gap:2px;white-space:normal;text-align:left}
+.ll-snap b{font-size:15px}.ll-snap small{font:500 11px/1.25 var(--font-body);color:inherit;opacity:.85}
+.ll-sl{display:grid;grid-template-columns:auto 1fr 3.5em;align-items:center;gap:12px}
+.ll-sl input{width:100%;min-height:44px;accent-color:var(--accent)}
+.ll-sl output{font:800 18px/1 var(--font-body);text-align:right}
+.ll-ch{position:relative;cursor:ns-resize;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:var(--radius-tile)}
+.ll-ch.drag{cursor:grabbing}
+.ll-svg .ll-sn{stroke:var(--text-2);stroke-width:1;stroke-dasharray:1 3;vector-effect:non-scaling-stroke;opacity:.7}
+.ll-ln{position:absolute;left:0;right:0;height:0;border-top:2px dashed var(--text);pointer-events:none}
+.ll-ln.moved{border-top-color:var(--accent);border-top-style:solid}
+.ll-ln i{position:absolute;right:0;top:-12px;transform:translateY(-50%);padding:2px 8px;border-radius:var(--radius-pill);background:var(--surface);border:1px solid var(--border-2);font:800 12px/1.2 var(--font-body);font-style:normal;color:var(--text)}
+.ll-ln.moved i{background:var(--accent-fill);color:var(--on-accent);border-color:transparent}
+#llViz{display:grid;gap:12px}.ll-out{margin:0}.ll-out b{font-weight:700}
+.ll-t th[scope=row]{font-weight:600}
+.ll-cv{margin:8px 0 0;display:grid;gap:10px}
+.ll-cvh{display:flex;align-items:baseline;gap:8px;font:700 14px/1.2 var(--font-body)}
+.ll-win{justify-self:start}
+.ll-cvp{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:stretch}
+.ll-ya{display:flex;flex-direction:column;justify-content:space-between;font:500 11px/1 var(--font-body);text-align:right;padding:2px 0}
+.ll-ya i{font-style:normal}
+.ll-cvs{width:100%;height:120px;display:block;overflow:visible}
+.ll-cvs .ll-g{stroke:var(--border);stroke-width:1;vector-effect:non-scaling-stroke}
+.ll-cvs .ll-ax{stroke:var(--border-2);stroke-width:1;vector-effect:non-scaling-stroke}
+.ll-cvs .ll-snx{stroke:var(--text-2);stroke-width:1;stroke-dasharray:2 3;vector-effect:non-scaling-stroke;opacity:.8}
+.ll-cvs .ll-path{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.ll-cvs .ll-now{stroke:var(--text);stroke-width:2;vector-effect:non-scaling-stroke}
+.ll-cvs .ll-hit{fill:transparent}.ll-cvs .ll-hit:hover{fill:color-mix(in oklab,var(--text) 8%,transparent)}
+.ll-xa{display:flex;justify-content:space-between;gap:8px;font:500 11px/1 var(--font-body);padding-left:34px}
+.ll-xa span:nth-child(2){display:inline-flex;align-items:center;gap:6px}
+.ll-k{display:inline-block;width:0;height:12px;border-left:1px dashed var(--text-2)}
+.ll-tbl summary{cursor:pointer;font:600 13px/1.4 var(--font-body);color:var(--text-2);min-height:44px;display:flex;align-items:center}
+.ll-tbl tr.on th,.ll-tbl tr.on td{font-weight:800;color:var(--text)}
+@media (prefers-reduced-motion:no-preference){.ll-ln{transition:bottom 60ms linear}.ll-ch.drag .ll-ln{transition:none}}
 .rp-foot{margin:4px 0 0}
 @media (max-width:640px){.rp-sheet{width:100vw;border-radius:0}.rp-nums{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-h{padding:14px 16px}.rp-b0{padding:16px 16px 40px}.rp-acts .bt{flex:1 1 calc(50% - 8px)}.rp-acts .lk{margin:0}.rp-av li{grid-template-columns:1fr}}
 
