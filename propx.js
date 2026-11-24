@@ -65,8 +65,16 @@
     if (X.host?.isConnected) { X.removed = window.flMarkets.removed(); setRows(window.flMarkets.open()); draw() } if (X.panel?.isConnected) redrawPanel() });
 
   /* ---------- the explorer ---------- */
-  const save = () => { store.set('fl.px', X.f); store.set('fl.pxSort', X.sort) };
-  const ADV = ['league', 'game', 'team', 'provider', 'l5', 'l10', 'l20', 'edge', 'grade', 'when', 'injury', 'moved', 'games', 'mins'];
+  // this exact view (sport, every filter and the sort), as a board item or a Continue researching card
+  function viewItem() {
+    const a = active().filter(k => k !== 'sport'), sp = X.f.sport === 'all' ? 'All sports' : SPORT[X.f.sport] || X.f.sport, sortName = (K.SORTS.find(s => s[0] === X.sort) || [, ''])[1];
+    return { kind: 'props', key: `props:${JSON.stringify(X.f)}:${X.sort}`, label: `Prop explorer · ${sp}`, sub: [a.length ? a.slice(0, 3).map(chipName).join(', ') + (a.length > 3 ? ` and ${a.length - 3} more` : '') : 'No filters', sortName].filter(Boolean).join(' · '),
+      open: { lab: { tool: 'props', sport: X.f.sport === 'all' ? '' : X.f.sport, filters: { ...X.f }, sort: X.sort } } };
+  }
+  let noteT = 0;
+  const save = () => { store.set('fl.px', X.f); store.set('fl.pxSort', X.sort);
+    clearTimeout(noteT); noteT = setTimeout(() => { if (active().filter(k => k !== 'sport').length) try { window.flRecent?.note({ ...viewItem(), key: 'props:last' }) } catch (e) {} }, 800) };
+  const ADV = ['league', 'game', 'team', 'provider', 'l5', 'l10', 'l20', 'edge', 'grade', 'when', 'injury', 'lineup', 'moved', 'games', 'mins'];
   const isAdv = k => ADV.includes(k);
   function active() {
     const d = K.defaults(), out = [];
@@ -77,6 +85,7 @@
   const EDGE = [[null, 'Any'], [0, 'Above 0'], [3, '+3 or more'], [5, '+5 or more'], [10, '+10 or more']];
   const GRADES = [['all', 'Any'], ['A', 'A only'], ['B', 'B or better'], ['C', 'C or better']];
   const WHEN = [['all', 'Any time'], ['soon', 'In the next 2 hours'], ['today', 'Today'], ['tomorrow', 'Tomorrow'], ['later', 'Later']];
+  const LINEUP = [['all', 'Any'], ['settled', 'Role settled'], ['unsure', 'Role uncertain']];
   const INJ = [['all', 'Any'], ['clear', 'Not on the injury report'], ['listed', 'On the injury report']];
   const MOVED = [['all', 'Any'], ['moved', 'Line has moved'], ['easier', 'Moved in the pick’s favour'], ['harder', 'Moved against the pick']];
   const GAMES = [[0, 'Any'], [5, '5+'], [10, '10+'], [20, '20+']];
@@ -87,10 +96,14 @@
     const opt = name => (o[name].find(x => x[0] === v) || [, v])[1];
     return { q: `Player: ${v}`, league: `League: ${SPORT[v] || v}`, game: `Game: ${opt('game')}`, team: `Team: ${opt('team')}`, stat: `Stat: ${opt('stat')}`, provider: `Provider: ${book(v)}`, side: find(SIDE, v),
       hot: 'Running hot', l5: `Last 5: ${find(RATE, v)}`, l10: `Last 10: ${find(RATE, v)}`, l20: `Last 20: ${find(RATE, v)}`, edge: `Supported edge ${find(EDGE, v)}`, grade: `Evidence ${find(GRADES, v)}`, when: find(WHEN, v),
-      injury: find(INJ, v), moved: find(MOVED, v), games: `${find(GAMES, v)} games`, mins: `Minutes ${find(MINS, v)}` }[k] || k;
+      injury: find(INJ, v), lineup: `Lineup: ${find(LINEUP, v).toLowerCase()}`, moved: find(MOVED, v), games: `${find(GAMES, v)} games`, mins: `Minutes ${find(MINS, v)}` }[k] || k;
   };
   function mount(host, o = {}, api = {}) {
     X.host = host; X.api = api; X.shown = 40;
+    // a view saved on a board, or in Continue researching, comes back with every filter and the sort exactly as they were
+    if (o.filters && typeof o.filters === 'object') { X.f = { ...K.defaults(), ...o.filters }; X.panelOpen = active().some(isAdv) }
+    if (o.sort && K.SORTS.some(s => s[0] === o.sort)) X.sort = o.sort;
+    if (o.filters || o.sort) save();
     if (o.sport) X.f.sport = o.sport;
     host.innerHTML = `<div class="px" id="px"><div id="pxHead"></div><div id="pxBody" aria-live="polite" aria-busy="true"></div></div>`;
     draw(); load();
@@ -120,7 +133,7 @@
           ${select('pxEdge', 'Supported edge', 'edge', EDGE, true)}
           ${select('pxGrade', 'Evidence quality', 'grade', GRADES, true)}
           ${select('pxWhen', 'Starting time', 'when', WHEN, true)}
-          ${select('pxInj', 'Injury status', 'injury', INJ, true)}
+          ${select('pxInj', 'Injury status', 'injury', INJ, true)}${select('pxLu', 'Lineup', 'lineup', LINEUP, true)}
           ${select('pxMove', 'Line movement', 'moved', MOVED, true)}
           ${select('pxGames', 'Games on record', 'games', GAMES, true)}
           ${select('pxMins', 'Minutes (last 5)', 'mins', MINS, true)}
@@ -132,6 +145,7 @@
         <div class="px-bar">
           <label class="px-q" for="pxQ"><span class="sr-only">Find a player</span>${ic('search', 18)}<input id="pxQ" class="inp" type="search" name="player" placeholder="Find a player…" autocomplete="off" spellcheck="false" value="${esc(X.f.q)}"></label>
           <label class="px-sort" for="pxSort"><span>Sort</span><select class="inp" id="pxSort" name="sort">${K.SORTS.map(([k, l]) => `<option value="${k}"${X.sort === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+          ${window.flBoards ? `<button type="button" class="bt ghost px-sv" data-px="saveview">${ic('save', 18)}Save view</button>` : ''}
           <button type="button" class="bt ghost px-fb" data-px="filters" aria-expanded="${X.panelOpen}" aria-controls="pxPanel">${ic('filter', 18)}Filters${act.filter(k => k !== 'q').length ? ` <span class="pl solid px-n">${act.filter(k => k !== 'q').length}</span>` : ''}</button>
         </div></div>
       ${panel}
@@ -203,10 +217,11 @@
     if (a === 'clear') { const sport = X.f.sport; X.f = { ...K.defaults(), sport }; save(); draw(); return $('pxQ')?.focus() }
     if (a === 'more') { X.shown += 40; return body() }
     if (a === 'reload') return load(true);
+    if (a === 'saveview') return window.flBoards?.offer(viewItem(), t.closest('button'));
   });
 
   /* ---------- the research panel ---------- */
-  const R = { p: null, from: null, moves: null, prior: null, tab: 'chart', key: '' };
+  const R = { p: null, from: null, moves: null, prior: null, tab: 'chart', key: '', lens: null, lensWin: 'l10' };
   const find = id => X.rows?.find(r => r.p.id === id)?.p || window.flMarkets?.get?.(id) || null;
   async function openPanel(id, from) {
     const p = typeof id === 'string' ? find(id) : id; if (!p) return;
@@ -216,6 +231,7 @@
       if (u && u.ok === false) { let box = X.host?.querySelector('#pxPlan'); if (!box && X.host) { box = document.createElement('div'); box.id = 'pxPlan'; box.tabIndex = -1; X.host.prepend(box) }
         if (box) { box.innerHTML = upsell('lab_unlimited', 'Unlimited Lab searches are part of Plus.'); box.focus() } return }
     }
+    if (R.key !== keyOf(p) || R.p?.line !== p.line) R.lens = null;
     R.p = p; R.from = from || document.activeElement; R.moves = null; R.prior = null; R.key = keyOf(p);
     track('player_open', { sport: p.sport, player: p.name }); count(p, 'research');
     try { window.flRecent?.note({ kind: 'player', key: `player:${p.sport}:${p.name}:${p.k}`, label: p.name, sub: p.text, photo: p.photo || '', open: { lab: { sport: p.sport, name: p.name, kind: 'player', stat: p.k, line: p.line, side: p.side } } }) } catch (e) {}
@@ -314,6 +330,89 @@
       <li><span class="lb">Injury report</span><b>${esc(a?.report || 'Not checked yet')}</b></li><li><span class="lb">Status</span><b>${esc(a?.avail || 'Not checked yet')}</b></li>
       <li><span class="lb">Lineup</span><b>${esc(a?.start || 'Lineup not announced')}</b></li><li><span class="lb">Minutes</span><b>${esc(minsTxt)}</b></li></ul></section>`;
   }
+
+  /* ---------- Line Lens: drag the line, or jump to a line a provider has open now ----------
+     The counting is labcore.js lens() and curve(); the snap points are labcore.snaps() over the verified feed's open
+     markets only, so a closed or expired line is never offered. Moving the line recounts the games. It never changes
+     the chance, the edge or the grade above, which stay tied to the posted line. */
+  const LW = [['l5', 'Last 5'], ['l10', 'Last 10'], ['l20', 'Last 20'], ['season', 'Season']];
+  function lensData(p, gone) {
+    const gs = (p.games || []).filter(x => x.v != null), open = gone ? [] : (window.flMarkets?.open?.() || X.rows?.map(r => r.p) || []);
+    const sn = K.snaps(p, open), rg = K.lensRange(gs, p.line, sn.map(x => x.line));
+    const line = R.lens ?? p.line;
+    return { gs, sn, rg, line, L: K.lens(gs, line, p.side), full: can('splits_full') };
+  }
+  const bookList = x => x.books.map(b => book(b.book)).join(', ');
+  const snapAge = x => { const t = Math.max(...x.books.map(b => +b.at || 0)); return t ? `verified ${ago(t > 1e11 ? t : t * 1000)}` : 'verification time unknown' };
+  function lensViz(p, d) {
+    const { gs, rg, line, L, sn, full } = d, under = p.side === 'under', word = under ? 'Under' : 'Over';
+    const xs = gs.slice(0, 20).reverse();
+    const top = Math.max(rg.hi, ...xs.map(g => g.v), .5) * 1.08, Y = v => 60 - v / top * 56;
+    const res = v => v === line ? 'push' : (under ? v < line : v > line) ? 'hit' : 'miss', W = 100 / Math.max(1, xs.length);
+    const bars = xs.length ? `<svg class="rp-ch ll-svg" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+      ${sn.map(x => `<line class="ll-sn" x1="0" x2="100" y1="${Y(x.line).toFixed(2)}" y2="${Y(x.line).toFixed(2)}"/>`).join('')}
+      ${xs.map((g, i) => { const h = Math.max(.8, g.v / top * 56); return `<rect class="rp-b ${res(g.v)}" x="${(i * W + W * .14).toFixed(2)}" y="${(60 - h).toFixed(2)}" width="${(W * .72).toFixed(2)}" height="${h.toFixed(2)}"><title>${esc(`${g.date ? new Date(g.date).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}${g.opp ? ' v ' + g.opp : ''}: ${fmt(g.v)}`)}</title></rect>` }).join('')}</svg>
+      <span class="ll-ln${line !== p.line ? ' moved' : ''}" style="bottom:${(Math.min(56, line / top * 56) / 60 * 100).toFixed(1)}%"><i class="num">${fmt(line)}</i></span>` : '';
+    const rows = full ? L.rows : L.rows.filter(r => r.key === 'l10' || (r.key === 'season' && !L.rows.some(x => x.key === 'l10')));
+    const table = `<div class="tbx-wrap"><table class="tbx ll-t"><caption class="sr-only">Games against ${fmt(line)}, by window</caption><thead><tr><th scope="col">Games</th><th scope="col" class="r">Over</th><th scope="col" class="r">Under</th><th scope="col" class="r">Push</th><th scope="col" class="r">${word} rate</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><th scope="row">${esc(r.key === 'season' ? `This season (${r.n})` : r.label)}</th><td class="r num">${r.over}</td><td class="r num">${r.under}</td><td class="r num">${r.push || '–'}</td><td class="r num"><b>${r.rate == null ? '–' : pct(r.rate)}</b></td></tr>`).join('')}</tbody></table></div>
+      ${full ? '' : upsell('splits_full', 'Last 5, last 20 and season counts in Line Lens are part of Plus.')}`;
+    // how the rate changes as the line moves, for one window, with the open lines marked on the axis
+    const win = full && L.rows.some(r => r.key === R.lensWin) ? R.lensWin : (L.rows.find(r => r.key === 'l10') || L.rows[0])?.key || 'l10';
+    const cv = K.curve(gs, p.side, rg.lines, win).filter(c => c.rate != null), n = rg.lines.length;
+    const X = x => n > 1 ? (x - rg.lo) / (rg.hi - rg.lo) * 100 : 50, CY = r => 38 - r * 34;
+    const path = cv.map((c, i) => `${i ? 'L' : 'M'}${X(c.line).toFixed(2)} ${CY(c.rate).toFixed(2)}`).join('');
+    const wName = (LW.find(w => w[0] === win) || [, 'Last 10'])[1].toLowerCase();
+    const at = cv.find(c => c.line === line) || cv.reduce((a, c) => !a || Math.abs(c.line - line) < Math.abs(a.line - line) ? c : a, null);
+    const curve = cv.length > 1 ? `<figure class="ll-cv"><figcaption class="ll-cvh"><b>${word} rate at each line</b>${full ? '' : `<span class="lb">${esc(wName)}</span>`}</figcaption>
+      ${full ? `<div class="seg ll-win" role="radiogroup" aria-label="Games counted in the curve">${LW.filter(w => L.rows.some(r => r.key === w[0])).map(([k, l]) => `<button type="button" role="radio" aria-checked="${win === k}" class="${win === k ? 'on' : ''}" tabindex="${win === k ? 0 : -1}" data-llwin="${k}">${l}</button>`).join('')}</div>` : ''}
+      <div class="ll-cvp"><span class="ll-ya lb" aria-hidden="true"><i>100%</i><i>50%</i><i>0%</i></span>
+        <svg class="ll-cvs" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="${esc(`${word} rate over the ${wName} at each line from ${fmt(rg.lo)} to ${fmt(rg.hi)}. At ${fmt(line)}: ${at?.rate == null ? 'no games off the line' : pct(at.rate)}. The table below lists every line.`)}">
+          <line class="ll-g" x1="0" x2="100" y1="4" y2="4"/><line class="ll-g" x1="0" x2="100" y1="21" y2="21"/><line class="ll-ax" x1="0" x2="100" y1="38" y2="38"/>
+          ${sn.map(x => `<line class="ll-snx" x1="${X(x.line).toFixed(2)}" x2="${X(x.line).toFixed(2)}" y1="4" y2="38"/>`).join('')}
+          <path class="ll-path" d="${path}"/>
+          <line class="ll-now" x1="${X(line).toFixed(2)}" x2="${X(line).toFixed(2)}" y1="2" y2="38"/>
+          ${cv.map(c => `<rect class="ll-hit" x="${(X(c.line) - 50 / n).toFixed(2)}" y="0" width="${(100 / n).toFixed(2)}" height="40"><title>${esc(`Line ${fmt(c.line)}: ${pct(c.rate)} ${word.toLowerCase()}, ${c.d} games off the line`)}</title></rect>`).join('')}</svg></div>
+      <div class="ll-xa lb" aria-hidden="true"><span class="num">${fmt(rg.lo)}</span><span>${sn.length ? '<i class="ll-k"></i>Lines open now' : ''}</span><span class="num">${fmt(rg.hi)}</span></div>
+      <details class="ll-tbl"><summary>Every line as a table</summary><div class="tbx-wrap"><table class="tbx"><caption class="sr-only">${esc(word)} rate over the ${esc(wName)} at each line</caption><thead><tr><th scope="col">Line</th><th scope="col" class="r">${word} rate</th><th scope="col" class="r">Games off the line</th><th scope="col">Open now</th></tr></thead>
+        <tbody>${cv.map(c => { const o = sn.find(x => x.line === c.line); return `<tr${c.line === line ? ' class="on"' : ''}><th scope="row" class="num">${fmt(c.line)}</th><td class="r num">${pct(c.rate)}</td><td class="r num">${c.d}</td><td>${o ? esc(bookList(o)) : ''}</td></tr>` }).join('')}</tbody></table></div></details></figure>` : '';
+    return `<div class="ll-ch" data-llchart data-top="${top}">${bars}</div>
+      <p class="ll-out" id="llOut"><b>${esc(L.summary)}</b>${line !== p.line ? ` <span class="lb">The posted line is ${fmt(p.line)}.</span>` : ''}</p>${table}${curve}`;
+  }
+  function lensBox(p, gone) {
+    const d = lensData(p, gone); if (!d.gs.length || p.yes) return '';
+    const { rg, sn, line } = d, smin = Math.max(.5, Math.floor(rg.lo * 2) / 2), smax = Math.ceil(rg.hi * 2) / 2;
+    const chips = sn.length ? `<div class="ll-snaps" role="group" aria-label="Lines open now: choose one to jump to it">${sn.map(x => `<button type="button" class="cx sm ll-snap" data-llsnap="${x.line}" aria-pressed="${x.line === line}"><b class="num">${fmt(x.line)}</b><small>${esc(bookList(x))} · ${esc(snapAge(x))}</small></button>`).join('')}</div>`
+      : `<p class="lb">${gone ? 'This market is off the board, so there are no open lines to jump to.' : 'No provider has another line open for this stat right now.'}</p>`;
+    return `<section class="rp-sec ll" aria-labelledby="llH"><div class="ll-hd"><h3 id="llH">Line Lens</h3><button type="button" class="lk" data-ll="reset"${line === p.line ? ' hidden' : ''}>Back to the posted line, ${fmt(p.line)}</button></div>
+      <p class="lb">Drag the line across ${d.gs.length > 20 ? 'the last 20 games' : 'the games'}, or jump to a line a provider has open now. The counts change as you move it; the chance and edge above stay on the posted line.</p>
+      ${chips}
+      <label class="ll-sl" for="llR"><span class="lb">Line</span><input type="range" id="llR" min="${smin}" max="${smax}" step="0.5" value="${line}" aria-valuetext="${esc(d.L.summary)}"><output class="num" for="llR">${fmt(line)}</output></label>
+      <div id="llViz">${lensViz(p, d)}</div><p class="sr-only" id="llSay" aria-live="polite"></p></section>`;
+  }
+  // a new line: repaint the lens only (the rest of the panel, and the slider being dragged, stay put)
+  function setLens(v, from) {
+    const p0 = R.p; if (!p0 || !X.panel) return; const p = find(p0.id) || p0, gone = !find(p0.id) && X.rows;
+    const d0 = lensData(p, gone), sn = d0.sn;
+    v = Math.round(+v * 2) / 2; if (isNaN(v)) return;
+    // within a quarter of a provider's line, the line snaps to it
+    if (from === 'drag') { const near = sn.find(x => Math.abs(x.line - v) <= .25); if (near) v = near.line }
+    R.lens = v === p.line ? null : v;
+    const d = lensData(p, gone), box = X.panel.querySelector('#llViz'); if (!box) return;
+    box.innerHTML = lensViz(p, d);
+    // the redrawn summary is read out once the line settles, not at every step of a drag
+    const say = X.panel.querySelector('#llSay'); if (say) { clearTimeout(setLens.t); setLens.t = setTimeout(() => { say.textContent = d.L.summary }, 500) }
+    const r = X.panel.querySelector('#llR'); if (r) { if (+r.value !== d.line) r.value = d.line; r.setAttribute('aria-valuetext', d.L.summary); const o = r.parentElement.querySelector('output'); if (o) o.textContent = fmt(d.line) }
+    X.panel.querySelectorAll('[data-llsnap]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.llsnap === d.line)));
+    const rs = X.panel.querySelector('[data-ll="reset"]'); if (rs) rs.hidden = d.line === p.line;
+  }
+  let llDrag = null;
+  const llFromY = (el, y) => { const r = el.getBoundingClientRect(); return (1 - (y - r.top) / r.height) * 60 / 56 * +el.dataset.top };
+  document.addEventListener('input', ev => { if (ev.target.id === 'llR' && X.panel?.contains(ev.target)) setLens(ev.target.value) });
+  document.addEventListener('pointerdown', ev => { const c = ev.target.closest?.('[data-llchart]'); if (!c || !X.panel?.contains(c) || ev.button > 0) return; llDrag = c.closest('#llViz'); c.classList.add('drag'); setLens(llFromY(c, ev.clientY), 'drag'); ev.preventDefault() });
+  document.addEventListener('pointermove', ev => { if (!llDrag) return; const c = llDrag.querySelector('[data-llchart]'); if (c) { c.classList.add('drag'); setLens(llFromY(c, ev.clientY), 'drag') } });
+  const llUp = () => { if (!llDrag) return; llDrag.querySelector('[data-llchart]')?.classList.remove('drag'); llDrag = null; say(X.panel?.querySelector('#llOut')?.textContent || '') };
+  document.addEventListener('pointerup', llUp); document.addEventListener('pointercancel', llUp);
   // what "Report incorrect data" sends with the member's note (the dialog is datastatus.js's, the same as on Predictions)
   const reportOf = p => ({ marketId: p.mid || p.id, eventId: p.eventId || p.v?.event?.id || '', player: p.name, provider: (p.books || []).map(book).join(', '),
     sport: p.sport, stat: p.text, line: p.line, side: p.side, verifiedAt: p.verifiedAt ? Math.round(+p.verifiedAt > 1e11 ? +p.verifiedAt / 1000 : +p.verifiedAt) : '', page: '#/lab (Prop Explorer)' });
@@ -339,11 +438,13 @@
         <button type="button" class="bt ghost" data-rp="follow" aria-pressed="${followed(p)}">${ic('star', 18)}${followed(p) ? 'Following' : 'Follow'}</button>
         <button type="button" class="bt ghost" data-rp="board">${ic('save', 18)}Save to board</button>
         <button type="button" class="bt ghost" data-rp="share">${ic('share', 18)}Share</button>
+        <button type="button" class="bt ghost" data-rp="compare">${ic('compare', 18)}Compare</button>
         <button type="button" class="lk" data-rp="lab">Full player page${ic('arrow', 16)}</button></div>
       <p class="sr-only" role="status" id="rpSay"></p>
       <section class="rp-sec"><h3>Every game against this line</h3><p class="rp-sum">${esc(s.summary)}</p>
         <div class="seg rp-tabs" role="tablist" aria-label="Show the games as"><button type="button" role="tab" id="rpTabC" aria-selected="${R.tab === 'chart'}" aria-controls="rpPane" data-rptab="chart" tabindex="${R.tab === 'chart' ? 0 : -1}">Chart</button><button type="button" role="tab" id="rpTabL" aria-selected="${R.tab === 'log'}" aria-controls="rpPane" data-rptab="log" tabindex="${R.tab === 'log' ? 0 : -1}">Game log</button></div>
         <div id="rpPane" role="tabpanel" aria-labelledby="${R.tab === 'chart' ? 'rpTabC' : 'rpTabL'}">${R.tab === 'chart' ? chart(p, gs) : log(p, gs)}</div></section>
+      ${lensBox(p, gone)}
       <section class="rp-sec"><h3>Splits</h3>
         <dl class="rp-mini"><div><dt>Average</dt><dd class="num">${fmt(s.avg)}</dd></div><div><dt>Median</dt><dd class="num">${fmt(s.med)}</dd></div><div><dt>Line</dt><dd class="num">${fmt(p.line)}</dd></div></dl>
         ${splitTable(s, full)}${full ? '' : upsell('splits_full', 'Last 5, last 20, season, home and away and opponent splits are part of Plus.')}</section>
@@ -356,6 +457,9 @@
   const say = t => { const s = $('rpSay'); if (s) { s.textContent = ''; setTimeout(() => { s.textContent = t }, 30) } };
   document.addEventListener('click', ev => {
     if (!X.panel || !X.panel.contains(ev.target)) return;
+    const sn = ev.target.closest('[data-llsnap]'); if (sn) { setLens(+sn.dataset.llsnap); sn.focus(); return say(X.panel.querySelector('#llOut')?.textContent || '') }
+    if (ev.target.closest('[data-ll="reset"]')) { const p = find(R.p.id) || R.p; setLens(p.line); X.panel.querySelector('#llR')?.focus(); return say(X.panel.querySelector('#llOut')?.textContent || '') }
+    const lw = ev.target.closest('[data-llwin]'); if (lw) { R.lensWin = lw.dataset.llwin; setLens(R.lens ?? (find(R.p.id) || R.p).line); return X.panel.querySelector(`[data-llwin="${R.lensWin}"]`)?.focus() }
     const tb = ev.target.closest('[data-rptab]'); if (tb) { R.tab = tb.dataset.rptab; redrawPanel(); return X.panel.querySelector(`[data-rptab="${R.tab}"]`)?.focus() }
     const a = ev.target.closest('[data-rp]')?.dataset.rp; if (!a) return; const p = find(R.p.id) || R.p;
     if (a === 'close') return closePanel();
@@ -364,11 +468,14 @@
     if (a === 'board') return window.flBoards?.offer({ kind: 'player', key: `player:${p.sport}:${p.name}:${p.k}`, label: p.name, sub: p.text, photo: p.photo || '', line: p.line, side: p.side, start: p.start ? +p.start : null, mid: p.mid || p.id,
       open: { lab: { sport: p.sport, name: p.name, kind: 'player', stat: p.k, line: p.line, side: p.side } } }, ev.target.closest('button'));
     if (a === 'share') return share(p);
+    // Compare, one player: this player and stat, two lines to start (the posted one and the next open one)
+    if (a === 'compare') { const args = { sport: p.sport, a: p.name, who: 'one', one: 'lines', stat: p.k }; closePanel(); return window.flLab?.compare?.(args) }
     if (a === 'lab') { const args = { sport: p.sport, name: p.name, kind: 'player', stat: p.k, line: p.line, side: p.side }; closePanel(); return X.api?.openPlayer ? X.api.openPlayer(args) : window.flLab?.open(args) }
   });
   document.addEventListener('keydown', ev => {
     if (!X.panel) return;
     if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); return closePanel() }
+    const lw = ev.target.closest?.('[data-llwin]'); if (lw && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(ev.key)) { ev.preventDefault(); const all = [...lw.parentElement.querySelectorAll('[data-llwin]')], i = all.indexOf(lw), nx = all[(i + (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length]; R.lensWin = nx.dataset.llwin; setLens(R.lens ?? (find(R.p.id) || R.p).line); return X.panel.querySelector(`[data-llwin="${R.lensWin}"]`)?.focus() }
     const tb = ev.target.closest?.('[data-rptab]'); if (tb && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) { ev.preventDefault(); R.tab = R.tab === 'chart' ? 'log' : 'chart'; redrawPanel(); X.panel.querySelector(`[data-rptab="${R.tab}"]`)?.focus() }
   }, true);
   async function share(p) {

@@ -21,7 +21,7 @@
   const tm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
   /* ---------- supported edge, step by step ---------- */
-  const EXPLAIN = 'Supported edge adjusts the raw difference for sample size, injuries, lineup uncertainty, missing information and data quality.';
+  const EXPLAIN = 'Supported edge adjusts the raw difference for sample size, injuries, lineup uncertainty, missing information, market freshness and data quality.';
   // which kind of doubt a reason from market.js supported() is. Anything not recognised counts as data quality.
   const KIND_RX = [
     ['sample', /available games?|no games on record|gap since the last appearance|days since the last appearance|gap in appearances|more than two months old/i],
@@ -88,15 +88,15 @@
   const GRADE_RANK = { A: 4, B: 3, C: 2, D: 1 };
 
   /* ---------- the record behind a line ---------- */
+  // this season: back to the first break of more than 90 days (the off-season), in a newest-first log
+  function seasonLen(gs) { for (let i = 0; i + 1 < gs.length; i++) { const a = +gs[i].date || Date.parse(gs[i].date), b = +gs[i + 1].date || Date.parse(gs[i + 1].date); if (a && b && a - b > 90 * DAY) return i + 1 } return gs.length }
   /* games: newest first, { v, home, min, opp, oppAbbr, date }. o: { line, side, yes, opp, oppAbbr, prior: [{ line, side, result, start }] }
      -> { windows: [{ key, label, n, hit, push, rate }], home, away, vsOpp, avg, med, mins: { l5, l20, trend }, similar, summary } */
   function splits(games, o = {}) {
     const gs = (games || []).filter(g => g && g.v != null && !isNaN(g.v)), line = +o.line, over = o.side !== 'under';
     const hit = g => over ? g.v > line : g.v < line;
     const rec = (xs, key, label) => { const push = xs.filter(g => g.v === line).length, h = xs.filter(hit).length, dec = xs.length - push; return { key, label, n: xs.length, hit: h, push, miss: dec - h, rate: dec ? h / dec : null } };
-    // this season: back to the first break of more than 90 days (the off-season)
-    let season = gs.length;
-    for (let i = 0; i + 1 < gs.length; i++) if (gs[i].date && gs[i + 1].date && gs[i].date - gs[i + 1].date > 90 * DAY) { season = i + 1; break }
+    const season = seasonLen(gs);
     const windows = [rec(gs.slice(0, 5), 'l5', 'Last 5'), rec(gs.slice(0, 10), 'l10', 'Last 10'), rec(gs.slice(0, 20), 'l20', 'Last 20'), rec(gs.slice(0, season), 'season', 'This season')];
     const opp = [o.opp, o.oppAbbr].map(tm).filter(Boolean);
     const vs = opp.length ? gs.filter(g => [g.opp, g.oppAbbr].map(tm).some(x => x && opp.includes(x))) : [];
@@ -118,13 +118,15 @@
 
   /* ---------- Prop Explorer: filters and sorts ---------- */
   const WHEN = { soon: 2 * 3600e3 };
-  const defaults = () => ({ sport: 'all', league: 'all', game: 'all', team: 'all', q: '', stat: 'all', provider: 'all', side: 'all', hot: false, l5: 0, l10: 0, l20: 0, edge: null, grade: 'all', when: 'all', injury: 'all', moved: 'all', games: 0, mins: 0 });
+  const defaults = () => ({ sport: 'all', league: 'all', game: 'all', team: 'all', q: '', stat: 'all', provider: 'all', side: 'all', hot: false, l5: 0, l10: 0, l20: 0, edge: null, grade: 'all', when: 'all', injury: 'all', lineup: 'all', moved: 'all', games: 0, mins: 0 });
   // the line a market opened at, and how far it has moved since, in the direction that matters (+ = easier for the pick)
   function movement(p) {
     const open = p.lineFrom ?? p.openLine ?? p.firstLine ?? null; if (open == null || p.line == null) return null;
     const d = p.line - open; return { from: open, to: p.line, d, easier: d === 0 ? 0 : (p.side === 'under' ? d > 0 : d < 0) ? 1 : -1 };
   }
   const injuryOf = p => p.av?.lv && !['ok', 'active', 'probable'].includes(p.av.lv) ? p.av.lv : null;
+  // the only lineup signal the feed has: market.js availability() says when a player's role is uncertain (no confirmed lineups are read)
+  const roleUnsure = p => /role uncertain/i.test(p.av?.start || '');
   const minsOf = p => mean((p.games || []).slice(0, 5).map(g => g.min).filter(m => m != null));
   /* markets: verified open markets. f: defaults() with changes. o: { now, tz, dayDiff (market.js), grades: Map(id -> grade) }
      -> the markets that pass every filter */
@@ -142,6 +144,7 @@
       && (f.grade === 'all' || GRADE_RANK[gr(p)] >= GRADE_RANK[f.grade])
       && (f.when === 'all' || (f.when === 'soon' ? p.start && +p.start - now <= WHEN.soon : f.when === 'today' ? p.start && dd(+p.start, now, o.tz) === 0 : f.when === 'tomorrow' ? p.start && dd(+p.start, now, o.tz) === 1 : f.when === 'later' ? p.start && dd(+p.start, now, o.tz) >= 2 : true))
       && (f.injury === 'all' || (f.injury === 'clear' ? !injuryOf(p) : !!injuryOf(p)))
+      && (!f.lineup || f.lineup === 'all' || (f.lineup === 'settled' ? !roleUnsure(p) : roleUnsure(p)))
       && (f.moved === 'all' || (() => { const m = movement(p); return f.moved === 'moved' ? !!m && m.d !== 0 : f.moved === 'easier' ? m?.easier === 1 : f.moved === 'harder' ? m?.easier === -1 : true })())
       && (!f.games || (p.games || []).filter(g => g.v != null).length >= f.games) && (!f.mins || (minsOf(p) ?? 0) >= f.mins));
   }
@@ -169,18 +172,63 @@
       team: uniq(p => p.team, p => p.teamName || p.team), stat: uniq(p => p.k, p => p.label), provider: [...new Set((markets || []).flatMap(p => p.books || []))].sort().map(b => [b, b]) };
   }
 
+  /* ---------- Line Lens: the same games against any line ---------- */
+  /* games: newest first, { v, date }. -> { line, rows: [{ key, label, n, over, under, push, rate }], summary }
+     rate is the share of the games off the line that went the pick's way (side). Counting only: no estimate. */
+  function lens(games, line, side = 'over') {
+    const gs = (games || []).filter(g => g && g.v != null && !isNaN(g.v)), L = +line, under = side === 'under', season = seasonLen(gs);
+    const row = (xs, key, label) => { const o = xs.filter(g => g.v > L).length, u = xs.filter(g => g.v < L).length, p = xs.length - o - u, d = o + u;
+      return { key, label, n: xs.length, over: o, under: u, push: p, rate: d ? (under ? u : o) / d : null } };
+    // a window only where that many games exist: a 7-game log reads Last 5 and This season, never a Last 10 of 7
+    const all = [row(gs.slice(0, 5), 'l5', 'Last 5'), row(gs.slice(0, 10), 'l10', 'Last 10'), row(gs.slice(0, 20), 'l20', 'Last 20')].filter((r, i) => r.n && (i === 0 || r.n === [5, 10, 20][i]));
+    const sea = row(gs.slice(0, season), 'season', 'This season'), rows = sea.n > (all[all.length - 1]?.n || 0) ? [...all, sea] : all;
+    const w = rows.find(r => r.key === 'l10') || rows[0], word = under ? 'Under' : 'Over';
+    const summary = !w ? 'No games on record.' : `${word} ${fmt(L)} in ${under ? w.under : w.over} of ${w.key === 'season' ? `${w.n} games this season` : `the ${w.label.toLowerCase()}`}${w.push ? `, with ${w.push} on the line` : ''}.`;
+    return { line: L, rows, summary };
+  }
+  /* the lines worth drawing: a step that gives about 30 points across the games and every snap line, kept on the
+     posted line's grid (25.5, 26, 26.5 ... or 215.5, 220.5 ...). -> { lo, hi, step, lines } */
+  function lensRange(games, posted, extra = []) {
+    const vs = (games || []).map(g => g?.v).filter(v => v != null && !isNaN(v)).concat([+posted], extra.map(Number)).filter(v => !isNaN(v));
+    if (!vs.length) return { lo: 0, hi: 1, step: .5, lines: [] };
+    const a = Math.min(...vs), b = Math.max(...vs), span = Math.max(1, b - a);
+    const step = [.5, 1, 2.5, 5, 10, 25].find(x => span / x <= 36) || 50;
+    const base = +posted, lo = base - Math.ceil((base - a) / step + .001) * step, hi = base + Math.ceil((b - base) / step + .001) * step;
+    const lines = []; for (let x = Math.max(lo, step === .5 ? .5 : 0); x <= hi + 1e-9; x += step) lines.push(Math.round(x * 100) / 100);
+    return { lo: lines[0], hi: lines[lines.length - 1], step, lines };
+  }
+  /* how the chosen window's rate for the pick's side changes as the line moves: [{ line, rate, d }] (d = games off the line) */
+  function curve(games, side, lines, key = 'l10') {
+    return (lines || []).map(x => { const r = lens(games, x, side).rows.find(w => w.key === key); return { line: x, rate: r ? r.rate : null, d: r ? r.over + r.under : 0 } });
+  }
+  /* snap points: the lines open right now for this player and stat, one per line, with who posts it and when it was
+     verified. Only open markets (the verified feed's) are read, so a closed or expired line is never a snap point.
+     p: the market the panel shows (left out when it has left the board). open: every open market in the feed. */
+  function snaps(p, open, o = {}) {
+    if (!p) return [];
+    const same = m => m && m.sport === p.sport && tm(m.name) === tm(p.name) && m.k === p.k && (!m.status || m.status === 'open' || m.status === 'awaiting_verification');
+    const by = new Map(), put = (line, book, at) => { if (line == null || isNaN(line)) return; const k = +line, x = by.get(k) || { line: k, books: [] }; if (!x.books.some(b => b.book === book)) x.books.push({ book, at: at || null }); by.set(k, x) };
+    for (const m of (open || []).filter(same)) {
+      const at = m.verifiedAt || m.at || null;
+      if (m.offers?.length) for (const of of m.offers) put(of.line, of.book || of.provider, of.at || at); else for (const b of m.books || []) put(m.line, b, at);
+    }
+    return [...by.values()].sort((a, b) => a.line - b.line);
+  }
+
   /* ---------- a Prediction Card or parlay read as a whole ---------- */
   /* legs: [{ id, name, short, text, start (ms), line, line0 (line when added), side, grade?, ours, sedge?, out (ruled out), res }]
-     -> { n, avgGrade, weakest, expires, moved, outs, open } */
+     -> { n, avgGrade, weakest, strongest, expires, moved, outs, open } */
   function card(legs, now = Date.now()) {
     const open = (legs || []).filter(l => !l.res);
     const gs = open.map(l => GRADE_RANK[l.grade?.grade || l.grade]).filter(Boolean), avg = gs.length ? mean(gs) : null;
     const letter = avg == null ? null : avg >= 3.5 ? 'A' : avg >= 2.5 ? 'B' : avg >= 1.5 ? 'C' : 'D';
     const weakScore = l => (GRADE_RANK[l.grade?.grade || l.grade] || 2.5) * 10 + (l.ours ?? .5) * 5;
-    const weakest = open.length > 1 ? [...open].sort((a, b) => weakScore(a) - weakScore(b))[0] : null;
+    const order = open.length > 1 ? [...open].sort((a, b) => weakScore(a) - weakScore(b)) : [], weakest = order[0] || null;
+    // the strongest pick: the other end of the same order, only when the two ends really differ
+    const strongest = order.length > 1 && weakScore(order[order.length - 1]) > weakScore(order[0]) ? order[order.length - 1] : null;
     const ahead = open.filter(l => l.start && +l.start > now).sort((a, b) => +a.start - +b.start), started = open.filter(l => l.start && +l.start <= now);
     const moved = open.filter(l => l.line0 != null && l.line != null && l.line0 !== l.line).map(l => ({ ...l, from: l.line0, to: l.line, worse: l.side === 'under' ? l.line < l.line0 : l.line > l.line0 }));
-    return { n: (legs || []).length, avgGrade: letter, weakest, expires: ahead[0] ? { leg: ahead[0], in: +ahead[0].start - now } : null, started, moved, outs: open.filter(l => l.out) };
+    return { n: (legs || []).length, avgGrade: letter, weakest, strongest, expires: ahead[0] ? { leg: ahead[0], in: +ahead[0].start - now } : null, started, moved, outs: open.filter(l => l.out) };
   }
   // "2 h 14 min", "38 min", "under a minute"
   function countdown(ms) {
@@ -204,7 +252,7 @@
       bySport: tally(c => c.legs.map(l => l.lg || l.sport).filter(Boolean)), bySize: tally(c => [sizeOf(c)]) };
   }
 
-  const api = { EXPLAIN, breakdown, kindOf, signed, grade, GRADE_WORD, GRADE_RANK, splits, median, defaults, filter, sort, SORTS, options, movement, injuryOf, card, countdown, history };
+  const api = { lens, lensRange, curve, snaps, roleUnsure, seasonLen, EXPLAIN, breakdown, kindOf, signed, grade, GRADE_WORD, GRADE_RANK, splits, median, defaults, filter, sort, SORTS, options, movement, injuryOf, card, countdown, history };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.flLabCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

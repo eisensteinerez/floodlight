@@ -76,6 +76,8 @@
   // the personal counts (daily.js) arrive after the board: redraw once they settle, never while someone is using Home
   let dailyT = 0; document.addEventListener('fl:daily', () => { clearTimeout(dailyT); dailyT = setTimeout(() => { if (root.classList.contains('hub-on') && !sec.contains(document.activeElement)) paint() }, 400) });
   document.addEventListener('fl:injuries', () => { if (root.classList.contains('hub-on') && !sec.contains(document.activeElement) && window.flRecent?.list().length) paint() });
+  // a market taken off the board can put "Market expired" on a Continue researching card
+  document.addEventListener('fl:markets', e => { if (e.detail?.removed?.length && root.classList.contains('hub-on') && !sec.contains(document.activeElement) && window.flRecent?.list().length) paint() });
   document.addEventListener('fl:recent', () => { if (root.classList.contains('hub-on') && !sec.contains(document.activeElement)) paint() });
 
   const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
@@ -475,13 +477,17 @@
     const live = x => { if (x.kind !== 'game') return ''; const g = list.find(y => 'game:' + y.key === x.key); return !g ? '' : g.state === 'in' ? '<span class="pl live"><i></i>Live</span>' : g.state === 'pre' ? `<span class="lb">${esc(hm(g.date))}</span>` : '<span class="lb">Final</span>' };
     const faces = x => x.photo || x.photo2 ? `<span class="rc-faces" aria-hidden="true">${[x.photo, x.photo2].filter(Boolean).map((src, i) => face(src, i ? '' : x.label, 'avx av-sm')).join('')}</span>` : `<span class="rc-ic" aria-hidden="true">${ico(x.kind === 'compare' ? 'swap' : x.kind === 'trend' ? 'trend' : x.kind === 'pred' ? 'pred' : x.kind === 'parlay' ? 'ticket' : x.kind === 'game' ? 'live' : x.kind === 'filters' ? 'grid' : 'lab', 18)}</span>`;
     const head = x => { const v = R.verb(x); return v ? `${v} ${x.label}` : x.label };
-    // what changed since you looked: a line that moved, an injury report entry newer than your visit
+    // what changed since you looked: a line that moved, an injury report entry newer than your visit, a market that expired
     const who = x => ({ name: x.open?.lab?.name || (['player', 'pred', 'props'].includes(x.kind) ? x.label : ''), sport: x.open?.lab?.sport || x.open?.filters?.sport || '' });
     const badges = x => { const w = who(x); if (!w.name) return ''; const out = [], F = window.flFeed, I = window.flInjuries;
       const mv = F ? F.forPlayer(w.name).map(m => ({ m, d: F.moved(m) })).find(o => o.d && (!o.d.at || o.d.at > x.at - 864e5)) : null;
       if (mv) out.push(`<span class="pl rc-badge" title="${esc(`${mv.m.label || 'Line'}: ${mv.d.from} to ${mv.d.to}`)}">${ico('trend', 12)}Line ${esc(String(mv.d.from))} → ${esc(String(mv.d.to))}</span>`);
       if (I && I.PATH?.[w.sport]) { if (!I.ready(w.sport)) I.load(w.sport); const st = I.status(w.sport, w.name);
         if (st && st.date && st.date > x.at) out.push(`<span class="pl rc-badge rc-inj">${ico('help', 12)}Injury: ${esc(st.status || I.LEVEL_NAME?.[st.lv] || 'update')}</span>`) }
+      // the line you were looking at has left the board since (the verified feed's standing, the same on every page)
+      const lb = x.open?.lab, M = window.flMarkets;
+      if (lb?.stat && M?.standing && !mv) { const st = M.standing({ sport: lb.sport || w.sport, name: w.name, k: lb.stat });
+        if (!st.open && st.market && st.status !== 'awaiting_verification') out.unshift(`<span class="pl rc-badge rc-gone" title="${esc(st.reason || '')}">${ico('x', 12)}Market expired: ${esc(st.message || 'Market closed')}</span>`) }
       return out.length ? `<span class="rc-badges">${out.join('')}</span>` : '' };
     const tile = x => { const k = esc(x.key);
       return `<li class="rc${x.pinned ? ' pinned' : ''}"><button type="button" class="rc-open" data-hubrc="open|${k}">${faces(x)}<span class="rw-t"><small class="lb">${esc(KIND[x.kind] || '')}${x.pinned ? ' · pinned' : ''} · <time datetime="${new Date(x.at).toISOString()}">viewed ${esc(ago(x.at))}</time></small><b>${esc(head(x))}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}${badges(x)}</span>${live(x)}</button>
