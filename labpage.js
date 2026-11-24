@@ -40,21 +40,31 @@
   const ms = t => t == null || t === '' ? null : typeof t === 'number' ? t : new Date(t).getTime() || null;
   function flagOf(v, now = Date.now()) {
     const s = lineOf(v); if (!s) return null;
-    if (s.start && s.start <= now) return { k: 'closed', t: 'Closed', d: 'The game has started, so this line is no longer open.' };
+    if (s.start && s.start <= now) return { k: 'closed', t: 'This market is no longer available', d: 'Game started: the line closed when it began.' };
     // the verified feed decides: the same standing every page uses (markets.js), with its own message and reason
     const M = window.flMarkets, st = M?.standing ? M.standing({ mid: v.mid, sport: s.sport, name: s.name, k: s.k }, now) : null;
-    if (st && !st.open && st.status !== 'awaiting_verification') return { k: ['started', 'expired'].includes(st.status) ? 'closed' : 'gone', t: st.message || 'Not offered now', d: st.reason || 'No provider in the verified feed has this line open right now.' };
+    if (st && !st.open && st.status !== 'awaiting_verification') return { k: ['started', 'expired'].includes(st.status) ? 'closed' : 'gone', t: 'This market is no longer available', d: [st.message, st.reason].filter(Boolean).join(': ') || 'No provider in the verified feed has this line open right now.' };
     const rows = st ? null : window.flPropX?.rows?.() || L.picks, cur = st ? st.market : rows?.find(p => p.sport === s.sport && p.name === s.name && p.k === s.k);
-    if (!st && rows?.length && !cur) return { k: 'gone', t: 'Not offered now', d: 'No provider in the verified feed has this line open right now.' };
+    if (!st && rows?.length && !cur) return { k: 'gone', t: 'This market is no longer available', d: 'No provider in the verified feed has this line open right now.' };
     if (cur && cur.line != null && +cur.line !== s.line) { const easier = s.side === 'under' ? +cur.line > s.line : +cur.line < s.line;
-      return { k: 'moved', t: `Line moved to ${num(cur.line)}`, d: `Saved at ${num(s.line)}. The ${s.side} is now ${easier ? 'easier' : 'harder'} to hit.` } }
+      return { k: 'moved', t: `Line moved from ${num(s.line)} to ${num(cur.line)}`, d: `The ${s.side} is now ${easier ? 'easier' : 'harder'} to hit.` } }
     const t0 = s.start || ms(cur?.start);
     if (t0 && t0 - now < 6 * 3600e3) return { k: 'soon', t: `Closes in ${window.flLabCore?.countdown ? window.flLabCore.countdown(t0 - now) : Math.round((t0 - now) / 6e4) + ' min'}`, d: 'Lines close when the game starts.' };
     return null;
   }
+  /* what else changed since a line was saved: a new injury report entry, and how long until the game starts */
+  function notesOf(v, now = Date.now()) {
+    const s = lineOf(v); if (!s) return [];
+    const out = [], I = window.flInjuries, f = flagOf(v, now);
+    if (I?.PATH?.[s.sport]) { if (!I.ready(s.sport)) I.load(s.sport); else { const st = I.status(s.sport, s.name); if (st && st.lv !== 'active' && (!st.date || !v.at || st.date > v.at)) out.push({ k: 'inj', t: `New injury report: ${st.status || I.LEVEL_NAME?.[st.lv] || 'listed'}`, d: st.what ? `${st.what}.` : '' }) } }
+    const M = window.flMarkets, cur = M?.standing ? M.standing({ mid: v.mid, sport: s.sport, name: s.name, k: s.k }, now).market : null, t0 = s.start || ms(cur?.start);
+    if (t0 && t0 > now && f?.k !== 'soon' && !['closed', 'gone'].includes(f?.k)) out.push({ k: 'start', t: `Starts in ${window.flLabCore?.countdown ? window.flLabCore.countdown(t0 - now) : Math.round((t0 - now) / 36e5) + ' h'}`, d: '' });
+    return out;
+  }
+  const notesHtml = v => notesOf(v).map(n => `<small class="bd-fl f-${n.k}"><b>${esc(n.t)}.</b>${n.d ? ` ${esc(n.d)}` : ''}</small>`).join('');
   function flagSum(b) {
-    const n = { moved: 0, closed: 0, gone: 0 }; for (const v of b.items || []) { const f = flagOf(v); if (f && f.k in n) n[f.k]++ }
-    return [n.moved && `${n.moved} line${n.moved === 1 ? '' : 's'} moved`, n.closed && `${n.closed} closed`, n.gone && `${n.gone} not offered now`].filter(Boolean).join(', ');
+    const n = { moved: 0, closed: 0, gone: 0, inj: 0 }; for (const v of b.items || []) { const f = flagOf(v); if (f && f.k in n) n[f.k]++; if (notesOf(v).some(x => x.k === 'inj')) n.inj++ }
+    return [n.moved && `${n.moved} line${n.moved === 1 ? '' : 's'} moved`, (n.closed + n.gone) && `${n.closed + n.gone} no longer available`, n.inj && `${n.inj} new injury ${n.inj === 1 ? 'report' : 'reports'}`].filter(Boolean).join(', ');
   }
   const flagHtml = f => f ? `<small class="bd-fl f-${f.k}"><b>${esc(f.t)}.</b> ${esc(f.d)}</small>` : '';
   const initials = n => esc(String(n || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase());
@@ -260,7 +270,7 @@
   function focusWs() { const ws = $('labWs'); if (!ws || L.kbTab) return; setTimeout(() => { ws.scrollIntoView({ behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' }); $('labWsT')?.focus({ preventScroll: true }) }, 60) }
   function runTool(k, o = {}) {
     const c = L.cur, sport = c?.sport || store.get('lab.sport', 'nba');
-    if (k === 'props') return openTools('props', { sport: o.sport || (c?.sport && L.engine === 'lab' ? c.sport : '') });
+    if (k === 'props') return openTools('props', { sport: o.sport || (c?.sport && L.engine === 'lab' ? c.sport : ''), filters: o.filters, sort: o.sort });
     if (k === 'trends') return c?.view === 'player' && L.engine === 'lab' ? openLab({ sport: c.sport, name: c.name, kind: 'player', stat: c.k, line: c.line, side: c.side, mode: 'trend' }, true) : openTools('trends', {});
     if (k === 'matchup') { const g = (window.flHub?.games?.() || []).filter(g => g.state !== 'post' && (['nba', 'nfl', 'nhl', 'mlb'].includes(String(g.lg)) || g.sport === 'soccer')).sort((a, b) => (b.state === 'in') - (a.state === 'in') || b.weight - a.weight)[0];
       return c?.view === 'team' ? openLab({ sport: c.sport, name: c.name, kind: 'team' }, true) : g ? openLab({ sport: g.sport === 'soccer' ? 'soccer' : g.lg, name: g.a.full || g.a.name, kind: 'team' }) : openLab({ sport, tab: 'team' }) }
@@ -417,7 +427,7 @@
     if (!L.picks && L.boards.some(b => b.items.some(lineOf))) loadPicks();
     const item = (b, v, i) => kindOf(v) === 'note'
       ? `<li class="bd-it bd-note"><p class="bd-nt"><small class="lb">Note · ${esc(ago(v.at || b.at))}</small>${esc(v.label)}</p><button type="button" class="ib bd-rm" data-bdrm="${b.id}|${i}" aria-label="Remove the note “${esc(v.label.slice(0, 40))}”">${ic('x', 16)}</button></li>`
-      : `<li class="bd-it"><button type="button" class="bd-open" data-bdview="${b.id}|${i}">${face(v.photo, v.name || v.label || SPORT_NAME[v.sport], 'avx av-sm')}<span class="rw-t"><b>${esc(viewLabel(v))}</b><small>${esc(subOf(v))}${lineOf(v) ? ` · saved at ${esc(lineOf(v).side)} ${num(lineOf(v).line)}` : ''}</small>${flagHtml(flagOf(v))}</span></button>
+      : `<li class="bd-it"><button type="button" class="bd-open" data-bdview="${b.id}|${i}">${face(v.photo, v.name || v.label || SPORT_NAME[v.sport], 'avx av-sm')}<span class="rw-t"><b>${esc(viewLabel(v))}</b><small>${esc(subOf(v))}${lineOf(v) ? ` · saved at ${esc(lineOf(v).side)} ${num(lineOf(v).line)}` : ''}</small>${flagHtml(flagOf(v))}${notesHtml(v)}</span></button>
         <button type="button" class="ib bd-rm" data-bdrm="${b.id}|${i}" aria-label="Remove ${esc(viewLabel(v))} from ${esc(b.name)}">${ic('x', 16)}</button></li>`;
     const counts = b => { const m = {}; for (const v of b.items) { const k = kindOf(v); m[k] = (m[k] || 0) + 1 } return Object.entries(m).map(([k, n]) => `${n} ${KIND_WORD[k]}${n === 1 ? '' : k === 'props' ? '' : 's'}`).join(', ') };
     const card = (b, i, list) => { const n = b.items.length, h = 'bdh-' + b.id, fs = flagSum(b);
@@ -568,7 +578,7 @@
     if (SB.err) { el.innerHTML = `<div class="vst bd">${head('Shared board')}<div class="card emp" role="alert">${ic('help', 28)}<b>${esc(SB.err)}</b><p>The owner may have stopped sharing it. Ask them for a new link.</p><button type="button" class="bt ghost" data-page="lab">Go to the Lab</button></div></div>`; return }
     if (!d) { el.innerHTML = `<div class="vst bd">${head('Shared board')}<div class="card emp" aria-busy="true"><p class="lb">Opening the board…</p></div></div>`; return }
     const items = (d.items || []).map((v, i) => { const s = lineOf(v);
-      return `<li class="bd-it">${s ? `<button type="button" class="bd-open" data-sbopen="${i}">` : '<div class="bd-open">'}${face(v.photo, v.name || v.label, 'avx av-sm')}<span class="rw-t"><b>${esc(v.label || v.name)}</b><small>${esc(v.sub || '')}${s ? ` · saved at ${esc(s.side)} ${num(s.line)}` : ''}</small>${flagHtml(flagOf(v))}</span>${s ? '</button>' : '</div>'}</li>` }).join('');
+      return `<li class="bd-it">${s ? `<button type="button" class="bd-open" data-sbopen="${i}">` : '<div class="bd-open">'}${face(v.photo, v.name || v.label, 'avx av-sm')}<span class="rw-t"><b>${esc(v.label || v.name)}</b><small>${esc(v.sub || '')}${s ? ` · saved at ${esc(s.side)} ${num(s.line)}` : ''}</small>${flagHtml(flagOf(v))}${notesHtml(v)}</span>${s ? '</button>' : '</div>'}</li>` }).join('');
     const room = roomForBoard();
     el.innerHTML = `<div class="vst bd">${head(d.name)}
       ${(d.notes || []).length ? `<section class="card bd-card" aria-label="Notes"><ul class="bd-items">${d.notes.map(n => `<li class="bd-it bd-note"><p class="bd-nt"><small class="lb">Note</small>${esc(n)}</p></li>`).join('')}</ul></section>` : ''}
@@ -646,6 +656,8 @@
   document.addEventListener('submit', ev => { if (!OF.el || !ev.target.matches('[data-boform]')) return; ev.preventDefault(); const nb = addItem(OF.item, OF.el.querySelector('#boN').value); OF.said = nb ? `Saved to <b>${esc(nb.name)}</b>.` : limitSaid('Give the board a name.'); drawOffer(nb ? `[data-bo="add"][data-id="${nb.id}"]` : '#boN') });
   document.addEventListener('keydown', ev => { if (OF.el && ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeOffer() } }, true);
   addEventListener('resize', () => OF.el && place());
+  // a new injury report can add a note to a saved line: the boards page and the Lab's board cards are drawn again
+  document.addEventListener('fl:injuries', () => { if (window.flPages?.current?.() === 'boards') drawBoardsPage(); else if (window.flPages?.current?.() === 'lab') drawBoards() });
   window.flBoards = { list: live, all: () => L.boards, offer, add: addItem, make: makeBoard, flag: flagOf, image: boardImage, TEMPLATES };
 
   window.flLab = { open, recent: () => L.recent, boards: () => L.boards,

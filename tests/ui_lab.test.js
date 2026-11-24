@@ -244,8 +244,9 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
       window.flBoards.make('My research') }, now);
     await p.evaluate(() => window.flPages.show('boards')); await p.waitForSelector('.bd-card'); await p.waitForTimeout(1500);
     const txt = await p.textContent('#pg-boards');
-    assert.match(txt, /Line moved to 25\.5\..*Saved at 24\.5\. The over is now harder to hit/);
-    assert.match(txt, /Closed\. The game has started/);
+    assert.match(txt, /Line moved from 24\.5 to 25\.5\. The over is now harder to hit/);
+    assert.match(txt, /This market is no longer available\. Game started/);
+    assert.match(txt, /Starts in \d+ h/, 'an open line counts down to its game');
     for (const s of ['Favorite players', 'Best unders', 'Fantasy roster', 'Injury watch']) assert.ok(txt.includes(s), `missing the ready-made name ${s}`);
     const names = () => p.$$eval('#pg-boards .bd > .bd-list > .bd-card h2', hs => hs.map(h => h.textContent));
     assert.deepStrictEqual(await names(), ['My research', 'Weekend NFL', 'Tonight’s NBA']);
@@ -276,7 +277,7 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     await shot(p, 'boards-1440');
     await p.evaluate(() => window.flPages.show('board', 'abc12345')); await p.waitForSelector('#pg-board .bd-it'); await p.waitForTimeout(300);
     const sh = await p.textContent('#pg-board');
-    assert.match(sh, /Shared board · read-only/); assert.match(sh, /Tonight’s NBA/); assert.match(sh, /Shared by erez/); assert.match(sh, /Line moved to 25\.5/);
+    assert.match(sh, /Shared board · read-only/); assert.match(sh, /Tonight’s NBA/); assert.match(sh, /Shared by erez/); assert.match(sh, /Line moved from 24\.5 to 25\.5/);
     assert.ok(!(await p.$('#pg-board [data-bdrm], #pg-board [data-bd]')), 'a shared board has no edit controls');
     await shot(p, 'shared-board-1440');
     // stop sharing: the link no longer opens
@@ -284,6 +285,22 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     if (!(await p.$(`[data-bd="unshare"][data-id="${nba}"]`))) await p.click(`[data-bd="share"][data-id="${nba}"]`);
     await p.click(`[data-bd="unshare"][data-id="${nba}"]`); await p.waitForTimeout(200);
     assert.deepStrictEqual(shared, {});
+    assert.deepStrictEqual(p.errors, []);
+  });
+
+  await t('saved boards: a Prop Explorer view keeps its filters and sort, and reopens exactly as it was', async () => {
+    const p = await page(); await explorer(p);
+    await p.click('[data-pxsport="nba"]'); await p.selectOption('#pxSort', 'soon'); await p.click('[data-px="filters"]'); await p.selectOption('#pxSide', { label: 'Under only' }); await p.waitForTimeout(200);
+    await p.click('[data-px="saveview"]'); await p.waitForSelector('[data-boform], [data-bo]');
+    await p.fill('#boN', 'Best unders'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+    const saved = await p.evaluate(() => window.flBoards.all().find(b => b.name === 'Best unders').items[0]);
+    assert.strictEqual(saved.kind, 'props'); assert.strictEqual(saved.open.lab.filters.side, 'under'); assert.strictEqual(saved.open.lab.sort, 'soon'); assert.strictEqual(saved.open.lab.filters.sport, 'nba');
+    // change everything, then open the saved view: the filters and sort come back
+    await p.evaluate(() => { localStorage.setItem('fl.px', '{}'); localStorage.setItem('fl.pxSort', '"edge"') });
+    await p.evaluate(it => window.flRecent.open(it), saved); await p.waitForSelector('.px-t tbody tr, .px-cards', { timeout: 15000 }); await p.waitForTimeout(300);
+    assert.strictEqual(await p.inputValue('#pxSort'), 'soon');
+    const rows = await p.$$eval('[data-pxopen]', bs => bs.map(b => b.textContent));
+    assert.ok(rows.length && rows.every(r => /Rudy Gobert/.test(r)), 'only the NBA under is left: ' + rows.join(' | '));
     assert.deepStrictEqual(p.errors, []);
   });
 

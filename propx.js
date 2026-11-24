@@ -65,7 +65,15 @@
     if (X.host?.isConnected) { X.removed = window.flMarkets.removed(); setRows(window.flMarkets.open()); draw() } if (X.panel?.isConnected) redrawPanel() });
 
   /* ---------- the explorer ---------- */
-  const save = () => { store.set('fl.px', X.f); store.set('fl.pxSort', X.sort) };
+  // this exact view (sport, every filter and the sort), as a board item or a Continue researching card
+  function viewItem() {
+    const a = active().filter(k => k !== 'sport'), sp = X.f.sport === 'all' ? 'All sports' : SPORT[X.f.sport] || X.f.sport, sortName = (K.SORTS.find(s => s[0] === X.sort) || [, ''])[1];
+    return { kind: 'props', key: `props:${JSON.stringify(X.f)}:${X.sort}`, label: `Prop explorer · ${sp}`, sub: [a.length ? a.slice(0, 3).map(chipName).join(', ') + (a.length > 3 ? ` and ${a.length - 3} more` : '') : 'No filters', sortName].filter(Boolean).join(' · '),
+      open: { lab: { tool: 'props', sport: X.f.sport === 'all' ? '' : X.f.sport, filters: { ...X.f }, sort: X.sort } } };
+  }
+  let noteT = 0;
+  const save = () => { store.set('fl.px', X.f); store.set('fl.pxSort', X.sort);
+    clearTimeout(noteT); noteT = setTimeout(() => { if (active().filter(k => k !== 'sport').length) try { window.flRecent?.note({ ...viewItem(), key: 'props:last' }) } catch (e) {} }, 800) };
   const ADV = ['league', 'game', 'team', 'provider', 'l5', 'l10', 'l20', 'edge', 'grade', 'when', 'injury', 'lineup', 'moved', 'games', 'mins'];
   const isAdv = k => ADV.includes(k);
   function active() {
@@ -92,6 +100,10 @@
   };
   function mount(host, o = {}, api = {}) {
     X.host = host; X.api = api; X.shown = 40;
+    // a view saved on a board, or in Continue researching, comes back with every filter and the sort exactly as they were
+    if (o.filters && typeof o.filters === 'object') { X.f = { ...K.defaults(), ...o.filters }; X.panelOpen = active().some(isAdv) }
+    if (o.sort && K.SORTS.some(s => s[0] === o.sort)) X.sort = o.sort;
+    if (o.filters || o.sort) save();
     if (o.sport) X.f.sport = o.sport;
     host.innerHTML = `<div class="px" id="px"><div id="pxHead"></div><div id="pxBody" aria-live="polite" aria-busy="true"></div></div>`;
     draw(); load();
@@ -133,6 +145,7 @@
         <div class="px-bar">
           <label class="px-q" for="pxQ"><span class="sr-only">Find a player</span>${ic('search', 18)}<input id="pxQ" class="inp" type="search" name="player" placeholder="Find a player…" autocomplete="off" spellcheck="false" value="${esc(X.f.q)}"></label>
           <label class="px-sort" for="pxSort"><span>Sort</span><select class="inp" id="pxSort" name="sort">${K.SORTS.map(([k, l]) => `<option value="${k}"${X.sort === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+          ${window.flBoards ? `<button type="button" class="bt ghost px-sv" data-px="saveview">${ic('save', 18)}Save view</button>` : ''}
           <button type="button" class="bt ghost px-fb" data-px="filters" aria-expanded="${X.panelOpen}" aria-controls="pxPanel">${ic('filter', 18)}Filters${act.filter(k => k !== 'q').length ? ` <span class="pl solid px-n">${act.filter(k => k !== 'q').length}</span>` : ''}</button>
         </div></div>
       ${panel}
@@ -204,6 +217,7 @@
     if (a === 'clear') { const sport = X.f.sport; X.f = { ...K.defaults(), sport }; save(); draw(); return $('pxQ')?.focus() }
     if (a === 'more') { X.shown += 40; return body() }
     if (a === 'reload') return load(true);
+    if (a === 'saveview') return window.flBoards?.offer(viewItem(), t.closest('button'));
   });
 
   /* ---------- the research panel ---------- */
