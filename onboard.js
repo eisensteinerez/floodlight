@@ -170,6 +170,59 @@
   const notify = () => { try { return { ...NDEF, ...JSON.parse(localStorage.getItem('fl.notify') || '{}') } } catch { return { ...NDEF } } };
   function setNotify(patch) { if (window.flAlerts?.set) window.flAlerts.set(patch); else store.set('fl.notify', { ...notify(), ...patch }) }
 
+
+  /* ---------- step 6: one real line from the verified market feed (markets.js), explained ----------
+     The line is an open market the feed has verified: a scheduled game that hasn't started, the player on one of its
+     teams, a provider that confirmed the price recently. A followed player comes first, then a followed team, then the
+     best evidence. With no open line (an off day, a provider down), the card says so and uses a marked example. */
+  const T = { m: null, at: 0, loading: false, done: false };
+  const BOOK = { prizepicks: 'PrizePicks', sleeper: 'Sleeper', underdog: 'Underdog' };
+  const LAB_OF = { football: ['nfl'], basketball: ['nba', 'wnba'], hockey: ['nhl'], baseball: ['mlb'], soccer: ['soccer'] };
+  function tourPick(list, now = Date.now()) {
+    const K = window.flLabCore, mine = new Set(favPlayers().map(p => flat(p.name))), teams = favs().map(f => flat(f.name)).filter(Boolean);
+    const onTeam = m => { const t = flat(m.teamName || m.team); return !!t && teams.some(x => x === t || x.endsWith(t) || t.endsWith(x)) };
+    const score = m => (mine.has(flat(m.name)) ? 1000 : 0) + (onTeam(m) ? 500 : 0) + (K?.GRADE_RANK?.[K.grade(m)?.grade] || 0) * 20 + Math.max(-20, Math.min(20, m.sedge || 0));
+    return (list || []).filter(m => m && m.type === 'prop' && m.status === 'open' && m.name && m.line != null && m.start && +m.start > now && m.verifiedAt && (m.games || []).length >= 5)
+      .sort((a, b) => score(b) - score(a) || +a.start - +b.start)[0] || null;
+  }
+  function loadTour() {
+    const M = window.flMarkets; if (T.loading || T.done) return; if (!M?.list) { T.done = true; return }
+    T.loading = true;
+    const known = (window.flEdge?.SPORTS || []).map(x => x[0]);
+    const want = [...new Set(O.sports.flatMap(s => LAB_OF[s] || []))].filter(s => known.includes(s));
+    const give = setTimeout(() => { if (T.loading) { T.loading = false; T.done = true; if (O.el && O.step === 5) paint() } }, 8000);   // never wait on a slow provider
+    const ask = sports => M.list(sports.length ? { sports } : {}).then(r => r?.markets || []).catch(() => []);
+    ask(want).then(list => tourPick(list) || (want.length ? ask([]).then(tourPick) : null)).then(m => { T.m = m || null; T.at = Date.now() })
+      .finally(() => { clearTimeout(give); if (!T.loading) return; T.loading = false; T.done = true; if (O.el && O.step === 5) paint() });
+  }
+  const agoMin = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'less than a minute ago' : m === 1 ? '1 minute ago' : `${m} minutes ago` };
+  function tourBody() {
+    loadTour();
+    const m = T.m && window.flMarkets?.standing?.({ mid: T.m.mid, sport: T.m.sport, name: T.m.name, k: T.m.k })?.open !== false ? T.m : null;   // gone since it was picked: don't show it
+    const items = (hit, chance, grade, who) => `<ol class="obd-explain">
+        <li><b>Hit rate</b><span>${hit} Check last 5, 20 and the season too; one hot week is not a trend.</span></li>
+        <li><b>Floodlight chance and supported edge</b><span>${chance} Supported edge starts from the raw gap, then takes off points for a small sample, injuries, lineup doubts and missing data. Open “See the evidence” on any card for the steps.</span></li>
+        <li><b>Evidence grade</b><span>${grade} A to D: how much solid data sits behind the number. A strong edge on D evidence is a guess.</span></li>
+        <li><b>Follow</b><span>The ☆ on ${who} puts new lines on Home and in your alerts.</span></li>
+        <li><b>Save to a board</b><span>Boards keep lines you're researching, like “Tonight's NBA”. They tell you when a line moves or a game starts.</span></li>
+        <li><b>Add to a Prediction Card</b><span>Group picks, see the combined chance, and get a warning when two picks depend on each other.</span></li></ol>`;
+    if (!m && T.loading) return `<p class="obd-lead">Every player in the Lab reads the same way. We're finding a line that's open right now to show you.</p><p class="lb" role="status">Checking today's verified lines…</p>`;
+    if (!m) return `<p class="obd-lead">Every player in the Lab reads the same way. No verified line is open right now${T.done && window.flMarkets ? ' (between games, or a provider is slow)' : ''}, so this example uses made-up numbers, not a live line.</p>
+      <figure class="obd-demo"><div class="obd-demo-top"><b>Example player · Points</b><span class="pl">Over 25.5 · example</span></div>
+        ${items('How often he went over this line: <strong>6 of the last 10</strong> games.', 'Our estimate (58%) against the line’s price.', 'This example would be a B.', 'a player')}</figure>`;
+    const K = window.flLabCore, MK = window.flMarket, g = K?.grade?.(m), smp = m.smp || MK?.sample?.(m.games, m.line, m.side, m.yes) || {};
+    const side = m.yes ? (m.side === 'under' ? 'No' : 'Yes') : m.side === 'under' ? 'Under' : 'Over', fmt = v => Number.isInteger(+v) ? String(+v) : (+v).toFixed(1);
+    const books = [...new Set((m.offers || []).map(o => o.book).concat(m.books || []))].map(b => BOOK[b] || b).filter(Boolean);
+    const when = MK?.when?.(+m.start, Date.now()) || new Date(+m.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    const match = [m.teamName || m.team, m.oppName || m.opp].filter(Boolean).join(' v ');
+    const chance = m.ours != null ? `Our estimate for this line is <strong>${Math.round(m.ours * 100)}%</strong>${m.market != null ? `, against ${Math.round(m.market * 100)}% in the price` : ''}. Supported edge: <strong>${esc(K?.signed ? K.signed(m.sedge) : m.sedge)}</strong>.` : `Supported edge: <strong>${esc(K?.signed ? K.signed(m.sedge) : m.sedge ?? '–')}</strong>.`;
+    return `<p class="obd-lead">Every player in the Lab reads the same way. Here's a real line that's open right now${favPlayers().some(p => flat(p.name) === flat(m.name)) ? ', for a player you follow' : ''}.</p>
+      <figure class="obd-demo obd-live" aria-labelledby="obLiveH"><div class="obd-demo-top"><b id="obLiveH">${esc(m.name)} · ${esc(m.label || m.k)}</b><span class="pl">${esc(side)} ${esc(fmt(m.line))}</span></div>
+        <p class="lb obd-live-m">${esc([match, when].filter(Boolean).join(' · '))}${books.length ? ` · ${esc(books.join(', '))}` : ''} · verified ${esc(agoMin(m.verifiedAt))}</p>
+        ${items(`${esc(smp.texts?.hit || 'Not enough games to count yet.')}${smp.texts?.avg ? `. ${esc(smp.texts.avg)}.` : '.'}`, chance, g ? `This one is <strong>${esc(g.grade)}</strong>, ${esc(g.word.toLowerCase())}.` : '', esc(m.name))}
+        <figcaption class="lb">Research, not advice. Lines move and can close before the game.</figcaption></figure>`;
+  }
+
   /* ---------- drawing ---------- */
   const logo = src => src ? `<img src="${esc(src)}" alt="" width="20" height="20" loading="lazy" decoding="async" onerror="this.remove()">` : '';
   const LEVELS = [['fav', 'Favorite', 'First on Home'], ['follow', 'Follow', 'On Home, with alerts'], ['quiet', 'Quiet', 'On Home, no alerts']];
@@ -229,15 +282,7 @@
           <label class="obd-sw"><input class="sw" type="checkbox" role="switch" data-obal="on" ${N.on ? 'checked' : ''}><span><b>Alerts on</b></span></label>
           ${ALERTS.map(([k, l, feat]) => `<label class="obd-sw sub"><input class="sw" type="checkbox" role="switch" data-obal="${k}" ${N[k] && !plus(feat) ? 'checked' : ''} ${N.on && !plus(feat) ? '' : 'disabled'}><span>${l}${plus(feat) ? ' <span class="pl">Plus</span>' : ''}</span></label>`).join('')}</fieldset>`;
     }
-    if (st === 5) return `<p class="obd-lead">Every player in the Lab reads the same way. Here's an example (made-up numbers, not a live line).</p>
-      <figure class="obd-demo"><div class="obd-demo-top"><b>Example player · Points</b><span class="pl">Over 25.5</span></div>
-        <ol class="obd-explain">
-          <li><b>Hit rate</b><span>How often he went over this line: <strong>6 of the last 10</strong> games. Check last 5, 20 and the season too; one hot week is not a trend.</span></li>
-          <li><b>Floodlight chance and supported edge</b><span>Our estimate (58%) against the line's price. Supported edge starts from the raw gap, then takes off points for a small sample, injuries, lineup doubts and missing data. Open “See the evidence” on any card for the steps.</span></li>
-          <li><b>Evidence grade</b><span>A to D: how much solid data sits behind the number. A strong edge on D evidence is a guess.</span></li>
-          <li><b>Follow</b><span>The ☆ on a player puts his new lines on Home and in your alerts.</span></li>
-          <li><b>Save to a board</b><span>Boards keep lines you're researching, like “Tonight's NBA”. They tell you when a line moves or a game starts.</span></li>
-          <li><b>Add to a Prediction Card</b><span>Group picks, see the combined chance, and get a warning when two picks depend on each other.</span></li></ol></figure>`;
+    if (st === 5) return tourBody();
     return `<div class="obd-ready"><p class="obd-lead">Home now leads with ${favs().length ? `your ${favs().length} team${favs().length > 1 ? 's' : ''}` : 'your sports'}${favPlayers().length ? ` and ${favPlayers().length} player${favPlayers().length > 1 ? 's' : ''}` : ''}. Change any of it later in Settings.</p>
       ${S_().me && !S_().me.email_verified ? `<p class="lb">One more thing: confirm your email from the link we sent${S_().me.email ? ` to ${esc(S_().me.email)}` : ''}, so you can always get back in.</p>` : ''}</div>`;
   }
@@ -269,6 +314,7 @@
   }
   function close(how) {
     if (!O.el) return; mark(how);
+    try { window.flTrack?.(how === 'finished' ? 'onboarding_done' : 'onboarding_skip', { step: O.step, teams: favs().length, players: favPlayers().length, live: !!T.m }) } catch (e) {}
     O.el.remove(); O.el = null; document.documentElement.classList.remove('obd-on');
     if (how === 'finished' && window.flHub?.show) { try { localStorage.removeItem('fl.upTab') } catch (e) {} window.flHub.show() }   // Up next opens on "For you" with the new choices
     (O.from && O.from !== document.body && document.contains(O.from) ? O.from : document.querySelector('#hub h1, .tb-brand'))?.focus?.({ preventScroll: true });   // a first visit opened over nothing: land on Home's heading
