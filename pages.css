@@ -3507,3 +3507,9 @@ h3.hm-brief-h{margin:0;font:700 17px/1.25 var(--font-body);color:var(--text)}
 /* the secondary buttons on the filled card: dark ink on the card itself, never on a dark glass fill (contrast) */
 html:root[data-theme] .pd-slip.has .bt.pd-clear{background:transparent;color:var(--on-accent);border-color:color-mix(in oklab,var(--on-accent) 55%,transparent)}
 html:root[data-theme] .pd-slip.has .bt.pd-clear:hover{background:color-mix(in oklab,var(--on-accent) 10%,transparent)}
+.ll-tbl>summary{list-style:none;gap:8px}.ll-tbl>summary::-webkit-details-marker{display:none}
+.ll-tbl>summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);flex:none}
+.ll-tbl[open]>summary::before{transform:rotate(45deg)}
+/* the name leads in each alerts row; the league or pick text sits under it, quieter */
+:root[data-theme] .al-t th[scope="row"]{font:600 14px/1.3 var(--font-body);color:var(--text);letter-spacing:0;text-transform:none}
+:root[data-theme] .al-t th[scope="row"] small{font:500 12px/1.3 var(--font-body);color:var(--muted)}

@@ -353,6 +353,7 @@ const NFL = { at: Math.round(now / 1000) - 120, checked: 20, rows: [
     await p.evaluate(() => { location.hash = '#/settings/alerts' }); await p.waitForSelector('#stAlerts'); await p.waitForTimeout(300);
     await p.evaluate(() => document.querySelectorAll('#stAlerts details').forEach(d => d.open = true));
     assert.ok(await p.$('[data-alpick="pk-ja|reopen"]'), 'a Reopened column for each pick'); assert.ok(await p.$('#al-pkReopen'), 'a Market reopened switch');
+    await p.locator('[data-alplayer]').first().scrollIntoViewIfNeeded(); await shot(p, 'alerts-players-1440');
     await p.uncheck('[data-alplayer="nba:anthonyedwards|line"]');
     assert.deepStrictEqual(await p.evaluate(() => window.flAlerts.settings().players), { 'nba:anthonyedwards': { line: false } });
     await p.evaluate(() => { const F = window.flFeed, real = F.now(); F.now = () => real.map(m => m.name === 'Anthony Edwards' || m.name === 'Rudy Gobert' ? { ...m, line: m.line + 1 } : m); window.flAlerts.check() });
