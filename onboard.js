@@ -207,7 +207,7 @@
         <li><b>Save to a board</b><span>Boards keep lines you're researching, like “Tonight's NBA”. They tell you when a line moves or a game starts.</span></li>
         <li><b>Add to a Prediction Card</b><span>Group picks, see the combined chance, and get a warning when two picks depend on each other.</span></li></ol>`;
     if (!m && T.loading) return `<p class="obd-lead">Every player in the Lab reads the same way. We're finding a line that's open right now to show you.</p><p class="lb" role="status">Checking today's verified lines…</p>`;
-    if (!m) return `<p class="obd-lead">Every player in the Lab reads the same way. No verified line is open right now${T.done && window.flMarkets ? ' (between games, or a provider is slow)' : ''}, so this example uses made-up numbers, not a live line.</p>
+    if (!m) return `<p class="obd-lead">Every player in the Lab reads the same way. No verified line is open right now${T.done && window.flMarkets ? ' (it’s between games, or a provider is slow)' : ''}. This example uses made-up numbers.</p>
       <figure class="obd-demo"><div class="obd-demo-top"><b>Example player · Points</b><span class="pl">Over 25.5 · example</span></div>
         ${items('How often he went over this line: <strong>6 of the last 10</strong> games.', 'Our estimate (58%) against the line’s price.', 'This example would be a B.', 'a player')}</figure>`;
     const K = window.flLabCore, MK = window.flMarket, g = K?.grade?.(m), smp = m.smp || MK?.sample?.(m.games, m.line, m.side, m.yes) || {};

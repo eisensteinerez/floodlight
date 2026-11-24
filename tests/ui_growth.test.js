@@ -7,7 +7,7 @@
 //   3. Finishing onboarding counts "onboarding_done" for the owner's funnel; skipping counts "onboarding_skip".
 //   4. Your week: the recap in plain sentences, a Share picture button, and the First followed prediction milestone.
 //   5. Trust and data: evidence quality and known limitations are explained.
-//   6. Owner dashboard: conversion rates, plan mix, revenue per active member and Plus features hit on Free.
+//   6. Owner dashboard: conversion rates, plan mix, revenue per active member and Plus features Free members tried.
 //   7. Every screen at 320, 375, 390, 430, 768, 1024, 1366 and 1920: no sideways scrolling, every control named,
 //      headings in order, tables with headers; on touch screens every control is at least 44 by 44.
 const path = require('path'), fs = require('fs'), os = require('os'), net = require('net'), { spawn } = require('child_process'), assert = require('assert');
@@ -121,7 +121,7 @@ const SMALL = () => [...document.querySelectorAll(':is(.obd-card, .flpage:not([h
     await openOnboarding(p); await toStep(p, 5);
     await p.waitForFunction(() => /made-up numbers/.test(document.querySelector('.obd-card')?.innerText || ''), null, { timeout: 12000 });
     const txt = await p.locator('.obd-card').innerText();
-    assert.ok(/No verified line is open right now/.test(txt) && /example/.test(txt));
+    assert.ok(/No verified line is open right now/.test(txt) && /example uses made-up numbers/.test(txt));
     assert.strictEqual(await p.locator('.obd-live').count(), 0);
     await p.ctx.close();
   });
@@ -169,11 +169,11 @@ const SMALL = () => [...document.querySelectorAll(':is(.obd-card, .flpage:not([h
   });
 
   /* ---------- 6. Owner dashboard ---------- */
-  await t('6 owner dashboard: conversion rates, plan mix, revenue per active member, Plus features hit on Free', async () => {
+  await t('6 owner dashboard: conversion rates, plan mix, revenue per active member, Plus features Free members tried', async () => {
     const p = await page({ w: 1366, h: 900, touch: false, hash: '#/owner' });
     await p.waitForSelector('#owJH', { timeout: 15000 });
     const txt = await p.locator('.flpage:not([hidden])').innerText();
-    for (const want of ['Landing page to account', 'Sign-up completion', 'Upgrade page to trial or paid', 'Plus features hit on Free', 'Plus features Free members ran into', 'Opened sign-up'])
+    for (const want of ['Landing page to account', 'Sign-up completion', 'Upgrade page to trial or paid', 'Plus features Free members tried', 'Which Plus features Free members tried', 'Opened sign-up'])
       assert.ok(txt.includes(want), `the dashboard should show "${want}"`);
     await shot(p, 'owner-1366');
     const a = await p.evaluate(AUDIT); assert.deepStrictEqual({ unnamed: a.unnamed, tables: a.tables, skips: a.skips }, { unnamed: [], tables: [], skips: [] });
