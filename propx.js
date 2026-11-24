@@ -388,7 +388,7 @@
       <p class="lb">Drag the line across ${d.gs.length > 20 ? 'the last 20 games' : 'the games'}, or jump to a line a provider has open now. The counts change as you move it; the chance and edge above stay on the posted line.</p>
       ${chips}
       <label class="ll-sl" for="llR"><span class="lb">Line</span><input type="range" id="llR" min="${smin}" max="${smax}" step="0.5" value="${line}" aria-valuetext="${esc(d.L.summary)}"><output class="num" for="llR">${fmt(line)}</output></label>
-      <div id="llViz">${lensViz(p, d)}</div></section>`;
+      <div id="llViz">${lensViz(p, d)}</div><p class="sr-only" id="llSay" aria-live="polite"></p></section>`;
   }
   // a new line: repaint the lens only (the rest of the panel, and the slider being dragged, stay put)
   function setLens(v, from) {
@@ -400,6 +400,8 @@
     R.lens = v === p.line ? null : v;
     const d = lensData(p, gone), box = X.panel.querySelector('#llViz'); if (!box) return;
     box.innerHTML = lensViz(p, d);
+    // the redrawn summary is read out once the line settles, not at every step of a drag
+    const say = X.panel.querySelector('#llSay'); if (say) { clearTimeout(setLens.t); setLens.t = setTimeout(() => { say.textContent = d.L.summary }, 500) }
     const r = X.panel.querySelector('#llR'); if (r) { if (+r.value !== d.line) r.value = d.line; r.setAttribute('aria-valuetext', d.L.summary); const o = r.parentElement.querySelector('output'); if (o) o.textContent = fmt(d.line) }
     X.panel.querySelectorAll('[data-llsnap]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.llsnap === d.line)));
     const rs = X.panel.querySelector('[data-ll="reset"]'); if (rs) rs.hidden = d.line === p.line;
