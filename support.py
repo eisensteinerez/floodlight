@@ -10,6 +10,7 @@ import secrets
 import threading
 import time
 
+import ratelimit
 import storage
 
 FILE = None
@@ -27,7 +28,6 @@ CTX_KEYS = {"page": 160, "title": 120, "device": 20, "browser": 60, "os": 40, "v
             "marketId": 80, "providerMarketId": 80, "eventId": 60, "player": 80, "team": 60, "opponent": 60, "sport": 12, "league": 20,
             "stat": 40, "line": 12, "side": 8, "provider": 40, "verifiedAt": 40, "start": 40}
 EMAIL = re.compile(r"[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,24}")
-_recent = {}   # address hash -> times, for signed-out tickets
 
 
 def init(path):
@@ -61,16 +61,8 @@ def clean_context(raw):
 
 
 def signed_out_allowed(addr_key, now=None):
-    now = now or time.time()
-    with _lock:
-        recent = [t for t in _recent.get(addr_key, []) if now - t < 3600]
-        if len(recent) >= 5:
-            _recent[addr_key] = recent
-            return False
-        _recent[addr_key] = recent + [now]
-        if len(_recent) > 5000:
-            _recent.clear()
-    return True
+    """At most 5 signed-out messages an hour from one network (ratelimit.py)."""
+    return ratelimit.take("support", addr_key, now=now)
 
 
 def public(t, staff=False):
@@ -181,3 +173,14 @@ def staff_action(body, staff_name):
         t["updated"] = now
         _save()
         return 200, {"ok": True, "ticket": public(t, staff=True)}
+
+
+def forget(user):
+    """Account deletion: the member's tickets go (they hold their name, email and messages)."""
+    key = str(user or "").lower()
+    with _lock:
+        before = len(T["tickets"])
+        T["tickets"] = [t for t in T["tickets"] if t.get("user") != key]
+        changed = len(T["tickets"]) != before
+    if changed:
+        _save()

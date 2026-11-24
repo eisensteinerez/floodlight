@@ -21,6 +21,8 @@ import time
 import urllib.error
 import urllib.request
 
+import ratelimit
+
 TERMS_VERSION = "2026-11-23"           # change this when the Terms, Privacy Policy or Subscription Terms change materially
 TTL = {"verify": 3 * 86400, "magic": 15 * 60, "reset": 3600, "email_change": 86400}
 EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,24}")
@@ -28,7 +30,6 @@ D = {}                                  # setup(): users, save, lock, storage, f
 _st = {}                                # {"tokens": {sha: {...}}, "outbox": [...], "recovery": {}}
 _lock = threading.Lock()
 _tickets = {}                           # two-step sign-in in progress: ticket -> {"user", "exp", "via"}
-_sends = {}                             # address or IP -> recent send times (rate limit)
 
 
 def setup(**kw):
@@ -111,21 +112,8 @@ def _link(line):
 
 
 def allowed(*keys, per_hour=5):
-    """Rate limit for anything that sends email: at most per_hour for each address and each visitor."""
-    now = time.time()
-    for k in keys:
-        if not k:
-            continue
-        recent = [t for t in _sends.get(k, []) if now - t < 3600]
-        if len(recent) >= per_hour:
-            return False
-    for k in keys:
-        if k:
-            _sends[k] = [t for t in _sends.get(k, []) if now - t < 3600] + [now]
-    if len(_sends) > 5000:
-        for k in [k for k, v in _sends.items() if not v or now - v[-1] > 3600]:
-            _sends.pop(k, None)
-    return True
+    """Rate limit for anything that sends email: at most per_hour for each address and each visitor (ratelimit.py)."""
+    return ratelimit.take("email", *keys, limit=per_hour)
 
 
 # ---------- one-time tokens ----------
@@ -490,3 +478,13 @@ def accept_terms(u, version):
         u["terms_history"] = hist
         D["save"]()
     return 200, {"ok": True}
+
+
+def forget(key):
+    """Account deletion: unused email links and two-step sign-ins in progress for the account go."""
+    with _lock:
+        for k in [k for k, v in _st["tokens"].items() if v.get("user") == key]:
+            _st["tokens"].pop(k, None)
+        _save()
+    for t in [t for t, v in _tickets.items() if v.get("user") == key]:
+        _tickets.pop(t, None)

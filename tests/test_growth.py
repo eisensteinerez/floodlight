@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 import analytics as A  # noqa: E402
 import ownerstats as O  # noqa: E402
 import referrals as R  # noqa: E402
+import ratelimit  # noqa: E402
 import support as SP  # noqa: E402
 
 DAY = 86400
@@ -32,7 +33,7 @@ def fresh(tmp):
     R.R.update({"salt": "", "codes": {}, "refs": {}, "nets": {}})
     R.init(os.path.join(tmp, "referrals.json"))
     SP.T.update({"seq": 10400, "tickets": []})
-    SP._recent.clear()
+    ratelimit.reset()
     SP.init(os.path.join(tmp, "support.json"))
 
 
