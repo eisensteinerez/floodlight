@@ -424,6 +424,11 @@ html.dragging .tip{display:none!important}
 <div class="mini" id="mini"></div>
 <div class="tip" id="tip"></div>
 <script src="/heat.js"></script>
+<!-- the one verified market feed, the same files the site runs (markets.js reads the board through edge.js) -->
+<script src="/meter.js"></script>
+<script src="/market.js"></script>
+<script src="/edge.js"></script>
+<script src="/markets.js"></script>
 <script>
 'use strict';
 const APP_ID = '__DISCORD_APP_ID__';
@@ -544,22 +549,37 @@ function home() {
     </div></section>`;
   if (!fight) hotPreview(sp);
 }
-/* ---------- the verified market feed (markets.py through /api/lab/board) ----------
-   The server sends only markets it checked open. Here the checks that depend on the clock run again on every draw: a
-   game that has started, or a line its provider has not re-read for 90 minutes, leaves at once. A board is read again
-   after five minutes, and when the tab comes back. */
-const MAX_AGE = 90 * 60e3, BOARD_TTL = 5 * 60e3;
+/* ---------- the verified market feed ----------
+   The Lab has no list of its own. Inside the site it reads the site's feed (window.parent.flMarkets), so the Lab, Prop
+   Explorer, Predictions and Home hold one set of open markets. Opened on its own (Discord, a shared link) it runs the
+   same feed files (markets.js, edge.js, market.js), reading the board through this page's api(). Either way the
+   clock checks (started, not re-verified, ruled out) run again on every draw through market.js gate(). */
+window.flBoardFetch = (url, ms) => api(String(url).replace(/^\/api\/lab\//, ''), ms);
+function FEED() { try { if (window.parent !== window && window.parent.flMarkets?.list) return window.parent.flMarkets } catch (e) {} return window.flMarkets }
+function feedDoc() { try { if (window.parent !== window && window.parent.flMarkets?.list) return window.parent.document } catch (e) {} return document }
+const MK = () => { try { if (window.parent !== window && window.parent.flMarket) return window.parent.flMarket } catch (e) {} return window.flMarket };
 const msOf = v => v == null || v === '' ? null : typeof v === 'number' ? (v > 1e11 ? v : v * 1000) : (Date.parse(v) || null);
-function liveRows(b, now = Date.now()) {
-  if (!b.verified) return (b.rows || []).filter(r => !r.start || msOf(r.start) > now);
-  return (b.rows || []).filter(r => r.status === 'open' && msOf(r.start) > now && (r.eventId || r.matchup === 'provider') && msOf(r.verifiedAt) && now - msOf(r.verifiedAt) <= MAX_AGE);
+// a feed market in the row shape this page draws
+function asRow(p) { return { _p: p, player: p.name, k: p.k, label: p.label, line: p.line, side: p.side, team: p.team, teamName: p.teamName, opp: p.oppName || p.opp, home: p.home,
+  start: p.start ? +p.start : null, verifiedAt: p.verifiedAt, books: p.books || [], l5: p.l5, l10: p.l10, l20: p.l20, avg: p.avg, mid: p.mid || p.id,
+  hot: !!MK()?.isHot(p), teamOk: p.teamNote ? false : undefined, teamNote: p.teamNote || '' } }
+function liveRows(b, now = Date.now()) { const G = MK(); return (b.rows || []).filter(r => r._p && G && G.gate(r._p, { now }).status === 'open') }
+function boardOf(sp, r) {
+  const by = r?.by?.[sp] || {}, open = (FEED()?.open(sp) || []).map(asRow), removed = FEED()?.removed(sp) || [];
+  return { rows: open, removed, error: by.error || r?.error || '', checked: Object.values(by.counts || {}).reduce((a, n) => a + n, 0) || open.length + removed.length, got: Date.now() };
 }
 async function boardFor(sp, force) {
   const b = S.board[sp];
-  if (b && !force && Date.now() - (b.got || 0) < BOARD_TTL) return b;
-  try { S.board[sp] = Object.assign(await api('board?sport=' + sp, 30000), { got: Date.now() }) } catch (e) { S.board[sp] = b && b.rows?.length ? Object.assign(b, { error: e.message }) : { rows: [], error: e.message, got: Date.now() } }
-  return S.board[sp];
+  if (b && !force) return b;
+  const F = FEED();
+  if (!F) return S.board[sp] = { rows: [], removed: [], error: 'The verified lines did not load. Reload the page to try again.', got: Date.now() };
+  const r = await F.list({ sport: sp, force: !!force }).catch(e => ({ error: e.message || 'The lines did not load.' }));
+  return S.board[sp] = boardOf(sp, r);
 }
+// the feed changed anywhere (a game started, a line moved, a player was ruled out): take what is open now and redraw
+try { feedDoc().addEventListener('fl:markets', ev => { if (ev.detail?.reason === 'load') return;
+  for (const sp of Object.keys(S.board)) S.board[sp] = { ...boardOf(sp, null), error: S.board[sp].error };
+  if (S.tab === 'board') renderBoard(); else if ($('#lhHot')) hotPreview(S.sport) }) } catch (e) {}
 const dayLabel = t => { const d = new Date(t), n = new Date(); const k = x => x.toDateString(); const tm = new Date(n); tm.setDate(n.getDate() + 1);
   return k(d) === k(n) ? 'Today' : k(d) === k(tm) ? 'Tomorrow' : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' }) };
 const timeOf = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -573,9 +593,10 @@ async function hotPreview(sp) {
   const b = await boardFor(sp);
   const el = $('#lhHot'); if (!el || S.sport !== sp) return;
   // the same "running hot" rule as Home and Prop Explorer, decided on the server (markets.py is_hot)
-  const rows = liveRows(b).filter(r => b.verified ? r.hot : r.l10 >= .7).slice(0, 5);
+  // the same "running hot" rule as Home and Prop Explorer (market.js hotRead), on the same open markets
+  const rows = liveRows(b).filter(r => r.hot).sort((a, c) => (c.l10 ?? 0) - (a.l10 ?? 0) || (c.l5 ?? 0) - (a.l5 ?? 0)).slice(0, 5);
   el.innerHTML = rows.length ? `<ul class="lh-hot">${rows.map(r => `<li><button data-ex="${esc(r.player)}" data-exs="${sp}" data-exk="${esc(r.k)}" data-exl="${r.line}"><span><b>${esc(r.player)}</b><small>${r.side === 'over' ? 'Over' : 'Under'} ${fmt(r.line)} ${esc(r.label)}</small></span><em class="num">${pc(r.l10)}</em></button></li>`).join('')}</ul><p class="lh-small">Hit rate over each player’s last 10 games.</p>`
-    : `<p class="lh-small">${b.error ? 'Props couldn’t load right now. Search a player instead.' : `No ${esc(sportName())} player is running hot on an open line right now.`}</p>`;
+    : `<p class="lh-small">${b.error && !liveRows(b).length ? 'Props couldn’t load right now. Search a player instead.' : `No ${esc(sportName())} player is running hot on an open line right now${liveRows(b).length ? ` (${liveRows(b).length} open ${liveRows(b).length === 1 ? 'line' : 'lines'} checked)` : ''}. Hot means 7 of the last 10 and 3 of the last 5 on that line, with 8 or more games.`}</p>`;
 }
 function notFound(name, kind, why) {
   const sp = S.sport, others = SPORTS.filter(x => x[0] !== sp && !(kind === 'team' && FIGHT.has(x[0])));
@@ -1049,7 +1070,7 @@ async function renderBoard() {
   $('#mini').classList.remove('on');
   tellPage({ view: 'board', sport: S.sport });
   const sp = S.sport, have = S.board[sp];
-  if (!have || Date.now() - (have.got || 0) >= BOARD_TTL) {
+  if (!have) {
     if (!have) $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>${esc(sportName())} props, upcoming games</b></div>${'<div class="skel" style="height:46px;margin:8px 0;border-radius:var(--r-ctl)"></div>'.repeat(8)}</div>`;
     await boardFor(sp, true);
     if (S.tab === 'board' && S.sport === sp) renderBoard();
@@ -1057,20 +1078,23 @@ async function renderBoard() {
   }
   const b = have, rows = liveRows(b), heat = x => `<span class="heat num" style="background:${heatBg(x)}">${pc(x)}</span>`;
   const off = (b.removed || []).length + ((b.rows || []).length - rows.length);
-  const ver = b.verified ? Math.max(0, ...rows.map(r => msOf(r.verifiedAt) || 0)) : 0;
+  const ver = Math.max(0, ...rows.map(r => msOf(r.verifiedAt) || 0));
   let day = '', i = 0;
   const body = rows.map(r => { const t = msOf(r.start), d = t ? dayLabel(t) : 'Time to be confirmed', head = d !== day ? `<div class="bday" role="heading" aria-level="3">${esc(d)}</div>` : ''; day = d; i++;
     return `${head}<div class="brow${i <= 3 ? ' top3' : ''}" role="button" tabindex="0" data-n="${esc(r.player)}" data-k="${r.k}" data-l="${r.line}" data-mid="${esc(r.mid || '')}"><div class="rk">${i}</div>
       <div><div class="nm">${esc(r.player)}${r.hot ? ' <span class="hotc">Hot</span>' : ''}</div><div class="sub">${esc([r.teamName || r.team, r.opp && (r.home === false ? '@ ' : 'vs ') + r.opp, t && timeOf(t)].filter(Boolean).join(' · '))}</div>${r.teamNote && r.teamOk === false ? `<div class="sub tflag" title="${esc(r.teamNote)}">Team check: ${esc(r.teamNote)}</div>` : ''}</div>
-      <div><span class="sidec ${r.side}">${r.side === 'over' ? 'O' : 'U'} ${fmt(r.line)}</span> <span class="sub">${esc(r.label)}</span>${r.verifiedAt ? `<div class="sub">${esc((r.books || []).map(x => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper' }[x] || x)).join(', '))} · verified ${esc(timeOf(msOf(r.verifiedAt)))}</div>` : ''}</div>
+      <div><span class="sidec ${r.side}">${r.side === 'over' ? 'O' : 'U'} ${fmt(r.line)}</span> <span class="sub">${esc(r.label)}</span>${r.verifiedAt ? `<div class="sub">${esc((r.books || []).map(x => ({ prizepicks: 'PrizePicks', sleeper: 'Sleeper' }[x] || x)).join(', '))} · last verified ${esc(timeOf(msOf(r.verifiedAt)))}</div>` : ''}</div>
       <div class="hide-s">${heat(r.l5)}<div class="sub">L5</div></div><div>${heat(r.l10)}<div class="sub">L10</div></div><div class="hide-s">${heat(r.l20)}<div class="sub">L20</div></div>
       <div class="num" style="text-align:right"><b>${f1(r.avg)}</b><div class="sub">avg</div></div></div>` }).join('');
   $('#view').innerHTML = `<div class="card" style="margin-top:16px"><div class="chh"><b>${esc(sportName())} props, upcoming games</b>${b.checked ? `<span class="num">${rows.length} open of ${b.checked} lines checked${ver ? ` · last verified ${esc(timeOf(ver))}` : ''}</span>` : ''}</div>
-    ${b.error ? `<div class="err">${esc(b.error)}${rows.length ? ' Showing the last verified lines.' : ''}</div>` : b.note ? `<p class="sub">${esc(b.note)}</p>` : !rows.length ? `<p class="sub">No open ${esc(sportName())} lines right now. A line shows here only while its game is on the schedule, hasn’t started, and the provider has re-checked it in the last 90 minutes.</p>` : ''}
+    ${b.error ? `<div class="err">${esc(b.error)}${rows.length ? ' These lines were verified within the last 90 minutes and leave as soon as their game starts.' : ''}</div>` : b.note ? `<p class="sub">${esc(b.note)}</p>` : !rows.length ? `<p class="sub">No open ${esc(sportName())} lines right now. A line shows here only while its game is on the schedule, hasn’t started, and the provider has re-checked it in the last 90 minutes.</p>` : ''}
     ${body}
-    ${off ? `<p class="sub boff">${off} ${off === 1 ? 'line is' : 'lines are'} off the board: game started, no confirmed game or opponent, player ruled out, or not re-checked by the provider. Predictions lists each one under Taken off the board.</p>` : ''}</div>`;
+    ${off ? `<p class="sub boff">${off} ${off === 1 ? 'line is' : 'lines are'} off the board${offWhy(b)}. Predictions lists each one under Taken off the board.</p>` : ''}</div>`;
   armBoard(rows);
 }
+// why lines left, in the feed's own words: "3 game started, 1 player ruled out"
+function offWhy(b) { const c = new Map(); for (const x of b.removed || []) { const m = x.message || MK()?.removalMessage(x.status, x.reason) || x.statusLabel || ''; if (m) c.set(m, (c.get(m) || 0) + 1) }
+  return c.size ? ': ' + [...c].sort((a, d) => d[1] - a[1]).slice(0, 4).map(([m, n]) => `${n} ${m.charAt(0).toLowerCase() + m.slice(1)}`).join(', ') : '' }
 function tabs() { document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === S.tab)) }
 
 /* ---------- events ---------- */

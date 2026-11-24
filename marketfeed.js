@@ -71,7 +71,10 @@
   function keptAt(sports = SPORTS) { const E1 = E(); return E1?.have ? Math.max(0, ...sports.map(s => E1.have(s)?.at || 0)) : 0 }
   const hot = (n = 3, list = now()) => M()?.hot ? M().hot(n) : E()?.hot ? E().hot(list, n) : [];
   const cold = (n = 2, list = now()) => M()?.cold ? M().cold(n) : E()?.cold ? E().cold(list, n) : [];
-  const ranked = (list = now()) => ahead(list).filter(m => edge(m) != null).sort((a, b) => edge(b) - edge(a) || startOf(a) - startOf(b));
+  // Best edge: the same order as Predictions' board (market.js SORTS.edge on the supported edge), so Home's top pick is
+  // Predictions' top pick; a market from an older server with no supported edge falls back to its raw edge
+  const ranked = (list = now()) => { const S = window.flMarket?.SORTS?.edge, xs = ahead(list).filter(m => edge(m) != null).map(m => m.sedge == null ? { ...m, sedge: m.edge } : m);
+    return S ? xs.sort(S) : xs.sort((a, b) => edge(b) - edge(a) || startOf(a) - startOf(b)) };
   const labArgs = m => E()?.labArgs ? E().labArgs(m) : { sport: m.sport, name: m.name, kind: 'player' };
   // a market is for this player (name match, accents and punctuation ignored)
   const flat = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');

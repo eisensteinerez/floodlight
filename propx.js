@@ -86,7 +86,7 @@
     const v = X.f[k], find = (list, x) => (list.find(o => JSON.stringify(o[0]) === JSON.stringify(x)) || [, String(x)])[1], o = K.options(X.rows?.map(r => r.p) || []);
     const opt = name => (o[name].find(x => x[0] === v) || [, v])[1];
     return { q: `Player: ${v}`, league: `League: ${SPORT[v] || v}`, game: `Game: ${opt('game')}`, team: `Team: ${opt('team')}`, stat: `Stat: ${opt('stat')}`, provider: `Provider: ${book(v)}`, side: find(SIDE, v),
-      l5: `Last 5: ${find(RATE, v)}`, l10: `Last 10: ${find(RATE, v)}`, l20: `Last 20: ${find(RATE, v)}`, edge: `Supported edge ${find(EDGE, v)}`, grade: `Evidence ${find(GRADES, v)}`, when: find(WHEN, v),
+      hot: 'Running hot', l5: `Last 5: ${find(RATE, v)}`, l10: `Last 10: ${find(RATE, v)}`, l20: `Last 20: ${find(RATE, v)}`, edge: `Supported edge ${find(EDGE, v)}`, grade: `Evidence ${find(GRADES, v)}`, when: find(WHEN, v),
       injury: find(INJ, v), moved: find(MOVED, v), games: `${find(GAMES, v)} games`, mins: `Minutes ${find(MINS, v)}` }[k] || k;
   };
   function mount(host, o = {}, api = {}) {
@@ -113,6 +113,7 @@
           ${select('pxStat', 'Statistic', 'stat', opts(o.stat, 'Every statistic'))}
           ${select('pxBook', 'Provider', 'provider', opts(o.provider.map(([k]) => [k, book(k)]), 'Every provider'), true)}
           ${select('pxSide', 'Over or under', 'side', SIDE)}
+          ${select('pxHot', 'Running hot', 'hot', [[false, 'Any line'], [true, 'Hot lines only']])}
           ${select('pxL5', 'Last 5 hit rate', 'l5', RATE, true)}
           ${select('pxL10', 'Last 10 hit rate', 'l10', RATE, true)}
           ${select('pxL20', 'Last 20 hit rate', 'l20', RATE, true)}
@@ -147,7 +148,7 @@
   function row(r) {
     const p = r.p, w = r.s.windows, mv = K.movement(p), se = p.sedge ?? null, o = opp(p), home = p.v?.event?.home;
     return `<tr data-pxrow="${esc(p.id)}">
-      <th scope="row" class="px-who"><button type="button" class="px-open" data-pxopen="${esc(p.id)}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}</b><small>${esc([p.teamName || p.team, o ? `${home === false ? 'at' : 'v'} ${o}` : ''].filter(Boolean).join(' '))}</small></span></button></th>
+      <th scope="row" class="px-who"><button type="button" class="px-open" data-pxopen="${esc(p.id)}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}${MK.isHot(p) ? ' <span class="pl px-hot" title="7 of the last 10 and 3 of the last 5 on this line, with 8 or more games">Hot</span>' : ''}</b><small>${esc([p.teamName || p.team, o ? `${home === false ? 'at' : 'v'} ${o}` : ''].filter(Boolean).join(' '))}</small></span></button></th>
       <td class="px-mk"><b>${esc(p.text)}</b><small>${esc(SPORT[p.sport] || p.sport)}${mv && mv.d ? ` · <span class="${mv.easier > 0 ? 'px-up' : 'px-dn'}">${mv.easier > 0 ? 'Moved for' : 'Moved against'} (was ${fmt(mv.from)})</span>` : ''}</small></td>
       <td class="px-when"><span>${esc(startTxt(p))}</span></td>
       ${hr(w[0], 'Last 5')}${hr(w[1], 'Last 10')}${hr(w[2], 'Last 20')}
@@ -172,7 +173,7 @@
           <tbody>${shown.map(p => row(byId.get(p.id))).join('')}</tbody></table></div>
         ${list.length > shown.length ? `<button type="button" class="bt ghost wide" data-px="more">Show ${Math.min(40, list.length - shown.length)} more of ${list.length - shown.length}</button>` : ''}`;
     const gone = X.removed.filter(p => X.f.sport === 'all' || p.sport === X.f.sport);
-    const removed = gone.length ? `<details class="card drw px-gone"><summary>Taken off the board <span class="lb">${gone.length} ${gone.length === 1 ? 'line' : 'lines'}: started, closed, ruled out or not verified</span></summary><div class="drw-b"><ul class="px-gl">${gone.slice(0, 60).map(p => `<li><span class="rw-t"><b>${esc(p.name)} · ${esc(p.text || p.label || '')}</b><small>${esc(p.statusLabel || p.v?.label || 'Removed')}${p.removalReason || p.v?.text ? ': ' + esc(p.removalReason || p.v?.text) : ''}</small></span></li>`).join('')}</ul></div></details>` : '';
+    const removed = gone.length ? `<details class="card drw px-gone"><summary>Taken off the board <span class="lb">${gone.length} ${gone.length === 1 ? 'line' : 'lines'}, each with the reason</span></summary><div class="drw-b"><ul class="px-gl">${gone.slice(0, 60).map(p => `<li><span class="rw-t"><b>${esc(p.name)} · ${esc(p.text || p.label || '')}</b><small>${esc(p.message || MK.removalMessage(p.status, p.removalReason || p.reason) || p.statusLabel || p.v?.label || 'Removed')}${p.removalReason || p.v?.text ? ': ' + esc(p.removalReason || p.v?.text) : ''}</small></span></li>`).join('')}</ul></div></details>` : '';
     el.innerHTML = status + sum + note + table + removed + `<p class="lb px-foot">Hit rates describe past games, not the next one. Supported edge and evidence are explained in each player’s research panel.</p>`;
   }
   function draw() { if (!X.host?.isConnected) return; const a = document.activeElement, id = a?.id, fk = a?.dataset?.pxsport || a?.dataset?.px || a?.dataset?.pxdrop;

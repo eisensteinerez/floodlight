@@ -2639,6 +2639,7 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .px-mk b{font-weight:700}
 .px-when{white-space:nowrap;color:var(--text-2)}
 .px-hi b{color:var(--good)}.px-lo b{color:var(--bad)}
+.px-hot{min-height:20px;padding:0 8px;margin-left:6px;font-size:11px;letter-spacing:.04em;vertical-align:2px;color:var(--good);border-color:color-mix(in oklab,var(--good) 55%,transparent);background:color-mix(in oklab,var(--good) 14%,transparent)}
 .px-na{color:var(--muted)}
 .px-se b{font:var(--display-weight) 18px/1 var(--font-display);letter-spacing:var(--display-track)}
 .px-up{color:var(--good)}.px-dn{color:var(--bad)}

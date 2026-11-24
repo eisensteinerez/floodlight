@@ -16,13 +16,16 @@ global.CustomEvent = class { constructor(type, o) { this.type = type; this.detai
 const disk = new Map(); global.localStorage = { getItem: k => disk.has(k) ? disk.get(k) : null, setItem: (k, v) => disk.set(k, String(v)), removeItem: k => disk.delete(k) };
 let BOARD = {};
 global.fetch = async url => { const sp = new URL('http://x' + url).searchParams.get('sport'); const d = BOARD[sp] || { rows: [] }; return { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(d)) } };
-for (const f of ['meter.js', 'market.js', 'edge.js', 'markets.js']) require(path.join(ROOT, f));
-const MK = window.flMarket, E = window.flEdge, F = window.flMarkets;
+for (const f of ['meter.js', 'market.js', 'labcore.js', 'edge.js', 'markets.js', 'marketfeed.js']) require(path.join(ROOT, f));
+const MK = window.flMarket, E = window.flEdge, F = window.flMarkets, K = window.flLabCore, FD = window.flFeed;
 
 // lab.html's own feed functions (Prop Explorer), run here exactly as written there
 const lab = fs.readFileSync(path.join(ROOT, 'lab.html'), 'utf8');
-const grab = name => { const i = lab.indexOf(name); assert(i >= 0, name); let j = lab.indexOf('\n', i); if (name.startsWith('function')) { let d = 0; for (j = lab.indexOf('{', i); j < lab.length; j++) { if (lab[j] === '{') d++; else if (lab[j] === '}' && !--d) break } j++ } return lab.slice(i, j) };
-const LAB = new Function(`${grab('const MAX_AGE = 90 * 60e3')}\n${grab('const msOf = ')}\n${grab('function liveRows(')}\nreturn { liveRows, MAX_AGE };`)();
+const grab = name => { const i = lab.indexOf(name); assert(i >= 0, name); let j = lab.indexOf('\n', i); if (/^(async )?function/.test(name)) { let d = 0; for (j = lab.indexOf('{', i); j < lab.length; j++) { if (lab[j] === '{') d++; else if (lab[j] === '}' && !--d) break } j++ } return lab.slice(i, j) };
+// the Lab page's own list is the feed: these are its functions, run exactly as written there (no window.parent here,
+// so FEED() is this window's flMarkets, as when the Lab is opened on its own)
+const LAB = new Function('S', `${grab('function FEED()')}\n${grab('function feedDoc()')}\n${grab('const MK = () =>')}\n${grab('const msOf = ')}\n${grab('function asRow(')}\n${grab('function liveRows(')}\n${grab('function boardOf(')}\n${grab('async function boardFor(')}\nreturn { liveRows, boardFor };`)({ board: {} });
+const labRows = async sp => LAB.liveRows(await LAB.boardFor(sp, true));
 
 const games = (vals, from = NOW0 - 2 * 24 * H, step = 7) => vals.map((v, i) => [v, i % 2, 60, 'DAL', 'DAL', new Date(from - i * step * 24 * H).toISOString()]);
 // a row as /api/lab/board sends it after the verified market service (markets.py) checked it
@@ -38,7 +41,8 @@ let n = 0; const t = async (name, fn) => { clock = NOW0; await fn(); n++; consol
   await t('every page reads the same open markets: Predictions, Prop Explorer and the feed agree', async () => {
     BOARD.nfl = board([row('Jalen Hurts'), row('Saquon Barkley', { k: 'ry', label: 'Rush yards', line: 95.5, hot: false }), row('A.J. Brown', { k: 'rcy', label: 'Receiving yards', line: 70.5 })]);
     const r = await F.list({ sport: 'nfl', force: true });
-    const explorer = LAB.liveRows(BOARD.nfl).map(x => x.mid).sort();
+    const explorer = (await labRows('nfl')).map(x => x.mid).sort();
+    assert.deepEqual(K.filter(F.open('nfl'), K.defaults(), { now: clock }).map(p => p.mid).sort(), explorer);   // Prop Explorer with no filter
     assert.deepEqual(ids(r.markets), explorer);
     assert.deepEqual(ids(E.upcoming(E.have('nfl').picks)), explorer);   // Predictions, Home, Parlays and the Lab's lists read flEdge
     assert.deepEqual(ids(F.open('nfl')), explorer);
@@ -49,10 +53,11 @@ let n = 0; const t = async (name, fn) => { clock = NOW0; await fn(); n++; consol
     BOARD.nfl = board([row('Jalen Hurts'), row('Saquon Barkley', { start: new Date(NOW0 + 30 * MIN).toISOString() })]);
     await F.list({ sport: 'nfl', force: true });
     assert.equal(F.open('nfl').length, 2);
+    const lb = await LAB.boardFor('nfl', true);   // the Lab page's board, read before the start
     clock = NOW0 + 31 * MIN; F.rebuild('start');
     assert.deepEqual(F.open('nfl').map(p => p.name), ['Jalen Hurts']);
     assert.equal(F.removed('nfl').find(x => x.name === 'Saquon Barkley').status, 'started');
-    assert.equal(LAB.liveRows(BOARD.nfl, clock).length, 1);
+    assert.equal(LAB.liveRows(lb, clock).length, 1);   // drawn again on the clock, the started game's line is gone without a new read
     const ev = events.filter(e => e.type === 'fl:markets').pop();
     assert.equal(ev.detail.removed[0].status, 'started');
   });
@@ -64,7 +69,7 @@ let n = 0; const t = async (name, fn) => { clock = NOW0; await fn(); n++; consol
     const kept = E.have('nba');
     assert.equal(kept.picks.length, 1);
     assert.equal(E.upcoming(kept.picks).length, 0);
-    assert.equal(LAB.liveRows(y).length, 0);
+    F.rebuild('load'); assert(!F.open('nba').some(p => p.name === 'Joe Milton'));
     // and a cached line with no start time is never shown as today's
     const nostart = row('Joe Milton', { start: null, eventId: '' });
     assert.equal(MK.gate({ ...nostart, start: null }, { now: clock }).status, 'missing_matchup');
@@ -104,14 +109,43 @@ let n = 0; const t = async (name, fn) => { clock = NOW0; await fn(); n++; consol
     delete window.flInjuries;
   });
 
-  await t('Home’s Hot right now agrees with Prop Explorer', async () => {
-    BOARD.nfl = board([row('Jalen Hurts', { l10: .9 }), row('Saquon Barkley', { k: 'ry', line: 95.5, hot: false, l10: .6 }), row('A.J. Brown', { k: 'rcy', line: 70.5, l10: .8 }),
+  await t('Home’s Hot right now agrees with Prop Explorer and the Lab, on one rule', async () => {
+    const cold = games([80, 90, 100, 85, 70, 99, 60, 88, 92, 75, 81, 77]);   // 2 of 10 over 95.5
+    BOARD.nfl = board([row('Jalen Hurts'), row('Saquon Barkley', { k: 'ry', label: 'Rush yards', line: 95.5, games: cold, hot: true }),   // the server's flag can't make it hot
+      row('A.J. Brown', { k: 'rcy', line: 70.5, hot: false, games: games([80, 75, 90, 71, 88, 60, 95, 85, 72, 99]) }),   // nor can it make a hot line cold
       row('DeVonta Smith', { k: 'rec', line: 4.5, start: new Date(NOW0 - MIN).toISOString() })]);
     await F.list({ sport: 'nfl', force: true });
-    const explorerHot = LAB.liveRows(BOARD.nfl).filter(r => r.hot).map(r => r.player).sort();
+    const explorerHot = K.filter(F.open('nfl'), { ...K.defaults(), hot: true }, { now: clock }).map(p => p.name).sort();
+    assert.deepEqual(explorerHot, ['A.J. Brown', 'Jalen Hurts']);
     assert.deepEqual(F.hot(10, { sport: 'nfl' }).map(p => p.name).sort(), explorerHot);
-    assert.deepEqual(E.hot(E.all(), 10).map(p => p.name).sort(), explorerHot);   // Home and the Lab's start screen
-    assert.deepEqual(F.hot(1, { sport: 'nfl' }).map(p => p.name), ['Jalen Hurts']);
+    assert.deepEqual(E.hot(E.all(), 10).map(p => p.name).sort(), explorerHot);   // the Lab's start screen
+    assert.deepEqual(FD.hot(10).map(p => p.name).sort(), explorerHot);           // Home's Hot right now
+    assert.deepEqual((await labRows('nfl')).filter(r => r.hot).map(r => r.player).sort(), explorerHot);   // the Lab page's Running hot
+    // and the rule is the one written down: 8+ games, 70%+ of the last 10, 60%+ of the last 5, pushes left out
+    const g = vs => games(vs).map(x => ({ v: x[0] }));
+    assert.equal(MK.hotRead(g([1, 1, 1, 0, 0, 1, 1, 1, 1, 0]), .5, 'over').hot, true);    // 7 of 10, 3 of 5
+    assert.equal(MK.hotRead(g([1, 1, 0, 0, 0, 1, 1, 1, 1, 1]), .5, 'over').hot, false);   // 7 of 10 but 2 of 5
+    assert.equal(MK.hotRead(g([1, 1, 1, 1, 1, 1, 1]), .5, 'over').hot, false);             // only 7 games
+    assert.equal(MK.hotRead(g([2, 3, 3, 3, 3, 3, 3, 3, 2, 1]), 2, 'over').hot, true);      // pushes left out: 4 of 4, 7 of 8
+    assert.equal(MK.hotRead(g([2, 2, 2, 3, 3, 3, 3, 1, 1, 1]), 2, 'over').hot, false);     // 4 of 7 decided
+  });
+
+  await t('Best edge on Home is Predictions’ top pick', async () => {
+    const priced = (p, o) => ({ book: 'prizepicks', line: o.line ?? 225.5, kind: 'standard', mid: 'prizepicks:' + p, pOver: o.pOver });
+    BOARD.nfl = board([row('Jalen Hurts', { offers: [priced('Jalen Hurts', { pOver: .5 })] }), row('A.J. Brown', { k: 'rcy', line: 70.5, games: games([80, 75, 90, 71, 88, 60, 95, 85, 72, 99]), offers: [priced('A.J. Brown', { line: 70.5, pOver: .55 })] })]);
+    await F.list({ sport: 'nfl', force: true });
+    const pred = F.open('nfl').filter(p => p.sedge != null && p.sedge >= 0).sort(MK.SORTS.edge);   // Predictions' ranking
+    assert(pred.length >= 1);
+    assert.equal(FD.ranked()[0].mid, pred[0].mid);
+  });
+
+  await t('a postponed game leaves with its own status and message', async () => {
+    BOARD.nfl = board([row('Jalen Hurts')]); BOARD.nfl.removed = [{ mid: 'mk_pp', player: 'Saquon Barkley', k: 'ry', label: 'Rush yards', line: 95.5, side: 'over', status: 'postponed', reason: 'The game was postponed' }];
+    await F.list({ sport: 'nfl', force: true });
+    const g = F.removed('nfl').find(x => x.mid === 'mk_pp');
+    assert.equal(g.status, 'postponed'); assert.equal(MK.STATUS_LABEL.postponed, 'Postponed'); assert.equal(MK.removalMessage('postponed'), 'Event postponed');
+    assert.equal(MK.gate({ status: 'postponed' }).status, 'postponed');
+    assert.equal(MK.removalMessage('closed', 'The provider no longer offers this line'), 'Provider removed the line');
   });
 
   await t('changing time zones does not move a market onto the wrong day', async () => {
@@ -150,8 +184,12 @@ let n = 0; const t = async (name, fn) => { clock = NOW0; await fn(); n++; consol
   });
 
   await t('no page reads the pick’em apps’ lines around the feed', async () => {
-    for (const f of ['predictions.js', 'labpage.js', 'labtools.js', 'parlays.js', 'home.js', 'search.js', 'profile.js', 'alerts.js', 'lab.html'])
-      assert(!fs.readFileSync(path.join(ROOT, f), 'utf8').includes('/api/dfs/lines'), f);
+    // every page the site serves: none reads the pick'em apps' lines (or the DFS endpoint) itself
+    const pages = fs.readdirSync(ROOT).filter(f => /\.(js|html)$/.test(f) && !['sw.js'].includes(f));
+    assert(pages.includes('research.js') && pages.includes('lab.html'));
+    for (const f of pages) assert(!/\/api\/dfs\//.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), f);
+    // and the Lab page has no board of its own: it reads the feed
+    assert(!/api\('board\?/.test(lab) && /window\.parent\.flMarkets/.test(lab), 'lab.html reads the shared feed');
   });
 
   Date.now = realNow;

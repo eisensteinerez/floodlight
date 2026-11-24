@@ -86,7 +86,7 @@
       <section class="lab-start" id="labStart" aria-label="Start here"></section>
       <section class="lab-boards" id="labBoards" aria-label="Saved boards"></section>
       <section class="card lab-more" aria-label="More tools"><div class="sec-h"><h2>More tools</h2><span class="lb">Tennis, combos, sportsbook boards and more</span></div>
-        <div class="cx-row">${[['tennis', 'Tennis players'], ['combo', 'Combo of two players'], ['book', 'Sportsbook prop board'], ['teamprops', 'Team props for today'], ['browse', 'Browse teams by league'], ['classic', 'College and minor leagues']].map(([k, l]) => `<button type="button" class="cx" data-labmore="${k}">${l}</button>`).join('')}</div></section>
+        <div class="cx-row">${[['tennis', 'Tennis players'], ['combo', 'Combo of two players'], ['teamprops', 'Team props for today'], ['browse', 'Browse teams by league'], ['classic', 'College and minor leagues']].map(([k, l]) => `<button type="button" class="cx" data-labmore="${k}">${l}</button>`).join('')}</div></section>
       <p class="lb lab-note">Hit rates describe the past, not the next game. Bet only what you can afford to lose.</p>`;
     L.loaded = true; L.ready = false; L.engine = null;
     drawTry(); drawStart(); drawBoards(); loadPicks();
@@ -127,7 +127,7 @@
     box.innerHTML = `<div class="sec-h"><h2>${cmp ? 'Add a player to Compare' : 'Start with tonight’s hottest'}</h2>${hot?.length ? `<span class="lb">${cmp ? 'Drag a card onto a slot, or select it to fill the next empty one' : 'Players with a line posted today'}</span>` : ''}</div>` +
       (hot == null ? `<div class="g3">${'<div class="skl lab-card-skl"></div>'.repeat(6)}</div>`
         : hot.length ? `<div class="g3">${hot.map(p => `<button type="button" class="card hit lab-starter" data-labopen="${esc(JSON.stringify(window.flEdge.labArgs(p)))}" draggable="true" data-cmpdrag="${esc(JSON.stringify({ sport: p.sport, name: p.name, stat: p.k }))}">${face(p.photo, p.name, 'avx av-lg')}<span class="rw-t"><b>${esc(p.name)}</b><small>${[p.fid || p.team ? (window.flPlayers ? window.flPlayers.span(p.fid, p.teamName || p.team) : esc(p.teamName || p.team || '')) : '', esc(SPORT_NAME[p.sport] || '')].filter(Boolean).join(' · ')}</small><small>${esc(p.text)}</small></span>${window.flHeat.badge(p.heat)}</button>`).join('')}</div>`
-        : `<div class="card emp">${ic('lab', 28)}<b>${L.denied ? 'The Lab is switched off for your account' : 'No open line reads hot right now'}</b><p>${L.denied ? 'Ask your admin to switch it on.' : `A line is hot when Floodlight’s chance for it is 60% or more. ${L.picks.length ? `None of the ${L.picks.length} open lines does yet; Prop Explorer lists them all with their recent hit rates.` : 'No player lines are open yet.'}`}</p>${!L.denied && L.picks.length ? '<button type="button" class="bt" data-labtool="props">Open Prop Explorer</button>' : ''}</div>`);
+        : `<div class="card emp">${ic('lab', 28)}<b>${L.denied ? 'The Lab is switched off for your account' : 'No open line reads hot right now'}</b><p>${L.denied ? 'Ask your admin to switch it on.' : `A line is hot when the player cleared it 7 of the last 10 and 3 of the last 5 times, with 8 or more games. ${L.picks.length ? `None of the ${L.picks.length} open lines meets that yet. Prop Explorer lists them all with the same hit rates and a Hot filter.` : 'No player lines are open yet.'}`}</p>${!L.denied && L.picks.length ? '<button type="button" class="bt" data-labtool="props">Open Prop Explorer</button>' : ''}</div>`);
   }
 
   /* ---------- the command bar ---------- */
@@ -251,7 +251,7 @@
     const host = $('labClassic');
     try { const el = rsEl(); if (el.parentElement !== host) host.appendChild(el); el.classList.add('rs-inpage'); openResearch({ ...o, _in: true, classic: true }) } catch (e) { host.innerHTML = `<div class="card emp"><b>That tool did not open</b><p>Reload the page and try again.</p></div>` }
     L.hint = o.compare ? (o.name ? 'Compare · search the second player' : 'Compare · search the first player, then choose Combo') : '';
-    drawHead(o.compare ? (o.name ? `${o.name} and another player` : 'Compare two players') : o.name || (o.tab === 'board' ? 'Sportsbook prop board' : o.tab === 'team' ? 'Team props' : o.sport === 'tennis' ? 'Tennis' : 'More tools'));
+    drawHead(o.compare ? (o.name ? `${o.name} and another player` : 'Compare two players') : o.name || (o.tab === 'team' ? 'Team props' : o.sport === 'tennis' ? 'Tennis' : 'More tools'));
     focusWs();
   }
   function focusWs() { const ws = $('labWs'); if (!ws || L.kbTab) return; setTimeout(() => { ws.scrollIntoView({ behavior: root.dataset.motion === 'reduce' ? 'auto' : 'smooth', block: 'start' }); $('labWsT')?.focus({ preventScroll: true }) }, 60) }
@@ -276,7 +276,7 @@
   function more(k) {
     if (k === 'tennis') return openClassic({ sport: 'tennis', tab: 'player' });
     if (k === 'combo') return openTools('compare', {});
-    if (k === 'book') return openClassic({ tab: 'board' });
+    if (k === 'book') return openTools('props', {});   // the old sportsbook prop board is Prop Explorer, on the verified feed
     if (k === 'teamprops') return openClassic({ tab: 'team' });
     if (k === 'browse') { openClassic({ tab: 'player' }); try { S.rs.browse = { ...(S.rs.browse || {}), open: true, sport: S.rs.sport }; document.querySelector('#rs [data-rs="browse"]')?.click() } catch (e) {} return }
     openClassic({ tab: 'player' });

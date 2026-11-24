@@ -118,7 +118,7 @@
 
   /* ---------- Prop Explorer: filters and sorts ---------- */
   const WHEN = { soon: 2 * 3600e3 };
-  const defaults = () => ({ sport: 'all', league: 'all', game: 'all', team: 'all', q: '', stat: 'all', provider: 'all', side: 'all', l5: 0, l10: 0, l20: 0, edge: null, grade: 'all', when: 'all', injury: 'all', moved: 'all', games: 0, mins: 0 });
+  const defaults = () => ({ sport: 'all', league: 'all', game: 'all', team: 'all', q: '', stat: 'all', provider: 'all', side: 'all', hot: false, l5: 0, l10: 0, l20: 0, edge: null, grade: 'all', when: 'all', injury: 'all', moved: 'all', games: 0, mins: 0 });
   // the line a market opened at, and how far it has moved since, in the direction that matters (+ = easier for the pick)
   function movement(p) {
     const open = p.lineFrom ?? p.openLine ?? p.firstLine ?? null; if (open == null || p.line == null) return null;
@@ -136,6 +136,7 @@
       && (f.game === 'all' || (p.eventId || p.gameKey) === f.game) && (f.team === 'all' || tm(p.team) === tm(f.team) || tm(p.teamName) === tm(f.team))
       && (!q || tm(p.name).includes(q)) && (f.stat === 'all' || p.k === f.stat) && (f.provider === 'all' || (p.books || []).includes(f.provider))
       && (f.side === 'all' || p.side === f.side)
+      && (!f.hot || !!window.flMarket?.isHot(p))
       && (!f.l5 || (p.l5 ?? -1) >= f.l5) && (!f.l10 || (p.l10 ?? -1) >= f.l10) && (!f.l20 || (p.l20 ?? -1) >= f.l20)
       && (f.edge == null || (p.sedge ?? -1e9) >= f.edge)
       && (f.grade === 'all' || GRADE_RANK[gr(p)] >= GRADE_RANK[f.grade])
