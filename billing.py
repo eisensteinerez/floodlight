@@ -4,13 +4,16 @@ Who has what
   effective(u) is the plan a member is on right now: owners and admins are always on Plus; then a live subscription
   (trial, active, or past due inside the grace period, or cancelled but paid to the end of the period); then a group
   seat on someone else's Group plan; then a free month from a gift code, a referral credit or the owner; else Free.
-  allows(u, feature) and use(u, "lab_search") are what the rest of the site asks. Limits only bite once the owner turns
-  "Apply plan limits" on (or FLOODLIGHT_PAYWALL=1); until then every member keeps every feature.
+  What each plan lets a member do is entitlements.py's job (the plans, prices and limits are in plans.json); the rest of
+  the site asks entitlements, never this module. Limits only bite once the owner turns "Apply plan limits" on (or
+  FLOODLIGHT_PAYWALL=1); until then every member keeps every feature.
 
 Payments
   With STRIPE_SECRET_KEY set, checkout goes through Stripe Checkout (cards, Apple Pay and Google Pay, promotion codes,
   free trials), card changes through a Stripe setup page, and Stripe's webhook (STRIPE_WEBHOOK_SECRET) keeps each
-  account in step. A key starting sk_live_ is refused until FLOODLIGHT_BILLING_LIVE=1 is also set, so the site cannot
+  account in step. The webhook handles checkout.session.completed, customer.subscription.created / updated / deleted /
+  trial_will_end (a reminder email), invoice.paid / payment_succeeded / payment_failed, charge.refunded, refund.created
+  and charge.dispute.*; each event id is processed once, and only marked done after it went through. A key starting sk_live_ is refused until FLOODLIGHT_BILLING_LIVE=1 is also set, so the site cannot
   take real money by accident. Without a key the site runs a built-in test checkout that charges nothing; on the hosted
   site only owners and admins can use it, so nobody gets Plus by pressing a test button.
 
@@ -21,6 +24,8 @@ The account fields (on each user in users.json, so they survive a deploy with th
   price_cents, interval (month | year), provider (stripe | demo), customer_id, subscription_id
   payment_method  {brand, last4, exp, wallet}
   invoices        [{id, number, at, amount_cents, currency, status, url, pdf}] newest first (demo and cached Stripe)
+  refunds         [{id, charge, invoice, amount_cents, currency, at}]; disputes [{id, charge, amount_cents, reason, status}]
+  payment_failed_at, dispute_open
   group_of        the username whose Group plan this member is on; group_members on the buyer
   comp_until      a free Plus period (gift code, referral credit or owner grant)
   ref_credit_months  free months earned from referrals, spent with "Use a free month"
@@ -42,49 +47,11 @@ try:
 except Exception:   # pragma: no cover
     analytics = None
 
+import entitlements
+from entitlements import PLANS, PLAN, PAID, GIFTS, FEATURES, FREE_LIMITS, TRIAL_DAYS, GRACE_DAYS, GROUP_SEATS, REFUND_DAYS  # noqa: F401  (plans.json)
+
 API = "https://api.stripe.com/v1"
 DAY = 86400
-TRIAL_DAYS = 7
-GRACE_DAYS = 7
-GROUP_SEATS = 5            # the buyer and four others
-
-PLANS = [
-    {"id": "free", "name": "Free", "price_cents": 0, "interval": None, "trial_days": 0,
-     "blurb": "Live scores and a taste of the Lab.",
-     "features": ["Live scores for every sport", "Player profiles (basic stats)", "5 Lab searches a day", "Last-10 hit rates",
-                  "1 saved board", "Follow up to 3 players", "Game start and final-score alerts", "Prediction record summary"]},
-    {"id": "plus", "name": "Plus", "price_cents": 499, "interval": "month", "trial_days": TRIAL_DAYS,
-     "blurb": "The full Lab, Predictions and alerts.",
-     "features": ["Unlimited Lab searches", "Last 5, 10, 20, season, home/away and opponent splits", "Every prediction, with the evidence",
-                  "Provider comparison and line movement", "Unlimited saved boards", "Unlimited follows and advanced alerts",
-                  "Full Pick History", "Shareable research cards"]},
-    {"id": "plus_annual", "name": "Plus, yearly", "price_cents": 2999, "interval": "year", "trial_days": TRIAL_DAYS,
-     "blurb": "Plus for a year at about half the monthly price.",
-     "features": ["Everything in Plus", "Billed once a year", "Works out to $2.50 a month"]},
-    {"id": "group", "name": "Group", "price_cents": 999, "interval": "month", "trial_days": TRIAL_DAYS,
-     "blurb": "Plus for five people, plus private competitions.",
-     "features": ["Plus for you and up to 4 others", "Private competitions for your group (no real money)", "One bill, managed by you"]},
-]
-PLAN = {p["id"]: p for p in PLANS}
-PAID = ("plus", "plus_annual", "group")
-GIFTS = {"gift_1m": {"months": 1, "price_cents": 499, "name": "Floodlight Plus, 1 month (gift)"},
-         "gift_12m": {"months": 12, "price_cents": 2999, "name": "Floodlight Plus, 12 months (gift)"}}
-
-# What Free cannot do. Everything not listed is open to everyone.
-FEATURES = {
-    "lab_unlimited": "Unlimited Lab searches",
-    "boards_unlimited": "More than one saved board",
-    "advanced_filters": "Advanced Lab filters",
-    "splits_full": "Last 5, 20, season, home/away and opponent splits",
-    "provider_compare": "Provider comparison",
-    "line_history": "Line movement and line history",
-    "advanced_alerts": "Line, injury and edge alerts",
-    "pick_history_full": "Full Pick History",
-    "share_cards": "Shareable research cards",
-    "predictions_full": "Every prediction with its evidence",
-    "follows_unlimited": "Following more than 3 players",
-}
-FREE_LIMITS = {"lab_search": 5, "boards": 1, "followed_players": 3, "predictions": 3}
 
 STATUS_MAP = {"trialing": "trial", "active": "active", "past_due": "past_due", "unpaid": "past_due", "canceled": "canceled",
               "incomplete": "incomplete", "incomplete_expired": "canceled", "paused": "canceled"}
@@ -108,6 +75,8 @@ def setup(**kw):
     for k, v in (("enforce", False), ("events", []), ("log", []), ("gifts", {}), ("usage", {}), ("webhook_at", 0)):
         if not isinstance(_state.get(k), type(v)):
             _state[k] = v
+    entitlements.bind(effective=effective, enforced=enforced, gated=bool(D.get("gated")), buyer=_buyer,
+                      state=_state, save=_save_state, lock=_slock)
 
 
 def _save_state():
@@ -214,77 +183,19 @@ def paid(u):
     return effective(u) in PAID
 
 
-def allows(u, feature):
-    """Can this member use a Plus feature? Everyone can while limits are off, and on your own computer without an account."""
-    if not enforced() or feature not in FEATURES:
-        return True
-    if not u:
-        return not D.get("gated")
-    return paid(u)
+def _buyer(u):
+    """Is this member the one paying for their plan (not a seat on someone else's Group)?"""
+    return bool(u) and u.get("plan") in PAID and _sub_live(u)
 
 
-def limit(u, name):
-    """A Free limit (None = no limit)."""
-    if not enforced() or paid(u):
-        return None
-    return FREE_LIMITS.get(name)
-
-
-def _today(u):
-    tz = ((u or {}).get("prefs") or {}).get("tz") or ""
-    try:
-        from zoneinfo import ZoneInfo
-        import datetime
-        return datetime.datetime.now(ZoneInfo(tz) if tz else datetime.timezone.utc).strftime("%Y-%m-%d")
-    except Exception:
-        return time.strftime("%Y-%m-%d", time.gmtime())
-
-
-def usage(u, what):
-    rec = _state["usage"].get(u["username"].lower()) if u else None
-    if not rec or rec.get("day") != _today(u):
-        return 0
-    return len(rec.get(what) or [])
-
-
-def use(u, what, item=""):
-    """Count one use of a limited thing (a Lab search). The same item again on the same day is free.
-    Returns (ok, left) where left is None when there is no limit."""
-    lim = limit(u, what) if u else None
-    if not u:
-        return True, None
-    k, day = u["username"].lower(), _today(u)
-    item = str(item or "").strip().lower()[:80] or secrets.token_hex(4)
-    with _slock:
-        rec = _state["usage"].get(k)
-        if not rec or rec.get("day") != day:
-            rec = _state["usage"][k] = {"day": day}
-        seen = rec.setdefault(what, [])
-        if item in seen:
-            return True, (None if lim is None else max(0, lim - len(seen)))
-        if lim is not None and len(seen) >= lim:
-            return False, 0
-        seen.append(item)
-        if len(_state["usage"]) > 20000:
-            for kk in [kk for kk, v in _state["usage"].items() if v.get("day") != day]:
-                _state["usage"].pop(kk, None)
-        _save_state()
-    return True, (None if lim is None else max(0, lim - len(seen)))
-
-
-def check_list_growth(u, name, old, new):
-    """A saved list (boards, followed players) may not grow past the Free limit. Existing items are never removed."""
-    lim = limit(u, name)
-    if lim is None or len(new) <= max(lim, len(old)):
-        return None
-    what = {"boards": "saved board", "followed_players": "followed players"}.get(name, name)
-    return f"Free includes {lim} {what}{'s' if lim != 1 and name == 'boards' else ''}. Upgrade to Plus for unlimited."
+# The plan checks live in entitlements.py; these names stay so older callers keep working.
+allows, limit, usage, use, check_list_growth = entitlements.allows, entitlements.limit, entitlements.usage, entitlements.use, entitlements.check_list_growth
 
 
 # ---------- what the browser sees ----------
 
 def view(u):
-    """The plan block sent with /api/me."""
+    """The plan block sent with /api/me: what the member is on (billing) and what it lets them do (entitlements)."""
     eff = effective(u)
     p = PLAN.get(u.get("plan") or "free") or PLAN["free"]
     now = _now()
@@ -297,20 +208,17 @@ def view(u):
            "comp_until": int(u.get("comp_until") or 0) if float(u.get("comp_until") or 0) > now else None,
            "ref_credit_months": int(u.get("ref_credit_months") or 0), "trial_available": not u.get("trialed"),
            "group_of": u.get("group_of") or None, "group_members": u.get("group_members") or [] if u.get("plan") == "group" else [],
-           "limits": {k: limit(u, k) for k in FREE_LIMITS}, "used": {"lab_search": usage(u, "lab_search")},
-           "features": {f: allows(u, f) for f in FEATURES}, "staff": D["rank"](u) in ("owner", "admin")}
+           "dispute": bool(u.get("dispute_open")), "staff": D["rank"](u) in ("owner", "admin"), **entitlements.view(u)}
     can, why = can_checkout(u)
     out["checkout"] = {"ok": can, "why": why}
     return out
 
 
 def plans_public():
-    """GET /api/plans: the plans, for the pricing page and the landing page."""
+    """GET /api/plans: the plans, for the pricing, landing and policy pages (from plans.json, through entitlements.py)."""
     m = mode()
-    return {"plans": [{k: p[k] for k in ("id", "name", "price_cents", "interval", "trial_days", "features", "blurb")} for p in PLANS],
-            "currency": "usd", "mode": m, "on_sale": m == "test" or (m == "live" and live_allowed()), "trial_days": TRIAL_DAYS,
-            "grace_days": GRACE_DAYS, "group_seats": GROUP_SEATS, "free_limits": FREE_LIMITS, "features": FEATURES,
-            "enforced": enforced(), "gifts": [{"id": k, **v} for k, v in GIFTS.items()]}
+    return {**entitlements.public(), "mode": m, "on_sale": m == "test" or (m == "live" and live_allowed()), "enforced": enforced(),
+            "terms_version": D["terms_version"]() if D.get("terms_version") else None}
 
 
 # ---------- Stripe ----------
@@ -367,23 +275,30 @@ LOOKUP = {"plus": "floodlight_plus_month", "plus_annual": "floodlight_plus_year"
 PRICE_ENV = {"plus": "STRIPE_PRICE_PLUS", "plus_annual": "STRIPE_PRICE_PLUS_ANNUAL", "group": "STRIPE_PRICE_GROUP"}
 
 
+def lookup_key(plan):
+    """Stripe lookup key for a plan at its price in plans.json, so changing a price there makes a new Stripe price."""
+    p = PLAN[plan]
+    return f"{LOOKUP[plan]}_{p['price_cents']}{entitlements.CONFIG['currency']}"
+
+
 def price_id(plan):
     """The Stripe price for a plan: from the environment, else by lookup key; in test mode it is created when missing."""
     if os.environ.get(PRICE_ENV[plan]):
         return os.environ[PRICE_ENV[plan]]
     if plan in _prices:
         return _prices[plan]
-    got = stripe("GET", "/prices", {"lookup_keys": [LOOKUP[plan]], "active": True, "limit": 1}).get("data") or []
+    lk = lookup_key(plan)
+    got = stripe("GET", "/prices", {"lookup_keys": [lk], "active": True, "limit": 1}).get("data") or []
     if got:
         _prices[plan] = got[0]["id"]
         return _prices[plan]
     if mode() != "test":
-        raise StripeError(f"No Stripe price for {PLAN[plan]['name']}. Add {PRICE_ENV[plan]} on Render.")
+        raise StripeError(f"No Stripe price for {PLAN[plan]['name']}. Add {PRICE_ENV[plan]} on Render, or a price with lookup key {lk}.")
     p = PLAN[plan]
     prod = stripe("POST", "/products", {"name": "Floodlight " + p["name"], "metadata": {"plan": plan}}, idem="fl-prod-" + plan)
-    price = stripe("POST", "/prices", {"product": prod["id"], "currency": "usd", "unit_amount": p["price_cents"],
-                                       "recurring": {"interval": p["interval"]}, "lookup_key": LOOKUP[plan], "metadata": {"plan": plan}},
-                   idem="fl-price-" + plan)
+    price = stripe("POST", "/prices", {"product": prod["id"], "currency": entitlements.CONFIG["currency"], "unit_amount": p["price_cents"],
+                                       "recurring": {"interval": p["interval"]}, "lookup_key": lk, "metadata": {"plan": plan}},
+                   idem=f"fl-price-{lk}")
     _prices[plan] = price["id"]
     return price["id"]
 
@@ -393,7 +308,7 @@ def _plan_of_price(price):
         return None
     lk = price.get("lookup_key") or ""
     for plan, k in LOOKUP.items():
-        if lk == k or os.environ.get(PRICE_ENV[plan]) == price.get("id"):
+        if lk == k or lk.startswith(k + "_") or (price.get("id") and os.environ.get(PRICE_ENV[plan]) == price.get("id")):
             return plan
     return (price.get("metadata") or {}).get("plan") if (price.get("metadata") or {}).get("plan") in PAID else None
 
@@ -498,7 +413,7 @@ def _ensure_customer(u):
 
 def _demo_invoice(u, cents, what):
     inv = {"id": "demo_" + secrets.token_hex(6), "number": f"TEST-{int(time.time()) % 1000000:06d}", "at": int(time.time()), "amount_cents": int(cents),
-           "currency": "usd", "status": "paid", "url": "", "pdf": "", "what": what, "demo": True}
+           "currency": entitlements.CONFIG["currency"], "status": "paid", "url": "", "pdf": "", "what": what, "demo": True}
     u.setdefault("invoices", []).insert(0, inv)
     del u["invoices"][36:]
 
@@ -531,8 +446,8 @@ def _demo_start(u, plan, trial):
     u.pop("canceled_at", None)
     u.pop("grace_until", None)
     if trial:
-        u.update({"plan_status": "trial", "trial_started": now, "trial_ends": now + TRIAL_DAYS * DAY, "current_period_end": now + TRIAL_DAYS * DAY, "trialed": True})
-        _demo_invoice(u, 0, f"{p['name']} free trial, {TRIAL_DAYS} days (test)")
+        u.update({"plan_status": "trial", "trial_started": now, "trial_ends": now + p["trial_days"] * DAY, "current_period_end": now + p["trial_days"] * DAY, "trialed": True})
+        _demo_invoice(u, 0, f"{p['name']} free trial, {p['trial_days']} days (test)")
     else:
         u.update({"plan_status": "active", "paid_since": u.get("paid_since") or now, "current_period_end": now + step})
         _demo_invoice(u, p["price_cents"], f"{p['name']} (test)")
@@ -556,7 +471,7 @@ def checkout(u, plan, site):
         if u.get("plan") == plan:
             return 409, {"error": f"You're already on {PLAN[plan]['name']}."}
         return change_plan(u, plan)
-    trial = not u.get("trialed")
+    trial = not u.get("trialed") and PLAN[plan]["trial_days"] > 0
     if mode() == "demo":
         with D["lock"]:
             _demo_start(u, plan, trial)
@@ -571,7 +486,7 @@ def checkout(u, plan, site):
                   "cancel_url": site + "/#/pricing?checkout=cancelled", "metadata": {"username": u["username"].lower(), "plan": plan, "kind": "subscription"},
                   "subscription_data": {"metadata": {"username": u["username"].lower(), "plan": plan}}}
         if trial:
-            params["subscription_data"]["trial_period_days"] = TRIAL_DAYS
+            params["subscription_data"]["trial_period_days"] = PLAN[plan]["trial_days"]
         s = stripe("POST", "/checkout/sessions", params)
     except StripeError as e:
         return 502, {"error": str(e)}
@@ -707,7 +622,7 @@ def update_card(u, site):
     if not u.get("customer_id"):
         return 400, {"error": "There's no billing account yet."}
     try:
-        s = stripe("POST", "/checkout/sessions", {"mode": "setup", "customer": u["customer_id"], "currency": "usd",
+        s = stripe("POST", "/checkout/sessions", {"mode": "setup", "customer": u["customer_id"], "currency": entitlements.CONFIG["currency"],
                                                   "success_url": site + "/#/account/billing?card=done&session={CHECKOUT_SESSION_ID}",
                                                   "cancel_url": site + "/#/account/billing", "metadata": {"username": u["username"].lower(), "kind": "setup"}})
     except StripeError as e:
@@ -795,7 +710,7 @@ def gift_checkout(u, gift, to, site):
         return 200, {"done": True, "code": c}
     try:
         s = stripe("POST", "/checkout/sessions", {"mode": "payment", "customer": _ensure_customer(u),
-                                                  "line_items": [{"quantity": 1, "price_data": {"currency": "usd", "unit_amount": g["price_cents"], "product_data": {"name": g["name"]}}}],
+                                                  "line_items": [{"quantity": 1, "price_data": {"currency": entitlements.CONFIG["currency"], "unit_amount": g["price_cents"], "product_data": {"name": g["name"]}}}],
                                                   "success_url": site + "/#/account/billing?gift=done&session={CHECKOUT_SESSION_ID}",
                                                   "cancel_url": site + "/#/pricing", "allow_promotion_codes": True,
                                                   "metadata": {"username": u["username"].lower(), "kind": "gift", "gift": gift, "to": to}})
@@ -858,7 +773,7 @@ def group(u, action, who):
             u.pop("group_of", None)
             _save_users()
         return 200, {"ok": True, "plan": view(u)}
-    if u.get("plan") != "group" or not _sub_live(u):
+    if not entitlements.can_create_group(u):
         return 403, {"error": "Only the person who bought a Group plan can manage its seats."}
     who = str(who or "").strip().lower()
     target = users.get(who) or next((x for x in users.values() if (x.get("email") or "").lower() == who and x.get("email_verified")), None)
@@ -933,7 +848,136 @@ def _user_for(obj):
     return None
 
 
+def _charge(obj):
+    """A charge, from a refund or dispute event (which only carry its id). Without a Stripe key, whatever the event holds."""
+    ch = obj.get("charge")
+    if isinstance(ch, dict):
+        return ch
+    if isinstance(ch, str) and key():
+        return stripe("GET", f"/charges/{ch}")
+    return {"id": ch, "customer": obj.get("customer"), "invoice": obj.get("invoice")}
+
+
+def _mail(u, subject, text):
+    mail = D.get("mail")
+    if mail and u.get("email"):
+        mail(u["email"], subject, text)
+
+
+def _day(ts):
+    return time.strftime("%B %-d, %Y", time.gmtime(int(ts))) if ts else ""
+
+
+def _on_subscription(typ, obj):
+    u = _user_for(obj)
+    if not u:
+        return
+    sub = _sub_fetch(obj["id"]) if key() else obj
+    with D["lock"]:
+        apply_subscription(u, sub)
+        _save_users()
+    if typ == "customer.subscription.trial_will_end" and not u.get("cancel_at_period_end") and u.get("trial_ends"):
+        p = PLAN.get(u.get("plan")) or PLAN["plus"]
+        price = f"${int(u.get('price_cents') or p['price_cents']) / 100:.2f}"
+        every = "a year" if (u.get("interval") or p["interval"]) == "year" else "a month"
+        _mail(u, "Your Floodlight free trial ends soon",
+              f"Your {p['name']} free trial ends on {_day(u['trial_ends'])}. Unless you cancel before then, your card is charged {price}, "
+              f"then {price} {every} until you cancel.\n\nKeep it, or cancel in two clicks: {D['site']()}/#/account/billing\n")
+        log("Trial ending reminder sent", u["username"])
+    if typ == "customer.subscription.deleted":
+        log("Subscription ended", u["username"])
+        _mail(u, "Your Floodlight plan has ended",
+              f"Your {PLAN.get(u.get('plan'), {}).get('name', 'Floodlight')} plan has ended and you're on Free now. Everything you saved is still there.\n\n"
+              f"Come back any time: {D['site']()}/#/pricing\n")
+
+
+def _on_invoice_paid(obj):
+    u = _user_for(obj)
+    if not u:
+        return
+    with D["lock"]:
+        u.pop("grace_until", None)
+        if u.get("plan_status") == "past_due":
+            u["plan_status"] = "active"
+        if obj.get("billing_reason") == "subscription_cycle" and int(obj.get("amount_paid") or 0) > 0:
+            log("Renewed", u["username"], amount_cents=obj.get("amount_paid"))
+            _journey(u, u.get("plan_status"), "renew")
+            u["renewed_at"] = int(time.time())
+        if not u.get("paid_since") and int(obj.get("amount_paid") or 0) > 0:
+            u["paid_since"] = int(time.time())
+        _save_users()
+
+
+def _on_payment_failed(obj):
+    u = _user_for(obj)
+    if not u:
+        return
+    with D["lock"]:
+        u["plan_status"] = "past_due"
+        u["grace_until"] = int(u.get("grace_until") or time.time() + GRACE_DAYS * DAY)
+        u["payment_failed_at"] = int(time.time())
+        _save_users()
+    log("Payment failed", u["username"])
+    _mail(u, "Your Floodlight payment didn't go through",
+          f"We couldn't charge your card for Floodlight Plus. Your plan stays on until {_day(u['grace_until'])} while Stripe tries again.\n\n"
+          f"Update your card under Account > Plan and billing: {D['site']()}/#/account/billing\n")
+
+
+def _on_refund(obj, refund_id=None):
+    """charge.refunded (a charge) or refund.created (a refund). Recorded on the account and its receipt; the plan itself
+    only changes when Stripe also cancels the subscription, which arrives as its own event."""
+    ch = obj if obj.get("object") == "charge" else _charge(obj)
+    u = _user_for(ch)
+    if not u:
+        return
+    rid = refund_id or obj.get("id")
+    amount = int(obj.get("amount_refunded") if obj.get("object") == "charge" else obj.get("amount") or 0)
+    with D["lock"]:
+        refunds = u.setdefault("refunds", [])
+        known = next((r for r in refunds if r.get("charge") == ch.get("id")), None)
+        if known:                                     # charge.refunded carries the running total for the charge
+            if amount <= known["amount_cents"]:
+                return
+            known.update(amount_cents=amount, at=int(time.time()))
+        else:
+            refunds.insert(0, {"id": rid, "charge": ch.get("id"), "invoice": ch.get("invoice") if isinstance(ch.get("invoice"), str) else None,
+                               "amount_cents": amount, "currency": obj.get("currency") or entitlements.CONFIG["currency"], "at": int(time.time())})
+            del refunds[50:]
+        inv = next((i for i in u.get("invoices") or [] if ch.get("invoice") and i.get("id") == ch.get("invoice")), None)
+        if inv:
+            inv["refunded_cents"] = amount
+            inv["status"] = "refunded" if amount >= int(inv.get("amount_cents") or 0) else "partly refunded"
+        _save_users()
+    log(f"Refund of ${amount / 100:.2f}", u["username"], amount_cents=amount, kind="refund")
+
+
+def _on_dispute(typ, obj):
+    ch = _charge(obj)
+    u = _user_for(ch)
+    if not u:
+        return
+    with D["lock"]:
+        ds = u.setdefault("disputes", [])
+        d = next((x for x in ds if x.get("id") == obj.get("id")), None)
+        if not d:
+            d = {"id": obj.get("id"), "charge": ch.get("id"), "amount_cents": int(obj.get("amount") or 0), "reason": obj.get("reason") or "",
+                 "opened": int(obj.get("created") or time.time())}
+            ds.insert(0, d)
+            del ds[20:]
+        d["status"] = obj.get("status") or ("closed" if typ.endswith("closed") else "needs_response")
+        u["dispute_open"] = any(x.get("status") not in ("won", "lost", "closed", "warning_closed") for x in ds)
+        _save_users()
+    log(f"Dispute {'opened' if typ.endswith('created') else d['status']} ({d['reason'] or 'no reason given'})", u["username"],
+        kind="dispute", amount_cents=d["amount_cents"])
+
+
+_inflight = set()
+
+
 def webhook(payload, header):
+    """Stripe's events, processed once each. An event is only marked done after it went through, so when anything fails
+    (Stripe unreachable, a bug) Stripe's retry is processed instead of being thrown away as a duplicate. A second delivery
+    that arrives while the first is still running is told to come back later (409), never acknowledged early."""
     secret = os.environ.get("STRIPE_WEBHOOK_SECRET") or ""
     if not verify_signature(payload, header, secret):
         return 400, {"error": "bad signature"}
@@ -942,53 +986,40 @@ def webhook(payload, header):
     except ValueError:
         return 400, {"error": "bad json"}
     eid, typ, obj = ev.get("id"), ev.get("type") or "", (ev.get("data") or {}).get("object") or {}
+    if not eid:
+        return 400, {"error": "no event id"}
     with _slock:
         if eid in _state["events"]:
             return 200, {"ok": True, "duplicate": True}
-        _state["events"].append(eid)
-        del _state["events"][:-500]
-        _state["webhook_at"] = int(time.time())
-        _save_state()
+        if eid in _inflight:
+            return 409, {"error": "already being processed"}
+        _inflight.add(eid)
     try:
         if typ == "checkout.session.completed":
             _handle_session(obj)
         elif typ.startswith("customer.subscription."):
-            u = _user_for(obj)
-            if u:
-                sub = _sub_fetch(obj["id"]) if key() else obj
-                with D["lock"]:
-                    apply_subscription(u, sub)
-                    _save_users()
+            _on_subscription(typ, obj)
         elif typ in ("invoice.paid", "invoice.payment_succeeded"):
-            u = _user_for(obj)
-            if u:
-                with D["lock"]:
-                    u.pop("grace_until", None)
-                    if u.get("plan_status") == "past_due":
-                        u["plan_status"] = "active"
-                    if obj.get("billing_reason") == "subscription_cycle" and int(obj.get("amount_paid") or 0) > 0:
-                        log("Renewed", u["username"], amount_cents=obj.get("amount_paid"))
-                        _journey(u, u.get("plan_status"), "renew")
-                        u["renewed_at"] = int(time.time())
-                    if not u.get("paid_since") and int(obj.get("amount_paid") or 0) > 0:
-                        u["paid_since"] = int(time.time())
-                    _save_users()
+            _on_invoice_paid(obj)
         elif typ == "invoice.payment_failed":
-            u = _user_for(obj)
-            if u:
-                with D["lock"]:
-                    u["plan_status"] = "past_due"
-                    u["grace_until"] = int(u.get("grace_until") or time.time() + GRACE_DAYS * DAY)
-                    _save_users()
-                log("Payment failed", u["username"])
-                mail = D.get("mail")
-                if mail and u.get("email"):
-                    mail(u["email"], "Your Floodlight payment didn't go through",
-                         f"We couldn't charge your card for Floodlight Plus. Your plan stays on for {GRACE_DAYS} days while Stripe tries again.\n\n"
-                         f"Update your card under Account > Plan and billing: {D['site']()}/#/account/billing\n")
-    except StripeError as e:
-        print(f"billing: webhook {typ} couldn't reach Stripe: {e}")
+            _on_payment_failed(obj)
+        elif typ == "charge.refunded":
+            _on_refund(obj)
+        elif typ == "refund.created":
+            _on_refund(obj, obj.get("id"))
+        elif typ.startswith("charge.dispute."):
+            _on_dispute(typ, obj)
+    except Exception as e:      # StripeError or anything else: leave it unmarked so Stripe's retry runs it again
+        print(f"billing: webhook {typ} {eid} failed, Stripe will retry: {type(e).__name__}: {e}")
+        with _slock:
+            _inflight.discard(eid)
         return 500, {"error": "try again"}
+    with _slock:
+        _inflight.discard(eid)
+        _state["events"].append(eid)
+        del _state["events"][:-2000]
+        _state["webhook_at"] = int(time.time())
+        _save_state()
     return 200, {"ok": True}
 
 
@@ -1018,11 +1049,15 @@ def summary():
     for x in cancels:
         reasons[x.get("reason") or "other"] = reasons.get(x.get("reason") or "other", 0) + 1
     m = mrr(counted)
+    refunds = [r for u in counted for r in u.get("refunds") or [] if now - r.get("at", 0) < 30 * DAY]
     return {"mode": mode(), "live_allowed": live_allowed(), "enforced": enforced(), "env_enforced": os.environ.get("FLOODLIGHT_PAYWALL") == "1",
             "durable": bool(D.get("durable", lambda: False)()), "webhook": bool(os.environ.get("STRIPE_WEBHOOK_SECRET")), "webhook_at": _state.get("webhook_at") or None,
             "webhook_url": D["site"]() + "/api/billing/webhook", "mail": bool(D.get("mail_ready", lambda: False)()),
             "users": len(users), "by_plan": by, "trials": trials, "paying": paying, "past_due": sum(1 for u in counted if u.get("plan_status") == "past_due"),
             "mrr_cents": m, "arr_cents": m * 12, "cancels_30d": len(cancels), "cancel_reasons": reasons,
+            "refunds_30d": len(refunds), "refunded_cents_30d": sum(int(r.get("amount_cents") or 0) for r in refunds),
+            "disputes_open": sum(1 for u in counted if u.get("dispute_open")),
+            "failed_payments_30d": sum(1 for u in counted if now - float(u.get("payment_failed_at") or 0) < 30 * DAY),
             "comped": sum(1 for u in users if float(u.get("comp_until") or 0) > now), "demo_accounts": len(demo), "demo_mrr_cents": mrr(demo),
             "gifts": {"sold": len(_state["gifts"]), "redeemed": sum(1 for g in _state["gifts"].values() if g.get("used_by"))},
             "log": _state["log"][:80]}
@@ -1048,12 +1083,10 @@ def forget(u):
             other["group_members"] = [m for m in other["group_members"] if m != me]
         if other.get("group_of") == me:
             other.pop("group_of", None)
-    with _slock:
-        _state["usage"].pop(me, None)
-        _save_state()
+    entitlements.forget(u)
 
 
 def export(u):
     keys = ("plan", "plan_status", "trial_started", "trial_ends", "paid_since", "canceled_at", "current_period_end", "cancel_at_period_end",
-            "price_cents", "interval", "provider", "payment_method", "invoices", "group_of", "group_members", "comp_until", "ref_credit_months", "cancel_reason")
+            "price_cents", "interval", "provider", "payment_method", "invoices", "refunds", "group_of", "group_members", "comp_until", "ref_credit_months", "cancel_reason")
     return {k: u.get(k) for k in keys if u.get(k) is not None}

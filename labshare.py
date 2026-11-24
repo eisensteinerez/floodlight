@@ -144,3 +144,22 @@ def popular():
                 if n:
                     out[name][key] = n
     return out
+
+
+def forget_owner(owner):
+    """Account deletion: every board link the member shared stops working. Returns how many were removed."""
+    owner = str(owner or "").lower()
+    with _lock:
+        gone = [k for k, v in _d["boards"].items() if str(v.get("owner") or "").lower() == owner]
+        for k in gone:
+            del _d["boards"][k]
+        if gone:
+            _save(force=True)
+    return len(gone)
+
+
+def shared_by(owner):
+    """The member's live board links (for the data export)."""
+    owner = str(owner or "").lower()
+    with _lock:
+        return [{"id": k, "name": v.get("name"), "at": v.get("at")} for k, v in _d["boards"].items() if str(v.get("owner") or "").lower() == owner]

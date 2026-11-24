@@ -381,3 +381,11 @@ def member(username):
         u = S["users"].get((username or "").lower()) or {}
         return {"days": list(u.get("days", [])), "week": {k: dict(v) for k, v in u.get("week", {}).items()}, "vids": list(u.get("vids", [])),
                 "steps": dict(u.get("steps", {}))}
+
+
+def forget(username):
+    """Account deletion: the member's own journey and active days go. Daily totals have no names in them and stay."""
+    with _lock:
+        if S["users"].pop((username or "").lower(), None) is not None:
+            _dirty["n"] += 1
+    save(True)

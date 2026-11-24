@@ -26,7 +26,8 @@
       <div class="ow-tiles">${tile('Total accounts', n(u.total))}${tile('Active in 30 days', n(u.mau), `${n(u.wau)} this week, ${n(u.dau)} today`)}${tile('New in 30 days', n(u.new30), `${n(u.new7)} in the last 7 days`)}</div></section>
       <section class="ow-sec" aria-labelledby="owMoneyH"><h2 id="owMoneyH">Revenue</h2>
       ${m ? `<div class="ow-tiles">${tile('Monthly recurring revenue', usd(m.mrr))}${tile('Annual recurring revenue', usd(m.arr))}${tile('Paying members', n(m.paid), m.pastDue ? `${n(m.pastDue)} with a failed payment` : '')}${tile('On a free trial', n(m.trial))}
-          ${tile('Conversion to paid', pc(m.conversion), 'Paying members out of all accounts')}${tile('Trial to paid', pc(m.trialToPaid), 'Finished trials that became paid')}${tile('Churn, 30 days', pc(m.churn), `${n(m.cancellations30)} cancellations`)}${tile('Revenue per paying member', usd(m.arppu), 'A month')}</div>`
+          ${tile('Conversion to paid', pc(m.conversion), 'Paying members out of all accounts')}${tile('Trial to paid', pc(m.trialToPaid), 'Finished trials that became paid')}${tile('Churn, 30 days', pc(m.churn), `${n(m.cancellations30)} cancellations`)}${tile('Revenue per paying member', usd(m.arppu), 'A month')}
+          ${tile('Failed payments, 30 days', n(m.failedPayments30 || 0), m.pastDue ? `${n(m.pastDue)} still in the grace period` : '')}${tile('Refunds, 30 days', usd(m.refunded30 || 0), `${n(m.refunds30 || 0)} refund${m.refunds30 === 1 ? '' : 's'}`)}${tile('Open disputes', n(m.disputesOpen || 0), m.disputesOpen ? 'Answer them in the Stripe dashboard' : '')}</div>`
         : `<div class="card flat ow-wait"><b>Paid plans aren’t switched on yet</b><p class="lb">Monthly and annual recurring revenue, paying members, trials, conversion, trial-to-paid, churn and revenue per member fill in here as soon as checkout records its first plan. Until then they are left out rather than shown as zeros.</p></div>`}</section>`;
   }
   function journey(g) {

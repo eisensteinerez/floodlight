@@ -406,3 +406,29 @@ def _loop():
         except Exception as e:
             print("groups loop:", e)
         time.sleep(600)
+
+
+def forget(username):
+    """Account deletion: leave every group and drop the member's picks. A group they ran passes to the member who joined
+    next, so the others keep their competition; an empty group is deleted."""
+    me = str(username or "").lower()
+    with _lock:
+        for gid, g in list(D["groups"].items()):
+            if me not in g["members"]:
+                continue
+            g["members"].pop(me, None)
+            D["picks"][gid] = [p for p in D["picks"].get(gid, []) if p.get("user") != me]
+            if not g["members"]:
+                D["groups"].pop(gid, None)
+                D["picks"].pop(gid, None)
+            elif g["owner"] == me:
+                g["owner"] = min(g["members"], key=lambda k: g["members"][k].get("joined") or 0)
+        _save(True)
+
+
+def of_member(username):
+    """The groups the member is in (for the data export)."""
+    me = str(username or "").lower()
+    with _lock:
+        return [{"name": g["name"], "owner": g["owner"] == me, "picks": len([p for p in D["picks"].get(gid, []) if p.get("user") == me])}
+                for gid, g in D["groups"].items() if me in g["members"]]

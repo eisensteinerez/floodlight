@@ -29,6 +29,7 @@
   const oops = (k, e) => { A.err[k] = e.message || String(e); A.msg[k] = '' };
   const line = k => `<p class="ac-msg${A.err[k] ? ' bad' : ''}" role="${A.err[k] ? 'alert' : 'status'}">${A.err[k] ? esc(A.err[k]) : A.msg[k] || ''}</p>`;
   const PLAN_NAME = { free: 'Free', plus: 'Plus, monthly', plus_annual: 'Plus, yearly', group: 'Group' };
+  const RSTATUS = { paid: 'Paid', open: 'Due', refunded: 'Refunded', 'partly refunded': 'Partly refunded', void: 'Void', uncollectible: 'Not paid' };
 
   /* ---------- tabs ---------- */
   function tabs() {
@@ -51,7 +52,8 @@
     <section class="card ac-sec" aria-labelledby="ac-id-h"><h2 class="ac-h" id="ac-id-h">Username</h2>
       <p class="ac-big">@${esc(u.username)}</p><p class="ac-help">You can sign in with your username or your email. Your display name and photo are on <a class="lk" href="#/profile" data-page="profile">your profile page</a>.</p></section>
     <section class="card ac-sec" aria-labelledby="ac-tm-h"><h2 class="ac-h" id="ac-tm-h">Terms</h2>
-      <p class="ac-help">${t.ok ? `You accepted the current <a class="lk" href="#/legal/terms" data-page="legal" data-arg="terms">Terms of Service</a> and <a class="lk" href="#/legal/privacy" data-page="legal" data-arg="privacy">Privacy Policy</a> (version ${esc(t.version)}).` : 'The terms changed since you last accepted them.'}</p></section>`;
+      <p class="ac-help">${t.ok ? `You accepted the current <a class="lk" href="#/legal/terms" data-page="legal" data-arg="terms">Terms of Service</a> and <a class="lk" href="#/legal/privacy" data-page="legal" data-arg="privacy">Privacy Policy</a> (version ${esc(t.version)})${t.accepted_at ? ` on ${esc(day(t.accepted_at))}` : ''}.` : 'The terms changed since you last accepted them.'}</p>
+      ${(t.history || []).length > 1 ? `<p class="ac-help">Earlier: ${t.history.slice(0, -1).reverse().map(h => `version ${esc(h.version)} on ${esc(day(h.at))}`).join(', ')}.</p>` : ''}</section>`;
   }
 
   /* ---------- security ---------- */
@@ -103,7 +105,7 @@
     let what;
     if (groupSeat) what = `You're on @${esc(p.group_of)}'s Group plan, so you have Plus. They manage the billing.`;
     else if (p.comp_until && !own) what = `You have free Plus until ${esc(day(p.comp_until))}. No card needed and nothing renews.`;
-    else if (!p.paid) what = 'Live scores, 5 Lab searches a day, last-10 hit rates, 1 saved board.';
+    else if (!p.paid) what = esc(p.free_summary || 'Free: live scores and a taste of the Lab.');
     else if (p.status === 'trial' && !p.cancel_at_period_end) what = `Your free trial ends ${esc(day(p.trial_ends || p.renews))}. Then ${money(p.price_cents)} ${p.interval === 'year' ? 'a year' : 'a month'}, charged to ${card(p.payment_method)}.`;
     else if (p.cancel_at_period_end) what = `Cancelled. Plus stays on until ${esc(day(p.renews))}, and you won't be charged again.`;
     else what = `Renews ${esc(day(p.renews))} for ${money(p.price_cents)}${p.interval === 'year' ? ' a year' : ' a month'}.`;
@@ -112,14 +114,14 @@
     const acts = [];
     if (own && p.cancel_at_period_end) acts.push('<button type="button" class="bt sm" data-ac="reactivate">Keep my plan</button>');
     if (own && !p.cancel_at_period_end && p.paid) {
-      if (p.plan === 'plus') acts.push('<button type="button" class="bt ghost sm" data-ac="switch" data-plan="plus_annual">Switch to yearly (save 50%)</button>');
+      if (p.plan === 'plus') acts.push(`<button type="button" class="bt ghost sm" data-ac="switch" data-plan="plus_annual">Switch to yearly${p.yearly_saving_pct ? ` (save ${p.yearly_saving_pct}%)` : ''}</button>`);
       if (p.plan === 'plus_annual') acts.push('<button type="button" class="bt ghost sm" data-ac="switch" data-plan="plus">Switch to monthly</button>');
       acts.push('<button type="button" class="bt ghost sm" data-ac="card">Update card</button>');
       acts.push('<button type="button" class="bt ghost sm" data-ac="cancel">Cancel plan</button>');
     }
     if (!p.paid || (!own && !groupSeat)) acts.push('<a class="bt sm" href="#/pricing" data-page="pricing">See plans</a>');
     const group = p.plan === 'group' && own ? `<section class="card ac-sec" aria-labelledby="ac-gr-h"><h2 class="ac-h" id="ac-gr-h">Your group</h2>
-        <p class="ac-help">${(p.group_members || []).length} of 4 seats used. Everyone you add gets Plus while your Group plan is on.</p>
+        <p class="ac-help">${(p.group_members || []).length} of ${(p.group_seats || 5) - 1} seats used. Everyone you add gets Plus while your Group plan is on.</p>
         <ul class="ac-devs">${(p.group_members || []).map(m => `<li><strong>@${esc(m)}</strong><button type="button" class="bt ghost sm" data-ac="group-rm" data-who="${esc(m)}" aria-label="Remove @${esc(m)} from your group">Remove</button></li>`).join('')}</ul>
         <form class="ac-form row" data-form="group-add"><label class="fl-f">Username or confirmed email<input class="inp" name="who" autocomplete="off" spellcheck="false" required></label><button class="bt sm" type="submit">Add to group</button></form>${line('group')}</section>` : '';
     const seat = groupSeat ? `<button type="button" class="bt ghost sm" data-ac="group-leave">Leave this group</button>` : '';
@@ -132,7 +134,7 @@
       ${group}
       <section class="card ac-sec" aria-labelledby="ac-rc-h"><h2 class="ac-h" id="ac-rc-h">Receipts</h2>
         ${inv.length ? `<div class="pp-tbl-wrap"><table class="pp-tbl ac-inv"><thead><tr><th scope="col">Date</th><th scope="col">What</th><th scope="col">Amount</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Receipt</span></th></tr></thead><tbody>
-          ${inv.map(i => `<tr><td>${esc(day(i.at))}</td><td>${esc(i.what || i.number || 'Floodlight')}</td><td class="num">${money(i.amount_cents, i.currency)}</td><td>${esc(i.status === 'paid' ? 'Paid' : i.status === 'open' ? 'Due' : i.status)}</td>
+          ${inv.map(i => `<tr><td>${esc(day(i.at))}</td><td>${esc(i.what || i.number || 'Floodlight')}</td><td class="num">${money(i.amount_cents, i.currency)}</td><td>${esc(RSTATUS[i.status] || i.status)}</td>
             <td>${i.pdf ? `<a class="lk" href="${esc(i.pdf)}" target="_blank" rel="noopener">Download PDF</a>` : i.url ? `<a class="lk" href="${esc(i.url)}" target="_blank" rel="noopener">View</a>` : `<button type="button" class="lk" data-ac="receipt" data-id="${esc(i.id)}">View receipt</button>`}</td></tr>`).join('')}</tbody></table></div>`
           : '<p class="ac-help">No receipts yet. They appear here after your first charge, and are emailed to you.</p>'}</section>
       <section class="card ac-sec" aria-labelledby="ac-more-h"><h2 class="ac-h" id="ac-more-h">Codes and restoring a purchase</h2>
@@ -164,12 +166,12 @@
     const reasons = Object.entries(s.cancel_reasons || {}).sort((a, b) => b[1] - a[1]);
     return `${s.durable ? '' : `<div class="ac-alert" role="alert"><strong>Accounts aren't stored durably yet.</strong> A deploy hands them to the new server, but a crash or manual restart loses them. Add DATABASE_URL (a free Neon Postgres) on Render before selling.</div>`}
       <section class="card ac-sec" aria-labelledby="ac-biz-h"><h2 class="ac-h" id="ac-biz-h">Members and revenue</h2>
-        <div class="ac-stats">${tile(s.paying, 'Paying')}${tile(s.trials, 'On a trial')}${tile(money(s.mrr_cents), 'Monthly recurring revenue', `${money(s.arr_cents)} a year`)}${tile(s.cancels_30d, 'Cancellations, 30 days')}${tile(s.past_due, 'Payment failed')}${tile(s.comped, 'Free Plus (granted)')}</div>
+        <div class="ac-stats">${tile(s.paying, 'Paying')}${tile(s.trials, 'On a trial')}${tile(money(s.mrr_cents), 'Monthly recurring revenue', `${money(s.arr_cents)} a year`)}${tile(s.cancels_30d, 'Cancellations, 30 days')}${tile(s.past_due, 'Past due now', s.failed_payments_30d ? `${s.failed_payments_30d} failed payment${s.failed_payments_30d === 1 ? '' : 's'} in 30 days` : '')}${tile(money(s.refunded_cents_30d || 0), 'Refunded, 30 days', `${s.refunds_30d || 0} refund${s.refunds_30d === 1 ? '' : 's'}`)}${tile(s.disputes_open || 0, 'Open disputes', s.disputes_open ? 'Answer them in the Stripe dashboard' : '')}${tile(s.comped, 'Free Plus (granted)')}</div>
         <p class="ac-help">${s.users} accounts: ${s.by_plan.free} on Free, ${s.by_plan.plus + s.by_plan.plus_annual} on Plus, ${s.by_plan.group} on Group seats. Test checkouts (${s.demo_accounts}) are left out of revenue.</p>
         ${reasons.length ? `<h3 class="ac-h3">Why people cancelled</h3><ul class="ac-bars">${reasons.map(([k, n]) => `<li><span>${esc(REASONS.find(r => r[0] === k)?.[1] || k)}</span><i style="--w:${(n / reasons[0][1] * 100).toFixed(0)}%"></i><b class="num">${n}</b></li>`).join('')}</ul>` : ''}</section>
       <section class="card ac-sec" aria-labelledby="ac-set-h"><h2 class="ac-h" id="ac-set-h">Selling</h2>
         <dl class="ac-dl"><div><dt>Checkout</dt><dd>${esc(modeTxt)}</dd></div><div><dt>Stripe webhook</dt><dd>${s.webhook ? `Set${s.webhook_at ? `, last event ${esc(when(s.webhook_at))}` : ', no events yet'}` : 'Not set'}: <code>${esc(s.webhook_url)}</code></dd></div><div><dt>Email</dt><dd>${s.mail ? 'Resend is set up' : 'Not set up: links are not emailed (see Outbox below)'}</dd></div><div><dt>Account storage</dt><dd>${s.durable ? 'Durable' : 'Not durable'}</dd></div></dl>
-        <label class="ac-switch"><input type="checkbox" class="sw" data-ac="enforce" ${s.enforced ? 'checked' : ''} ${s.env_enforced ? 'disabled' : ''}><span><strong>Apply Free plan limits</strong><span class="ac-help">Off: every member keeps every feature (the beta). On: Free members get 5 Lab searches a day, 1 board and 3 followed players. Turn on only once paid plans are on sale.</span></span></label>
+        <label class="ac-switch"><input type="checkbox" class="sw" data-ac="enforce" ${s.enforced ? 'checked' : ''} ${s.env_enforced ? 'disabled' : ''}><span><strong>Apply Free plan limits</strong><span class="ac-help">Off: every member keeps every feature (the beta). On: Free members get ${esc((me()?.plan?.free_summary || '').replace(/^Live scores, /, '').replace(/\.$/, '') || 'the Free limits')}. Turn on only once paid plans are on sale.</span></span></label>
         <form class="ac-form row" data-form="comp"><label class="fl-f">Give free Plus to<input class="inp" name="username" placeholder="username" autocomplete="off" spellcheck="false" required></label><label class="fl-f">Months<input class="inp" name="months" type="number" min="0" max="36" value="3" required></label><button class="bt sm" type="submit">Grant</button></form>${line('owner')}</section>
       ${A.outbox && !A.outbox.ready ? `<details class="card flat drw"><summary>Outbox: emails that weren't sent (${A.outbox.outbox.length})</summary><div class="drw-b"><p class="ac-help">No RESEND_API_KEY on the server, so these were not delivered. They contain sign-in links: never share them.</p>${A.outbox.outbox.map(m => `<div class="tile"><strong>${esc(m.subject)}</strong> to ${esc(m.to)} · ${esc(when(m.at))}<pre class="ac-pre">${esc(m.text)}</pre></div>`).join('')}</div></details>` : ''}
       <details class="card flat drw"><summary>Billing log</summary><div class="drw-b"><ul class="ac-log">${(s.log || []).map(x => `<li><span>${esc(when(x.at))}</span> ${x.user ? `@${esc(x.user)}: ` : ''}${esc(x.what)}</li>`).join('') || '<li>Nothing yet.</li>'}</ul></div></details>`;
@@ -202,7 +204,7 @@
     const i = (A.bill?.invoices || []).find(x => x.id === id); if (!i) return;
     const u = me(), d = document.createElement('dialog'); d.className = 'ac-dlg ac-rcpt'; d.setAttribute('aria-labelledby', 'acRcH');
     d.innerHTML = `<h2 class="ac-h" id="acRcH">Receipt ${esc(i.number)}</h2>
-      <dl class="ac-dl"><div><dt>Date</dt><dd>${esc(day(i.at))}</dd></div><div><dt>Billed to</dt><dd>@${esc(u.username)}${u.email ? `, ${esc(u.email)}` : ''}</dd></div><div><dt>Item</dt><dd>${esc(i.what)}</dd></div><div><dt>Amount</dt><dd>${money(i.amount_cents, i.currency)}</dd></div><div><dt>Status</dt><dd>${i.status === 'paid' ? 'Paid' : esc(i.status)}${i.demo ? ' (test, no money moved)' : ''}</dd></div></dl>
+      <dl class="ac-dl"><div><dt>Date</dt><dd>${esc(day(i.at))}</dd></div><div><dt>Billed to</dt><dd>@${esc(u.username)}${u.email ? `, ${esc(u.email)}` : ''}</dd></div><div><dt>Item</dt><dd>${esc(i.what)}</dd></div><div><dt>Amount</dt><dd>${money(i.amount_cents, i.currency)}</dd></div><div><dt>Status</dt><dd>${esc(RSTATUS[i.status] || i.status)}${i.refunded_cents ? `, ${money(i.refunded_cents, i.currency)} refunded` : ''}${i.demo ? ' (test, no money moved)' : ''}</dd></div></dl>
       <div class="cx-row"><button type="button" class="bt ghost sm" data-ac="print">Print or save as PDF</button><button type="button" class="bt sm" data-ac="close-dlg" autofocus>Close</button></div>`;
     document.body.appendChild(d);
     const from = document.activeElement;

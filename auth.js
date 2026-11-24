@@ -61,7 +61,7 @@
     if (err) A.err = err;
     const title = A.invite && !A.invite.error && A.mode === 'signup' ? "You're invited" : TITLE[A.mode] || 'Floodlight';
     const lead = A.invite && !A.invite.error && A.mode === 'signup' ? `<p>${esc(A.invite.by)} invited <strong>${esc(A.invite.email)}</strong>${A.invite.rank === 'admin' ? ' as an admin' : ''}. Pick a username and password to join.</p>`
-      : A.mode === 'login' ? '<p>Welcome back.</p>' : A.mode === 'signup' && !A.invite ? '<p>Free to start: live scores, 5 Lab searches a day and your own Home.</p>' : '';
+      : A.mode === 'login' ? '<p>Welcome back.</p>' : A.mode === 'signup' && !A.invite ? `<p>Free to start: live scores, ${window.flPricing?.config?.()?.free_limits?.lab_search ? `${flPricing.config().free_limits.lab_search} Lab searches a day` : 'daily Lab searches'} and your own Home.</p>` : '';
     return `<div class="flg-card fla" id="flgCard"><h2 class="flg-h" id="faH" tabindex="-1">${esc(title)}</h2>${lead}
       ${A.msg ? `<div class="flg-ok" role="status">${A.msg}</div>` : ''}${form()}
       <div class="flg-err" role="alert">${esc(A.err || '')}</div></div>`;

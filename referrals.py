@@ -192,3 +192,17 @@ def stats():
         refs = list(R["refs"].values())
     return {"codes": len(R["codes"]), "joined": len(refs), "counting": sum(1 for r in refs if r["qualified"]),
             "flagged": sum(1 for r in refs if r["flags"] and not r["qualified"])}
+
+
+def forget(username):
+    """Account deletion: the member's invite code, the record of who invited them and their network hashes go. Friends
+    they invited keep their accounts; the reward record that pointed at the deleted member is dropped."""
+    me = str(username or "").lower()
+    with _lock:
+        for c in [c for c, u in R["codes"].items() if u == me]:
+            R["codes"].pop(c, None)
+        R["refs"].pop(me, None)
+        for f in [f for f, r in R["refs"].items() if r.get("by") == me]:
+            R["refs"].pop(f, None)
+        R["nets"].pop(me, None)
+        _save()

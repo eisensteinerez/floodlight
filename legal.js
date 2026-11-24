@@ -5,7 +5,17 @@
    Privacy Policy or Subscription Terms change in a way members must accept again.
    window.flLegal.render(el, doc) draws a page anywhere (the signed-out front page uses it too). */
 (() => {
-  const UPDATED = 'November 23, 2026';
+  const UPDATED = 'November 24, 2026';
+  // prices, trial, grace and refund days and the Free limits come from plans.json through /api/plans, so these pages
+  // never disagree with the pricing page; until it answers, the words stay general instead of guessing a number
+  let PL = null, shown = null, asked = false;
+  const need = () => { if (PL || asked) return; asked = true; fetch('/api/plans', { credentials: 'same-origin' }).then(r => r.json()).then(d => { PL = d; if (shown && shown.el.isConnected) render(shown.el, shown.doc) }).catch(() => { asked = false }) };
+  const usd = c => new Intl.NumberFormat(undefined, { style: 'currency', currency: (PL?.currency || 'usd').toUpperCase() }).format(c / 100);
+  const plan = id => PL?.plans?.find(p => p.id === id);
+  const n = (k, fallback) => PL?.[k] ?? fallback;
+  const lim = k => PL?.free_limits?.[k];
+  const priceLine = () => PL ? `Plus costs ${usd(plan('plus').price_cents)} a month or ${usd(plan('plus_annual').price_cents)} a year. Group costs ${usd(plan('group').price_cents)} a month and covers you and up to ${PL.group_seats - 1} other accounts.`
+    : 'Prices for Plus (monthly or yearly) and Group are on the pricing page.';
   const f = t => `<mark class="lg-fill" title="Fill this in before launch">${t}</mark>`;
   const BIZ = f('[Business legal name]'), ADDR = f('[Business postal address]'), MAIL = f('[support email address]'), LAW = f('[State or country whose law applies]');
   const DOCS = [
@@ -34,7 +44,7 @@
       <h2>Who else handles it</h2><ul><li>Render (hosting the site), ${f('[Neon, the database, if DATABASE_URL is set]')}</li><li>Stripe (payments)</li><li>Resend (sending email)</li><li>Discord, only if you use the Floodlight bot there</li></ul><p>Each processes data on our behalf under its own privacy and security terms.</p>
       <h2>How long we keep it</h2><p>While your account is open. When you delete it, we delete your account and saved data straight away; backups roll over within ${f('[30]')} days. Receipts and payment records are kept by Stripe for as long as tax law requires.</p>
       <h2>Your choices and rights</h2><p>Download everything we hold about you (Account, Your data, Download), correct it in Account, or delete your account. Depending on where you live (for example the EU, UK or California) you have rights to access, correct, delete and port your data and to object to some uses; email ${MAIL} and we'll answer within 30 days.</p>
-      <h2>Security</h2><p>Passwords are hashed with PBKDF2, sign-in links are single-use and expire, two-step sign-in is available, and the session cookie is HttpOnly, Secure and SameSite=Strict.</p>
+      <h2>Security</h2><p>Passwords are hashed with scrypt, a slow, memory-hard method, so a stolen copy can't be turned back into passwords quickly. Sign-in links are single-use and expire, two-step sign-in is available, and the session cookie is HttpOnly, Secure and SameSite=Strict.</p>
       <h2>Children</h2><p>Floodlight isn't for anyone under 18. We delete accounts we learn belong to a minor.</p>
       <h2>Changes and contact</h2><p>We'll ask you to accept material changes when you next sign in. Questions: ${MAIL}, ${BIZ}, ${ADDR}.</p>`],
     ['cookies', 'Cookie Policy', 'One sign-in cookie and settings saved on your device.', () => `
@@ -45,22 +55,22 @@
       <h2>Your control</h2><p>You can clear cookies and site data in your browser at any time; you'll be signed out.</p>`],
     ['refunds', 'Refund Policy', 'When you can get money back.', () => `
       <h2>Free trials</h2><p>Cancel before the trial ends and you're never charged.</p>
-      <h2>A renewal you meant to cancel</h2><p>If you're charged for a renewal and haven't used Plus since, ask within 14 days and we'll refund it in full. This applies to monthly and yearly plans.</p>
+      <h2>A renewal you meant to cancel</h2><p>If you're charged for a renewal and haven't used Plus since, ask within ${n('refund_days', 14)} days and we'll refund it in full. This applies to monthly and yearly plans.</p>
       <h2>Other cases</h2><p>Otherwise, payments aren't refunded for partial periods; when you cancel, Plus stays on until the end of what you paid for. If Floodlight is unavailable for a long stretch, or we charged you in error, we'll put it right.</p>
-      <h2>Gifts</h2><p>An unredeemed gift code can be refunded to the buyer within 14 days of purchase.</p>
+      <h2>Gifts</h2><p>An unredeemed gift code can be refunded to the buyer within ${n('refund_days', 14)} days of purchase.</p>
       <h2>Deleting your account</h2><p>Deleting ends a plan immediately. Ask for a refund first if one of the cases above applies.</p>
       <h2>How to ask</h2><p>Email ${MAIL} from your account's email with your username and the receipt number. Refunds go back to the original payment method and usually arrive within 5 to 10 business days.</p>
       <p class="lg-q">${f('[Check: consumer law where you sell (for example the EU and UK 14-day withdrawal right) may require more than this.]')}</p>`],
     ['subscription', 'Subscription Terms', 'How paid plans, trials and renewals work.', () => `
-      <h2>Plans</h2><p>Plus costs $4.99 a month or $29.99 a year. Group costs $9.99 a month and covers you and up to four other accounts. Prices are in US dollars and ${f('[include / exclude]')} sales tax. The pricing page always shows the current prices.</p>
-      <h2>Free trial</h2><p>Each account gets one 7-day free trial. You add a payment method to start it. <strong>Unless you cancel before the trial ends, your plan starts and you're charged the plan price on the date shown when you started the trial, and then every month or year until you cancel.</strong></p>
+      <h2>Plans</h2><p>${priceLine()} Prices are in US dollars and ${f('[include / exclude]')} sales tax. The pricing page always shows the current prices.</p>
+      <h2>Free trial</h2><p>Each account gets one ${n('trial_days', 7)}-day free trial. You add a payment method to start it. <strong>Unless you cancel before the trial ends, your plan starts and you're charged the plan price on the date shown when you started the trial, and then every month or year until you cancel.</strong></p>
       <h2>Automatic renewal</h2><p>Paid plans renew automatically at the end of each period at the then-current price, charged to the payment method on file. We email a receipt each time. For yearly plans we email a reminder ${f('[7]')} days before renewal.</p>
       <h2>Cancelling</h2><p>Cancel online at any time: Account, Plan and billing, Cancel plan. No call or email needed. Your plan stays on until the end of the paid period and isn't charged again. You can reactivate before then.</p>
       <h2>Changing plans</h2><p>Switching between monthly, yearly and Group takes effect straight away and is prorated by our payment processor.</p>
       <h2>Price changes</h2><p>We'll give at least 30 days' notice by email before a price change applies to you, and you can cancel before it does.</p>
-      <h2>Failed payments</h2><p>If a renewal payment fails, your plan stays on for 7 days while we retry and you update your card. After that it moves to Free.</p>
+      <h2>Failed payments</h2><p>If a renewal payment fails, your plan stays on for ${n('grace_days', 7)} days while we retry and you update your card. After that it moves to Free.</p>
       <h2>Promotion and gift codes</h2><p>Promotion codes apply only as described when issued. Gift codes give a fixed number of months, never renew, and can't be exchanged for cash.</p>
-      <h2>Free plan limits</h2><p>Free includes live scores, 5 Lab searches a day, last-10 hit rates, 1 saved board and 3 followed players. We may change Free's limits; we'll never take away what you've already saved.</p>`],
+      <h2>Free plan limits</h2><p>${PL ? `Free includes live scores, ${lim('lab_search')} Lab searches a day, last-10 hit rates, ${lim('boards')} saved board${lim('boards') === 1 ? '' : 's'} and ${lim('followed_players')} followed players.` : 'Free includes live scores, a daily number of Lab searches, last-10 hit rates, and a small number of saved boards and followed players, as shown on the pricing page.'} We may change Free's limits; we'll never take away what you've already saved.</p>`],
     ['acceptable-use', 'Acceptable Use Policy', 'What you may not do with Floodlight.', () => `
       <p>Use Floodlight for your own research. Please don't:</p><ul>
         <li>Share your sign-in with people outside your account or Group plan, or resell access.</li>
@@ -93,7 +103,7 @@
       <h2>Mistakes</h2><p>Sources sometimes get things wrong, and so do we. Report incorrect data from any card; material corrections go in the public correction log.</p>`],
     ['delete-account', 'Deleting your account', 'How to delete your account and what happens.', () => `
       <h2>How</h2><ol><li>Sign in and open <a href="#/account/data" data-page="account" data-arg="data">Account, then Your data</a>.</li><li>Optional: press <strong>Download my data</strong> first to keep a copy.</li><li>Under <strong>Delete your account</strong>, enter your password (and your two-step code if it's on), tick the box and press <strong>Delete my account</strong>.</li></ol>
-      <h2>What's deleted</h2><p>Your account, email, password, settings, follows, boards, prediction cards, parlays, votes and photo, straight away. You're signed out on every device. Any paid plan ends immediately and won't renew.</p>
+      <h2>What's deleted</h2><p>Your account, email, password, settings, follows, boards, prediction cards, parlays, votes and photo, straight away. Links you shared to your boards stop working, your picks leave any private competition (a group you ran passes to the next member), and your support messages, invite code and usage history are removed. You're signed out on every device and any unused email links stop working. Any paid plan ends immediately and won't renew.</p>
       <h2>What's kept</h2><p>Receipts and payment records stay with Stripe as tax law requires. Floodlight's public prediction record isn't personal data and isn't affected. Backups roll over within ${f('[30]')} days.</p>
       <h2>Can't sign in?</h2><p>Use <a href="#/auth/forgot">Forgot password</a> to get back in first. If you no longer have the email, write to ${MAIL} from any address with your username; we'll verify it's you before deleting.</p>`],
     ['contact', 'Contact', 'How to reach us.', () => `
@@ -101,8 +111,10 @@
       <h2>Quicker answers</h2><ul><li>Billing, receipts, cancelling: <a href="#/account/billing" data-page="account" data-arg="billing">Account, Plan and billing</a></li><li>Can't sign in: <a href="#/auth/forgot">Forgot password or username</a></li><li>Wrong data on a card: use “Report incorrect data” on the card itself</li></ul>`],
   ];
   const BY = Object.fromEntries(DOCS.map(d => [d[0], d]));
+  const ACCEPT = new Set(['terms', 'privacy', 'subscription']);   // the documents a member accepts (accounts.TERMS_VERSION)
 
   function render(el, doc) {
+    shown = { el, doc }; need();
     const d = BY[doc];
     const nav = `<nav class="lg-nav" aria-label="Policies"><ul>${DOCS.map(([k, t]) => `<li><a href="#/legal/${k}" data-page="legal" data-arg="${k}"${k === doc ? ' aria-current="page"' : ''}>${t}</a></li>`).join('')}</ul></nav>`;
     const draft = `<div class="lg-draft" role="note"><strong>Draft for review.</strong> These pages are a starting template written for how Floodlight actually works. They aren't legal advice. Have a lawyer review them and fill in the highlighted details before taking payments.</div>`;
@@ -111,7 +123,7 @@
         <div class="lg-grid">${DOCS.map(([k, t, s]) => `<a class="tile lg-card" href="#/legal/${k}" data-page="legal" data-arg="${k}"><strong>${t}</strong><span>${s}</span></a>`).join('')}</div></div>`;
       return;
     }
-    el.innerHTML = `<div class="lg-wrap"><header class="pg-head"><div><h1 class="pg-title">${d[1]}</h1><p class="pg-sub">${d[2]} Last updated ${UPDATED}.</p></div></header>${draft}
+    el.innerHTML = `<div class="lg-wrap"><header class="pg-head"><div><h1 class="pg-title">${d[1]}</h1><p class="pg-sub">${d[2]} Last updated ${UPDATED}.${PL?.terms_version && ACCEPT.has(doc) ? ` Terms version ${PL.terms_version}${window.S?.me?.terms?.accepted_at && window.S.me.terms.ok ? `, which you accepted on ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(S.me.terms.accepted_at * 1000))}` : ''}.` : ''}</p></div></header>${draft}
       <div class="lg-cols">${nav}<article class="card lg-body">${d[3]()}</article></div></div>`;
   }
   window.flLegal = { render, docs: DOCS.map(d => [d[0], d[1]]) };

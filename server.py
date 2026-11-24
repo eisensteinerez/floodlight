@@ -59,6 +59,8 @@ import players as roster
 import health
 import accounts
 import billing
+import entitlements
+import ratelimit
 import corrections
 import gradebook
 import analytics
@@ -85,21 +87,11 @@ ROLES = ("pending", "viewer", "research")
 SIGNUP_ROLE = os.environ.get("FLOODLIGHT_SIGNUP_ROLE", "viewer")
 if SIGNUP_ROLE not in ROLES:
     SIGNUP_ROLE = "viewer"
-_signups = {}   # address -> times of recent sign-ups, so one visitor can't create accounts in bulk
 
 
 def signup_allowed(addr):
-    now = time.time()
-    recent = [t for t in _signups.get(addr, []) if now - t < 3600]
-    if len(recent) >= 5:
-        _signups[addr] = recent
-        return False
-    recent.append(now)
-    _signups[addr] = recent
-    if len(_signups) > 5000:
-        for k in [k for k, v in _signups.items() if not v or now - v[-1] > 3600]:
-            _signups.pop(k, None)
-    return True
+    """At most 5 new accounts an hour from one address (ratelimit.py)."""
+    return ratelimit.take("signup", "ip:" + addr)
 # Only these files are served to browsers; everything else (Python code, the cache folder with
 # accounts and the API key) stays private.
 PUBLIC_FILES = {"index.html", "analytics.js", "landing.js", "support.js", "referrals.js", "owner.js", "status.js", "recent.js", "linemove.js", "alerts.js", "share.js", "onboard.js", "manifest.webmanifest", "baseball.js", "basketball.js", "books.js", "football.js",
@@ -110,6 +102,7 @@ PUBLIC_FILES = {"index.html", "analytics.js", "landing.js", "support.js", "refer
 PUBLIC_FILES |= {"labcore.js", "propx.js"}   # the Lab: shared numbers (labcore.js)
 PUBLIC_FILES |= {"marketfeed.js", "inbox.js", "daily.js", "compete.js", "pwa.js", "sw.js", "offline.html"}   # Home, alerts, daily habits and the installable app
 PUBLIC_FILES |= {"plan.js", "auth.js", "account.js", "pricing.js", "legal.js"}   # plans, sign-in, account and policies
+# plans.json, entitlements.py and ratelimit.py stay private: the browser reads the plans from /api/plans
 ROOT = Path(__file__).resolve().parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/"
@@ -1022,7 +1015,6 @@ PREF_KEYS = {"favTeams": list, "favPlayers": list, "favLeagues": list, "picks": 
 
 _users = storage.load(USERS_FILE, {})
 _sessions = storage.load(SESSIONS_FILE, {})
-_failures = {}
 
 
 def _save_accounts():
@@ -1328,7 +1320,7 @@ def _start_off():
 def _new_user(username, password, role, display=None, prefs=None, rank="member", email=""):
     salt = secrets.token_hex(16)
     paused = role == "pending"
-    return {"username": username, "salt": salt, "hash": _hash(password, salt), "created": int(time.time()),
+    return {"username": username, "salt": salt, "algo": PW_ALGO, "hash": _hash(password, salt), "created": int(time.time()), "pw_at": int(time.time()),
             "role": "pending" if paused else "research", "rank": rank if rank in ("owner", "admin") else "member",
             "status": "paused" if paused else "active", "off": _start_off(), "email": email,
             "prefs": clean_prefs(prefs or {}, {"display": (display or username).strip()[:40]})}
@@ -1419,6 +1411,8 @@ def members_action(body, actor):
             email, rank = str(body.get("email") or "").strip().lower()[:120], body.get("rank") if body.get("rank") in ("admin", "member") else "member"
             if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
                 return 400, {"error": "Enter the person's email address."}
+            if not ratelimit.take("invite", "u:" + str(me)):
+                return 429, {"error": "You've sent a lot of invites this hour. Try again later."}
             if any(i["email"] == email and i.get("exp", 0) > time.time() for i in _mstate["invites"]):
                 return 409, {"error": "That address already has an invite. Use Resend to get its link again."}
             if any((u.get("email") or "").lower() == email for u in _users.values()):
@@ -1502,8 +1496,7 @@ def members_action(body, actor):
             elif op == "password":   # the member forgot it: a temporary one the admin passes on
                 u = targets[0]
                 temp = "-".join(secrets.token_hex(2) for _ in range(3))
-                u["salt"] = secrets.token_hex(16)
-                u["hash"] = _hash(temp, u["salt"])
+                _set_password(u, temp)
                 for t in [t for t, v in _sessions.items() if v["user"] == u["username"].lower()]:
                     _sessions.pop(t, None)
                 log_activity(me, f"Gave {name(u)} a temporary password")
@@ -1923,8 +1916,20 @@ def owner_dashboard(days):
             "referrals": referrals.stats(), "privacy": {"gpcRespected": True, "cookies": False, "ipStored": False}}
 
 
-def _hash(password, salt):
+# Passwords: scrypt (memory-hard, Python's standard library) with a random salt per account. Accounts made before scrypt
+# carry no "algo" and use PBKDF2-SHA256; login() rehashes them to scrypt the next time the member signs in.
+PW_ALGO = "scrypt"
+SCRYPT = {"n": 2 ** 15, "r": 8, "p": 1}    # about 32 MB and a few tenths of a second per check
+
+
+def _hash(password, salt, algo=PW_ALGO):
+    if algo == "scrypt":
+        return hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), **SCRYPT, maxmem=64 * 1024 * 1024, dklen=32).hex()
     return hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 200_000).hex()
+
+
+def _needs_rehash(u):
+    return (u.get("algo") or "pbkdf2") != PW_ALGO
 
 
 def public_user(u):
@@ -1932,18 +1937,23 @@ def public_user(u):
             "created": u["created"], "prefs": u.get("prefs", {}), "role": role_of(u), "rank": rank_of(u),
             "status": "paused" if is_paused(u) else "active", "services": {k: has(u, k) for k in SERVICE_KEYS},
             "email": u.get("email") or "", "email_verified": bool(u.get("email_verified")), "twofa": bool(u.get("twofa")),
-            "terms": {"ok": accounts.terms_ok(u), "version": accounts.TERMS_VERSION, "accepted": (u.get("terms") or {}).get("version")},
+            "terms": {"ok": accounts.terms_ok(u), "version": accounts.TERMS_VERSION, "accepted": (u.get("terms") or {}).get("version"),
+                      "accepted_at": (u.get("terms") or {}).get("at"), "history": (u.get("terms_history") or [])[-5:]},
             "plan": billing.view(u), "plan_status": u.get("plan_status") or "free"}
 
 
-def _set_password(u, password):
+def _set_password(u, password, keep_date=False):
     u["salt"] = secrets.token_hex(16)
+    u["algo"] = PW_ALGO
     u["hash"] = _hash(password, u["salt"])
-    u["pw_at"] = int(time.time())
+    if not keep_date:
+        u["pw_at"] = int(time.time())
 
 
 def _check_password(u, password):
-    return bool(u) and hmac.compare_digest(_hash(password or "", u["salt"]), u["hash"])
+    if not u or not u.get("salt") or not u.get("hash"):
+        return False
+    return hmac.compare_digest(_hash(password or "", u["salt"], u.get("algo") or "pbkdf2"), u["hash"])
 
 
 def _drop_sessions(key, keep=None):
@@ -2019,18 +2029,24 @@ def signup(body):
     return 200, {"user": public_user(_users[key]), "_token": token, "verify": {k: v for k, v in sent.items() if k in ("sent", "to", "devLink")}}
 
 
-def login(body):
+def login(body, addr=""):
+    """Username or email and password. Failed tries are limited per account and per address (ratelimit.py); a good
+    password clears the account's count. An old PBKDF2 hash is upgraded to scrypt here, the one time we see the password."""
     ident = (body.get("username") or body.get("login") or "").strip()
     password = body.get("password") or ""
-    fkey = ident.lower()
-    fails = _failures.get(fkey, [0, 0])
-    if fails[0] >= 5 and time.time() - fails[1] < 60:
-        return 429, {"error": "Too many attempts. Wait a minute and try again."}
+    fkey, ip = "u:" + ident.lower(), "ip:" + addr
+    if ratelimit.full("login_user", fkey) or ratelimit.full("login_ip", ip):
+        return 429, {"error": "Too many attempts. Wait 15 minutes and try again, or use Forgot password."}
     u = accounts.find_login(ident)
     if not u or not _check_password(u, password):
-        _failures[fkey] = [fails[0] + 1, time.time()]
+        ratelimit.note("login_user", fkey)
+        ratelimit.note("login_ip", ip)
         return 401, {"error": "That username or email and password don't match."}
-    _failures.pop(fkey, None)
+    ratelimit.clear("login_user", fkey)
+    if _needs_rehash(u):
+        with _acct_lock:
+            _set_password(u, password, keep_date=True)
+            _save_accounts()
     return finish_login(u, "password")
 
 
@@ -2070,6 +2086,8 @@ def session_user(cookie_header):
 def auth_post(path, body, addr):
     """Signed-out account endpoints: sign-in links, two-step codes, password and username recovery, email confirmation."""
     if path == "/api/auth/2fa":
+        if not ratelimit.take("twofa_ip", "ip:" + addr):
+            return 429, {"error": "Too many codes tried from here. Wait 15 minutes and sign in again."}
         u, err = accounts.ticket_use(body.get("ticket"), body.get("code"))
         if not u:
             return 401, {"error": err}
@@ -2141,10 +2159,12 @@ def account_post(handler, path, body, user, token):
     if path == "/api/me/terms":
         return accounts.accept_terms(user, body.get("version"))
     if path == "/api/plan/use":   # count one Free use (a Lab search); the same item twice in a day counts once
-        ok, left = billing.use(user, str(body.get("what") or "lab_search")[:20], body.get("item"))
-        return (200 if ok else 402), {"ok": ok, "left": left, **({} if ok else {"error": "You've used today's free Lab searches. Plus has no limit.", "upgrade": "lab_unlimited"})}
+        ok, left = entitlements.use(user, str(body.get("what") or "lab_search")[:20], body.get("item"))
+        return (200 if ok else 402), {"ok": ok, "left": left, **({} if ok else {"error": entitlements.upgrade_message("lab_unlimited"), "upgrade": "lab_unlimited"})}
     if path.startswith("/api/billing/"):
         op = path[len("/api/billing/"):]
+        if op in ("checkout", "card", "gift", "restore", "redeem") and not ratelimit.take("checkout", "u:" + user["username"].lower()):
+            return 429, {"error": "Too many billing requests in the last hour. Try again in an hour, or contact support from the Help center."}
         try:
             if op == "checkout":
                 return billing.checkout(user, str(body.get("plan") or ""), site)
@@ -2189,10 +2209,17 @@ def account_post(handler, path, body, user, token):
 
 
 def delete_account(user, body):
-    """Delete for good: billing stops at once, and the account, its sessions, links, parlays, photo and votes go."""
+    """Delete for good: billing stops at once, and the account, its sessions, email links, parlays, photo, votes, shared
+    board links, competition picks, support tickets, invite code and usage journey go."""
     key = user["username"].lower()
     email = user.get("email") if user.get("email_verified") else ""
     billing.forget(user)
+    for forget in (lambda: labshare.forget_owner(key), lambda: groups.forget(key), lambda: support.forget(key),
+                   lambda: referrals.forget(key), lambda: analytics.forget(key), lambda: accounts.forget(key)):
+        try:                               # each store forgets its part; one failing doesn't stop the rest
+            forget()
+        except Exception as e:
+            print(f"delete: couldn't clear part of @{key}'s data: {type(e).__name__}: {e}")
     with _acct_lock:
         _users.pop(key, None)
         _drop_sessions(key)
@@ -2219,12 +2246,13 @@ def delete_account(user, body):
 def export_account(user, token):
     """Everything Floodlight keeps about a member, as one JSON file (Account > Your data > Download)."""
     key = user["username"].lower()
-    skip = {"salt", "hash", "twofa", "twofa_pending", "customer_id", "subscription_id"}
+    skip = {"salt", "hash", "algo", "twofa", "twofa_pending", "customer_id", "subscription_id"}
     acct = {k: v for k, v in user.items() if k not in skip}
     return {"exported": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "site": site_url(),
             "account": acct, "two_step_sign_in": bool(user.get("twofa")), "billing": billing.export(user),
             "sessions": accounts.sessions_of(_sessions, key, token), "parlays": _parlays.get(key, []),
             "votes": {g: v[key] for g, v in _votes.items() if key in v}, "photo": key in _avatars,
+            "shared_board_links": labshare.shared_by(key), "competitions": groups.of_member(key), "support_tickets": support.mine(key),
             "note": "Card details are held by Stripe, never by Floodlight. Password and two-step secrets are left out on purpose."}
 
 
@@ -2360,11 +2388,11 @@ class Handler(SimpleHTTPRequestHandler):
             svc = "predictions" if board and has(user, "lab") else "lab"
             return self.send_json({"error": f"Your account doesn't include {SERVICE_NAME[svc]}. Ask your admin for access.", "service": svc}, 403)
         sub = u.path[len("/api/lab/"):]
-        if user and ok and sub in ("player", "team") and billing.enforced() and not billing.allows(user, "lab_unlimited"):
+        if user and ok and sub in ("player", "team") and not entitlements.can_use_unlimited_lab(user):
             what = (q.get("id") or q.get("name") or q.get("player") or q.get("team") or "") + ":" + (q.get("sport") or "")
-            got, left = billing.use(user, "lab_search", sub + ":" + what)
+            got, left = entitlements.use(user, "lab_search", sub + ":" + what)
             if not got:
-                return self.send_json({"error": "You've used today's 5 free Lab searches. Plus has no daily limit.", "upgrade": "lab_unlimited", "left": 0}, 402)
+                return self.send_json({"error": entitlements.upgrade_message("lab_unlimited"), "upgrade": "lab_unlimited", "left": 0}, 402)
         status, obj = lab.handle(sub, q, signed_in=ok)
         if isinstance(obj, tuple):
             ct, data = obj
@@ -2435,11 +2463,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_auth(400, {"error": "Bad JSON."})
         addr = (self.headers.get("X-Forwarded-For") or self.client_address[0] or "").split(",")[0].strip()
         if u.path == "/api/auth/signup":
-            if GATED and not signup_allowed(addr):
+            if HOSTED and not signup_allowed(addr):
                 return self.send_auth(429, {"error": "Too many new accounts from here. Try again in an hour."})
             return self.send_auth(*self.tag_session(signup(body)))
         if u.path == "/api/auth/login":
-            return self.send_auth(*self.tag_session(login(body)))
+            return self.send_auth(*self.tag_session(login(body, addr)))
         if u.path.startswith("/api/auth/"):   # recovery and sign-in links work signed out
             r = auth_post(u.path, body, addr)
             if r:
@@ -2488,6 +2516,8 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path == "/api/data-report":   # "Report incorrect data" on a card: private, for the administrators (corrections.py)
             if GATED and not user:
                 return self.send_auth(401, {"error": "Log in to report a problem."})
+            if not ratelimit.take("report", ("u:" + user["username"].lower()) if user else "ip:" + addr):
+                return self.send_auth(429, {"error": "Thanks, we've had several reports from you this hour. Try again in an hour, or write to us from the Help center."})
             try:
                 r = corrections.report(body if isinstance(body, dict) else {}, (body or {}).get("text"), by=(user or {}).get("name") or "")
             except ValueError as ex:
@@ -2508,6 +2538,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_auth(401, {"error": "Log in to share a board."})
             if u.path.endswith("unshare"):
                 return self.send_auth(*labshare.unshare(user["username"], str(body.get("id") or "")[:20]))
+            if not ratelimit.take("share", "u:" + user["username"].lower()):
+                return self.send_auth(429, {"error": "You've shared a lot of boards this hour. Try again in an hour."})
             return self.send_auth(*labshare.share(user["username"], (user.get("prefs") or {}).get("display") or user["username"], body.get("board")))
         if u.path == "/api/popular":   # a line researched or followed, for Prop Explorer's "Most researched" and "Most followed"
             who = user["username"] if user else re.sub(r"[^A-Za-z0-9]", "", str(body.get("guest") or ""))[:24]
@@ -2562,7 +2594,7 @@ class Handler(SimpleHTTPRequestHandler):
             old = user.get("prefs", {})
             for field, lim in (("boards", "boards"), ("favPlayers", "followed_players")):
                 if isinstance(body.get(field), list):
-                    why = billing.check_list_growth(user, lim, old.get(field) or [], body[field])
+                    why = entitlements.check_list_growth(user, lim, old.get(field) or [], body[field])
                     if why:
                         return self.send_auth(402, {"error": why, "upgrade": "boards_unlimited" if field == "boards" else "follows_unlimited"})
             with _acct_lock:
@@ -3155,7 +3187,8 @@ if __name__ == "__main__":
                    hosted=lambda: HOSTED, check_password=_check_password, set_password=_set_password, drop_sessions=_drop_sessions,
                    display=lambda u: (u.get("prefs") or {}).get("display") or u["username"])
     billing.setup(users=_users, save=_save_accounts, lock=_acct_lock, storage=storage, file=CACHE_DIR / "billing.json", rank=rank_of,
-                  site=site_url, mail=accounts.send, mail_ready=accounts.mail_ready, durable=durable, hosted=HOSTED, gated=GATED)
+                  site=site_url, mail=accounts.send, mail_ready=accounts.mail_ready, durable=durable, hosted=HOSTED, gated=GATED,
+                  terms_version=lambda: accounts.TERMS_VERSION)
     accounts_handoff()   # before the port opens, while the public address still reaches the server being replaced
     if not durable() and HOSTED:
         print("accounts: WARNING no DATABASE_URL or FLOODLIGHT_DATA_DIR; accounts rely on the deploy handoff and are lost on a crash or restart")
