@@ -130,4 +130,39 @@ t('card history: hit rate, best card, streak, average size, by sport and by size
   assert.deepEqual(h.bySport.find(x => x[0] === 'nba')[1], { won: 1, lost: 1 }); assert.deepEqual(h.bySize.find(x => x[0] === '2 picks')[1], { won: 1, lost: 1 });
 });
 
+/* ---------- Line Lens ---------- */
+t('Line Lens counts over, under and push in each window at any line, and says it in one sentence', () => {
+  const gs = games([30, 20, 25.5, 26, 18, 31, 22, 27, 24, 29, 21, 33]);
+  const r = L.lens(gs, 25.5, 'over');
+  assert.deepEqual(r.rows.map(w => w.key), ['l5', 'l10', 'season']);   // 12 games: no Last 20 of 12
+  assert.deepEqual([r.rows[0].over, r.rows[0].under, r.rows[0].push], [2, 2, 1]);
+  assert.equal(r.summary, 'Over 25.5 in 5 of the last 10, with 1 on the line.');
+  const u = L.lens(gs, 25.5, 'under'); assert.equal(u.rows[1].rate, 4 / 9); assert.match(u.summary, /^Under 25\.5 in 4 of the last 10/);
+});
+t('Line Lens: the rate at each line never rises as the over line goes up', () => {
+  const gs = games([30, 20, 25, 26, 18, 31, 22, 27, 24, 29]), rg = L.lensRange(gs, 25.5, [27.5]);
+  assert.ok(rg.lines.includes(25.5) && rg.lines.includes(27.5)); assert.ok(rg.lines.length <= 40);
+  const c = L.curve(gs, 'over', rg.lines, 'l10').map(x => x.rate);
+  for (let i = 1; i < c.length; i++) assert.ok(c[i] <= c[i - 1] + 1e-9);
+  const big = L.lensRange(games([240, 198, 260, 221]), 215.5); assert.ok(big.step >= 2.5 && big.lines.includes(215.5));
+});
+t('snap points are open lines for the same player and stat only: one per line, every provider named', () => {
+  const p = mk(), other = { ...mk(), name: 'Beta Player' }, stat = { ...mk(), k: 'reb' };
+  const alt = { ...mk(), id: 'x', offers: [{ book: 'underdog', line: 21.5, at: NOW - MIN }] }, shut = { ...mk(), id: 'y', status: 'started', offers: [{ book: 'sleeper', line: 19.5 }] };
+  const s = L.snaps(p, [p, other, stat, alt, shut]);
+  assert.deepEqual(s.map(x => x.line), [20.5, 21.5]);
+  assert.deepEqual(s[0].books.map(b => b.book), ['prizepicks', 'sleeper']); assert.equal(s[1].books[0].at, NOW - MIN);
+  assert.deepEqual(L.snaps(null, [p]), []);
+});
+t('Prediction Card: the strongest pick is the other end from the weakest, and only when they differ', () => {
+  const c = L.card([{ id: 1, grade: 'A', ours: .8 }, { id: 2, grade: 'C', ours: .55 }, { id: 3, grade: 'B', ours: .6 }], NOW);
+  assert.equal(c.strongest.id, 1); assert.equal(c.weakest.id, 2);
+  assert.equal(L.card([{ id: 1, grade: 'B', ours: .6 }, { id: 2, grade: 'B', ours: .6 }], NOW).strongest, null);
+});
+t('the lineup filter keeps or drops players whose role is uncertain', () => {
+  const a = mk({ av: { start: 'Available, role uncertain' } }), b = mk({ id: 'b', av: { start: 'Lineup not announced' } });
+  assert.deepEqual(L.filter([a, b], { ...L.defaults(), lineup: 'settled' }, { now: NOW }).map(p => p.id), ['b']);
+  assert.deepEqual(L.filter([a, b], { ...L.defaults(), lineup: 'unsure' }, { now: NOW }).map(p => p.id), [a.id]);
+});
+
 console.log(`\n${n} tests passed`);

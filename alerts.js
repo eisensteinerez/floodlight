@@ -16,9 +16,9 @@
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'fl.notify';
-  const DEF = { on: false, start: true, score: true, final: true, lineup: true, quiet: false, qFrom: 23, qTo: 8, pkInjury: true, pkLine: true, pkResult: true, pkRemoved: true,
+  const DEF = { on: false, start: true, score: true, final: true, lineup: true, quiet: false, qFrom: 23, qTo: 8, pkInjury: true, pkLine: true, pkResult: true, pkRemoved: true, pkReopen: true,
     plInjury: true, plLine: true, injSev: 'doubtful', edgeOn: false, edgeMin: 10, edgeMine: true, daily: false, dailyAt: 9, weekly: false, weeklyDay: 1, weeklyAt: 9,
-    teams: {}, picks: {}, rules: [] };
+    teams: {}, picks: {}, players: {}, rules: [] };
   const read = () => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || '{}') } } catch { return { ...DEF } } };
   const quietNow = () => { if (!A.quiet) return false; const h = new Date().getHours(); return A.qFrom > A.qTo ? h >= A.qFrom || h < A.qTo : h >= A.qFrom && h < A.qTo };
   const hr = h => new Date(2026, 0, 1, h).toLocaleTimeString([], { hour: 'numeric' });
@@ -102,6 +102,8 @@
   const sevOk = lv => (SEV[A.injSev] || SEV.doubtful).includes(lv || '');
   const pickParts = f => { const p = String(f.id || '').split(':'); return { sport: f.sport || p[1], k: p[3] || '' } };
   const pickPref = (f, kind) => (A.picks[f.k] || {})[kind] !== false;
+  // per-player choices, keyed by league and name the way fl.follows stores a player
+  const plKey = p => `${p.lg}:${flat(p.name)}`, playerPref = (p, kind) => ((A.players || {})[plKey(p)] || {})[kind] !== false;
   function marketFor(f, list) { const { sport, k } = pickParts(f), n = flat(f.name); return list.find(m => flat(m.name) === n && m.sport === sport && (!k || m.k === k)) || null }
   function removedFor(f) { const R = window.flMarkets?.removed?.() || [], { sport, k } = pickParts(f), n = flat(f.name); return R.find(m => flat(m.name) === n && m.sport === sport && (!k || m.k === k)) || null }
   const linkLab = m => ({ lab: window.flFeed?.labArgs ? window.flFeed.labArgs(m) : { sport: m.sport, name: m.name, kind: 'player' } });
@@ -125,7 +127,9 @@
           else if (+s.line !== +m.line) { if (A.pkLine && pickPref(f, 'line') && !s.gone && stillOpen(m)) send('line', `${f.name}: line ${fmtL(s.line)} → ${fmtL(m.line)}`, `${m.text || f.text}. A pick you follow.`, { link: linkLab(m), tag: `pl-${f.k}-${m.line}` }); window.flDaily?.log?.('moved'); s.line = m.line; ch = true }
         }
         const gone = !started && !s.gone && removedFor(f);
-        if (gone) { s.gone = 1; ch = true; if (A.pkRemoved && pickPref(f, 'removed')) send('removed', `${f.name}: taken off the board`, `${f.text}. ${gone.removalReason || gone.statusLabel || 'The market is no longer open.'}`, { link: { page: 'predictions' }, tag: 'rm-' + f.k }) }
+        if (gone) { s.gone = 1; ch = true; if (A.pkRemoved && pickPref(f, 'removed')) send('removed', `${f.name}: taken off the board`, `${f.text}. ${gone.removalReason || gone.statusLabel || 'The market is no longer open.'}`, { link: { page: 'predictions', pick: f.k }, tag: 'rm-' + f.k }) }
+        // the same market back on the board (open again in the verified feed, before its game): the removal is undone
+        else if (s.gone && !started && m && stillOpen(m) && !removedFor(f)) { s.gone = 0; ch = true; if (A.pkReopen && pickPref(f, 'reopen')) send('reopened', `${f.name}: back on the board`, `${m.text || f.text}${m.line != null ? ` at ${fmtL(m.line)}` : ''}. The market is open again.`, { link: { page: 'predictions', pick: f.k }, tag: `ro-${f.k}-${Date.now() / 6e5 | 0}` }) }
         if (I && f.sport && I.PATH?.[f.sport] && I.ready(f.sport) && !started) {
           const st = I.status(f.sport, f.name), now = st ? (st.status || I.LEVEL_NAME[st.lv]) : '';
           if (s.inj === undefined) { s.inj = now; ch = true }
@@ -136,14 +140,14 @@
       }
       // players you follow
       for (const p of (store.get('fl.follows', []) || []).filter(x => x && x.k === 'player' && x.name)) {
-        const pk = `${p.lg}:${flat(p.name)}`, s = ST.pl[pk] || (ST.pl[pk] = { lines: {} });
+        const pk = plKey(p), s = ST.pl[pk] || (ST.pl[pk] = { lines: {} });
         for (const m of F.forPlayer(p.name, list)) {
           const mk = F.key(m).replace(/:[\d.]+$/, ''), was = s.lines[mk];
           if (was == null) { s.lines[mk] = m.line; ch = true }
-          else if (+was !== +m.line) { if (A.plLine && stillOpen(m)) send('line', `${p.name}: ${m.label || 'line'} ${fmtL(was)} → ${fmtL(m.line)}`, `${[m.team, m.opp].filter(Boolean).join(' v ')}. A player you follow.`, { link: linkLab(m), tag: `pp-${mk}-${m.line}` }); s.lines[mk] = m.line; ch = true }
+          else if (+was !== +m.line) { if (A.plLine && playerPref(p, 'line') && stillOpen(m)) send('line', `${p.name}: ${m.label || 'line'} ${fmtL(was)} → ${fmtL(m.line)}`, `${[m.team, m.opp].filter(Boolean).join(' v ')}. A player you follow.`, { link: linkLab(m), tag: `pp-${mk}-${m.line}` }); s.lines[mk] = m.line; ch = true }
         }
         if (I && I.PATH?.[p.lg]) { if (!I.ready(p.lg)) I.load(p.lg); else { const st = I.status(p.lg, p.name), now = st ? (st.status || I.LEVEL_NAME[st.lv]) : '';
-          if (s.inj === undefined) { s.inj = now; ch = true } else if (now !== s.inj) { if (A.plInjury && (!st || sevOk(st.lv))) send('injury', `${p.name}: ${now ? `now ${now}` : 'off the injury report'}`, `${st?.what ? st.what + '. ' : ''}${st?.teamName || ''}. A player you follow.`, { link: { page: 'injuries', arg: p.lg }, tag: `ij-${pk}-${now}` }); s.inj = now; ch = true } } }
+          if (s.inj === undefined) { s.inj = now; ch = true } else if (now !== s.inj) { if (A.plInjury && playerPref(p, 'injury') && (!st || sevOk(st.lv))) send('injury', `${p.name}: ${now ? `now ${now}` : 'off the injury report'}`, `${st?.what ? st.what + '. ' : ''}${st?.teamName || ''}. A player you follow.`, { link: { page: 'injuries', arg: p.lg }, tag: `ij-${pk}-${now}` }); s.inj = now; ch = true } } }
       }
       // line alerts you set
       if (advanced()) for (const r of A.rules) {
@@ -160,7 +164,7 @@
         const mySports = new Set((window.flHome?.mine?.()?.sports || []).map(s => ({ basketball: 'nba', football: 'nfl', hockey: 'nhl', baseball: 'mlb', soccer: 'soccer' })[s]).filter(Boolean));
         const fresh = F.ranked(list).filter(m => F.edge(m) >= A.edgeMin && !ST.e.k.includes(F.key(m)) && (!A.edgeMine || !mySports.size || mySports.has(m.sport)));
         if (fresh.length && ST.e.base) {
-          const top = fresh[0]; send('edge', `${top.name}: ${top.text}, ${top.sedge != null ? 'supported edge' : 'edge'} ${sign(F.edge(top))}`, `${[top.game || [top.team, top.opp].filter(Boolean).join(' v '), fresh.length > 1 ? `and ${fresh.length - 1} more at ${sign(A.edgeMin)} or better` : ''].filter(Boolean).join(' · ')}`, { link: { page: 'predictions' }, tag: 'edge-' + F.key(top) });
+          const top = fresh[0]; send('edge', `${top.name}: ${top.text}, ${top.sedge != null ? 'supported edge' : 'edge'} ${sign(F.edge(top))}`, `${[top.game || [top.team, top.opp].filter(Boolean).join(' v '), fresh.length > 1 ? `and ${fresh.length - 1} more at ${sign(A.edgeMin)} or better` : ''].filter(Boolean).join(' · ')}`, { link: linkLab(top), tag: 'edge-' + F.key(top) });
         }
         ST.e.k = [...ST.e.k, ...fresh.map(F.key)].slice(-600); ST.e.base = 1; ch = true;
       }
@@ -183,12 +187,13 @@
   }
 
   /* ---------- previews: what each alert looks like, sent to the page only ---------- */
-  const PV_NAME = { start: 'Game starting', score: 'Score change', final: 'Final score', lineup: 'Lineup confirmed', injury: 'Injury news', line: 'Line move', removed: 'Market removed', graded: 'Prediction graded', edge: 'Supported edge', summary: 'Daily summary', weekly: 'Weekly summary' };
+  const PK_NAME = { line: 'line moves', injury: 'injury news', removed: 'market removed', reopen: 'market reopened', result: 'result' };
+  const PV_NAME = { start: 'Game starting', score: 'Score change', final: 'Final score', lineup: 'Lineup confirmed', injury: 'Injury news', line: 'Line move', removed: 'Market removed', reopened: 'Market reopened', graded: 'Prediction graded', edge: 'Supported edge', summary: 'Daily summary', weekly: 'Weekly summary' };
   const PV = { k: 'line' };
   const PREVIEW = {
     start: ['start', 'Lakers v Celtics has started', 'NBA · ESPN'], score: ['score', 'Lakers 88–90 Celtics', 'NBA · Q4 4:12'], final: ['final', 'Final: Lakers 110–104 Celtics', 'NBA'],
     lineup: ['lineup', 'Lineups confirmed: Arsenal v Chelsea', '4-3-3 v 4-2-3-1'], injury: ['injury', 'LeBron James: now Questionable', 'Ankle. From the league injury report.'],
-    line: ['line', 'LeBron James: points line 24.5 → 25.5', 'Lakers v Celtics. A player you follow.'], removed: ['removed', 'Jalen Brunson: taken off the board', 'Over 26.5 points. The player was ruled out.'],
+    line: ['line', 'LeBron James: points line 24.5 → 25.5', 'Lakers v Celtics. A player you follow.'], removed: ['removed', 'Jalen Brunson: taken off the board', 'Over 26.5 points. The player was ruled out.'], reopened: ['reopened', 'Jalen Brunson: back on the board', 'Over 26.5 points at 27.5. The market is open again.'],
     graded: ['graded', 'Jalen Brunson: hit (31)', 'Over 26.5 points. The receipt is in Pick history.'], edge: ['edge', 'Anthony Edwards: Over 25.5 points, supported edge +12', 'Timberwolves v Grizzlies'],
     summary: ['summary', 'Your day on Floodlight', '3 games with your teams · 2 followed players with lines · best supported edge +12'], weekly: ['weekly', 'Your week on Floodlight', 'You researched 18 players, followed 7 predictions and your followed predictions finished 5–2.'] };
   function preview(k) { const p = PREVIEW[k]; if (!p) return; window.flNotify ? window.flNotify(p[0], `Preview · ${p[1]}`, p[2], { preview: true }) : null }
@@ -223,8 +228,10 @@
     const gRow = (k, label, sub) => sw(k, label, sub, !A.on);
     const teamRows = F.length ? `<table class="al-t"><caption class="sr-only">Alerts for each team you follow</caption><thead><tr><th scope="col">Team</th>${['start', 'score', 'final', 'lineup'].map(k => `<th scope="col">${{ start: 'Start', score: 'Score', final: 'Final', lineup: 'Lineup' }[k]}</th>`).join('')}</tr></thead>
       <tbody>${F.map(f => `<tr><th scope="row">${esc(f.name)}${f.level === 'quiet' ? ' <small class="lb">quiet: no alerts</small>' : ''}</th>${['start', 'score', 'final', 'lineup'].map(k => `<td><label class="al-cbl"><input type="checkbox" class="al-cb" data-alteam="${esc(f.id)}|${k}" aria-label="${esc(f.name)}: ${k === 'lineup' ? 'lineup confirmed' : k}"${(A.teams[f.id] || {})[k] !== false && A[k] ? ' checked' : ''}${!A.on || !A[k] || f.level === 'quiet' ? ' disabled' : ''}></label></td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="lb">Follow a team on Home or its own page to choose alerts for it.</p>';
-    const pickRows = pk.length ? `<table class="al-t"><caption class="sr-only">Alerts for each pick you follow</caption><thead><tr><th scope="col">Pick</th><th scope="col">Line</th><th scope="col">Injury</th><th scope="col">Removed</th><th scope="col">Result</th></tr></thead>
-      <tbody>${pk.slice(-30).reverse().map(f => `<tr><th scope="row">${esc(f.name)} <small class="lb">${esc(f.text || '')}</small></th>${['line', 'injury', 'removed', 'result'].map(k => `<td><label class="al-cbl"><input type="checkbox" class="al-cb" data-alpick="${esc(f.k)}|${k}" aria-label="${esc(f.name)}, ${esc(f.text || '')}: ${k}"${pickPref(f, k) ? ' checked' : ''}></label></td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="lb">Follow a pick on Predictions to choose alerts for it.</p>';
+    const pickRows = pk.length ? `<table class="al-t"><caption class="sr-only">Alerts for each pick you follow</caption><thead><tr><th scope="col">Pick</th><th scope="col">Line</th><th scope="col">Injury</th><th scope="col">Removed</th><th scope="col">Reopened</th><th scope="col">Result</th></tr></thead>
+      <tbody>${pk.slice(-30).reverse().map(f => `<tr><th scope="row">${esc(f.name)} <small class="lb">${esc(f.text || '')}</small></th>${['line', 'injury', 'removed', 'reopen', 'result'].map(k => `<td><label class="al-cbl"><input type="checkbox" class="al-cb" data-alpick="${esc(f.k)}|${k}" aria-label="${esc(f.name)}, ${esc(f.text || '')}: ${PK_NAME[k]}"${pickPref(f, k) ? ' checked' : ''}></label></td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="lb">Follow a pick on Predictions to choose alerts for it.</p>';
+    const playerRows = pl.length ? `<table class="al-t"><caption class="sr-only">Alerts for each player you follow</caption><thead><tr><th scope="col">Player</th><th scope="col">Line moves</th><th scope="col">Injury news</th></tr></thead>
+      <tbody>${pl.slice(-30).reverse().map(x => `<tr><th scope="row">${esc(x.name)}${x.lg ? ` <small class="lb">${esc(String(x.lg).toUpperCase())}</small>` : ''}</th>${['line', 'injury'].map(k => `<td><label class="al-cbl"><input type="checkbox" class="al-cb" data-alplayer="${esc(plKey(x))}|${k}" aria-label="${esc(x.name)}: ${k === 'line' ? 'line moves' : 'injury news'}"${playerPref(x, k) && A[k === 'line' ? 'plLine' : 'plInjury'] ? ' checked' : ''}${A[k === 'line' ? 'plLine' : 'plInjury'] ? '' : ' disabled'}></label></td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
     const rules = A.rules.length ? `<ul class="al-rules">${A.rules.map(r => `<li><span class="rw-t"><b>${esc(r.player)}: ${esc(r.label || r.k)} from ${fmtL(r.from)}</b><small>${esc(condText(r))}${r.provider && r.provider !== 'any' ? ` · on ${esc(r.provider)}` : ' · any provider'}${r.fired ? ` · sent ${esc(new Date(r.fired).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))} at ${fmtL(r.got)}` : ''}${r.cancelled ? ` · stopped: ${esc(r.cancelled.why)}` : ''}</small></span>
         ${r.fired || r.cancelled ? `<button type="button" class="bt ghost sm" data-al-rule="rearm:${esc(r.id)}">Watch again<span class="sr-only"> ${esc(r.player)}</span></button>` : ''}<button type="button" class="ib" data-al-rule="del:${esc(r.id)}" aria-label="Delete the line alert for ${esc(r.player)}">${window.flShell?.ic?.('x', 16) || '×'}</button></li>`).join('')}</ul>` : '';
     return `<section class="card feature st-card" id="stAlerts" aria-labelledby="stAlH">
@@ -247,6 +254,7 @@
         <p class="lb">${pl.length ? `${pl.length} ${pl.length === 1 ? 'player' : 'players'}: ${esc(pl.slice(0, 6).map(x => x.name).join(', '))}${pl.length > 6 ? ' and more' : ''}.` : 'Press Follow on a player’s profile to hear about them.'} These work whether or not game alerts are on.</p>
         ${sw('plInjury', 'Injury news', 'When a player you follow joins, leaves or changes status on the injury report.')}
         ${sw('plLine', 'Line moves', 'When any line for a player you follow moves.')}
+        ${playerRows ? `<details class="st-drw"><summary>Choose alerts player by player</summary>${playerRows}</details>` : ''}
         <div class="st-row"><div class="st-l"><label for="al-injSev">Injury news to include</label><small>For players and picks you follow.</small></div><div class="st-c">${sel('injSev', 'Injury news to include', [['out', 'Ruled out only'], ['doubtful', 'Out or doubtful'], ['any', 'Every change, including questionable']], A.injSev)}</div></div>
 
         <h3 class="st-sub">Picks you follow</h3>
@@ -254,6 +262,7 @@
         ${sw('pkLine', 'Line moves', 'When the line on a pick you follow moves.')}
         ${sw('pkInjury', 'Injury news', 'When the player in a pick you follow changes status on the injury report.')}
         ${sw('pkRemoved', 'Market removed', 'When a pick you follow is taken off the board before its game, with the reason.')}
+        ${sw('pkReopen', 'Market reopened', 'When a pick you follow that was taken off the board is open again before its game.')}
         ${sw('pkResult', 'Prediction graded', 'When a pick you follow is graded: hit, miss, push or void.')}
         <details class="st-drw"><summary>Choose alerts pick by pick</summary>${pickRows}</details>
 
@@ -290,6 +299,7 @@
     if (t.dataset?.alpv !== undefined) { PV.k = t.value; return }
     const q = t.dataset?.alq; if (q) { A[q] = q === 'injSev' ? t.value : +t.value; save(); return repaint(t.id) }
     const tm = t.dataset?.alteam; if (tm) { const [id, kind] = tm.split('|'); A.teams[id] = { ...(A.teams[id] || {}), [kind]: t.checked }; save(); return }
+    const pp = t.dataset?.alplayer; if (pp) { const i = pp.lastIndexOf('|'), id = pp.slice(0, i), kind = pp.slice(i + 1); A.players = { ...(A.players || {}), [id]: { ...((A.players || {})[id] || {}), [kind]: t.checked } }; save(); return }
     const pc = t.dataset?.alpick; if (pc) { const i = pc.lastIndexOf('|'), id = pc.slice(0, i), kind = pc.slice(i + 1); A.picks[id] = { ...(A.picks[id] || {}), [kind]: t.checked }; save(); return }
     const rf = t.dataset?.alrf; if (rf) { RULE[rf] = t.value; if (rf === 'player') { RULE.k = ''; RULE.provider = 'any' } if (rf === 'cond') RULE.value = ''; RULE.err = ''; return repaint(t.id) }
   });
@@ -317,7 +327,7 @@
       if (a === 'rearm') { const x = A.rules.find(y => y.id === id); if (x) { const F = window.flFeed, m = F?.now().find(y => flat(y.name) === flat(x.player) && y.k === x.k); x.fired = 0; x.on = true; delete x.cancelled; if (m) x.from = lineOn(m, x.provider) ?? m.line; save(); repaint() } } }
   });
 
-  function reset() { A = { ...DEF, teams: {}, picks: {}, rules: [] }; save() }
+  function reset() { A = { ...DEF, teams: {}, picks: {}, players: {}, rules: [] }; save() }
   const set = patch => { A = { ...A, ...patch }; save() };   // the first-visit setup's switches
   // another page (a prop row, a player panel) can start a line alert: flAlerts.watchLine(market, { cond, value, provider })
   function watchLine(m, o = {}) { if (!m || m.line == null) return false; A.rules = [...A.rules, { id: Date.now().toString(36), sport: m.sport, player: m.name, k: m.k, label: m.label || m.k, cond: o.cond || 'move', value: o.value ?? null, from: m.line, provider: o.provider || 'any', on: true, at: Date.now() }].slice(-40); save(); return true }

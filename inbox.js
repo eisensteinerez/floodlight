@@ -2,7 +2,7 @@
    Every alert, whether it reaches the browser as a notification or only shows as a note in the page, is also kept
    here, so nothing is lost when a notification is missed or dismissed. Kept on this device for 30 days (200 at most).
    flNotify(kind, title, body, { link, tag, quiet, silent }):
-     kind   start · score · final · lineup · injury · line · removed · edge · graded · summary · weekly · achievement · test
+     kind   start · score · final · lineup · injury · line · removed · reopened · edge · graded · summary · weekly · achievement · test
      link   where the alert leads, in recent.js's "open" shape ({ page, arg } · { game } · { lab } · { route })
      quiet  keep it in the inbox and the page only, never as a browser notification
    A notification opens the page it is about: through the service worker when there is one (sw.js), so a tap from
@@ -13,7 +13,7 @@
   const ic = (n, s = 18) => window.flShell?.ic?.(n, s) || '';
   const KEY = 'fl.inbox', MAX = 200, KEEP = 30 * 864e5;
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
-  const CAT = { start: 'games', score: 'games', final: 'games', lineup: 'games', injury: 'injuries', line: 'lines', removed: 'picks', edge: 'picks', graded: 'picks', summary: 'summaries', weekly: 'summaries', achievement: 'summaries', test: 'summaries', other: 'picks' };
+  const CAT = { start: 'games', score: 'games', final: 'games', lineup: 'games', injury: 'injuries', line: 'lines', removed: 'picks', reopened: 'picks', edge: 'picks', graded: 'picks', summary: 'summaries', weekly: 'summaries', achievement: 'summaries', test: 'summaries', other: 'picks' };
   const ICON = { games: 'live', injuries: 'help', lines: 'trend', picks: 'pred', summaries: 'clock' };
   const FILTERS = [['all', 'All'], ['unread', 'Unread'], ['games', 'Games'], ['picks', 'Picks'], ['lines', 'Lines'], ['injuries', 'Injuries'], ['summaries', 'Summaries']];
   let L = (store.get(KEY, []) || []).filter(x => x && x.id && x.title && Date.now() - x.at < KEEP);
