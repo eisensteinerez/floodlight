@@ -250,10 +250,15 @@
   }
   function streak() { let n = 0; for (let t = day0(); ; t -= 864e5) { const d = LOG[dkey(t)]; if (d && d.n) n++; else if (t === day0()) continue; else break; if (n > 400) break } return n }
   const rec = t => `${t.w}–${t.l}${t.p ? `–${t.p}` : ''}`;
+  // the recap in plain sentences: "You researched 18 players. You followed 7 predictions. Five were graded as hits. ..."
+  const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+  const word = n => WORDS[n] || String(n);
   function weekly() {
     const W = week(); if (!W.researched && !W.followed) return '';
-    return [`You researched ${plural(W.researched, 'player')}`, W.followed ? `followed ${plural(W.followed, 'prediction')}` : '', W.graded ? `your followed predictions finished ${rec(W.t)}` : '',
-      W.strong ? `your strongest sport was ${LG_NAME[W.strong.s] || W.strong.s}` : '', W.moved ? `${plural(W.moved, 'saved line')} moved` : ''].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.';
+    const sport = W.most ? LG_NAME[W.most[0]] || String(W.most[0]).toUpperCase() : '';
+    return [W.researched ? `You researched ${plural(W.researched, 'player')}.` : '', W.followed ? `You followed ${plural(W.followed, 'prediction')}.` : '',
+      W.graded ? `${word(W.t.w)} ${W.t.w === 1 ? 'was' : 'were'} graded as ${W.t.w === 1 ? 'a hit' : 'hits'}${W.t.l ? `, ${W.t.l} as ${W.t.l === 1 ? 'a miss' : 'misses'}` : ''}${W.t.p ? `, ${W.t.p} ${W.t.p === 1 ? 'push' : 'pushes'}` : ''}.` : '',
+      W.moved ? `${word(W.moved)} saved ${W.moved === 1 ? 'line' : 'lines'} moved.` : '', sport ? `Your most researched sport was ${sport}.` : ''].filter(Boolean).join(' ');
   }
   function summary() {
     const c = counts(), hub = window.flHub?.games?.() || [], F = window.flFeed, best = F ? F.ranked(F.now())[0] : null;
@@ -275,7 +280,7 @@
     const stat = (n, l, sub = '') => `<div class="tile inset rcp-s"><b class="fig num">${n}</b><span>${esc(l)}</span>${sub ? `<small class="lb">${esc(sub)}</small>` : ''}</div>`;
     const quiet = !W.researched && !W.followed;
     el.innerHTML = `${quiet ? `<div class="card emp">${ic('bars', 28)}<b>Nothing to recap yet this week</b><p>Open players in the Lab and follow a few predictions. Your week is counted here, on this device.</p><button type="button" class="bt" data-shell="lab">Open the Lab</button></div>` : `
-      <section class="card" aria-labelledby="rcpWkH"><div class="sec-h"><h2 id="rcpWkH">Last 7 days</h2><button type="button" class="bt ghost sm" data-rcpcopy>Copy summary</button></div>
+      <section class="card" aria-labelledby="rcpWkH"><div class="sec-h"><h2 id="rcpWkH">Last 7 days</h2><span class="cx-row"><button type="button" class="bt ghost sm" data-rcpshare>${window.flShare?.ICON || ''}Share picture</button><button type="button" class="bt ghost sm" data-rcpcopy>Copy summary</button></span></div>
         <p class="rcp-line">${esc(weekly())}</p>
         <div class="rcp-stats">${stat(W.researched, W.researched === 1 ? 'player researched' : 'players researched')}${stat(W.followed, W.followed === 1 ? 'prediction followed' : 'predictions followed')}
           ${stat(W.graded ? rec(W.t) : '–', 'followed predictions', W.graded ? `${W.graded} graded${W.t.v ? `, ${W.t.v} void` : ''}` : 'none graded yet')}
@@ -291,11 +296,21 @@
       <button type="button" class="bt ghost" data-page="today">${ic('clock')}Your day</button></header><div id="rcpBody" class="vst" aria-live="polite"></div></div>`;
     drawRecap();
   }
+  // the week as a picture (share.js): the same counts as the tiles, nothing else
+  document.addEventListener('click', ev => {
+    const b = ev.target.closest?.('[data-rcpshare]'); if (!b || !window.flShare) return;
+    const W = week(), sport = W.most ? LG_NAME[W.most[0]] || String(W.most[0]).toUpperCase() : '–';
+    window.flShare.share({ kicker: 'My week on Floodlight', title: W.researched ? `${plural(W.researched, 'player')} researched this week` : `${plural(W.followed, 'prediction')} followed this week`, file: 'my-week',
+      stats: [['Players researched', W.researched], ['Predictions followed', W.followed], ['Graded hits', W.graded ? `${W.t.w} of ${W.graded}` : '–'], ['Most researched', sport]],
+      foot: 'Research, not a guarantee. Past results don’t promise future ones.' }, b);
+    try { window.flTrack?.('share', { kind: 'recap' }) } catch (e) {}
+  });
   document.addEventListener('click', ev => { const b = ev.target.closest?.('[data-rcpcopy]'); if (!b) return; const t = `My Floodlight week: ${weekly()}`; try { navigator.clipboard.writeText(t).then(() => { b.textContent = 'Copied' }, () => {}) } catch (e) {} });
 
   /* ---------- milestones: few, plain, and never in the way ---------- */
   const ACH = [
     ['board', 'First saved board', 'Save a player or prop to a board in the Lab.', 'save', () => (store.get('fl.labBoards', []) || []).length > 0 || (window.flBoards?.list?.() || []).length > 0],
+    ['follow', 'First followed prediction', 'Press Follow on a prediction.', 'star', () => picks().length > 0],
     ['five', 'Researched five sports', 'Research players in five different sports.', 'grid', () => new Set(Object.values(LOG).flatMap(d => d.s)).size >= 5],
     ['streak', 'Seven-day research streak', 'Research something seven days in a row.', 'clock', () => streak() >= 7],
     ['upset', 'Correct upset prediction', 'Pick an underdog that wins in a private competition.', 'trophy', () => !!store.get('fl.achUpset', 0)],
