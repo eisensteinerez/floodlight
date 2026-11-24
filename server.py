@@ -2164,7 +2164,7 @@ def account_post(handler, path, body, user, token):
     if path.startswith("/api/billing/"):
         op = path[len("/api/billing/"):]
         if op in ("checkout", "card", "gift", "restore", "redeem") and not ratelimit.take("checkout", "u:" + user["username"].lower()):
-            return 429, {"error": "Too many tries this hour. Wait a while, or contact support from the Help center."}
+            return 429, {"error": "Too many billing requests in the last hour. Try again in an hour, or contact support from the Help center."}
         try:
             if op == "checkout":
                 return billing.checkout(user, str(body.get("plan") or ""), site)
@@ -2517,7 +2517,7 @@ class Handler(SimpleHTTPRequestHandler):
             if GATED and not user:
                 return self.send_auth(401, {"error": "Log in to report a problem."})
             if not ratelimit.take("report", ("u:" + user["username"].lower()) if user else "ip:" + addr):
-                return self.send_auth(429, {"error": "Thanks, we have several reports from you this hour. Try again later, or use the Help center."})
+                return self.send_auth(429, {"error": "Thanks, we've had several reports from you this hour. Try again in an hour, or write to us from the Help center."})
             try:
                 r = corrections.report(body if isinstance(body, dict) else {}, (body or {}).get("text"), by=(user or {}).get("name") or "")
             except ValueError as ex:
@@ -2539,7 +2539,7 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path.endswith("unshare"):
                 return self.send_auth(*labshare.unshare(user["username"], str(body.get("id") or "")[:20]))
             if not ratelimit.take("share", "u:" + user["username"].lower()):
-                return self.send_auth(429, {"error": "You've shared a lot of boards this hour. Try again later."})
+                return self.send_auth(429, {"error": "You've shared a lot of boards this hour. Try again in an hour."})
             return self.send_auth(*labshare.share(user["username"], (user.get("prefs") or {}).get("display") or user["username"], body.get("board")))
         if u.path == "/api/popular":   # a line researched or followed, for Prop Explorer's "Most researched" and "Most followed"
             who = user["username"] if user else re.sub(r"[^A-Za-z0-9]", "", str(body.get("guest") or ""))[:24]

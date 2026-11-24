@@ -29,6 +29,47 @@ The live site runs on Render's paid Starter plan, which stays awake, so nothing 
 wiped on every redeploy: without `DATABASE_URL`, members and forecasts reset then. (On Render's free plan the service
 sleeps after 15 minutes without visitors and takes about a minute to wake up.)
 
+## Accounts, plans and payments
+
+Members sign up with a username, an email address they confirm, and a password (hashed with scrypt; older PBKDF2 hashes
+are upgraded at the next sign-in). They can sign in with a username or email, ask for a one-time email sign-in link,
+reset a password, get a username reminder, change their email (confirmed at the new address), turn on two-step sign-in
+with an authenticator app, see and sign out their devices, download their data and delete their account. Deleting also
+cancels billing and takes down shared board links, competition picks, support tickets, the invite code and usage history.
+
+**Plans** live in `plans.json`: prices (in cents), trial, grace and refund days, Group seats, gift codes, the Free
+limits, the feature names, which features each plan includes and the Free-vs-Plus rows on the pricing page. Change a
+number there and restart; the pricing, account and policy pages all read it through `/api/plans`. `entitlements.py`
+is the one place that decides what a plan allows (`can_use_unlimited_lab`, `can_create_group` and so on; the browser
+gets the same names as `window.flEntitlements`). `billing.py` handles Stripe and works out which plan a member is on.
+
+**Limits** (Free's daily Lab searches, boards, follows) stay off until the owner turns on Account › Business › Apply
+Free plan limits, or sets `FLOODLIGHT_PAYWALL=1`. Every limit on requests (login, sign-up, emails, invites, sharing,
+data reports, checkout) is a named rule in `ratelimit.py`.
+
+Environment variables (Render › Environment):
+
+| Variable | Needed for | Notes |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | Checkout | A test key (`sk_test_…`) takes test payments. Without a key there is a built-in test checkout only owners can use on the hosted site. |
+| `STRIPE_WEBHOOK_SECRET` | Keeping plans in step | The signing secret (`whsec_…`) of the webhook endpoint below. |
+| `FLOODLIGHT_BILLING_LIVE` | Real charges | A live key (`sk_live_…`) is refused unless this is `1` and storage is durable. Only set it once Erez says go. |
+| `STRIPE_PRICE_PLUS`, `STRIPE_PRICE_PLUS_ANNUAL`, `STRIPE_PRICE_GROUP` | Optional | Use existing Stripe prices. Otherwise prices are found by lookup key (`floodlight_plus_month_499usd` and so on), and created in test mode. A new price in `plans.json` gets a new lookup key, so the old Stripe price is never reused for it. |
+| `FLOODLIGHT_PLANS_FILE` | Optional | Another copy of `plans.json`. A broken file falls back to the repository's, with a warning in the log. |
+| `FLOODLIGHT_PAYWALL` | Optional | `1` turns the Free limits on regardless of the owner switch. |
+| `RESEND_API_KEY`, `MAIL_FROM` | Emails | Confirmation links, sign-in links, receipts notices, trial reminders. `MAIL_FROM` must be on a domain verified in Resend. Without a key, emails wait in Account › Business › Outbox. |
+| `FLOODLIGHT_URL` | Links in emails and Stripe | The public address, for example `https://floodlight-x9sl.onrender.com`. |
+| `DATABASE_URL` | Durable accounts | Required before taking real money. |
+
+Stripe webhook: in the Stripe dashboard (test mode), Developers › Webhooks › Add endpoint, URL
+`https://<your-site>/api/billing/webhook`, with these events: `checkout.session.completed`,
+`customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`,
+`customer.subscription.trial_will_end`, `invoice.paid`, `invoice.payment_failed`, `charge.refunded`,
+`refund.created`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`. Copy its signing secret
+into `STRIPE_WEBHOOK_SECRET`. Each event is processed once; one that fails is left for Stripe's retry. In Stripe's
+Settings › Payment methods, turn on Cards, Apple Pay and Google Pay; Checkout shows the wallets where the device
+supports them. Promotion codes made in Stripe (Products › Coupons) can be typed in at checkout.
+
 ## Discord bot
 
 `discord_bot.py` puts Floodlight's research, scores, predictions and lineups in Discord as slash commands:
