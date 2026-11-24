@@ -40,7 +40,7 @@
   const ms = t => t == null || t === '' ? null : typeof t === 'number' ? t : new Date(t).getTime() || null;
   function flagOf(v, now = Date.now()) {
     const s = lineOf(v); if (!s) return null;
-    if (s.start && s.start <= now) return { k: 'closed', t: 'Game started', d: 'The game has started, so this line is no longer open.' };
+    if (s.start && s.start <= now) return { k: 'closed', t: 'Closed', d: 'The game has started, so this line is no longer open.' };
     // the verified feed decides: the same standing every page uses (markets.js), with its own message and reason
     const M = window.flMarkets, st = M?.standing ? M.standing({ mid: v.mid, sport: s.sport, name: s.name, k: s.k }, now) : null;
     if (st && !st.open && st.status !== 'awaiting_verification') return { k: ['started', 'expired'].includes(st.status) ? 'closed' : 'gone', t: st.message || 'Not offered now', d: st.reason || 'No provider in the verified feed has this line open right now.' };

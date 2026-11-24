@@ -148,7 +148,7 @@
   function row(r) {
     const p = r.p, w = r.s.windows, mv = K.movement(p), se = p.sedge ?? null, o = opp(p), home = p.v?.event?.home;
     return `<tr data-pxrow="${esc(p.id)}">
-      <th scope="row" class="px-who"><button type="button" class="px-open" data-pxopen="${esc(p.id)}">${face(p.photo, p.name)}<span class="rw-t"><b>${esc(p.name)}${MK.isHot(p) ? ' <span class="pl px-hot" title="7 of the last 10 and 3 of the last 5 on this line, with 8 or more games">Hot</span>' : ''}</b><small>${esc([p.teamName || p.team, o ? `${home === false ? 'at' : 'v'} ${o}` : ''].filter(Boolean).join(' '))}</small></span></button></th>
+      <th scope="row" class="px-who"><button type="button" class="px-open" data-pxopen="${esc(p.id)}">${face(p.photo, p.name)}<span class="rw-t"><b><span class="px-nm">${esc(p.name)}</span>${MK.isHot(p) ? ' <span class="pl px-hot" title="7 of the last 10 and 3 of the last 5 on this line, with 8 or more games">Hot</span>' : ''}</b><small>${esc([p.teamName || p.team, o ? `${home === false ? 'at' : 'v'} ${o}` : ''].filter(Boolean).join(' '))}</small></span></button></th>
       <td class="px-mk"><b>${esc(p.text)}</b><small>${esc(SPORT[p.sport] || p.sport)}${mv && mv.d ? ` · <span class="${mv.easier > 0 ? 'px-up' : 'px-dn'}">${mv.easier > 0 ? 'Moved for' : 'Moved against'} (was ${fmt(mv.from)})</span>` : ''}</small></td>
       <td class="px-when"><span>${esc(startTxt(p))}</span></td>
       ${hr(w[0], 'Last 5')}${hr(w[1], 'Last 10')}${hr(w[2], 'Last 20')}
