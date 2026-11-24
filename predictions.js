@@ -84,7 +84,7 @@
         market: p.market == null ? null : +p.market.toFixed(3), conf: p.conf, start: Math.round(+p.start / 1000), books: p.books,
         proj: p.mu == null ? null : +(+p.mu).toFixed(2), hit: p.smp?.rate == null ? null : +p.smp.rate.toFixed(3), n: p.smp?.n || null,
         // the receipt's ids and the state at publication (the record keeps the first one it gets)
-        event: ev.id || '', playerId: p.fid || '', teamId: ev.teamId || '', oppId: ev.oppId || '', league: p.sport, marketId: offer.mid || `${offer.book || (p.books || [])[0] || ''}:${p.k}:${p.line}`,
+        event: ev.id || '', playerId: p.fid || '', teamId: ev.teamId || '', oppId: ev.oppId || '', league: p.sport, marketId: p.mid || offer.mid || `${offer.book || (p.books || [])[0] || ''}:${p.k}:${p.line}`, providerMarketId: offer.mid || '', grade: gradeOf(p)?.grade || null,
         provider: (p.books || []).map(b => BOOK[b] || b).join(', '), sedge: p.sedge, lo: R ? +R.lo.toFixed(3) : null, hi: R ? +R.hi.toFixed(3) : null,
         sources: [ev.verified === 'schedule' ? 'ESPN schedule' : 'Provider schedule', 'ESPN game log', ...(p.books || []).map(b => BOOK[b] || b), ...(p.av?.lv && p.av.lv !== 'unknown' ? ['ESPN injury report'] : [])],
         injury: p.av?.report || '', lineup: p.av?.start || '', verifiedAt: p.at || now, tz: P.tz });

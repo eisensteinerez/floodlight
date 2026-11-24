@@ -141,6 +141,7 @@ def _extra(p):
             "range": [round(lo, 3), round(hi, 3)] if lo is not None and hi is not None and lo <= hi else None,
             "sources": [s for s in (_text(x, 40) for x in (p.get("sources") or [])[:8] if isinstance(p.get("sources"), list)) if s] or None,
             "injury": _text(p.get("injury")), "lineup": _text(p.get("lineup")),
+            "grade": p["grade"] if p.get("grade") in ("A", "B", "C", "D") else None, "providerMarketId": _ident(p.get("providerMarketId"), 60),
             "verifiedAt": None if va is None else int(va / 1000 if va > 1e11 else va)}
 
 
@@ -159,7 +160,8 @@ def make_receipt(key, p, read, backfilled=False):
         price=read.get("price"), modelProb=read.get("ours"), marketProb=read.get("market"), rawEdge=read.get("edge"),
         supportedEdge=p.get("sedge"), confidence=p.get("conf") or None, confRange=p.get("range"),
         sources=p.get("sources") or ([BOOK_NAME.get(b, b) + " line" for b in books] + ["Floodlight Lab model"]),
-        injury=p.get("injury"), lineup=p.get("lineup"), verifiedAt=p.get("verifiedAt"), backfilled=backfilled)
+        injury=p.get("injury"), lineup=p.get("lineup"), verifiedAt=p.get("verifiedAt"), backfilled=backfilled,
+        **({} if backfilled else {"evidence": p.get("grade"), "sample": p.get("n"), "providerMarketId": p.get("providerMarketId")}))
 
 
 def ensure_receipt(e):

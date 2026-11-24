@@ -41,6 +41,29 @@ def test_a_published_prop_saves_a_full_receipt():
     assert GB.receipt_ok(r)
 
 
+def test_a_receipt_keeps_the_evidence_grade_sample_size_and_provider_market_id():
+    books(lambda g, s: (None, ""))
+    PB.seen([prop(**dict(FULL, grade="B", n=18, providerMarketId="pp-889120"))], now=NOW)
+    r = one()["receipt"]
+    assert r["evidence"] == "B" and r["sample"] == 18 and r["providerMarketId"] == "pp-889120" and GB.receipt_ok(r)
+    r["evidence"] = "A"                                                                # a better grade written in later
+    assert GB.receipt_ok(r) is False
+
+
+def test_a_made_up_evidence_grade_is_not_saved():
+    books(lambda g, s: (None, ""))
+    PB.seen([prop(**dict(FULL, grade="A+", n=9999))], now=NOW)
+    r = one()["receipt"]
+    assert r["evidence"] is None and r["sample"] is None and GB.receipt_ok(r)
+
+
+def test_a_receipt_written_before_the_evidence_fields_still_checks_out():
+    old = GB.receipt(id="k1", publishedAt=NOW, player="Jalen Brunson", line=26.5, side="over")
+    assert "evidence" not in old and GB.receipt_ok(old)
+    old["line"] = 27.5
+    assert GB.receipt_ok(old) is False
+
+
 def test_later_data_never_rewrites_the_receipt():
     books(lambda g, s: ("won", "31"))
     PB.seen([prop(**FULL)], now=NOW)
