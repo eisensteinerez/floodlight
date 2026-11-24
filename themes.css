@@ -165,7 +165,7 @@ html[data-theme] body::after{display:none}
 .pg-title{font:var(--display-weight) clamp(44px,6.6vw,76px)/.95 var(--font-display)!important;letter-spacing:var(--display-track)!important;margin:0}
 .pg-sub{margin:8px 0 0;font:500 17px/1.4 var(--font-body);color:var(--text-2);max-width:64ch}
 /* page help: shown in full once, then behind a "?" in the heading (flHelp in pages.js) */
-.pg-acts{display:flex;align-items:center;gap:10px;margin-left:auto}
+.pg-acts{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-left:auto}
 .hlp-q{display:inline-grid;place-items:center;flex:none;width:40px;height:40px;border-radius:50%;border:1px solid var(--border-2);background:transparent;color:var(--text-2);font:700 17px/1 var(--font-body);cursor:pointer;transition:color .15s var(--ease,ease),border-color .15s var(--ease,ease),background .15s var(--ease,ease)}
 .hlp-q:hover{color:var(--text);border-color:var(--accent)}
 .hlp-q[aria-expanded="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}

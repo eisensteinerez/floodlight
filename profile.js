@@ -151,6 +151,7 @@
     const team = o.team && reg ? `<span data-flreg="${esc(reg)}" data-flreg-show="keep" data-flreg-shown="${esc(String(o.teamId || ''))}" data-flreg-where="profile">${o.team}</span>` : o.team;
     const sub = [team, o.number ? `<span class="num">#${esc(String(o.number).replace(/^#/, ''))}</span>` : '', o.position ? `<span>${esc(o.position)}</span>` : ''].filter(Boolean).join('<i aria-hidden="true">·</i>');
     const stats = (o.stats || []).filter(s => s && s.value != null && s.value !== '');
+    who.stats = stats.slice(0, 4).map(s => [s.label, `${s.value}${s.unit ? ` ${s.unit}` : ''}`]); who.position = o.position || '';
     // availability and the next game, on one line under the team
     const inj = !o.avail && lab && window.flInjuries ? (window.flInjuries.load(lab), window.flInjuries.status(lab, o.name)) : null;
     const avail = o.avail || (inj ? { text: inj.status || window.flInjuries.LEVEL_NAME[inj.lv] || 'Injured', tone: inj.lv === 'out' ? 'out' : 'warn', what: inj.what } : null);
@@ -163,7 +164,7 @@
     const fol = following(o);
     const acts = o.id && o.name ? `<div class="pfh-acts">${window.flTransfers?.follow && !o.noFollow ? `<button type="button" class="bt sm${fol ? '' : ' ghost'}" data-pfact="follow" aria-pressed="${fol}" aria-label="Follow ${esc(o.name)}">${ic(fol ? 'check' : 'bell', 16)}${fol ? 'Following' : 'Follow'}</button>` : ''}
       ${lab && window.flLab?.compare ? `<button type="button" class="bt sm ghost" data-pfact="compare" aria-label="Compare ${esc(o.name)} with another player">${ic('compare', 16)}Compare</button>` : ''}
-      ${lab && window.flBoards ? `<button type="button" class="bt sm ghost" data-pfact="board" aria-label="Add to board: ${esc(o.name)}">${ic('plus', 16)}Add to board</button>` : ''}</div>` : '';
+      ${lab && window.flBoards ? `<button type="button" class="bt sm ghost" data-pfact="board" aria-label="Add to board: ${esc(o.name)}">${ic('plus', 16)}Add to board</button>` : ''}${window.flShare ? `<button type="button" class="bt sm ghost" data-pfact="share" aria-label="Share a picture of ${esc(o.name)}'s card">${window.flShare.ICON}Share</button>` : ''}</div>` : '';
     // the headline numbers: each one once, with its rank and percentile
     const tiles = stats.length ? `<div class="pfh-stats">${stats.map(s => { const rl = s.n != null ? F().rankLine(s.rank, s.n, s.pc) : (s.rank || '');
       return `<div class="tile"><span class="lb">${esc(s.label)}</span><b class="num">${esc(s.value)}</b>${s.unit ? `<small class="pfh-u">${esc(s.unit)}</small>` : ''}${rl ? `<em>${esc(rl)}</em>` : ''}</div>` }).join('')}</div>` : '';
@@ -270,11 +271,23 @@
       if (lg && S) { const st = { basketball: S.bb, football: S.fb, hockey: S.hk, baseball: S.bs }[S.sport]; if (st && 'lg' in st && st.lg !== lg) { st.lg = lg; try { typeof render === 'function' && render() } catch (e) {} } }
     }
   }
+  /* the player card as a picture (share.js): the header's own numbers, and a line only when the verified feed has it open
+     now. share.js checks that line once more right before drawing, so a line that just closed says so on the picture. */
+  function shareCard(o, btn) {
+    const M = window.flMarkets, line = o.lab && M?.open ? M.open(o.lab).filter(m => norm(m.name) === norm(o.name)).sort((a, b) => (b.sedge ?? -99) - (a.sedge ?? -99))[0] : null;
+    const side = line ? (line.side === 'under' ? 'Under' : 'Over') : '', fmt = v => Number.isInteger(+v) ? String(+v) : (+v).toFixed(1);
+    window.flShare.share({ kicker: [o.league || o.sportName, 'Player card'].filter(Boolean).join(' · '), title: o.name, file: o.name,
+      sub: [[o.team, o.position].filter(Boolean).join(' · '), line ? `Open line: ${side} ${fmt(line.line)} ${line.label || line.k}${line.verifiedAt ? `, verified ${new Date(line.verifiedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}` : ''].filter(Boolean).join('. '),
+      stats: o.stats || [],
+      markets: line ? [{ mid: line.mid, sport: line.sport, name: line.name, k: line.k }] : [] }, btn);
+    try { window.flTrack?.('share', { kind: 'player' }) } catch (e) {}
+  }
   function act(d, t) {
     const o = who; if (!o) return;
     if (d.pfact === 'follow') { const r = window.flTransfers?.follow?.(fKey(o)); if (r?.error) return window.flAdmin?.say?.(r.error); renderSheet(); window.flAdmin?.say?.(r?.on ? `Following ${o.name}. Their moves show on the Transfer window.` : `Stopped following ${o.name}.`); document.querySelector('[data-pfact="follow"]')?.focus(); return }
     if (d.pfact === 'compare') { leaveSheet(); return window.flLab?.compare?.({ sport: o.lab, name: o.name }) }
     if (d.pfact === 'board') return window.flBoards?.offer?.({ kind: 'player', key: `player:${o.lab}:${norm(o.name)}`, label: o.name, sub: [o.team, o.league].filter(Boolean).join(' · '), photo: o.photo || '', open: { lab: { sport: o.lab, name: o.name, kind: 'player' } } }, t);
+    if (d.pfact === 'share') return shareCard(o, t);
     if (d.pfact === 'lab') { leaveSheet(); return window.flLab?.open?.({ sport: o.lab, name: o.name, kind: 'player' }) }
     if (d.pfprop != null) { const p = propsFor(o.lab, o.name)?.[+d.pfprop]; if (!p) return; leaveSheet(); return window.flLab?.open?.(window.flEdge.labArgs(p)) }
   }

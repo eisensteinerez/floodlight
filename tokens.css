@@ -172,6 +172,8 @@
 }
 /* Stadium Gold's condensed poster face needs a little more size to carry a working page's title */
 :root[data-theme="stadium-gold"],[data-theme-preview="stadium-gold"]{--title-dense:clamp(42px,5.4vw,64px)}
+/* ...but not so much that one long word ("COMPETITIONS", "DASHBOARD") runs off a 320px phone */
+@media (max-width:400px){:root[data-theme="stadium-gold"],[data-theme-preview="stadium-gold"]{--title-dense:34px}}
 /* warning reads as amber: bright on the dark themes, deep enough on the light ones to pass as text */
 :root[data-scheme="dark"],.tok-scope[data-scheme="dark"]{--warning:#F2B544}
 :root[data-scheme="light"],.tok-scope[data-scheme="light"]{--warning:#8A5A00}

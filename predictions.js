@@ -359,7 +359,7 @@
     if (f.sport) P.sport = f.sport; if (f.sort && SORT.some(x => x[0] === f.sort)) P.sort = f.sort; if (f.pf) P.pf = { ...PF0(), ...f.pf }; if (pfActive().length) P.more = true; P.all = false; draw() });
   function follow(p) {
     if (following(p)) P.follow = P.follow.filter(f => f.k !== keyOf(p));
-    else P.follow.push({ k: keyOf(p), id: p.id, name: p.name, text: p.text, sport: p.sport, game: p.game || '', start: p.start ? +p.start : 0, edge: p.edge, at: Date.now(), alert: null });
+    else { P.follow.push({ k: keyOf(p), id: p.id, name: p.name, text: p.text, sport: p.sport, game: p.game || '', start: p.start ? +p.start : 0, edge: p.edge, at: Date.now(), alert: null }); try { window.flTrack?.('prediction_follow', { sport: p.sport }) } catch (e) {} }
     saveFollow(); draw();
   }
   function checkAlerts() {

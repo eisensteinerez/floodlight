@@ -1503,7 +1503,7 @@ button.hm-bi:hover{background:var(--surface-2)}button.hm-bi:focus-visible{outlin
 @media (max-width:560px){.hs-tiles{gap:8px}.hs-tiles .tile{padding:14px 12px}.hs-tiles .fig{font-size:clamp(22px,7vw,30px)}}
 .hs-status{display:flex;align-items:flex-start;gap:8px;margin:0;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-tile);background:var(--surface-2);font:500 14px/1.4 var(--font-body);color:var(--text-2)}
 .hs-status svg{flex:none;margin-top:2px;color:var(--good,var(--text-2))}.hs-status.warn{border-color:var(--border-2);color:var(--text)}.hs-status.warn svg{color:var(--bad)}
-.hs-how{display:grid;gap:10px}.hs-how summary{cursor:pointer;font:600 15px/1.3 var(--font-body);color:var(--text)}.hs-how p{margin:0;max-width:86ch;color:var(--text-2);font:400 14px/1.55 var(--font-body)}
+.hs-how{display:grid;gap:10px}.hs-how summary{cursor:pointer;font:600 15px/1.3 var(--font-body);color:var(--text);padding:13px 0}.hs-how p{margin:0;max-width:86ch;color:var(--text-2);font:400 14px/1.55 var(--font-body)}
 .hs-how summary:focus-visible,.hs-list button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .hs-rc-row > td{padding:0 12px 16px;background:var(--inset,transparent)}
 .hs-rc{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:20px;padding-top:12px}
@@ -3012,6 +3012,8 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .obd-need .lk{margin:-12px 0;display:inline-flex}
 .obd-demo{margin:0;display:grid;gap:12px;padding:18px;border-radius:var(--radius-tile);border:1px solid var(--border-2);background:var(--surface)}
 .obd-demo-top{display:flex;justify-content:space-between;align-items:center;gap:12px;font:600 15px/1.3 var(--font-body)}
+.obd-live-m{margin:-4px 0 0;overflow-wrap:anywhere}
+.obd-demo-top b{min-width:0;overflow-wrap:anywhere}.obd-demo-top .pl{flex:none}
 .obd-explain{margin:0;padding:0;list-style:none;counter-reset:ob;display:grid;gap:10px}
 .obd-explain li{counter-increment:ob;display:grid;grid-template-columns:28px minmax(0,1fr);gap:2px 12px;align-items:baseline}
 .obd-explain li::before{content:counter(ob);grid-row:span 2;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border-2);font:700 13px/1 var(--font-body);color:var(--accent)}
@@ -3162,6 +3164,10 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 @media (max-width:760px){.lp-nav nav{display:none}.lp-nav-acts{margin-left:auto}}
 @media (max-width:480px){.lp-rates{grid-template-columns:repeat(2,minmax(0,1fr))}.lp-nav-acts .bt.ghost{padding:0 12px}.lp-brand span{font-size:20px}
   .lp-receipt dl div{grid-template-columns:1fr;gap:2px}.lp-game{grid-template-columns:6.2em minmax(0,1fr) 1.8em 1.8em minmax(0,1fr);gap:6px}.lp-cta .bt{flex:1 1 100%}}
+/* the narrowest phones: the brand and both header buttons on one line, and setup's Skip, Back and Finish too */
+@media (max-width:380px){.lp-nav{gap:10px}.lp-nav-acts{gap:6px}.lp-nav-acts .bt{padding:0 12px}.lp-brand span{font-size:18px}
+  .obd-foot{gap:8px;padding-left:14px;padding-right:14px}.obd-nav{gap:6px}.obd-nav .bt{padding-left:16px;padding-right:16px}.obd-skip{padding-inline:4px}}
+@media (max-width:560px){.obd-demo-top{flex-wrap:wrap}}
 @media (forced-colors:active){.lp-bars i.ov{background:CanvasText}.lp-line{border-top-color:CanvasText}}
 
 /* ---------- Help center (support.js) ---------- */
@@ -3249,6 +3255,7 @@ html:root[data-theme="stadium-gold"] .pd-mini-o span{font-size:16px}html:root[da
 .ow-col{flex:1 1 0;min-width:0;height:100%;display:flex;align-items:flex-end}
 .ow-col i{display:block;width:100%;min-height:1px;border-radius:4px 4px 0 0;background:var(--accent-fill)}
 .ow-col:hover i{filter:brightness(1.15)}
+.ow-mix{display:grid;gap:10px;margin-top:12px}.ow-mix h3{font:700 16px/1.25 var(--font-body);letter-spacing:0;margin:0}
 .ow-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .ow-two .card{display:grid;gap:10px;align-content:start}
 .ow-two h3{font:700 16px/1.25 var(--font-body);letter-spacing:0;margin:0}
@@ -3393,7 +3400,7 @@ h3.hm-brief-h{margin:0;font:700 17px/1.25 var(--font-body);color:var(--text)}
 
 /* Your week */
 .rcp-line{margin:0 0 16px;font:500 17px/1.5 var(--font-body);color:var(--text);max-width:62ch}
-.rcp-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px}
+.rcp-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,136px),1fr));gap:10px}
 .rcp-s{display:grid;gap:2px;align-content:start}
 .rcp-s .fig{font:800 clamp(26px,3vw,34px)/1 var(--font-display);color:var(--text)}
 .rcp-s span{font:600 14px/1.3 var(--font-body);color:var(--text-2)}

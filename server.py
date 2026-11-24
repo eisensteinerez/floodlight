@@ -1913,7 +1913,16 @@ def owner_dashboard(days):
         users = dict(_users)
     return {"at": int(time.time()), "days": days, "business": ownerstats.business(users), "product": ownerstats.product(users, _parlays, days),
             "growth": ownerstats.growth(users, days), "support": {k: v for k, v in support.staff_list().items() if k != "tickets"},
-            "referrals": referrals.stats(), "privacy": {"gpcRespected": True, "cookies": False, "ipStored": False}}
+            "referrals": referrals.stats(), "privacy": {"gpcRespected": True, "cookies": False, "ipStored": False},
+            "names": {"plans": {p["id"]: p["name"] for p in entitlements.PLANS}, "features": {k: _feature_name(k) for k in entitlements.FEATURES}}}
+
+
+def _feature_name(k):
+    v = entitlements.FEATURES.get(k, k)
+    try:
+        return entitlements._fill(v, entitlements.FREE_LIMITS)
+    except Exception:
+        return k
 
 
 # Passwords: scrypt (memory-hard, Python's standard library) with a random salt per account. Accounts made before scrypt

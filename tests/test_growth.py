@@ -236,3 +236,58 @@ def test_product_counts_boards_follows_and_parlays():
     p = O.product(users, {"a": [{}, {}, {}]}, days=7)
     assert p["saved"] == {"boards": 2, "follows": 1, "slips": 0, "cards": 3}
     assert len(p["usage"]["series"]) == 7
+
+
+# ---------- the journey's conversion rates, feature gates and revenue per active member (PR: onboarding and growth) ----------
+
+def test_conversion_rates_follow_each_journey_from_its_first_step():
+    # one visitor sees the landing page, opens sign-up and makes an account; another only sees the landing page
+    A.event("landing_view", {}, vid="c" * 24, ts=NOW - 900)
+    A.event("signup_start", {}, vid="c" * 24, ts=NOW - 800)
+    A.event("signup", {}, user="ana", ts=NOW - 700)
+    A.event("session", {}, user="ana", vid="c" * 24, ts=NOW - 650)
+    A.event("landing_view", {}, vid="d" * 24, ts=NOW - 600)
+    # a member saw the upgrade page, then started a trial; another saw it and left
+    A.event("upgrade_view", {}, user="ana", ts=NOW - 500)
+    A.event("trial_start", {}, user="ana", ts=NOW - 400)
+    A.event("signup", {}, user="ben", ts=NOW - 300)
+    A.event("upgrade_view", {}, user="ben", ts=NOW - 200)
+    r = A.funnel(30, now=NOW)["rates"]
+    assert r["landing"] == {"of": 2, "n": 1, "rate": 50.0}
+    assert r["signup"] == {"of": 1, "n": 1, "rate": 100.0}
+    assert r["upgrade"] == {"of": 2, "n": 1, "rate": 50.0}
+    steps = [s["step"] for s in A.funnel(30, now=NOW)["steps"]]
+    assert steps.index("landing") < steps.index("signup_start") < steps.index("signup")
+
+
+def test_no_rate_before_anyone_reaches_the_first_step():
+    r = A.funnel(30, now=NOW)["rates"]
+    assert all(v["rate"] is None and v["of"] == 0 for v in r.values())
+
+
+def test_feature_gates_count_by_feature_and_ignore_junk():
+    for f in ("advanced_filters", "advanced_filters", "line_history", "<script>", ""):
+        A.event("gate", {"feature": f}, user="ana", ts=NOW - 60)
+    u = A.usage(7, now=NOW)
+    assert u["gates"] == 5                       # every encounter is an event
+    assert dict(u["topGates"]) == {"advanced_filters": 2, "line_history": 1}   # only real feature keys are named
+
+
+def test_onboarding_finish_and_skip_are_counted_apart():
+    A.event("signup", {}, user="ana", ts=NOW - 900)
+    A.event("onboarding_done", {"step": 6}, user="ana", ts=NOW - 600)
+    A.event("signup", {}, user="ben", ts=NOW - 500)
+    A.event("onboarding_skip", {"step": 1}, user="ben", ts=NOW - 400)
+    rate = A.onboarding_rate()
+    assert rate == {"signedUp": 2, "finished": 1, "rate": 50.0}
+    assert A.usage(7, now=NOW)["onboardingSkipped"] == 1
+
+
+def test_revenue_per_active_member_uses_accounts_active_in_30_days():
+    users = users_with("m", "f", "old")
+    users["m"].update(plan="plus", plan_status="active", price_cents=499, interval="month", seen=NOW - DAY)
+    users["f"].update(plan="free", seen=NOW - 2 * DAY)
+    users["old"].update(created=NOW - 90 * DAY, seen=NOW - 60 * DAY)
+    m = O.business(users, now=NOW)["money"]
+    assert m["arpu"] == round(4.99 / 2, 2) and m["arppu"] == 4.99
+    assert dict(m["byPlan"]) == {"plus": 1}
